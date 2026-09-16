@@ -23,6 +23,8 @@
 import type { Complex } from "../complex";
 import type { Node } from "@cas/expr/ast";
 import * as C from "@cas/expr/complexJs";
+import { rootsMonic } from "@cas/core";
+import { polynomialCoeffs } from "./critical";
 import { differentiate } from "@cas/expr/derivative";
 import { makeComplexFn, getComplexFn, getEscapeFn } from "@cas/expr/evaluate";
 import { classifyRotationNumber, type RotationClass } from "./brjuno";
@@ -73,6 +75,8 @@ export interface FatouInfo {
 
 /** ||λ|−1| below this ⇒ indifferent (matches showInspect + juliaProperties' neutral band). */
 const NEUTRAL_TOL = 1e-3;
+/** Fixed points closer than this are one DOUBLE root — see {@link attractingFixedPoint}. */
+const DOUBLE_ROOT_TOL = 1e-5;
 /** |λ| below this ⇒ superattracting (the cycle contains a critical point). */
 const SUPERATTRACTING_TOL = 1e-6;
 
@@ -308,6 +312,62 @@ function escapeDistance(
   return (az * Math.log(az)) / ad;
 }
 
+/**
+ * The **indifferent-or-attracting fixed point** of a polynomial `f`, found exactly rather than by
+ * watching an orbit.
+ *
+ * `classifyOrbit` decides a cycle by waiting for the orbit to return within 1e-6 in at most 512
+ * iterations. That is a *convergence-speed* test, not a dynamical one, and it fails exactly where the
+ * interesting parameters are: at |λ| = 0.99 the orbit needs ≈ 1,375 iterations to get that close, and
+ * on the cardioid boundary (|λ| = 1) it never does. Measured before this existed, **every** parameter
+ * on the boundary — the golden-mean Siegel point, the parabolic c = −3/4, the cusp c = 1/4, the 1/3
+ * root — and an attracting c at |λ| = 0.99 all reported `fate: "undetermined"`, `period: 0` and no
+ * multiplier, so the Siegel / Cremer / parabolic verdicts the app documents were unreachable from a
+ * click and `paramClass: "neutral"` was dead code.
+ *
+ * Fixed points are roots of f(z) − z, which for a polynomial is a polynomial: they are solved for and
+ * certified by residual, never iterated toward. Returns the root of smallest |f′| when that is ≤ 1
+ * (within {@link NEUTRAL_TOL}) — an attracting or indifferent fixed point is the attractor, so it is
+ * what the click is asking about — and null otherwise, which includes every c whose attractor is a
+ * genuine higher-period cycle (there α is repelling and this correctly declines to answer).
+ */
+function attractingFixedPoint(
+  fAst: Node,
+  a: Complex,
+  c: Complex,
+  deriv: { fz: (z: Complex, c: Complex) => Complex },
+): { point: Complex; multiplier: Complex } | null {
+  const coeffs = polynomialCoeffs(fAst, a, c);
+  if (!coeffs || coeffs.length < 2) return null; // not a polynomial in z
+  // p(z) = f(z) − z
+  const p = coeffs.map((v): Complex => [v[0], v[1]]);
+  p[1] = [p[1][0] - 1, p[1][1]];
+  const roots = rootsMonic(p);
+  let best: { point: Complex; multiplier: Complex; mag: number } | null = null;
+  for (const r of roots) {
+    const pt: Complex = [r[0], r[1]];
+    const lam = deriv.fz(pt, c);
+    const mag = cabs(lam);
+    if (!Number.isFinite(mag)) continue;
+    if (!best || mag < best.mag) best = { point: pt, multiplier: lam, mag };
+  }
+  if (!best || best.mag > 1 + NEUTRAL_TOL) return null;
+  // A DOUBLE root of f(z) − z is exactly the parabolic case with rotation number 0: two fixed points
+  // colliding means f′ = 1 there. Durand–Kerner converges only linearly at a multiple root, so it
+  // returns the pair about √ε apart — measured at the cardioid cusp c = 1/4, 5.8e-9. |λ| survives
+  // that (1.000000000 to nine places) but ARG does not: the spurious imaginary part put θ at ~1e-8
+  // instead of 0, the continued fraction did not terminate, and the app reported a **Siegel disc** at
+  // the cusp. Snapping the multiplier to exactly 1 states the fact the collision already proves, and
+  // leaves the rotation-number classifier — which cannot tell a near-Cremer irrational from a
+  // rational at float64, and does not have to — untouched. (WP5 / I5, review 2026-09-16.)
+  const collided = roots.some((r) => {
+    const d = Math.hypot(r[0] - best.point[0], r[1] - best.point[1]);
+    return d > 0 && d < DOUBLE_ROOT_TOL;
+  });
+  if (collided) return { point: best.point, multiplier: [1, 0] };
+  return { point: best.point, multiplier: best.multiplier };
+}
+
 /** Classify and measure the orbit at a clicked point. See the module comment for plane semantics. */
 export function inspect(
   fAst: Node,
@@ -359,6 +419,18 @@ export function inspect(
         const settled = locateCycle(f, cycle[0], c, info.period);
         if (settled.length === info.period) out.multiplierMag = cycleMultiplierMag(f, settled, c);
       }
+    }
+  } else if (info.fate === "undetermined" && deriv) {
+    // The orbit did not settle in the iteration budget. For a polynomial that does not mean "no
+    // attractor" — it usually means a slow one, or an indifferent fixed point that never converges at
+    // all. Solve for it instead of waiting for it. (WP5 / I5, review 2026-09-16.)
+    const fp = attractingFixedPoint(fAst, a, c, deriv);
+    if (fp) {
+      out.fate = "converged";
+      out.period = 1;
+      out.cyclePoints = [fp.point];
+      out.multiplier = fp.multiplier;
+      out.multiplierMag = cabs(fp.multiplier);
     }
   } else if (info.fate === "escaped" && deriv) {
     out.distance = escapeDistance(fAst, escapeAst, plane, z0, c, a, deriv);

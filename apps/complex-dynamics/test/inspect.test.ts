@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { parse } from "@cas/expr/parser";
 import { makeComplexFn } from "@cas/expr/evaluate";
-import { inspect, rotationNumber, findNucleus } from "../src/render/inspect";
+import { inspect, rotationNumber, findNucleus, fatouComponentType } from "../src/render/inspect";
 import type { Complex } from "../src/complex";
 
 const F = parse("z^2+c"); // Mandelbrot / Julia map
@@ -250,5 +250,57 @@ describe("findNucleus — refuses a centre of the wrong period", () => {
     expect(rabbit?.[1]).toBeCloseTo(0.744862, 5);
     const p4 = findNucleus(F, O, 4, [-1.31, 0.01]);
     expect(p4?.[0]).toBeCloseTo(-1.310703, 5);
+  });
+});
+
+// ── WP5 / I5 (review 2026-09-16): the indifferent verdicts are reachable at last ──────────────
+// `classifyOrbit` decides a cycle by waiting for the orbit to return within 1e-6 in ≤ 512
+// iterations. That is a convergence-SPEED test, and it fails exactly where the interesting
+// parameters are. Measured before the fallback existed: the golden-mean Siegel point, the parabolic
+// c = −3/4, the cusp c = 1/4, the 1/3 root — and an ATTRACTING c at |λ| = 0.99 — every one reported
+// `fate: "undetermined"`, period 0 and no multiplier. So the Siegel / Cremer / parabolic verdicts
+// the README documents could not be reached from a click at all.
+describe("inspect — indifferent and slow parameters are classified exactly", () => {
+  /** c on the cardioid at internal angle θ: c = μ/2 − μ²/4 with μ = e^{2πiθ}. */
+  const cardioid = (t: number): Complex => {
+    const m: Complex = [Math.cos(2 * Math.PI * t), Math.sin(2 * Math.PI * t)];
+    const m2: Complex = [m[0] * m[0] - m[1] * m[1], 2 * m[0] * m[1]];
+    return [m[0] / 2 - m2[0] / 4, m[1] / 2 - m2[1] / 4];
+  };
+  const classify = (c: Complex): string | null => {
+    const r = inspect(F, ESC, "param", O, c);
+    return fatouComponentType(r.multiplier, r.multiplierMag)?.type ?? null;
+  };
+
+  it("classifies the parabolic points on the cardioid", () => {
+    expect(classify(cardioid(0.5))).toBe("parabolic"); // c = −3/4, the period-2 root
+    expect(classify(cardioid(1 / 3))).toBe("parabolic"); // the 1/3 root
+    // The CUSP, c = 1/4. Here f(z) − z has a DOUBLE root, Durand–Kerner gets only √ε, and the
+    // spurious imaginary part put θ at ~1e-8 instead of 0 — so the app reported a Siegel disc at the
+    // one point on the cardioid where everyone can see there is none.
+    expect(classify(cardioid(0))).toBe("parabolic");
+  });
+
+  it("classifies the golden-mean Siegel point", () => {
+    expect(classify(cardioid((Math.sqrt(5) - 1) / 2))).toBe("siegel");
+  });
+
+  it("classifies a slowly-attracting parameter the orbit test could not settle", () => {
+    // |λ| = 0.99 needs ≈ 1,375 iterations to return within 1e-6; the budget is 512.
+    const lam = 0.99;
+    const mu: Complex = [lam * Math.cos(1), lam * Math.sin(1)];
+    const mu2: Complex = [mu[0] * mu[0] - mu[1] * mu[1], 2 * mu[0] * mu[1]];
+    const c: Complex = [mu[0] / 2 - mu2[0] / 4, mu[1] / 2 - mu2[1] / 4];
+    const r = inspect(F, ESC, "param", O, c);
+    expect(r.period).toBe(1);
+    expect(r.multiplierMag ?? 0).toBeCloseTo(0.99, 6);
+    expect(fatouComponentType(r.multiplier, r.multiplierMag)?.type).toBe("attracting");
+  });
+
+  it("declines where the attractor is a genuine higher-period cycle", () => {
+    // The anti-vacuity clause: in the 1/2 bulb α is REPELLING, so the fixed-point fallback must not
+    // answer — the settled-cycle path does, with period 2.
+    const r = inspect(F, ESC, "param", O, [-1, 0]);
+    expect(r.period).toBe(2);
   });
 });

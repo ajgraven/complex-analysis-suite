@@ -86,14 +86,26 @@ describe("computeJuliaProperties — z²+c known parameters", () => {
     expect(p.smallCDimension).toBeNull(); // period 2 ≠ principal cardioid
   });
 
-  it("c=-0.5: attracting fixed point in the cardioid — |λ|∈(0,1), λ_Lyap<0, small-c dim>1", () => {
+  it("c=-0.5: attracting fixed point in the cardioid — |λ|∈(0,1), λ_Lyap<0", () => {
     const p = props(2, [-0.5, 0]);
     expect(p.cycle?.period).toBe(1);
     expect(p.cycle?.multiplierMag ?? 9).toBeGreaterThan(0);
     expect(p.cycle?.multiplierMag ?? 9).toBeLessThan(1);
     expect(p.paramClass).toBe("hyperbolic");
     expect(p.lyapunov ?? 9).toBeLessThan(0); // attracting
-    expect(p.smallCDimension ?? 0).toBeCloseTo(1 + 0.25 / (4 * Math.log(2)), 6);
+  });
+
+  // ── WP5 (review 2026-09-16): the Ruelle row is a SMALL-|c| asymptotic ──────────────────────
+  // It used to be offered anywhere in the principal cardioid, which reaches |c| = 3/4 at the cusp.
+  // The formula keeps a |c|² term and drops an O(|c|³) one, so at |c| = 0.5 the dropped term is the
+  // same order as the one kept, and the row was printed as an exact value beside the box count.
+  it("offers the small-|c| dimension only where |c| is actually small", () => {
+    expect(props(2, [0.05, 0]).smallCDimension ?? 0).toBeCloseTo(
+      1 + 0.05 * 0.05 / (4 * Math.log(2)),
+      9,
+    );
+    expect(props(2, [-0.5, 0]).smallCDimension).toBeNull(); // |c| = 0.5 — not small
+    expect(props(2, [-0.7, 0]).smallCDimension).toBeNull();
   });
 
   it("z³+c: the small-c dimension is quadratic-only (null for d=3, even in its principal cardioid)", () => {
