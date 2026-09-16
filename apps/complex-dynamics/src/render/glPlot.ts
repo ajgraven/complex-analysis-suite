@@ -456,6 +456,19 @@ export class GLPlot {
   private _perturbation = false; // perturbation deep-zoom toggle
   private _perturbEligible = false; // current f is a monic z^d+c the kernel handles (auto-detected)
   private _monicDegree: number | null = null; // degree d if f is z^d + c, else null
+  /**
+   * The degree the SMOOTH-ITERATION normalisation divides by, for EVERY shader this plot builds.
+   *
+   * `_monicDegree` is null for anything that is not exactly z^d + c, so `z³ − z + c` normalised by
+   * log 2 while the perturbation kernel divided by log 3, and toggling perturbation visibly re-banded
+   * the exterior (WP9/R5). That was fixed at the single-precision build site and NOT at the df64 one,
+   * so the same mismatch survived one zoom threshold away: past DF64_THRESHOLD the program swaps and
+   * the exterior re-bands. A getter rather than the expression repeated twice, because two call sites
+   * that must agree and are 130 lines apart will not stay agreed. (Review follow-up.)
+   */
+  private get smoothDegree(): number | null {
+    return this._polyPerturb?.degree ?? this._monicDegree;
+  }
   // Squared escape radius R² the perturbation kernel bails at — probed from the map's escapeFn so its
   // smooth-colour bands match the standard render; 4.0 (|z| > 2) is the default / z²+c value.
   private _perturbEscape2 = 4.0;
@@ -842,13 +855,10 @@ export class GLPlot {
         precision,
         this._fZAst,
         this._fCAst,
-        // The degree the SMOOTH-ITERATION normalisation divides by, and it has to be the same number
-        // the perturbation kernel uses (`perturbDegree()` → `uPerturbDegree`). `_monicDegree` is null
-        // for anything that is not exactly z^d + c, so `z³ − z + c` got LOG_DEGREE = log 2 here while
-        // the kernel divided by log 3, and toggling perturbation visibly re-banded the exterior. log 3
-        // is also the correct one: the smooth escape time normalises by the polynomial's DEGREE.
-        // (WP9/R5, review 2026-09-16.)
-        this._polyPerturb?.degree ?? this._monicDegree,
+        // Must be the same number the perturbation kernel uses (`perturbDegree()` →
+        // `uPerturbDegree`): the smooth escape time normalises by the polynomial's DEGREE.
+        // See {@link smoothDegree}. (WP9/R5, review 2026-09-16.)
+        this.smoothDegree,
         this._interiorBailout,
         this._periodicityBailout,
       ),
@@ -984,7 +994,7 @@ export class GLPlot {
           "df64",
           this._fZAst,
           this._fCAst,
-          this._monicDegree,
+          this.smoothDegree, // NOT `_monicDegree` — see the getter; this site was the one R5 missed
           this._interiorBailout,
           this._periodicityBailout,
         ),

@@ -796,24 +796,32 @@ function withModalFocus(
       e.preventDefault();
     }
   };
-  return {
-    open() {
-      returnFocus = document.activeElement as HTMLElement | null;
-      rawOpen();
-      overlay.addEventListener("keydown", onKeydown);
-      releaseEscape?.(); // a second open without a close would otherwise stack two layers
-      releaseEscape = pushEscapeLayer(() => this.close());
-      initialFocus.focus();
-    },
-    close() {
-      overlay.removeEventListener("keydown", onKeydown);
-      releaseEscape?.();
-      releaseEscape = null;
-      rawClose();
-      if (returnFocus && typeof returnFocus.focus === "function") returnFocus.focus();
-      returnFocus = null;
-    },
+  // Declared as plain closures rather than object methods, and the Escape layer captures `close`
+  // directly — NOT `this.close`. With a method, `this` is whatever the call site supplies, and
+  // `byId("help-ref-btn").addEventListener("click", modal.open)` supplies the BUTTON: the layer
+  // then called `button.close()`, which throws. `escapeStack` consumes the key before invoking the
+  // layer, so the throw skipped the release and left a dead layer on top of the stack — after one
+  // visit to the keyboard reference, Escape closed nothing for the rest of the session (not the
+  // mobile sheet, not an expanded plot, not the σ view). Only the ✕ and the backdrop still worked.
+  // A detached method is a legitimate way to pass a handler, so the fix belongs here, where no call
+  // site can reintroduce it, rather than at the one that happened to do it. (Review follow-up.)
+  const close = (): void => {
+    overlay.removeEventListener("keydown", onKeydown);
+    releaseEscape?.();
+    releaseEscape = null;
+    rawClose();
+    if (returnFocus && typeof returnFocus.focus === "function") returnFocus.focus();
+    returnFocus = null;
   };
+  const open = (): void => {
+    returnFocus = document.activeElement as HTMLElement | null;
+    rawOpen();
+    overlay.addEventListener("keydown", onKeydown);
+    releaseEscape?.(); // a second open without a close would otherwise stack two layers
+    releaseEscape = pushEscapeLayer(close);
+    initialFocus.focus();
+  };
+  return { open, close };
 }
 
 /** Populate + wire the glossary modal, and set the module-level {@link openGlossary} opener

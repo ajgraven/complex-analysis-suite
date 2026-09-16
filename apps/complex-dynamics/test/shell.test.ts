@@ -578,6 +578,31 @@ describe("WP8/S5 — Escape closes one layer, not all of them", () => {
     escape();
     expect(workspace.classList.contains("expand-param")).toBe(false);
   });
+
+  // The KEYBOARD REFERENCE, which none of the three above reaches — they all use `help-btn`, the
+  // glossary. Its opener was registered as a DETACHED method (`addEventListener("click",
+  // modal.open)`), so inside `open()` `this` was the button and the pushed layer was
+  // `button.close()`. That throws; `escapeStack` calls preventDefault/stopPropagation BEFORE the
+  // layer, so the key was consumed, the release never ran, and the dead layer stayed on top for the
+  // rest of the session. The defect is therefore invisible to the FIRST Escape's own dialog state
+  // and shows on the SECOND — which is why this walks two layers. (Review follow-up.)
+  it("the keyboard reference closes on Escape, and does not wedge the stack under it", async () => {
+    await mount();
+    const workspace = document.querySelector(".workspace") as HTMLElement;
+    byId("expand-param").click();
+    byId("help-ref-btn").click();
+    expect(byId("help-ref").hidden, "the reference opened").toBe(false);
+
+    escape();
+    expect(byId("help-ref").hidden, "its own layer closed it").toBe(true);
+    expect(workspace.classList.contains("expand-param"), "and only it").toBe(true);
+
+    escape();
+    expect(
+      workspace.classList.contains("expand-param"),
+      "the layer underneath still has the key — the stack is not wedged",
+    ).toBe(false);
+  });
 });
 
 describe("WP8/S4 — a mode the app cannot draw says so, and says so when it moves", () => {
