@@ -235,12 +235,11 @@ export function createFrontDoor(host: HTMLElement, page: HTMLElement, input: Fro
     page,
     // `shell2` on the BACKDROP, `contrasts.ts`'s trick and its reason: `inert` is not defeasible from
     // CSS, so the dialog cannot be a descendant of the shell, and wearing the class is how it gets
-    // the visual system without the containment. `contrastBackdrop` carries the fixed, centred,
-    // dimmed plate — a rule that is generic and was merely named after its first consumer; it now
-    // has two, so it wants renaming to a shared `modalBackdrop`, which is a step that owns the
-    // stylesheet. `frontBackdrop` is this panel's own hook for when it does.
-    backdropClass: "shell2 contrastBackdrop frontBackdrop",
-    dialogClass: "frontDoorDialog card2",
+    // the visual system without the containment. `modalBackdrop` is the fixed, centred, dimmed
+    // plate — a rule that never said anything about the ladder it was first written for, renamed
+    // when this panel became its second consumer. `doorBackdrop` is this one's own hook.
+    backdropClass: "shell2 modalBackdrop doorBackdrop",
+    dialogClass: "modalDialog frontDoorDialog card2",
     onClose: input.close,
     build: (dialog, titleId) => {
       render(dialog, titleId);

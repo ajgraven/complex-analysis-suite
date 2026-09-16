@@ -21,7 +21,6 @@
 // commit nothing at all.
 import { beforeEach, describe, expect, it } from "vitest";
 import { DARK_INK, LIGHT_INK } from "../src/ui/inkTheme.js";
-import { PIECE_COLOURS } from "../src/ui/stage/ink.js";
 import { FAMILIES } from "../src/families/index.js";
 import {
   clearThumbnailCache,
@@ -228,11 +227,11 @@ describe("the plate", () => {
     // rasterisation carries 347 colours in Chromium. The floor is stated as the count AND as the
     // membership, because a count alone cannot tell four piece colours from four greys.
     //
-    // The hues come from `PIECE_COLOURS` and not from `LIGHT_INK.pieces`, which is a FINDING about
-    // `ink.ts` rather than a choice here: see the palette test below.
+    // The hues come from `LIGHT_INK.pieces`, the theme this plate is drawn in — which it did not
+    // until the repair recorded in the palette test below.
     const ink = inks(rec.marks);
     expect(ink.size).toBeGreaterThanOrEqual(6);
-    const used = family("mellin-keyhole").contour.pieces.map((p) => PIECE_COLOURS[p.colour % 6]);
+    const used = family("mellin-keyhole").contour.pieces.map((p) => LIGHT_INK.pieces[p.colour % 6]);
     for (const hue of new Set(used)) expect(ink.has(hue)).toBe(true);
     expect(ink.has(LIGHT_INK.halo)).toBe(true);
     expect(ink.has(LIGHT_INK.accumulator.axes)).toBe(true);
@@ -253,7 +252,7 @@ describe("the plate", () => {
     expect(box.y1).toBeLessThanOrEqual(THUMBNAIL_SIZE.height);
   });
 
-  it("is the textbook palette everywhere the palette is READ — and the pieces are not (finding)", () => {
+  it("is the textbook palette EVERYWHERE, the piece strokes included", () => {
     const rec = recorder();
     drawThumbnail(rec.ctx, family("semicircle-quartic"));
     const ink = inks(rec.marks);
@@ -263,16 +262,18 @@ describe("the plate", () => {
     expect(ink.has(LIGHT_INK.halo)).toBe(true);
     expect(ink.has(DARK_INK.halo)).toBe(false);
 
-    // **AND WHAT IT DOES NOT.** `ink.ts` line 292 takes the piece stroke from the module-level
-    // `PIECE_COLOURS`, which is `DARK_INK.pieces` — so `opts.theme` decides the halo, the cuts, the
-    // handles, the marker and a refused contour's amber, and does NOT decide the six colours the
-    // pieces are actually drawn in. Handing it `LIGHT_INK` therefore gives a light plate stroked in
-    // the stage's hues, measured on `#f7f8fa` at **1.61:1 to 2.27:1** where the light palette's own
-    // hues sit at **5.11:1 to 7.22:1**. Asserted rather than described, so the step that repairs it
-    // (1.9, whose file list names `ink.ts` for textbook-mode drawing) fails HERE, at the sentence
-    // that says what changed, instead of somewhere downstream.
-    expect(ink.has(DARK_INK.pieces[0])).toBe(true);
-    expect(ink.has(LIGHT_INK.pieces[0])).toBe(false);
+    // **AND THE PIECES, WHICH IT DID NOT.** `drawContour` took the piece stroke from the module-level
+    // `PIECE_COLOURS` — `DARK_INK.pieces` — so the theme decided the halo, the cuts, the handles, the
+    // marker and a refused contour's amber, and did not decide the six colours the pieces are
+    // actually drawn in, two lines from a `t.refusedInk` that does. Handing it `LIGHT_INK` gave a
+    // light plate stroked in the stage's hues: measured on `#f7f8fa` at **1.61:1 to 2.27:1** where
+    // the light palette's own darkened hues sit at **5.11:1 to 7.22:1**, 2.6x to 3.6x better, and
+    // `inkTheme.ts`'s comment for that palette says it was darkened for exactly this reason.
+    //
+    // This test pinned the defect, so the repair failed HERE, at the sentence that says what
+    // changed — which is what a pinned finding is for. It now pins the repair.
+    expect(ink.has(LIGHT_INK.pieces[0])).toBe(true);
+    expect(ink.has(DARK_INK.pieces[0])).toBe(false);
   });
 
   it("lays the ground under everything, once, and leaves the composite as it found it", () => {

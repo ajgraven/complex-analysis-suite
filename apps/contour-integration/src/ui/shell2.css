@@ -632,9 +632,14 @@
    system, every rule of which is scoped `.shell2 …`; it cannot be a descendant of the shell because
    `inert` is not defeasible from CSS and a modal inside the element it makes inert is a modal nobody
    can reach. So it carries the class and this rule cancels the grid the class otherwise means.
+
+   **`modalBackdrop` / `modalDialog`, and they were `contrast…`.** Neither rule ever said anything
+   about the ladder — they are the container the mechanics in `shell2/modal.ts` put up — and the
+   front door is the second panel to wear them. A shared rule named after its first consumer is the
+   same drift `modal.ts` was extracted to stop, one file over.
    ════════════════════════════════════════════════════════════════════════════════════════════ */
 
-.shell2.contrastBackdrop {
+.shell2.modalBackdrop {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -648,7 +653,7 @@
   padding: 1rem;
 }
 
-.contrastDialog {
+.modalDialog {
   max-width: min(92vw, 68rem);
   max-height: 88vh;
   overflow: auto;
@@ -656,6 +661,82 @@
      the one that is IN FRONT of the page rather than part of it. */
   border: 1px solid var(--g-border);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+/* ---- the front door (step 1.8) ---- */
+
+/* The picker is wider than the ladder: four cards across at 240 px of thumbnail plus their text. */
+.frontDoorDialog {
+  max-width: min(94vw, 76rem);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* **FOUR columns, fixed, and this is a CONTRACT rather than a preference.** `frontDoor.ts` moves
+   the arrow keys by a declared `COLUMNS = 4` — layout is the only instrument that could measure the
+   real count, and jsdom reports every box as zero-sized, so a measured version would be asserted
+   nowhere in the blocking gate. `auto-fill` would therefore leave Up and Down stepping by four while
+   the eye sees three, at exactly the widths where a reader is most likely to be using the keyboard.
+   The cards narrow instead; the thumbnail is 240 px and scales down with them. */
+.doorGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.doorCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.5rem;
+  border: 1px solid var(--g-border);
+  border-radius: var(--r-card);
+  background: var(--g-panel-2);
+  min-width: 0;
+}
+/* The whole card is the target — `frontDoor.ts` puts the handler on the article and leaves the
+   button bare, so pointer, Enter and Space all arrive at one place and a card cannot open twice. */
+.doorCard:hover {
+  border-color: var(--g-accent);
+}
+.doorCard:focus-within {
+  outline: 2px solid var(--g-accent);
+  outline-offset: 2px;
+}
+
+/* The thumbnail's slot. A fixed aspect box, so a record whose plate is missing leaves a gap the
+   size of the picture rather than collapsing the card and reflowing the grid around it. */
+.doorThumb {
+  aspect-ratio: 240 / 110;
+  background: var(--g-ground);
+  border-radius: calc(var(--r-card) / 2);
+  overflow: hidden;
+}
+.doorThumb > canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* The identity — the target integral with its answer — is the card's headline and the one thing a
+   reader scans for, so it is the one thing allowed to wrap. */
+.doorIdentity {
+  font-size: var(--t-s);
+  overflow-x: auto;
+}
+
+.doorGroups {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.doorGroup > .doorDisclosure {
+  width: 100%;
+  text-align: left;
+}
+.doorRegion {
+  padding-top: 0.5rem;
 }
 
 .contrastGrid {

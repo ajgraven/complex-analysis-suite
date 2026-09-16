@@ -289,7 +289,15 @@ export function drawContour(
   }
 
   for (let k = 0; k < paths.length; k++) {
-    const colour = PIECE_COLOURS[(opts.colours[k] ?? k) % PIECE_COLOURS.length];
+    // **The THEME's palette, and this read the module-level one.** `PIECE_COLOURS` is `DARK_INK.pieces`,
+    // so `opts.theme` decided the halo, the cuts, the handles, the marker and a refused contour's
+    // amber — and did not decide the six colours the pieces are actually drawn in, two lines from a
+    // `t.refusedInk` that does. On the light ground the stage's hues measure 1.61:1 to 2.27:1 against
+    // `#f7f8fa`, where `LIGHT_INK`'s own darkened hues give 5.11:1 to 7.22:1; `inkTheme.ts`'s comment
+    // for that palette says it was darkened for exactly this reason. A provable no-op for the stage,
+    // which passes `DARK_INK`, so `t.pieces` IS `PIECE_COLOURS` there.
+    const palette = t.pieces;
+    const colour = palette[(opts.colours[k] ?? k) % palette.length];
     const emphasised = opts.highlight === k;
     tracePath(ctx, paths[k]);
     ctx.strokeStyle = opts.refused === true ? t.refusedInk : colour;

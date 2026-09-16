@@ -224,12 +224,12 @@ export function createContrastsDialog(host: HTMLElement, page: HTMLElement, inpu
   // cannot be a DESCENDANT of the shell: `inert` is not defeasible from CSS, so a modal inside the
   // element it makes inert is a modal nobody can reach. Wearing the class rather than living under
   // it gets the visual system without the containment; `shell2.css` cancels the grid on
-  // `.shell2.contrastBackdrop`.
+  // `.shell2.modalBackdrop`.
   const modal = createModal({
     host,
     page,
-    backdropClass: "shell2 contrastBackdrop",
-    dialogClass: "contrastDialog card2",
+    backdropClass: "shell2 modalBackdrop",
+    dialogClass: "modalDialog card2",
     onClose: input.close,
     build: (dialog, titleId) => {
       patch(dialog, [

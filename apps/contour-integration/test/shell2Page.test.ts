@@ -210,7 +210,7 @@ describe("the contrast ladder, from the bar", () => {
     // records — in front of the app's first frame would be the cost of a panel most readers never
     // open, and the ladder is memoised at module scope so the second open is free.
     expect(dialogOf()).toBeNull();
-    expect(root.querySelector(".contrastBackdrop")).toBeNull();
+    expect(root.querySelector(".modalBackdrop")).toBeNull();
     expect(app.session().contrastsOpen).toBe(false);
 
     // The bar's button is what puts it up, and the session flag is what the bar reads back — both

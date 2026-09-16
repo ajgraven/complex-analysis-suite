@@ -33,6 +33,8 @@ import { createStageController, type StageController } from "./stageController.j
 import { createStageView } from "./stageView.js";
 import { createStripView, type StripDraw } from "./strip.js";
 import { createContrastsDialog } from "./contrasts.js";
+import { createFrontDoor } from "./frontDoor.js";
+import { thumbnailById } from "./thumbnails.js";
 
 /** A mounted shell, from the outside — the same two functions the old shell exposes. */
 export interface Shell2Handle {
@@ -166,6 +168,28 @@ export function mountShell2(root: Element): Shell2Handle {
       render2();
     },
   });
+  // --- the front door ---------------------------------------------------------------------------
+  //
+  // Mounted beside the contrasts dialog and for its reasons, on `root` rather than in the shell.
+  //
+  // **`apply` FRAMES the contour, and `applyStateNow` deliberately does not.** A link carries the
+  // camera the sharer chose (M6.2's finding), so the door a link comes through must not reframe —
+  // but a reader opening a record from the picker has chosen no camera at all, and A6's contour runs
+  // to R = 4 against a default half-height of 2. So the fit belongs to this caller, which is exactly
+  // where `setTemplate` already puts it.
+  const frontDoor = createFrontDoor(root as HTMLElement, shell, {
+    state: () => state,
+    apply: (next) => {
+      applyStateNow(next);
+      controller?.fitContour();
+    },
+    close: () => {
+      session.frontDoorOpen = false;
+      render2();
+    },
+    thumbnail: (id) => thumbnailById(id),
+  });
+
   const scheduleDraw = (): void => stageView.schedule(drawState);
 
   // --- the one door ---------------------------------------------------------------------------
@@ -357,7 +381,13 @@ export function mountShell2(root: Element): Shell2Handle {
       render2();
     },
     applyState: (next) => applyStateNow(next),
-    openFrontDoor: () => say("The worked-example picker arrives at step 1.8.", "⚠"),
+    // Both written here, so the bar and the dialog cannot disagree about whether it is up — the
+    // shape `setContrastsOpen` records.
+    openFrontDoor: () => {
+      session.frontDoorOpen = true;
+      frontDoor.open();
+      render2();
+    },
     notify: (text, level) => say(text, level),
     redraw: () => render2(),
 
@@ -668,6 +698,7 @@ export function mountShell2(root: Element): Shell2Handle {
     destroy: () => {
       window.clearTimeout(hashTimer);
       controller?.destroy();
+      frontDoor.destroy();
       stageView.destroy();
       stripView.destroy();
       contrasts.destroy();

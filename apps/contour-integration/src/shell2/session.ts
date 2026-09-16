@@ -110,6 +110,14 @@ export interface Session {
    */
   contrastsOpen: boolean;
   /**
+   * Whether the front door — the worked-example picker — is open.
+   *
+   * SESSION, for {@link Session.contrastsOpen}'s reason: a dialog is where the reader's hands are,
+   * and a permalink that reopened one would hand someone else a modal over the thing they came to
+   * look at. Opening a card is an `applyState`, so `resetTransient` puts it away by construction.
+   */
+  frontDoorOpen: boolean;
+  /**
    * The drill's answer sheet for the rung that is open — rung ii's pick per piece, rung iv's check.
    *
    * **HERE rather than in a `WeakMap` beside the panel**, which is where it first landed. That map
@@ -168,6 +176,7 @@ export function defaultSession(): Session {
     figureTheme: "light",
     notice: null,
     contrastsOpen: false,
+    frontDoorOpen: false,
     drillAnswers: {},
     drillDrawn: null,
     drillPicker: false,
@@ -197,6 +206,7 @@ export function resetTransient(session: Session): void {
   session.drillPicker = false;
   session.notice = null;
   session.contrastsOpen = false;
+  session.frontDoorOpen = false;
   // The reader has gone somewhere else; a sentence about the link they arrived on is no longer
   // about them. `writeHash` clears it on the reader's first action for the same reason.
   session.linkRefusal = null;
