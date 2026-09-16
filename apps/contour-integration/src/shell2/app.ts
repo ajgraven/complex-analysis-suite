@@ -31,6 +31,7 @@ import { render, type ShellActions } from "./render.js";
 import { defaultSession, resetTransient, type Session } from "./session.js";
 import { createStageController, type StageController } from "./stageController.js";
 import { createStageView, describeStage } from "./stageView.js";
+import { createUndo, type CommitReason } from "./undo.js";
 import { createStripView, type StripDraw } from "./strip.js";
 import { createContrastsDialog } from "./contrasts.js";
 import { createFrontDoor } from "./frontDoor.js";
@@ -63,8 +64,14 @@ export interface Shell2Handle {
   readonly destroy: () => void;
 }
 
-/** Why a commit happened. Read by the undo stack (1.11) and the budget choice below. */
-export type CommitReason = "init" | "edit" | "gesture" | "gesture-end" | "link";
+/**
+ * Why a commit happened — read by the undo stack and by the budget choice below.
+ *
+ * Re-exported rather than declared: `undo.ts` owns it, because that is the module that reads it,
+ * and a second copy here drifted the first time a reason was added. The dependency runs one way,
+ * `app.ts` → `undo.ts`, which is why the name lives at the far end.
+ */
+export type { CommitReason };
 
 /** The work ceiling while a gesture is live — the old shell's number, so the two behave alike. */
 const DRAFT_EVALUATIONS = 768;
@@ -415,6 +422,15 @@ export function mountShell2(root: Element): Shell2Handle {
       render2();
     },
     applyState: (next) => applyStateNow(next),
+
+    // ── undo and redo ──────────────────────────────────────────────────────────────────────
+    //
+    // **A restored state goes through `commit` like any other**, which is what makes an undo a
+    // recompute rather than a repaint: the expression is recompiled, the resolution is rebuilt, the
+    // permalink is rewritten and every surface is redrawn from one writer. `"edit"` would make the
+    // restored state a new entry and the reader could never get past it, so the reason is its own.
+    undo: () => restore(undoStacks.undo(state), "Undone", "Nothing to undo"),
+    redo: () => restore(undoStacks.redo(state), "Redone", "Nothing to redo"),
     // Both written here, so the bar and the dialog cannot disagree about whether it is up — the
     // shape `setContrastsOpen` records.
     openFrontDoor: () => {
@@ -596,7 +612,23 @@ export function mountShell2(root: Element): Shell2Handle {
     });
   }
 
+  /**
+   * Undo and redo — M8 step 1.11.
+   *
+   * On the SESSION's arrays rather than in a closure, so `resetTransient` goes on clearing them and
+   * the comment beside them stays true. `applyStateNow` calls `resetTransient` before its `commit`,
+   * so a link clears the stacks twice over — once there and once through `record`'s `"link"` rule —
+   * which is belt and braces on the one transition where an inherited history would be restoring a
+   * state from somebody else's reading.
+   */
+  const undoStacks = createUndo(session);
+
   function commit(next: ShellState, why: CommitReason): void {
+    // **Before the state moves**, because an entry is the state the reader was in a moment ago and
+    // `commit` is about to overwrite it. `record` decides for itself whether this is an entry at
+    // all — a camera move is not, a drag's two-hundredth frame is not, and the tenth arrow nudge
+    // inside 800 ms is the first one's entry rather than a tenth.
+    undoStacks.record(state, next, why);
     if (next.expr !== state.expr) compiled = compile(next.expr);
     state = next;
     // A draft budget while a gesture is live and the full one on settle — the plan's rule. At 1.1
@@ -733,6 +765,40 @@ export function mountShell2(root: Element): Shell2Handle {
   hashReady = true;
 
   /** The door a link, a contrast cell and a drill rung all come through. */
+  /**
+   * Put a state from the undo stacks back, and say so.
+   *
+   * **NOT `applyStateNow`**, and the difference is the whole point: that one is how a LINK arrives,
+   * so it resets the rails to the mode's default and clears the stacks. An undo is the reader's own
+   * step backwards inside one reading — the rails stay where they put them, and the history has to
+   * survive or `redo` would have nothing to go forward to.
+   *
+   * The transient half is still cleared, for M7.4's reason: a half-drawn pen path and a hover
+   * pointing at a piece the restored state does not have are not things to bring back.
+   */
+  function restore(target: ShellState | null, done: string, empty: string): void {
+    // **An empty stack announces and draws nothing**, which is what every editor does at the start
+    // of its history and is the honest thing here: the app's one visible notice channel is the
+    // Share card, in the right rail, where a reader who has just pressed Ctrl+Z is not looking —
+    // so a message there would be a reply nobody reads. The live region is where the reply belongs,
+    // because a screen-reader user has no other way to tell a no-op from a broken key.
+    if (target === null) {
+      stageA11y.announce(`${empty}.`);
+      return;
+    }
+    // M7.4's decision, for the same reason `applyStateNow` takes it: a restored state inherits no
+    // half-drawn path, no grading that would unmask a rung's answer, and no hover pointing at a
+    // piece it does not have. The CONTROLLER's locals go with them.
+    resetTransient(session);
+    controller?.reset();
+    // **The CAMERA is the reader's, not the entry's.** A camera move is not an undo entry (see
+    // `undo.ts`), so an entry carries whatever the camera happened to be when it was pushed —
+    // restoring that would teleport the view as a side effect of undoing an edit somewhere else.
+    // Keeping the current one is what makes an undo a change to the argument and nothing more.
+    commit({ ...target, view: state.view }, "restore");
+    stageA11y.announce(`${done}.`);
+  }
+
   function applyStateNow(next: ShellState): void {
     // **The camera comes back into the plane HERE**, because a link is the way a reader arrives at
     // one they did not navigate to. `decodeShell` checks the camera is three finite numbers with a
@@ -763,6 +829,50 @@ export function mountShell2(root: Element): Shell2Handle {
     return { left: mode === "worked", right: false };
   }
 
+  /**
+   * Ctrl/Cmd+Z and Shift+Ctrl/Cmd+Z — M8 step 1.11.
+   *
+   * On the DOCUMENT rather than on the shell, because the shortcut belongs to the app and not to
+   * whichever element happens to have focus: a reader who has just dragged the contour has focus on
+   * the stage, one who has just moved a slider has focus on the slider, and one who has clicked a
+   * card heading has focus on nothing in particular. All three mean the same thing by Ctrl+Z.
+   *
+   * **Except in a text field, where the BROWSER's undo is the right one.** The integrand box is an
+   * `<input>`, and a reader who has typed `1/z^` and wants the `^` back means their keystrokes
+   * rather than the app's edit history. `isEditable` is the guard, and it lets the pen keep
+   * Backspace for the same reason from the other side: the shortcut here is `z`, so the two never
+   * meet at all.
+   *
+   * `metaKey` and `ctrlKey` both, rather than a platform test: a platform test is a claim about the
+   * reader's machine and this is a claim about which key they pressed.
+   */
+  const isEditable = (target: EventTarget | null): boolean => {
+    if (!(target instanceof HTMLElement)) return false;
+    const tag = target.tagName;
+    return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable;
+  };
+
+  const onKeyDown = (ev: KeyboardEvent): void => {
+    if (ev.key !== "z" && ev.key !== "Z") return;
+    if (!ev.ctrlKey && !ev.metaKey) return;
+    if (isEditable(ev.target)) return;
+    ev.preventDefault();
+    // **While a path is open, Ctrl+Z is the PEN's.** The plan says the pen keeps its own Backspace,
+    // and the reason it has to keep something is this: an undo that went to the app would put the
+    // path away — `restore` clears the transient half, which is M7.4's rule and right for a state
+    // arriving from the stacks — and discard every vertex the reader had placed, to step back over
+    // an edit made before they started drawing. That is data loss under the key whose whole meaning
+    // is that nothing is lost. So it drops the last vertex, which is what Backspace does and what a
+    // reader means by "undo" while they are drawing.
+    if (session.pen !== null) {
+      if (!ev.shiftKey) controller?.penBack();
+      return;
+    }
+    if (ev.shiftKey) actions.redo();
+    else actions.undo();
+  };
+  document.addEventListener("keydown", onKeyDown);
+
   return {
     currentState: () => state,
     applyState: applyStateNow,
@@ -772,6 +882,7 @@ export function mountShell2(root: Element): Shell2Handle {
     /** The gestures, for the cards that drive them (the pen's buttons at step 1.4) and for tests. */
     stage: () => controller as StageController,
     destroy: () => {
+      document.removeEventListener("keydown", onKeyDown);
       window.clearTimeout(hashTimer);
       controller?.destroy();
       frontDoor.destroy();

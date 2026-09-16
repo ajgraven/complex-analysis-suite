@@ -26,7 +26,8 @@ import { math, mathPlain, mathText, renderedCount } from "../src/shell2/math.js"
 import { mountShell2 } from "../src/shell2/app.js";
 import { createStageController } from "../src/shell2/stageController.js";
 import { createStageView } from "../src/shell2/stageView.js";
-import { COLD_START_RECORD, compile, shellMode } from "../src/shell/state.js";
+import { COLD_START_RECORD, compile, defaultState, shellMode } from "../src/shell/state.js";
+import { circleTemplate } from "../src/engine/contour/templates.js";
 import { defaultSession, resetTransient } from "../src/shell2/session.js";
 import { resolveState } from "../src/shell/state.js";
 
@@ -287,14 +288,19 @@ describe("the session", () => {
     const s = defaultSession();
     s.gesture = "pen";
     s.drillGraded = true;
-    s.undo = [{}];
+    s.undo = [defaultState(circleTemplate())];
     s.hover = { z: [1, 0], piece: "arc", handle: 2 };
     s.rails = { left: true, right: false };
     s.open = { numerics: true };
     resetTransient(s);
     expect(s.gesture).toBe("none");
     expect(s.drillGraded).toBe(false);
-    expect(s.undo).toEqual([]);
+    // **The undo stacks SURVIVE this, and that changed at M8 step 1.11.** They used to be on the
+    // list, which was right while `applyState` was its only caller — and wrong the moment `restore`
+    // became the second, because clearing them there wiped the redo stack the undo had just filled
+    // and a reader could step back and never forward. A link still clears them; `undo.ts`'s
+    // `"link"` rule does it, in the module that owns them.
+    expect(s.undo).toHaveLength(1);
     expect(s.hover.piece).toBeNull();
     // Opening a link should not fold a reader's panels or close their disclosures.
     expect(s.rails).toEqual({ left: true, right: false });
@@ -1357,5 +1363,155 @@ describe("the hover: one id, three surfaces — M8 step 1.10", () => {
     expect(text, "the readout was not drawn at all").not.toBe("");
     expect(text).not.toContain("Infinity");
     expect(text).not.toContain("NaN");
+  });
+});
+
+describe("undo and redo — M8 step 1.11", () => {
+  /**
+   * What the app says the integral IS, as the one thing an undo has to bring back.
+   *
+   * The THEOREM's exact value where there is one, because that is the number on screen and the one
+   * the residue theorem establishes; the quadrature's value is the cross-check and moves with the
+   * geometry for reasons of its own.
+   */
+  const verdict = (app: ReturnType<typeof mountShell2>): string => {
+    const r = app.resolution();
+    if (r.kind !== "plain" && r.kind !== "declared") throw new Error(`nothing was integrated (${r.kind})`);
+    return r.analysis.theorem?.exactValue?.text ?? JSON.stringify(r.analysis.integral.value);
+  };
+
+  const ctrlZ = (shift = false): void => {
+    document.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "z", ctrlKey: true, shiftKey: shift, bubbles: true, cancelable: true }),
+    );
+  };
+
+  it("A DRAG ACROSS A POLE, UNDONE, RESTORES THE VERDICT — the step's own gate", () => {
+    const { app, ink } = mountStage();
+    // The sandbox's `1/z` on the unit-ish circle: the pole is inside, so the integral is 2πi.
+    const inside = verdict(app);
+    expect(inside).toContain("2");
+
+    // Drag the contour bodily off the pole. The press lands ON the curve, which is what makes it a
+    // body drag rather than a pan — `pointer()` presses with a button down, as most of these do.
+    const r = app.currentState().contour.params.R.value;
+    const [x, y] = screenOf(app, [r, 0]);
+    // **The shift is computed from R**, not a round number of pixels: at the boot camera a pixel is
+    // about 1/150 of a unit, so a 200 px drag moves the circle 1.33 units and a circle of radius
+    // 1.5 still has the origin inside it. The first draft asserted the answer had changed and it
+    // had not, for exactly that reason.
+    const [far] = screenOf(app, [3 * r, 0]);
+    ink.dispatchEvent(pointer("pointermove", x, y, { buttons: 0 }));
+    ink.dispatchEvent(pointer("pointerdown", x, y));
+    expect(app.session().gesture, "the press did not take the contour").toBe("contour");
+    for (let k = 1; k <= 5; k++) ink.dispatchEvent(pointer("pointermove", x + ((far - x) * k) / 5, y));
+    ink.dispatchEvent(pointer("pointerup", far, y));
+    const outside = verdict(app);
+    expect(outside, "the drag did not move the contour off the pole").not.toEqual(inside);
+
+    // **One entry for the whole drag**, and one press of Ctrl+Z brings the answer back. A push per
+    // frame would need six.
+    ctrlZ();
+    expect(verdict(app)).toEqual(inside);
+    ctrlZ(true);
+    expect(verdict(app), "redo did not return to the dragged state").toEqual(outside);
+  });
+
+  it("makes TEN ARROW NUDGES one entry", () => {
+    // The plan's second gate. Each nudge commits `"edit"` on its own, so without coalescing this
+    // would take ten presses of Ctrl+Z to undo — which is what a reader would call broken.
+    const { app } = mountStage();
+    // Enter cycles what the arrows move; take it round to the contour itself, which is the thing a
+    // reader nudges. `onCanvasKey` is the route `@cas/ui` translates a key into, and the route the
+    // rest of this file's keyboard tests use.
+    for (let i = 0; i < 8 && app.stage().grabLabel() !== "the whole contour"; i++) {
+      app.stage().onCanvasKey({ kind: "commit" }, new KeyboardEvent("keydown", { key: "Enter" }));
+    }
+    expect(app.stage().grabLabel(), "the arrows are not on the contour").toBe("the whole contour");
+    const grabbed = app.currentState().contour;
+    for (let k = 0; k < 10; k++) {
+      // `"pan"` with something held MOVES what is held — the controller's own branch, and what an
+      // arrow key means once Enter has taken hold of the contour.
+      app.stage().onCanvasKey({ kind: "pan", dx: 1, dy: 0 }, new KeyboardEvent("keydown", { key: "ArrowRight" }));
+    }
+    const nudged = app.currentState().contour;
+    expect(nudged, "the arrows moved nothing — the grab did not take").not.toEqual(grabbed);
+    ctrlZ();
+    expect(app.currentState().contour).toEqual(grabbed);
+  });
+
+  it("does NOT make an entry of a camera move", () => {
+    // `ShellState`'s own comment files the camera under "none of this can change a number", and an
+    // undo stack full of pans is one a reader cannot get back through.
+    const { app, ink } = mountStage();
+    const start = app.currentState().expr;
+    app.actions().setExpr("1/(z-1)");
+    const edited = app.currentState().expr;
+
+    ink.dispatchEvent(pointer("pointerdown", 5, 5));
+    ink.dispatchEvent(pointer("pointermove", 60, 5));
+    ink.dispatchEvent(pointer("pointerup", 60, 5));
+    app.stage().onCanvasKey({ kind: "pan", dx: -1, dy: 0 }, new KeyboardEvent("keydown", { key: "ArrowLeft" }));
+    expect(app.currentState().expr, "the camera moves changed the problem").toBe(edited);
+
+    // One press, and it steps over every camera move to the edit underneath.
+    ctrlZ();
+    expect(app.currentState().expr).toBe(start);
+  });
+
+  it("leaves Ctrl+Z ALONE inside a text field", () => {
+    // The integrand box is an `<input>`, and a reader who has typed `1/z^` and wants the `^` back
+    // means their keystrokes rather than the app's edit history.
+    const { root, app } = mount();
+    app.actions().setExpr("1/(z-1)");
+    const edited = app.currentState().expr;
+    const box = root.querySelector("input[type='text']");
+    expect(box, "no text box to type into").not.toBeNull();
+    box?.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true, cancelable: true }));
+    expect(app.currentState().expr, "the app's undo fired inside a text field").toBe(edited);
+  });
+
+  it("CLEARS the history when a link arrives", () => {
+    // A link is an arrival, not an edit: the states before it belong to a different reading, and an
+    // undo that walked back into one would take the reader somewhere they have never been.
+    const { app } = mount();
+    app.actions().setExpr("1/(z-1)");
+    expect(app.session().undo.length).toBeGreaterThan(0);
+    app.applyState({ ...app.currentState(), expr: "1/(z-2)" });
+    expect(app.session().undo).toHaveLength(0);
+    expect(app.session().redo).toHaveLength(0);
+  });
+
+  it("gives Ctrl+Z to the PEN while a path is open", () => {
+    // An undo that went to the app here would put the path away (`restore` clears the transient
+    // half, M7.4's rule) and discard every vertex the reader had placed, to step back over an edit
+    // made before they started drawing — data loss under the key whose meaning is that nothing is
+    // lost.
+    const { app, ink } = mountStage();
+    app.actions().setExpr("1/(z-1)");
+    const edited = app.currentState().expr;
+    app.stage().penStart();
+    for (const [x, y] of [[10, 10], [40, 10], [40, 40]]) ink.dispatchEvent(pointer("pointerdown", x, y));
+    const session = app.session() as { pen: { nodes: unknown[] } | null };
+    expect(session.pen?.nodes).toHaveLength(3);
+    ctrlZ();
+    expect(session.pen?.nodes, "Ctrl+Z did not drop a vertex").toHaveLength(2);
+    expect(session.pen, "the path was put away").not.toBeNull();
+    expect(app.currentState().expr, "the app's undo fired under the pen").toBe(edited);
+  });
+
+  it("does not push the state it just restored", () => {
+    // `"restore"` is its own commit reason for exactly this: an `"edit"` would push the state the
+    // reader has just stepped away from, and the second press of Ctrl+Z would bring it back.
+    const { app } = mount();
+    const start = app.currentState().expr;
+    app.actions().setExpr("1/(z-1)");
+    app.actions().setExpr("1/(z-2)");
+    ctrlZ();
+    ctrlZ();
+    expect(app.currentState().expr).toBe(start);
+    // And a third press, with nothing left, changes nothing rather than oscillating.
+    ctrlZ();
+    expect(app.currentState().expr).toBe(start);
   });
 });

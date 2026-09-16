@@ -42,6 +42,8 @@ function spyActions(): ShellActions & { calls: string[] } {
     setBranch: () => calls.push("branch"),
     setIso: (on) => calls.push(`iso:${on}`),
     setStageMode: (m) => calls.push(`stageMode:${m}`),
+    undo: () => calls.push("undo"),
+    redo: () => calls.push("redo"),
     declare: (id) => calls.push(`declare:${id}`),
     undeclare: () => calls.push("undeclare"),
     setDeclaration: () => calls.push("decl"),

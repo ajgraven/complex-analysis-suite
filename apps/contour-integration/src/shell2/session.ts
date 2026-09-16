@@ -12,6 +12,7 @@
 // field in the wrong object — a question with an answer instead of a habit.
 import type { PenNode } from "../engine/contour/pen.js";
 import type { Cx } from "../kernel/geom.js";
+import type { ShellState } from "../shell/state.js";
 
 /** What the pointer is currently doing. `none` is not a gesture; it is the absence of one. */
 export type Gesture = "none" | "contour" | "handle" | "branch" | "view" | "pen";
@@ -83,9 +84,16 @@ export interface Session {
    */
   scrubbing: boolean;
   hover: Hover;
-  /** Undo and redo hold whole `ShellState`s; the stacks are session-local and a link clears both. */
-  undo: unknown[];
-  redo: unknown[];
+  /**
+   * Undo and redo hold whole `ShellState`s; the stacks are session-local and a link clears both.
+   *
+   * **Whole states, not diffs** — M8 step 1.11. A `ShellState` is plain data and `commit` already
+   * replaces it wholesale, so an entry is the object that was current a moment ago and restoring it
+   * is `commit`. A diff would have to know which fields exist, which is the one thing about this
+   * state that keeps changing.
+   */
+  undo: ShellState[];
+  redo: ShellState[];
   /** Whether the drill's current rung has been graded — which unmasks the derivation (M7.4's bug). */
   drillGraded: boolean;
   rails: RailState;
@@ -191,6 +199,14 @@ export function defaultSession(): Session {
  * grading that outlived its rung, a pen path the reader never drew, a hover pointing at a piece the
  * new state does not have. The rails, the disclosures and the figure theme are the reader's own
  * preferences and deliberately survive — opening a link should not fold their panels.
+ *
+ * **The undo stacks are NOT on the list, and were, until they had a second caller.** M8 step 1.11's
+ * `restore` puts a state back from those stacks and has to clear the same transient half — and
+ * clearing the stacks there wiped the redo stack the undo had just filled, so a reader could step
+ * back and never forward. The two callers want different things, which is the sign that the stacks
+ * do not belong here: a LINK must not inherit them, and `undo.ts`'s `"link"` rule clears them in
+ * the module that owns them, which is the only place that knows what a run or a coalescing window
+ * is. Measured: without this, redo after a drag returned the state it had just left.
  */
 export function resetTransient(session: Session): void {
   session.gesture = "none";
@@ -198,8 +214,6 @@ export function resetTransient(session: Session): void {
   session.held = null;
   session.scrubbing = false;
   session.hover = NO_HOVER;
-  session.undo = [];
-  session.redo = [];
   session.drillGraded = false;
   session.drillAnswers = {};
   session.drillDrawn = null;

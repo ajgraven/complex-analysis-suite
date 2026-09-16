@@ -124,6 +124,15 @@ export interface ShellActions {
   /** Apply a whole state — a contrast cell, a drill rung, a front-door card. */
   readonly applyState: (next: ShellState) => void;
   /**
+   * Step back and forward through the reader's own edits — M8 step 1.11.
+   *
+   * Actions rather than a keyboard handler's private business, for the reason every other control
+   * here is one: the keyboard is a way of asking, not the thing being asked. A test drives them
+   * directly, and a button in a later step would drive the same pair.
+   */
+  readonly undo: () => void;
+  readonly redo: () => void;
+  /**
    * Open the front door — step 1.8 builds it.
    *
    * Declared now and **deliberately inert**, so the bar's record button exists in the shape it will
