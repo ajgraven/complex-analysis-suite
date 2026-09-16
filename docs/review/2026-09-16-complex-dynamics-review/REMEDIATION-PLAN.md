@@ -51,7 +51,16 @@ the code as it ends up). Pause for review at each WP gate.
 
 ---
 
-## WP1 — Five one-line fixes with outsized effect · effort S · closes R1, R2, R3, S1, U1
+## WP1 — Five one-line fixes with outsized effect · effort S · closes R1, R2, R3, S1, U1 · **DONE**
+
+> **Landed** (commit `d670c1f`). Gate green: lint, typecheck, 553 files / 5,725 tests, build; browser
+> suite 5 files / 26 tests. Every fix negative-control checked by reverting it and confirming red.
+> Two things the work changed from what is written below. **R3's distance legend was NOT inverted** —
+> its ramp ends are correct and only the boundary-darkening was unmentioned, so it keeps its labels
+> and gains a note; only multiplier, orbit trap and period were flipped. And **R1's test is pinned as
+> "the vignette slider cannot reach the image while post is off"** rather than as a corner-to-centre
+> luminance ratio: the first draft of that test measured the Julia set's black interior, and its own
+> anti-vacuity guard caught it.
 
 **Why first:** each is a handful of lines, each is user-visible on the first frame, and none needs the
 test scaffold.
