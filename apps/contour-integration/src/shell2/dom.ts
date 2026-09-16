@@ -49,7 +49,10 @@ export interface Desc {
  * Props are read by convention, which keeps the call sites terse: `key` addresses the node, `on*` is
  * a listener (`onClick`, `onInput`), `html` is raw innerHTML (KaTeX's output and nothing else),
  * anything in {@link PROPERTIES} is written as a property, and everything else is an attribute —
- * `undefined` or `null` removes it, `true` sets it empty, `false` removes it.
+ * `undefined` or `null` removes it, `true` sets it empty, `false` removes it. **An `aria-*`
+ * attribute is the exception in both directions**: its booleans are written as the strings `"true"`
+ * and `"false"`, because in ARIA an absent attribute and a `false` one mean different things and an
+ * empty one means neither.
  */
 export function h(tag: string, props: Readonly<Record<string, unknown>> = {}, ...children: Child[]): Desc {
   const { key, ...rest } = props as { key?: string } & Record<string, unknown>;
@@ -133,7 +136,17 @@ function applyProps(node: Node, desc: Desc, previous: Readonly<Record<string, un
       if (el[name] !== value) el[name] = value;
       continue;
     }
-    if (value === undefined || value === null || value === false) el.removeAttribute(name);
+    // **An `aria-*` attribute's `false` is a VALUE, not an absence — and its `true` is `"true"`, not
+    // `""`.** The general rule below is HTML's: a boolean attribute is present or absent, and `true`
+    // means the empty string. ARIA is not like that. `aria-pressed="false"` says *this toggle is off*
+    // where an absent one says *this is not a toggle at all*, and `aria-pressed=""` is read as
+    // undefined rather than as pressed — so the naive `aria-pressed: mode === m` produced one toggle
+    // and two ordinary buttons, and the one that WAS pressed was not announced as pressed either.
+    // Both directions were wrong, and both are invisible on screen: `theme.css` styles
+    // `[aria-pressed="true"]`, which never matched. Found at step 1.7, in a module everything in the
+    // shell goes through.
+    if (typeof value === "boolean" && name.startsWith("aria-")) el.setAttribute(name, String(value));
+    else if (value === undefined || value === null || value === false) el.removeAttribute(name);
     else el.setAttribute(name, value === true ? "" : String(value));
   }
 }

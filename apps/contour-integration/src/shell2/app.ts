@@ -31,6 +31,7 @@ import { defaultSession, resetTransient, type Session } from "./session.js";
 import { createStageController, type StageController } from "./stageController.js";
 import { createStageView } from "./stageView.js";
 import { createStripView, type StripDraw } from "./strip.js";
+import { createContrastsDialog } from "./contrasts.js";
 
 /** A mounted shell, from the outside — the same two functions the old shell exposes. */
 export interface Shell2Handle {
@@ -135,6 +136,22 @@ export function mountShell2(root: Element): Shell2Handle {
   });
   const accCanvas = stripView.canvas;
   const stripState = (): StripDraw => ({ state, resolution, session });
+
+  // --- the contrasts dialog ---------------------------------------------------------------------
+  //
+  // **Mounted on `root`, OUTSIDE `<main class="shell2">`**, because `inert` is not defeasible from
+  // CSS: a modal inside the element it makes inert is a modal nobody can reach. It wears the shell's
+  // class to get the visual system without the containment (`shell2.css` cancels the grid).
+  //
+  // Its content is built on the FIRST open rather than at mount — five full solves, four of them
+  // gallery records, which at mount would sit in front of the app's first frame.
+  const contrasts = createContrastsDialog(root as HTMLElement, shell, {
+    apply: (next) => applyStateNow(next),
+    close: () => {
+      session.contrastsOpen = false;
+      render2();
+    },
+  });
   const scheduleDraw = (): void => stageView.schedule(drawState);
 
   // --- the one door ---------------------------------------------------------------------------
@@ -302,11 +319,16 @@ export function mountShell2(root: Element): Shell2Handle {
       ),
     setContrastsOpen: (open) => {
       session.contrastsOpen = open;
+      // The dialog owns its own DOM, its focus and the page's `inert`; the session flag is what the
+      // BAR reads. Both are written here so the two cannot disagree about whether it is up.
+      if (open) contrasts.open();
+      else contrasts.close();
       render2();
     },
     applyState: (next) => applyStateNow(next),
     openFrontDoor: () => say("The worked-example picker arrives at step 1.8.", "⚠"),
     notify: (text, level) => say(text, level),
+    redraw: () => render2(),
 
     copyFigure: () => {
       if (typeof ClipboardItem === "undefined" || typeof navigator.clipboard?.write !== "function") {
@@ -503,6 +525,7 @@ export function mountShell2(root: Element): Shell2Handle {
       controller?.destroy();
       stageView.destroy();
       stripView.destroy();
+      contrasts.destroy();
       observer?.disconnect();
     },
   };

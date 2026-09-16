@@ -67,9 +67,46 @@
   border-bottom: 1px solid var(--g-border);
 }
 
-/* The bar's controls sit at its right end, away from the title. */
+/* The bar's controls sit at its right end, away from the title.
+ *
+ * **`margin-left: auto` on more than one child does not push them right, it SHARES the free space**
+ * — flexbox splits it equally among every auto margin on the line, so a second `.barBtn` strews the
+ * controls across the bar instead of clustering them. Exactly one child carries it, and that child
+ * is the wrapper holding the tool buttons. */
 .shell2 > .bar2 > .barBtn {
   margin-left: auto;
+}
+
+/* **The plan says bar overflow is "impossible by construction". Measured, it is not.**
+ *
+ * In real Chromium at 1024px — the app's narrowest supported width — the fixed parts (brand,
+ * segmented control, Sandbox, tool cluster, gaps, padding) take about 847 px, leaving ~177 px for
+ * the record button, whose typeset target runs from 65 px to 235 px across the corpus: 9 of 94
+ * (record, fixture) pairs did not fit. At 1280 and 1440 none did. And the failure was SILENT — the
+ * tool cluster inherits `.btnRow`'s `flex-wrap: wrap`, which is right in a rail card and wrong in a
+ * bar whose grid row is a fixed 3.25rem: the second line spilled about 5 px under the stage instead
+ * of announcing itself.
+ *
+ * So the bar does not wrap, and the one elastic thing in it is the record button — the only control
+ * whose width is content the app cannot choose. It truncates with an ellipsis; its accessible name
+ * carries the target in full, so nothing is lost to a reader who cannot see the end of it. */
+.shell2 > .bar2 {
+  flex-wrap: nowrap;
+}
+.shell2 > .bar2 > .barBtn {
+  flex-wrap: nowrap;
+  flex: none;
+}
+.shell2 > .bar2 > .barRecord {
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shell2 > .bar2 > .brand2,
+.shell2 > .bar2 > .segmented {
+  flex: none;
 }
 
 /* ---- rails ---- */
@@ -526,4 +563,81 @@
    wrapping a complex number across two lines. */
 .shell2 .card2[data-card="result"] {
   overflow-x: auto;
+}
+
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+   The contrasts dialog — M8 step 1.7.
+
+   **The backdrop wears `.shell2` without living under it.** The dialog reuses the shell's visual
+   system, every rule of which is scoped `.shell2 …`; it cannot be a descendant of the shell because
+   `inert` is not defeasible from CSS and a modal inside the element it makes inert is a modal nobody
+   can reach. So it carries the class and this rule cancels the grid the class otherwise means.
+   ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+.shell2.contrastBackdrop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: fixed;
+  inset: 0;
+  margin: 0;
+  height: auto;
+  /* Above `.cas-nav`, which sits at z-index 6 — a modal under the suite nav is not modal. */
+  z-index: 20;
+  background: rgba(8, 10, 14, 0.6);
+  padding: 1rem;
+}
+
+.contrastDialog {
+  max-width: min(92vw, 68rem);
+  max-height: 88vh;
+  overflow: auto;
+  /* The one surface in the app that is raised off its ground rather than beside it, because it is
+     the one that is IN FRONT of the page rather than part of it. */
+  border: 1px solid var(--g-border);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+.contrastGrid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-s);
+}
+.contrastGrid th,
+.contrastGrid td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.25rem 0.4rem;
+  border-top: 1px solid var(--g-border);
+}
+.contrastGrid th {
+  font-weight: 600;
+  color: var(--g-muted);
+}
+
+/* **A row that CHANGED, and a row whose wording moved without the argument doing so.** M7.1 filed
+   those apart deliberately: widening the declared set would point at rows that did not change, and
+   ignoring them would leave a difference nobody watches. Two marks, because they are two facts. */
+.contrastGrid td[data-change="declared"] {
+  background: rgba(110, 168, 254, 0.12);
+  box-shadow: inset 2px 0 0 var(--g-accent);
+}
+.contrastGrid td[data-change="wording"] {
+  background: rgba(153, 161, 179, 0.1);
+}
+
+/* The visually-hidden text that carries a status word beside an `aria-hidden` glyph. `app.css` has
+   an unscoped `.srOnly`; this is the shell2-scoped twin, so the dialog does not depend on the old
+   sheet surviving step 1.12. */
+.shell2 .srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }

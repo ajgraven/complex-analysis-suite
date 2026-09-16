@@ -59,6 +59,7 @@ function spyActions(): ShellActions & { calls: string[] } {
     applyState: () => calls.push("applyState"),
     openFrontDoor: () => calls.push("frontDoor"),
     notify: (text, level) => calls.push(`notify:${level}:${text}`),
+    redraw: () => calls.push("redraw"),
   };
 }
 

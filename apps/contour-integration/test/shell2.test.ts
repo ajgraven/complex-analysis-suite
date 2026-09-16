@@ -56,6 +56,26 @@ describe("the keyed builder", () => {
     expect([...host.children]).toEqual([b]);
   });
 
+  it("writes an `aria-*` boolean as a WORD, not as presence or absence", () => {
+    // HTML's boolean attributes are present-or-absent and `true` means the empty string; ARIA's are
+    // values. `aria-pressed="false"` says *this toggle is off* where an absent one says *this is not
+    // a toggle*, and `aria-pressed=""` is read as undefined rather than as pressed — so the general
+    // rule got BOTH directions wrong, invisibly, since `theme.css` styles `[aria-pressed="true"]`
+    // and that selector simply never matched.
+    const host = document.createElement("div");
+    patch(host, [
+      h("button", { key: "off", "aria-pressed": false }),
+      h("button", { key: "on", "aria-pressed": true }),
+      h("div", { key: "hidden", hidden: true }),
+      h("div", { key: "shown", hidden: false }),
+    ]);
+    expect(host.children[0].getAttribute("aria-pressed")).toBe("false");
+    expect(host.children[1].getAttribute("aria-pressed")).toBe("true");
+    // And the ordinary rule is untouched: a non-ARIA boolean is still presence-or-absence.
+    expect(host.children[2].getAttribute("hidden")).toBe("");
+    expect(host.children[3].hasAttribute("hidden")).toBe(false);
+  });
+
   it("REFUSES two children of one parent that share a key", () => {
     // A duplicate key is a caller's bug that used to be silent and permanent: the map holds one node
     // per key, so the first is never matched and never removed, and the app draws it twice forever.
@@ -305,7 +325,11 @@ describe("the new shell's structure", () => {
       expect(titles, `${id} is missing`).toContain(cardTitle(id));
     }
     // And the engine actually ran: the bar states what the resolution is.
-    expect(q(root, '[data-testid="mode"]').textContent).toBe("sandbox");
+    // `data-testid="mode"` NAMES THE MODE CONTROL now, not the scaffold's debug line — which is
+    // what the id always said and what 1.1 spent it on for want of anything else. The property is
+    // the same: the engine ran and the shell knows which state it is in.
+    expect(q(root, '[data-testid="mode"] button[aria-pressed="true"]').textContent).toBe("Explore");
+    expect(q(root, '[data-testid="record"]').textContent).toBe("Choose a record");
   });
 
   it("clears the session's transient half on applyState — M7.4's defect, structurally", () => {

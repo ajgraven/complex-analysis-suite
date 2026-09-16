@@ -12,6 +12,8 @@
 import { LEFT_CARDS, RIGHT_CARDS, cardTitle, type CardId } from "../engine/vocabulary.js";
 import type { PoleReport } from "../kernel/poles.js";
 import type { ShellState, StateResolution } from "../shell/state.js";
+import { bar } from "./bar.js";
+import { drillPanel } from "./drillPanel.js";
 import { contourCard } from "./cards/contour.js";
 import { cutsCard } from "./cards/cuts.js";
 import { integrandCard } from "./cards/integrand.js";
@@ -53,21 +55,6 @@ function placeholder(id: CardId): Desc {
   );
 }
 
-/** A one-line description of what the resolution IS, so the scaffold shows the engine is live. */
-function resolutionLine(resolution: StateResolution): string {
-  switch (resolution.kind) {
-    case "gallery":
-      return resolution.fatal ?? `record ${resolution.family.id}`;
-    case "declared":
-      return "sandbox, with a branch factor declared";
-    case "declared-refused":
-      return resolution.reason;
-    case "plain":
-      return "sandbox";
-    case "empty":
-      return resolution.reason ?? "nothing to compute";
-  }
-}
 
 /**
  * The whole shell, as descriptions.
@@ -107,19 +94,13 @@ export function render(
   const ctx: CardContext = { state, resolution, session, poles, actions };
   const build = (id: CardId): Desc => CARDS[id]?.(ctx) ?? placeholder(id);
   return {
-    bar: [
-      h("h1", { key: "brand", class: "brand2" }, "Contour Integration"),
-      h("span", { key: "mode", class: "placeholder", "data-testid": "mode" }, resolutionLine(resolution)),
-      // The stage's one toolbar control. Double-click does the same thing; a reader who has zoomed
-      // into nothing needs a way back that does not require knowing about the double-click.
-      h(
-        "button",
-        { key: "fit", class: "barBtn", "data-testid": "fit", onClick: () => actions.fitContour() },
-        "Fit contour",
-      ),
-    ],
+    bar: bar(ctx),
     left: LEFT_CARDS.filter((id) => gallery || id !== "target").map(build),
-    right: RIGHT_CARDS.map(build),
+    // **The drill's card is the TOP SLOT, not a member of `RIGHT_CARDS`.** It appears only while a
+    // rung is open, where every other card is always present; putting it in the list would make the
+    // list's contract "a card, or nothing" for one member's sake, and every `map` over it would grow
+    // a case meaning "none of the above" — which is M7.1's own reason for not making Contrasts a mode.
+    right: [drillPanel(ctx), ...RIGHT_CARDS.map(build)].filter((d): d is Desc => d !== null),
     rails: {
       left: session.rails.left ? "folded" : "open",
       right: session.rails.right ? "folded" : "open",

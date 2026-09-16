@@ -124,6 +124,15 @@ export interface ShellActions {
   readonly openFrontDoor: () => void;
   /** Say something in the honest-labelling vocabulary — the Share card's notice channel, shared. */
   readonly notify: (text: string, level: "=" | "≤" | "≈" | "⚠") => void;
+  /**
+   * Repaint the chrome without recomputing.
+   *
+   * For a change that is the SESSION's — a grading, a rung's answer sheet, a fold — where `commit`
+   * would re-resolve the whole state to redraw a panel and `applyState` would clear the very
+   * session fields the caller just wrote. The drill panel had been reporting a grading through
+   * `notify` for want of this, which made a sentence out of a repaint.
+   */
+  readonly redraw: () => void;
 }
 
 /** What every card is handed. */

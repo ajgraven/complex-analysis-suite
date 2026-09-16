@@ -133,7 +133,15 @@ export type CardId =
   | "singularities"
   | "result"
   | "derivation"
-  | "share";
+  | "share"
+  /**
+   * The drill's task card — M8 step 1.7.
+   *
+   * Not in {@link RIGHT_CARDS}: it is the right rail's TOP SLOT and appears only while a rung is
+   * open, where every other card is always present. A card that renders `null` inside a `map` would
+   * make the list's contract "a card, or nothing" for one member's sake.
+   */
+  | "drill";
 
 const CARD_TITLES: Readonly<Record<CardId, string>> = {
   target: "Target",
@@ -145,6 +153,7 @@ const CARD_TITLES: Readonly<Record<CardId, string>> = {
   result: "Result",
   derivation: "Derivation",
   share: "Share",
+  drill: "Drill",
 };
 
 /** The cards of the LEFT rail — what is being integrated — in the order they are read. */

@@ -109,6 +109,20 @@ export interface Session {
    * would hand someone else a modal over the thing they came to look at.
    */
   contrastsOpen: boolean;
+  /**
+   * The drill's answer sheet for the rung that is open — rung ii's pick per piece, rung iv's check.
+   *
+   * **HERE rather than in a `WeakMap` beside the panel**, which is where it first landed. That map
+   * would be correct — keyed by the session, and internally by `task/stage` so a scratch cannot
+   * outlive its rung — and it is still the shape this file exists to replace: the old shell kept
+   * roughly sixty module-level `let`s inside `mountApp`'s closure, and three of M7.4's defects were
+   * exactly that, a value the door could not see and therefore did not clear. `resetTransient`
+   * clears by construction; a scratch that reset itself by deriving its own key is one more thing
+   * to get right in a second place.
+   */
+  drillAnswers: Record<string, string | undefined>;
+  /** Rung iv's last enclosure check, or null. Same reasoning as {@link Session.drillAnswers}. */
+  drillDrawn: unknown;
 }
 
 /**
@@ -133,6 +147,8 @@ export function defaultSession(): Session {
     figureTheme: "light",
     notice: null,
     contrastsOpen: false,
+    drillAnswers: {},
+    drillDrawn: null,
   };
 }
 
@@ -153,6 +169,8 @@ export function resetTransient(session: Session): void {
   session.undo = [];
   session.redo = [];
   session.drillGraded = false;
+  session.drillAnswers = {};
+  session.drillDrawn = null;
   session.notice = null;
   session.contrastsOpen = false;
 }
