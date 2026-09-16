@@ -14,12 +14,12 @@
 // moves. `screen()` below is the same idea one level up — everything a reader could be told, as one
 // string, with each typeset formula standing for the sentence it is NAMED with rather than for
 // KaTeX's three copies of its own spans.
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_VIEW } from "../src/kernel/camera.js";
 import type { Contour } from "../src/engine/contour/model.js";
 import { penContour, sameShape } from "../src/engine/contour/pen.js";
-import { offeredCorpus, type ShellState } from "../src/shell/state.js";
+import { offeredCorpus, shellMode, type ShellState } from "../src/shell/state.js";
 import { decodeShell, encodeShell } from "../src/shell/viewState.js";
 import { mountShell2, type Shell2Handle } from "../src/shell2/app.js";
 
@@ -594,5 +594,142 @@ describe("the `#vs=` permalink, at the shell", () => {
     expect(back?.ok).toBe(true);
     if (back === null || !back.ok) return;
     expect(sameShape(back.state.contour, drawn)).toBe(true);
+  });
+
+  // **The worked-example flag reached the wire and nothing round-tripped it through a REAL hash.**
+  // Mutant `we-not-in-codec`: `viewState.ts`'s `workedExample: w.we === 1` replaced by
+  // `workedExample: false`. It survived the sweep — `test/viewState.test.ts` judges the codec by
+  // verdict, and a verdict is a NUMBER, which the mode does not move; and the state door's
+  // both-directions test above puts `workedExample` in its pair but never sends it through a hash.
+  // So the one field M8 added to the wire was the one field no link was ever asked to carry.
+  //
+  // Asserted on what a reader can observe — the derived mode and the segment the bar reports as
+  // pressed — as well as on the field, because `workedExample` is only ever visible THROUGH
+  // `shellMode`, and a link that restored the boolean while the bar went on showing Explore would
+  // satisfy a field check and nothing a reader cares about.
+  it("carries Worked example through the address bar, into a fresh app", async () => {
+    const built = mount();
+    clickNamed(q(built.root, '[data-testid="mode"]'), "Worked example");
+    expect(shellMode(built.app.currentState())).toBe("worked");
+    await settle();
+    expect(window.location.hash).toMatch(/^#vs=/);
+
+    const opened = mount(window.location.hash);
+    expect(opened.app.currentState().workedExample).toBe(true);
+    expect(shellMode(opened.app.currentState())).toBe("worked");
+    expect(q(opened.root, '[data-testid="mode"] button[aria-pressed="true"]').textContent).toBe("Worked example");
+    expect(refusal(opened.root).hidden).toBe(true);
+  });
+
+  // **A state the codec refuses leaves the URL ALONE.** Mutant `write-refused-link`: `writeHash`'s
+  // `if (!enc.ok) return;` writes `#vs=` and returns. Nothing failed, because every other test here
+  // reaches a state that encodes, and the Share card's refusal test never lets a commit settle — so
+  // the branch that exists to protect a good link was never watched while a bad state went past it.
+  // Overwriting a working permalink with a stub is worse than writing nothing at all: the reader
+  // still holds a URL, it still looks like one of ours, and it opens the defaults.
+  //
+  // **The refusal is NOT the pen's.** A hand-drawn contour encodes — M7.2 gave it its own wire form,
+  // and the last test in this block pins that. What refuses is a contour with no recipe whose pieces
+  // the pen did not draw either, which is the case the Share card's own test uses, and it reaches
+  // `writeHash` because `applyState` commits like every other change.
+  it("leaves a good link in the bar when the state stops being linkable", async () => {
+    const { app } = mount();
+    app.actions().setExpr("1/(1+z^2)");
+    await settle();
+    const good = window.location.hash;
+    expect(good).toMatch(/^#vs=/);
+
+    app.applyState({ ...app.currentState(), contourSource: null });
+    const enc = encodeShell(app.currentState());
+    expect(enc.ok, "the state has to be one the codec actually refuses").toBe(false);
+    await settle();
+
+    expect(window.location.hash, "a refused state overwrote the link that was there").toBe(good);
+  });
+
+  // **The boot write must not clobber the hash the app was opened with.** Mutant
+  // `sync-before-ready`: `syncHash`'s `if (!hashReady) return;` removed. Then `commit(state, "init")`
+  // — which runs before the link is read — schedules a write that lands 250 ms later carrying the
+  // app's own defaults.
+  //
+  // With a link that OPENED, nothing shows: the app is in the link's state, so the write reproduces
+  // the hash it would have overwritten. The case where it is visible is a link that was REFUSED —
+  // the app is showing its own starting state, and the bar must still hold the link that could not
+  // be opened, because a reader whose evidence disappears a quarter-second after it arrived cannot
+  // paste it anywhere, correct it, or see what they were sent.
+  //
+  // And the guard is pinned rather than "the hash never changes": the reader's first real change
+  // DOES replace it, which is the whole of what `hashReady` turns on.
+  it("keeps a REFUSED link in the bar until the reader acts", async () => {
+    const bad = "#vs=" + btoa(JSON.stringify({ v: 1, app: "ci", state: { m: "g", r: "no-such-record" } }))
+      .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
+    const { app, root } = mount(bad);
+    expect(refusal(root).hidden, "the refusal is showing to begin with").toBe(false);
+    await settle();
+    expect(window.location.hash, "the boot commit wrote over the link that was refused").toBe(bad);
+
+    app.actions().setExpr("1/(1+z^4)");
+    await settle();
+    expect(window.location.hash).not.toBe(bad);
+    const decoded = decodeShell(window.location.hash);
+    expect(decoded?.ok === true && decoded.state.expr).toBe("1/(1+z^4)");
+  });
+
+  // **A link comes through the DOOR, and the door does more than commit.** Mutant
+  // `link-skips-the-door`: the boot read's `applyStateNow(link.state)` replaced by
+  // `commit(link.state, "link")`. It looks equivalent — `applyStateNow` ends in exactly that call —
+  // and it is not: the door also runs the rails-follow-the-mode rule, and `railsFor("worked")` folds
+  // the left rail where the session's default leaves both open. So a worked-example link opened by a
+  // bare `commit` arrives with the derivation rail unfolded: not the worked example that was shared.
+  //
+  // Read off `<main class="shell2">`'s own `data-left`, which `render2` writes from the render's
+  // output — the attribute the CSS grid reads, so this is the fold a reader would SEE rather than
+  // the session field behind it.
+  it("opens a worked-example link with its left rail already folded", () => {
+    const built = mount();
+    built.app.applyState({ ...built.app.currentState(), workedExample: true });
+    const target = built.app.currentState();
+    expect(shellMode(target)).toBe("worked");
+
+    const opened = mount(link(target));
+    const shell = q(opened.root, "main.shell2");
+    expect(shellMode(opened.app.currentState())).toBe("worked");
+    expect(shell.dataset.left, "the link arrived without the mode's own fold").toBe("folded");
+    // And the default it had to move off, so the assertion above is not true of every mount.
+    expect(q(mount().root, "main.shell2").dataset.left).toBe("open");
+  });
+
+  // **One write per settle, which is the whole point of the timer.** Mutant `no-timer-cancel`:
+  // `syncHash`'s `window.clearTimeout(hashTimer)` removed, so every change schedules its own write
+  // instead of replacing the pending one. A wheel zoom has no gesture and no end event, so a fast
+  // spin is dozens of settled changes in a second, and `replaceState` is rate-limited by the
+  // browser — write per event and the browser silently stops writing at all.
+  //
+  // **Counted as writes ATTEMPTED, with the real `replaceState` suppressed**, and measuring is why:
+  // every leaked timer fires after every change, so each one encodes the SAME final state, and
+  // `writeHash`'s own `enc.hash !== window.location.hash` guard then declines all but the first. A
+  // spy that calls through therefore reads 1 under the mutant as well, and "the hash is right at the
+  // end" reads true under it too. Suppressing the write is what makes the extra timers observable.
+  //
+  // Two settles rather than one, so the claim is "one per settle" and not "at most one ever" —
+  // which `if (false) writeHash()` would satisfy perfectly.
+  it("coalesces a burst of changes into ONE write, and the next burst into one more", async () => {
+    const { app } = mount();
+    const spy = vi.spyOn(window.history, "replaceState").mockImplementation(() => undefined);
+    try {
+      for (const src of ["1/(1+z^2)", "1/(1+z^3)", "1/(1+z^4)", "1/(1+z^5)", "1/(1+z^6)"]) {
+        app.actions().setExpr(src);
+      }
+      expect(spy, "the write landed before the settle window closed").toHaveBeenCalledTimes(0);
+      await settle();
+      expect(spy, "one write for the burst").toHaveBeenCalledTimes(1);
+
+      app.actions().setExpr("1/(1+z^7)");
+      await settle();
+      expect(spy, "one write for the next change").toHaveBeenCalledTimes(2);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
