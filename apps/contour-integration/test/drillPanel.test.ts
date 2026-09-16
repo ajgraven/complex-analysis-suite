@@ -378,6 +378,12 @@ describe("rung ii — the KILL column", () => {
       s.dispatchEvent(new Event("change", { bubbles: true }));
     }
     expect(Object.values(session.drillAnswers), "the sheet never reached the session").toContain("vanishes");
+    // **Shown BEFORE it is cleared, or the clearing proves nothing.** Without this the last
+    // assertion passes on a card that never rendered the sheet at all — a test satisfied by the
+    // feature's absence. (Measured: a first draft omitted it and a leak mutant survived because
+    // nothing had made the leaked value visible in the first place.)
+    draw(drillState("rational", 2));
+    expect([...host.querySelectorAll<HTMLSelectElement>("select")].every((s) => s.value === "vanishes")).toBe(true);
     // The door, as `applyStateNow` calls it.
     resetTransient(session);
     draw(drillState("indented", 2));
@@ -386,6 +392,8 @@ describe("rung ii — the KILL column", () => {
     draw(drillState("oscillatory", 4));
     clickExact(host, "Check the enclosure");
     expect(session.drillDrawn, "the check never reached the session").not.toBeNull();
+    draw(drillState("oscillatory", 4));
+    expect(host.querySelector(".tag.warn"), "the check was never shown").not.toBeNull();
     resetTransient(session);
     draw(drillState("oscillatory", 4));
     expect(host.querySelector(".tag.warn"), "a stale verdict survived the door").toBeNull();

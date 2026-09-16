@@ -96,16 +96,18 @@ export function drillMask(ctx: CardContext): DrillMask {
 /**
  * The reader's answer sheet at rung ii.
  *
- * **Narrowed here, at its only reader.** `session.ts` types it as plain strings because it may not
- * import `shell/drill.ts` — `Disposal` lives beside the ledger's own vocabulary, and the import
- * would be a cycle back through `shell/state.ts`. Anything in it that is not a `Disposal` grades as
- * wrong, which is what an unanswered question does too, so the assertion cannot launder a bad value
- * into a right answer.
+ * **Narrowed here, at its only reader.** `session.ts` types it as plain strings and keeps
+ * {@link Session.drillDrawn} as `unknown` because it may not import `shell/drill.ts`: that module
+ * pulls `analyse`, `FAMILIES` and the contrast grid behind it, and the one file whose job is to say
+ * what a permalink must NOT carry should not depend on the engine to say it. Anything in the sheet
+ * that is not a `Disposal` grades as WRONG, which is what an unanswered question does too — so the
+ * assertion cannot launder a bad value into a right answer, which is the only thing it could cost.
  */
 const sheetOf = (session: Session): Readonly<Record<string, Disposal | undefined>> =>
   session.drillAnswers as Readonly<Record<string, Disposal | undefined>>;
 
-/** Rung iv's last enclosure check. `drillDrawn` is `unknown` for {@link sheetOf}'s reason. */
+/** Rung iv's last enclosure check, narrowed for {@link sheetOf}'s reason. A value that is not a
+ *  `DrawResult` would render as one — which is why nothing but this file ever writes the field. */
 const lastCheckOf = (session: Session): DrawResult | null =>
   (session.drillDrawn as DrawResult | null | undefined) ?? null;
 

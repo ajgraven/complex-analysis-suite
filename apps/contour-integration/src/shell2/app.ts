@@ -24,7 +24,7 @@ import type { StageDraw } from "./stageView.js";
 import { injectPngText } from "@cas/export";
 
 import { drawFigure, figureCaption, figureLayout, figureMetadata, type FigureCaption } from "../shell/figure.js";
-import { encodeShell } from "../shell/viewState.js";
+import { decodeShell, encodeShell } from "../shell/viewState.js";
 import { patch, h } from "./dom.js";
 import { render, type ShellActions } from "./render.js";
 import { defaultSession, resetTransient, type Session } from "./session.js";
@@ -66,6 +66,9 @@ export type CommitReason = "init" | "edit" | "gesture" | "gesture-end" | "link";
 /** The work ceiling while a gesture is live — the old shell's number, so the two behave alike. */
 const DRAFT_EVALUATIONS = 768;
 
+/** How long after the last change the address bar catches up. The old shell's number. */
+const HASH_SETTLE_MS = 250;
+
 export function mountShell2(root: Element): Shell2Handle {
   const session = defaultSession();
   let state: ShellState = defaultState(circleTemplate([0, 0], 1.5));
@@ -80,6 +83,16 @@ export function mountShell2(root: Element): Shell2Handle {
   // reader reaches, while `position: fixed` draws it at the top.
   const navHost = document.createElement("div");
   navHost.className = "shell2Nav";
+
+  // **The refusal gets its own element, OUTSIDE `<main>`** — M6.2's third finding. It is a fact
+  // about how the page was opened rather than part of the argument, and it must not be the notice
+  // region: that is cleared by the next thing the reader does, and a refusal wiped a moment after
+  // appearing is no refusal. `role="alert"` rather than `status` because it is inserted after the
+  // first paint (the link is read LAST, below), which is exactly the case an alert announces.
+  const linkBox = document.createElement("p");
+  linkBox.className = "linkRefusal";
+  linkBox.setAttribute("role", "alert");
+  linkBox.hidden = true;
 
   const shell = document.createElement("main");
   shell.className = "shell2";
@@ -98,7 +111,7 @@ export function mountShell2(root: Element): Shell2Handle {
   strip.className = "strip2";
 
   shell.append(bar, left, stageWrap, right, strip);
-  root.replaceChildren(navHost, shell);
+  root.replaceChildren(navHost, linkBox, shell);
   mountNavHeader(navHost, { current: "contour-integration" });
 
   // --- the stage ------------------------------------------------------------------------------
@@ -449,6 +462,11 @@ export function mountShell2(root: Element): Shell2Handle {
     patch(right, out.right);
     scheduleDraw();
     stripView.schedule(stripState);
+    // **Every commit, and that is the structural payoff.** The old shell called `syncHash` from five
+    // places and forgot three of them — the scrub, the iso toggle and the contrast mode moved the
+    // view and left the address bar behind — because each caller had to remember. Here there is one
+    // way for the state to change, so there is one place to say it changed.
+    syncHash();
   }
 
   // --- accessibility ---------------------------------------------------------------------------
@@ -475,6 +493,59 @@ export function mountShell2(root: Element): Shell2Handle {
     announce: (message) => stageA11y.announce(message),
   });
 
+  // --- the permalink ---------------------------------------------------------------------------
+  //
+  // A boot-time read plus `history.replaceState` on settle — the house idiom across the suite, and
+  // deliberately not a live `hashchange` listener: nothing in the repo re-hydrates from one, and the
+  // app where a dropped field changes the ANSWER is not where that should start.
+
+  /** False until the boot link has been read, so the app's own first renders cannot clobber it. */
+  let hashReady = false;
+  let hashTimer = 0;
+
+  /**
+   * Put the current state in the address bar.
+   *
+   * `replaceState`, never `pushState`: a contour drag would otherwise leave a hundred entries
+   * between the reader and the page they came from. A state the codec REFUSES leaves the URL alone
+   * rather than half-writing one — the Share card is where that refusal is read, and overwriting a
+   * good link with a broken one would be the worse failure.
+   */
+  function writeHash(): void {
+    if (!hashReady) return;
+    // The reader has acted, so a sentence about the link they arrived on is no longer about them.
+    if (session.linkRefusal !== null) {
+      session.linkRefusal = null;
+      showLinkRefusal();
+    }
+    const enc = encodeShell(state);
+    if (!enc.ok) return;
+    if (enc.hash !== window.location.hash) window.history.replaceState(null, "", enc.hash);
+  }
+
+  /**
+   * The state has changed; the URL should catch up shortly.
+   *
+   * **COALESCED, and a real browser is why** (M6.2's first finding). A wheel zoom has no gesture and
+   * no end event, so a fast spin is dozens of discrete settled changes in a second — and
+   * `replaceState` is rate-limited by the browser, so writing per event would silently stop writing.
+   * One timer means every caller can simply say "this changed" and the URL lands once things settle.
+   */
+  function syncHash(): void {
+    if (!hashReady) return;
+    window.clearTimeout(hashTimer);
+    hashTimer = window.setTimeout(writeHash, HASH_SETTLE_MS);
+  }
+
+  function showLinkRefusal(): void {
+    const why = session.linkRefusal;
+    linkBox.hidden = why === null;
+    linkBox.textContent =
+      why === null
+        ? ""
+        : `This shared link could not be opened: ${why}. Showing the app's own starting state instead.`;
+  }
+
   commit(state, "init");
   if (stageView.glError !== null) {
     // Said in the bar rather than thrown: the shell works without a portrait, and a reader who
@@ -488,6 +559,22 @@ export function mountShell2(root: Element): Shell2Handle {
   // The stage has no size until layout runs, so the first draw would be at 1×1 without this.
   const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => scheduleDraw());
   observer?.observe(stageWrap);
+
+  // **THE LINK IS READ LAST AND EXACTLY ONCE.** After the app has built itself, so a decoded state
+  // goes through the same `applyState` a contrast cell or a drill rung does; before `hashReady`, so
+  // none of the boot renders above has overwritten the very hash being read.
+  //
+  // **No `fitContour()` here**, and it was in the old shell for one draft: the link CARRIES the
+  // camera, and reframing would throw away the view the sharer chose.
+  const link = decodeShell(window.location.hash);
+  if (link !== null) {
+    if (link.ok) applyStateNow(link.state);
+    else {
+      session.linkRefusal = link.reason;
+      showLinkRefusal();
+    }
+  }
+  hashReady = true;
 
   /** The door a link, a contrast cell and a drill rung all come through. */
   function applyStateNow(next: ShellState): void {
@@ -522,6 +609,7 @@ export function mountShell2(root: Element): Shell2Handle {
     /** The gestures, for the cards that drive them (the pen's buttons at step 1.4) and for tests. */
     stage: () => controller as StageController,
     destroy: () => {
+      window.clearTimeout(hashTimer);
       controller?.destroy();
       stageView.destroy();
       stripView.destroy();

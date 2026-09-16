@@ -21,6 +21,40 @@
   display: contents;
 }
 
+/* The link refusal (M6.2's third finding), between the nav and the shell so that it is neither
+   inside the page's one landmark nor competing with the bar for width. It is `hidden` almost
+   always. When it is not, it takes a row of its own and the page scrolls by exactly its height,
+   because `.shell2` below is `calc(100vh - nav)` and nothing tells it about this element — which is
+   the right trade here rather than a defect worked around: the banner is showing only until the
+   reader's first action (`writeHash` clears it), a fixed overlay would cover the bar exactly as the
+   suite nav once did, and a scroll a reader can see is better than a sentence they cannot. */
+.linkRefusal {
+  margin: var(--cas-nav-h, 0px) 0 0;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--g-line, #2a2f3a);
+  background: color-mix(in srgb, var(--g-warn, #d8a657) 12%, transparent);
+  color: var(--g-text, #e7e9ee);
+  font-size: 0.85rem;
+}
+
+/* …and the shell starts directly below the banner rather than taking the nav's offset a second
+   time — the banner has already reserved it. An adjacent-sibling selector, so this costs nothing
+   while the banner is hidden. */
+.linkRefusal:not([hidden]) + .shell2 {
+  margin-top: 0;
+}
+
+/* **The shell's nav offset must stay INSIDE its parent.** `.shell2`'s `margin-top` is the first
+   thing in its containing block, so with nothing establishing a formatting context there it
+   collapses straight out through `#app` and moves the BODY down instead — measured at 1440 × 900:
+   the body laid out from y = 32 to y = 932, `scrollHeight` 932 against a 900 px viewport, the page
+   scrolling by exactly the nav's height on the default view. `flow-root` is the minimum that stops
+   it, and the selector asks for the shell's parent rather than naming `#app`, so a host element
+   with another id keeps the fix. */
+:has(> .shell2) {
+  display: flow-root;
+}
+
 .shell2 {
   display: grid;
   /* **The suite nav is `position: fixed` and publishes its own height as `--cas-nav-h`.** A shell
@@ -175,6 +209,13 @@
 .shell2 > .strip2 {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 19rem;
+  /* **The ROW is declared too, and the page scrolled 33 px without it.** With only the columns
+     named, the implicit row is `auto` and sizes to the taller child — the side panel's readout — so
+     the panel's own `overflow: auto` never engaged, the canvas's `height: 100%` resolved against
+     224 px inside a 192 px strip, and the bottom of the trail sat below the fold. Measured at
+     1440 × 900: `scrollHeight` 933 against a 900 px viewport, the whole of it this row.
+     `minmax(0, 1fr)` pins the row to the strip and hands the overflow back to the panel. */
+  grid-template-rows: minmax(0, 1fr);
 }
 .shell2 > .strip2 > canvas.acc {
   position: relative;

@@ -123,6 +123,17 @@ export interface Session {
   drillAnswers: Record<string, string | undefined>;
   /** Rung iv's last enclosure check, or null. Same reasoning as {@link Session.drillAnswers}. */
   drillDrawn: unknown;
+  /**
+   * Why the link this page was opened with could not be honoured, or null.
+   *
+   * **A refusal is not an absence** — M6.2's third finding. `decodeShell` returns `null` for *there
+   * was no link* and a named reason for *there was one and I cannot honour it*, and the second must
+   * be SHOWN: a link that cannot be opened must never open something plausible instead and say
+   * nothing about it. It is not a {@link Session.notice} because it is not the outcome of anything
+   * the reader did — it is a fact about how they arrived, and it outlives the six seconds a notice
+   * would have got.
+   */
+  linkRefusal: string | null;
 }
 
 /**
@@ -149,6 +160,7 @@ export function defaultSession(): Session {
     contrastsOpen: false,
     drillAnswers: {},
     drillDrawn: null,
+    linkRefusal: null,
   };
 }
 
@@ -173,4 +185,7 @@ export function resetTransient(session: Session): void {
   session.drillDrawn = null;
   session.notice = null;
   session.contrastsOpen = false;
+  // The reader has gone somewhere else; a sentence about the link they arrived on is no longer
+  // about them. `writeHash` clears it on the reader's first action for the same reason.
+  session.linkRefusal = null;
 }
