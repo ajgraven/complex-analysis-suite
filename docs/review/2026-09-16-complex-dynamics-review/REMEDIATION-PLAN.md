@@ -194,7 +194,33 @@ module scope (the `__views` debug handle, the a11y announcer) — keep them insi
 
 ---
 
-## WP4 — Instruments, tier 2: the combinatorial panels · effort L · closes I3, I4, I7 (findNucleus / refineCycle)
+## WP4 — Instruments, tier 2: the combinatorial panels · effort L · closes I3, I7 · **DONE (I4 carved out)**
+
+> **Landed** (commit `23289cc`). Gate green: lint, typecheck, 554 files / 5,757 tests, build.
+>
+> **I3 done, and it had a third part the review missed.** Both the lamination and the Yoccoz puzzle
+> are models of a _connected_ Julia set and **neither checked**: at the Cantor parameter c = −2.1 the
+> lamination drew **104 leaves** and the puzzle returned a valence-2 graph. Both now gate on a new
+> `quadraticCriticalBounded`. The tolerance change is as planned (1e-9 on both sides, unrefined
+> landings dropped); the choice was wide open, since genuine co-landings agree to 1e-16 while the
+> nearest distinct pair is 1e-4 to 1e-6. The decisive check is **structural, not numeric**: every QML
+> gap must be a 2-gon, which is what a component root is, and 4e-3 produced gaps of 17, 10 and 9.
+> Measured valence repairs: the basilica's β 21 → 1, ∂M's tip 33 → 1.
+>
+> **I7 done** for `findNucleus`, with an exact period guard rather than the distance threshold
+> sketched here — every period-2 centre is also a root of `f⁴(0) = 0`, so the failure was a genuine
+> nucleus of the wrong period, and a distance test would not have named that. `refineCycle`'s
+> converged flag is carried with I4 below.
+>
+> **I4 is NOT done, and the reason is a measurement.** This plan proposed deciding
+> satellite-vs-primitive by whether the cycle winds about α. **It does not separate them**: the
+> primitive period-4 component at −0.1565 + 1.0322i winds about α exactly once, like the 1/3 bulb,
+> while the 1/2 bulb winds _zero_ times because a 2-gon is degenerate. The defect is real and
+> reproduced — that primitive component is reported with internal angle 1/4, and "Limb", "Show bulb
+> rays" and the orbit portrait all ride on it — but there is no verified criterion here, and guessing
+> one would ship a wrong mathematical claim in a tool whose whole point is honest labelling. The
+> orbit-portrait rotation number at α (`combinatorics/orbitPortrait.ts`, now that the valence finder
+> is trustworthy) is the likely route and needs its own slice.
 
 **I3 laminations, QML, angles of a point, Yoccoz.** The 4e-3 / 5e-3 clusters are the defect; the
 repair is one rule applied in four places: **two rays land at the same point only if their
