@@ -68,7 +68,7 @@ export const d7DogboneTwoFractionalPowers: Family = {
   auxiliary: {
     integrand: "z^mu * (b-z)^(1-mu) / (c-z)",
     relation: "Re",
-    note: "the upper edge is the target itself; the lower edge is the target times −e^{2πiμ}, which at μ = 3/4 is +i — so the two edges neither cancel nor add, and the solve divides by 1 + i",
+    note: "the upper edge is the target itself; the lower edge is the target times −e^{2πiμ}, which at μ = 3/4 is +i — so the two edges neither cancel nor add, and the identity is divided by 1 + i",
   },
 
   parameters: [

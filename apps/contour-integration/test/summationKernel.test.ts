@@ -166,7 +166,7 @@ describe("kernelResidues", () => {
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.reason).toMatch(/pole at z = 0, where the kernel has one too/);
-    expect(r.reason).toMatch(/MERGE/);
+    expect(r.reason).toMatch(/merge/);
     expect(r.certificate.level).toBe("⚠");
     // …and away from the collision the same cofactor is fine, which is what makes the refusal about
     // the point rather than about the integrand.

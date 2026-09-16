@@ -181,3 +181,122 @@ export const HEADLINES = {
   /** It does not close, and no single constraint is the one that stopped it. */
   incomplete: "The argument is incomplete.",
 } as const;
+
+/**
+ * One of the contour templates the sandbox offers — M8 step 2.1.
+ *
+ * Declared here for {@link ConstraintId}'s reason: `shell/templates.ts` re-exports it, so no
+ * consumer changed, and the label and the id cannot drift apart across a module boundary.
+ */
+export type TemplateId =
+  | "circle"
+  | "semicircle"
+  | "semicircleDown"
+  | "indented"
+  | "rectangle"
+  | "keyhole"
+  | "dogbone"
+  | "strip"
+  | "wedge"
+  | "square";
+
+/**
+ * What each template is called on screen.
+ *
+ * **This map and {@link disposalLabel}'s are the app's two PICKER vocabularies, and the one place
+ * the wording pass's "every formula inside `$…$`" cannot apply.** Both are rendered as the text of
+ * an `<option>`, and an `<option>` renders no markup at all — a `$2\pi$` in one would be seen, and
+ * read out, as four characters and a backslash. So their symbols are Unicode. Every other sentence
+ * in the app is typeset.
+ *
+ * `wedge` names the angle it actually builds rather than a general `2π/n`: the picker's entry is a
+ * shape you get, not a family you parameterise, and `wedgeTemplate(3, …)` gives the third.
+ */
+const TEMPLATE_LABEL: Readonly<Record<TemplateId, string>> = {
+  circle: "circle",
+  semicircle: "upper semicircle",
+  semicircleDown: "lower semicircle",
+  indented: "indented semicircle",
+  rectangle: "rectangle",
+  strip: "rectangle of height 2π",
+  wedge: "sector of angle 2π/3",
+  square: "square Γ_N",
+  keyhole: "keyhole",
+  dogbone: "dogbone",
+};
+
+export function templateLabel(id: TemplateId): string {
+  return TEMPLATE_LABEL[id];
+}
+
+/**
+ * What the drill offers as the job a piece of the contour does — M8 step 2.1.
+ *
+ * Declared here rather than in `shell/drill.ts` for the reason above; that module re-exports it.
+ * The five are a noun phrase each, because the reader picks one from a menu to complete the sentence
+ * *this piece is …*, and a verb there (`vanishes in the limit`, `cannot be disposed of`) made two of
+ * them read as a claim the reader was asserting rather than a role they were naming.
+ */
+export type Disposal = "target" | "vanishes" | "limit" | "reproduces" | "fails";
+
+const DISPOSAL: Readonly<Record<Disposal, string>> = {
+  target: "the target",
+  vanishes: "→ 0",
+  limit: "a known limit",
+  reproduces: "a constant multiple of the target",
+  fails: "no estimate",
+};
+
+export function disposalLabel(id: Disposal): string {
+  return DISPOSAL[id];
+}
+
+/**
+ * The small tags the rails hang on a value, a parameter, a pole or a winding number — step 2.1.
+ *
+ * They were nine strings in four card modules, each written where it was rendered, and two of them
+ * said the same thing in different words (`undecided` on a winding in the Singularities card, and
+ * again in the Derivation card's pole table). One map, so a tag means one thing.
+ *
+ * `numerical` replaces `located numerically`: the column it sits in is the pole's position, so the
+ * word *located* was carried by the column and the tag only had to say how.
+ */
+export type TagId =
+  | "derived"
+  | "not-sampled"
+  | "quadrature-capped"
+  | "winding-undecided"
+  | "numerical"
+  | "possibly-removable"
+  | "order-uncertain";
+
+const TAG: Readonly<Record<TagId, string>> = {
+  derived: "derived",
+  "not-sampled": "not sampled",
+  "quadrature-capped": "quadrature capped",
+  "winding-undecided": "$\\operatorname{Ind}_\\gamma$ undecided",
+  numerical: "numerical",
+  "possibly-removable": "possibly removable",
+  "order-uncertain": "order uncertain",
+};
+
+export function tagLabel(id: TagId): string {
+  return TAG[id];
+}
+
+/**
+ * The tag on a parameter the argument takes to a limit — `$\to\infty$`, `$\to 0^+$`.
+ *
+ * **The plan's own replacement for this tag is wrong twice, and both are measurements.** It names
+ * them `$R\to\infty$` and `$\rho\to0^+$`, which are right for the record the reviewer had open:
+ * over the corpus the parameters carrying a limit are named `R`, `R_lim`, `N`, `eps`, `eta` and
+ * `rho`, so a literal `R` mislabels three of the six and a literal `\rho` two. And naming the
+ * parameter at all is redundant here, because the tag sits in the same row as the readout that has
+ * just named it: `R = 4` followed by `R → ∞` says `R` twice in four centimetres. What the tag adds
+ * is the limit, so the limit is all it carries.
+ *
+ * `to` is the schema's own word for where the parameter goes: `"inf"`, `"0+"`, or a number as text.
+ */
+export function limitTag(to: string): string {
+  return `$\\to ${to === "inf" ? "\\infty" : to === "0+" ? "0^+" : to}$`;
+}

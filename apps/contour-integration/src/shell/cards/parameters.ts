@@ -19,6 +19,8 @@
 import { fmt } from "../../kernel/decimal.js";
 import { paramChannel } from "../../shell/state.js";
 import type { Param } from "../../engine/contour/model.js";
+import { limitTag, tagLabel } from "../../engine/vocabulary.js";
+import { mathText } from "../math.js";
 import { h, type Desc } from "../dom.js";
 import { card, nothing, type Card } from "./card.js";
 
@@ -59,7 +61,7 @@ export const parametersCard: Card = ({ state, resolution, actions }) => {
         { key: `p:${p.name}`, class: "paramRow2" },
         readout,
         // Named rather than hidden: a reader who expects a slider should be told why there is none.
-        h("span", { key: "t", class: "tag" }, "derived"),
+        h("span", { key: "t", class: "tag" }, tagLabel("derived")),
       );
     }
     return h(
@@ -83,7 +85,7 @@ export const parametersCard: Card = ({ state, resolution, actions }) => {
       }),
       p.limit === undefined
         ? null
-        : h("span", { key: "l", class: "tag" }, p.limit.to === "inf" ? "→ ∞" : p.limit.to === "0+" ? "→ 0⁺" : `→ ${p.limit.to}`),
+        : h("span", { key: "l", class: "tag" }, ...mathText(limitTag(String(p.limit.to)), `lim:${p.name}`)),
     );
   });
 

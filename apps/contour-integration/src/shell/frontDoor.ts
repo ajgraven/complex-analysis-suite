@@ -172,7 +172,7 @@ function cardOf(family: Family, onOpen: (id: string) => void, keyPrefix: string)
   // The FIRST citation. A card is a door rather than a bibliography, and the Target card carries all
   // of them for the record a reader actually opened.
   const cite = family.description.citations[0];
-  if (cite !== undefined) body.push(h("p", { key: "cite", class: "muted small cites" }, citationLine(cite)));
+  if (cite !== undefined) body.push(h("p", { key: "cite", class: "muted small cites" }, ...mathText(citationLine(cite), "cite")));
   // A fixture documenting a REFUSAL states a value its own derivation does not establish, and a card
   // that printed it plain would present a collapsed argument as a worked one.
   //

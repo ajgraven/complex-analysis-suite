@@ -697,15 +697,15 @@ export function decodeShell(hashOrLink: string): DecodeResult | null {
   if (w.dr !== undefined) {
     const d = w.dr;
     if (!Array.isArray(d) || d.length !== 2 || !isStr(d[0]) || !isNum(d[1])) {
-      return { ok: false, reason: "the drill rung in this link is not [task, stage]" };
+      return { ok: false, reason: "the practice stage in this link is not [task, stage]" };
     }
     // Validated against the corpus exactly as a record id is: a link naming a task this build does
     // not have would otherwise open the drill on nothing, masking the ledger with no way back.
     if (taskById(d[0]) === null) {
-      return { ok: false, reason: `this link opens the drill on '${d[0]}', which is not one of its tasks` };
+      return { ok: false, reason: `this link opens practice on '${d[0]}', which is not one of its tasks` };
     }
     if (!DRILL_STAGES.includes(d[1] as (typeof DRILL_STAGES)[number])) {
-      return { ok: false, reason: `this link opens the drill at rung ${d[1]}, and there are ${DRILL_STAGES.length}` };
+      return { ok: false, reason: `this link opens practice at stage ${d[1]}, and there are ${DRILL_STAGES.length}` };
     }
     drill = { task: d[0], stage: d[1] as DrillState["stage"] };
   }

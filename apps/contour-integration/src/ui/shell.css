@@ -554,17 +554,20 @@
   border-left: 1px solid var(--g-border);
   padding-left: 0.5rem;
 }
+/* **A verdict is a SENTENCE with a stamp on it, and it was a flex row** — which made every node of
+   the sentence a flex item. That is fine for `badge` + one string and wrong for the ones this app
+   actually composes: a refusal naming $R(z)$ is text, formula, text, formula, text, and step 2.1's
+   browser pass found it laid out as a five-column grid two words wide. `share.ts` had been doing the
+   same since step 1.6. The badge is `inline-grid` at a fixed 22 px, so it could never collapse
+   outside a flex context and needs no `flex: none` to protect it. */
 .shell2 .verdict {
-  display: flex;
-  align-items: baseline;
-  gap: 0.35rem;
   margin: 0;
   font-size: var(--t-s);
 }
-/* A badge in a flex row is a fixed 22 px stamp, not something to squeeze: without this the `⚠` on a
-   long refusal collapses to a red hairline, which is the one glyph that must not be missable. */
 .shell2 .verdict > .badge {
-  flex: none;
+  margin-right: 0.35rem;
+  /* A 22 px stamp on a 13 px line: dropped so its middle sits on the sentence's baseline. */
+  vertical-align: -0.35em;
 }
 /* A note on a picker row wraps under it rather than being clipped mid-word — the sheet spinner's
    sentence is 60 characters and the rail is 19rem. */
@@ -628,7 +631,7 @@
   color: var(--g-text);
 }
 
-.shell2 .ledger2 {
+.shell2 .checkList {
   list-style: none;
   margin: 0.3rem 0 0;
   padding: 0;
@@ -636,22 +639,22 @@
   flex-direction: column;
   gap: 0.3rem;
 }
-.shell2 .ledger2 > li {
+.shell2 .checkList > li {
   display: grid;
   grid-template-columns: 22px auto 1fr;
   align-items: baseline;
   gap: 0.35rem;
   font-size: var(--t-s);
 }
-.shell2 .ledger2 > li > .claim {
+.shell2 .checkList > li > .claim {
   min-width: 0;
 }
-.shell2 .ledger2 > li > .repair {
+.shell2 .checkList > li > .repair {
   grid-column: 2 / -1;
 }
 /* A failed row is the one a reader is looking for, so it carries a rule in the bad colour rather
    than relying on its badge alone — three glyphs down a list is not a scannable difference. */
-.shell2 .ledger2 > li.failed {
+.shell2 .checkList > li.failed {
   border-left: 2px solid var(--g-bad);
   padding-left: 0.35rem;
   margin-left: -0.35rem;
@@ -711,7 +714,7 @@
 }
 
 .modalDialog {
-  max-width: min(92vw, 68rem);
+  max-width: min(96vw, 84rem);
   max-height: 88vh;
   overflow: auto;
   /* The one surface in the app that is raised off its ground rather than beside it, because it is
@@ -796,10 +799,24 @@
   padding-top: 0.5rem;
 }
 
+/* **`max-content`, because five columns never fitted and the table was CLIPPING them.** At `width:
+   100%` the table is exactly the dialog's width and its cells overflow their own boxes, so the
+   fourth and fifth columns were drawn past the dialog's edge and could not be read or reached —
+   measured at 1440 px in step 2.1 and visible in step 1.7's own screenshot, where the third column
+   is already cut off mid-word. `min-width: 100%` keeps it filling the dialog when it does fit, and
+   the dialog's own `overflow: auto` carries the rest; the dialog takes focus when it opens, so the
+   scrollable region is reachable from the keyboard. */
 .contrastGrid {
+  table-layout: fixed;
   width: 100%;
   border-collapse: collapse;
   font-size: var(--t-s);
+  margin-top: 0.3rem;
+}
+/* The row headings name a check (`Boundary terms · vanishing piece 1`); the five columns share what
+   is left, equally, so no column can grow until it pushes another off the dialog. */
+.contrastGrid th:first-child {
+  width: 11rem;
 }
 .contrastGrid th,
 .contrastGrid td {

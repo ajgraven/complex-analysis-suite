@@ -78,7 +78,7 @@ export const shareCard: Card = (ctx) => {
         "p",
         { key: "size", class: "muted small" },
         h("span", { key: "n", class: "num" }, `${fmtNum(bytes, 0)} B`),
-        " of link fragment — research 07 §6 warns at about 2 kB.",
+        " of link fragment; a URL is safe to about 2 kB.",
         over ? h("span", { key: "w", class: "tag warn" }, "over the warning") : null,
       ),
     );

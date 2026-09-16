@@ -86,7 +86,7 @@ export const g1SquareCotCollision: Family = {
     relation: "Re",
     note:
       "the summand is not integrated at all: the kernel's residue at every integer IS the summand, " +
-      "and at n = 0 the two poles MERGE into one of order 3 whose residue is -pi^2/3",
+      "and at n = 0 the two poles merge into one of order 3 whose residue is -pi^2/3",
   },
 
   parameters: [],

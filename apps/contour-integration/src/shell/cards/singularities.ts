@@ -12,8 +12,9 @@
 import { fmt, fmtCx } from "../../kernel/decimal.js";
 import { declaredOrder } from "../../shell/state.js";
 import type { ContourIntegral } from "../../engine/contour/integrate.js";
+import { tagLabel } from "../../engine/vocabulary.js";
 import { h, type Desc } from "../dom.js";
-import { math } from "../math.js";
+import { math, mathText } from "../math.js";
 import { card, nothing, type Card } from "./card.js";
 
 /** How close two points must be to be the same pole. `residueTheorem.ts`'s own tolerance. */
@@ -76,14 +77,14 @@ export const singularitiesCard: Card = ({ state, resolution, session, poles, act
         String(pole.order),
         // Two different doubts, and neither is the order being wrong: one says the multiplicity was
         // inferred from a cluster, the other that the pole may not be there at all.
-        pole.orderCertain ? null : h("span", { key: "u", class: "tag warn" }, "uncertain"),
-        pole.possiblyRemovable ? h("span", { key: "r", class: "tag warn" }, "may be removable") : null,
+        pole.orderCertain ? null : h("span", { key: "u", class: "tag warn" }, tagLabel("order-uncertain")),
+        pole.possiblyRemovable ? h("span", { key: "r", class: "tag warn" }, tagLabel("possibly-removable")) : null,
       ),
       h(
         "td",
         { key: "res" },
         pole.residue === undefined
-          ? h("span", { key: "n", class: "muted small" }, pole.isExact ? "—" : "located numerically")
+          ? h("span", { key: "n", class: "muted small" }, pole.isExact ? "—" : tagLabel("numerical"))
           : math(pole.residue.latex, { key: "m", label: pole.residue.text }),
       ),
       // **A winding nobody DECIDED is not a winding of zero.** `integrateContour` weighs every pole
@@ -96,7 +97,7 @@ export const singularitiesCard: Card = ({ state, resolution, session, poles, act
           ? h("span", { key: "q", class: "muted" }, "—")
           : w.decided
             ? fmt(w.n)
-            : h("span", { key: "u", class: "tag warn" }, "undecided"),
+            : h("span", { key: "u", class: "tag warn" }, ...mathText(tagLabel("winding-undecided"), "wu")),
       ),
     );
   });

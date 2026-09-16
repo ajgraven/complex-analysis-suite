@@ -394,7 +394,7 @@ describe("rung iv — the enclosure", () => {
     const mirror = [w([0, 1], 0), w([0, -1], -1)];
     const bad = checkDrawing("as-recorded", recorded, mirror);
     expect(bad.ok).toBe(false);
-    expect(bad.why).toContain("winds 0 times");
+    expect(bad.why).toContain("$\\operatorname{Ind}_\\gamma(i) = 0$");
 
     // A doubled loop is a different number too — `2πi Σ n·Res`, not `2πi Σ Res`.
     const twice = [w([0, 1], 2), w([0, -1], 0)];
@@ -423,10 +423,10 @@ describe("rung iv — the enclosure", () => {
     expect(none.why).toContain("no singularity is enclosed");
     const both = checkDrawing("one-pole", rec, [w([0, 1], 1), w([0, -1], 1)]);
     expect(both.ok).toBe(false);
-    expect(both.why).toContain("2 singularities");
+    expect(both.why).toContain("both singularities are enclosed");
     const twice = checkDrawing("one-pole", rec, [w([0, 1], 2), w([0, -1], 0)]);
     expect(twice.ok).toBe(false);
-    expect(twice.why).toContain("winds 2 times");
+    expect(twice.why).toContain("$\\operatorname{Ind}_\\gamma(i) = 2$");
   });
 
   it("refuses an EMPTY singular set rather than passing vacuously", () => {
@@ -441,7 +441,7 @@ describe("rung iv — the enclosure", () => {
     // One of the two missing is the same failure, and named for the one that is missing.
     const half = checkDrawing("as-recorded", rec, [w([0, 1], 1)]);
     expect(half.ok).toBe(false);
-    expect(half.why).toContain("−i");
+    expect(half.why).toContain("$-i$");
   });
 
   it("refuses an UNDECIDED winding by name rather than reading it as zero", () => {
@@ -456,7 +456,7 @@ describe("rung iv — the enclosure", () => {
     expect(typeof task?.drawCheck).toBe("object");
     const r = checkDrawing(task?.drawCheck ?? "as-recorded", [], []);
     expect(r.ok).toBe(false);
-    expect(r.why).toContain("i\\alpha\\operatorname{Res}");
+    expect(r.why).toContain("a limit (the indentation) that a fixed drawn curve cannot take");
     // Measured: its own contour winds about nothing, so "wind about no pole" is free.
     const run = task === null ? null : runTask(task);
     expect(run?.integral.windings.map((x) => x.n)).toEqual([0]);
@@ -523,8 +523,8 @@ describe("every rung is ADDRESSABLE — M7's gate clause 2", () => {
     };
     expect(bad(["oscillatory", 2])).toBe("OK");
     expect(bad(["no-such-task", 2])).toContain("not one of its tasks");
-    expect(bad(["oscillatory", 0])).toContain("rung 0");
-    expect(bad(["oscillatory", 5])).toContain("rung 5");
+    expect(bad(["oscillatory", 0])).toContain("stage 0");
+    expect(bad(["oscillatory", 5])).toContain("stage 5");
     expect(bad("oscillatory")).toContain("not [task, stage]");
     expect(bad(["oscillatory"])).toContain("not [task, stage]");
   });

@@ -57,7 +57,7 @@ export const d2KeyholeTwoPoles: Family = {
   auxiliary: {
     integrand: "z^(s-1)/((z+p)*(z+q))",
     relation: "Re",
-    note: "the upper edge is the target itself; the lower edge is the target times −e^{2πi(s−1)}, which at s = 3/2 is +1 — so the two edges ADD rather than fight",
+    note: "the upper edge is the target itself; the lower edge is the target times −e^{2πi(s−1)}, which at s = 3/2 is +1 — so the two edges add rather than fight",
   },
 
   parameters: [

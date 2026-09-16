@@ -57,7 +57,7 @@ export const c3PvSineOverXTimesQuadratic: Family = {
     // Im, and no fold: the target is over ALL of ℝ, unlike C1's ∫₀^∞.
     relation: "Im",
     principalValue: true,
-    note: "sin x = Im e^{ix}; the REAL part ∫cos x/(x(x²+b²)) diverges at the origin, so the auxiliary needs a principal value while the target does not",
+    note: "sin x = Im e^{ix}; the real part ∫cos x/(x(x²+b²)) diverges at the origin, so the auxiliary needs a principal value while the target does not",
   },
 
   parameters: [{ name: "b", domain: "real", constraints: ["b > 0"] }],

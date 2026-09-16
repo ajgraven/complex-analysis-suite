@@ -37,6 +37,7 @@ import { h, patch } from "./dom.js";
 import { readout } from "./readout.js";
 import { mathPlain, mathText } from "./math.js";
 import type { Session } from "./session.js";
+import { stableKey } from "./stableKey.js";
 
 /** What the stage needs to know that it cannot read off the state. */
 export interface StageDraw {
@@ -217,13 +218,20 @@ export function createStageView(host: HTMLElement): StageView {
         declared: resolution.declared,
         // The declaration decides the picture, so it decides the key — see M5.1's shadowed-`branch`
         // review, where the two came apart and the cut was drawn where the answer was not.
-        key: `d:${state.expr}:${JSON.stringify(state.declaration)}:${state.branch.sheet}`,
+        //
+        // **With `undo.ts`'s replacer, and step 2.1's browser pass is why.** A declared factor's
+        // exponent is a `Frac`, whose `n` and `d` are bigints, and `JSON.stringify` REFUSES a bigint
+        // rather than skipping it — so declaring a factor threw out of `programOf`, out of `drawNow`
+        // and out of the whole draw, from the first sandbox declaration M5.1c shipped. Nothing saw
+        // it: `drawNow` runs inside a `requestAnimationFrame` callback, where a throw is an uncaught
+        // error the jsdom specs never observe and the stage they cannot render anyway.
+        key: `d:${state.expr}:${stableKey(state.declaration)}:${state.branch.sheet}`,
       };
     }
     if (resolution.kind === "gallery") {
       const run = resolution.run;
       if (run === null) return null;
-      const key = `g:${resolution.family.id}:${state.fixture}:${JSON.stringify(state.bindings)}`;
+      const key = `g:${resolution.family.id}:${state.fixture}:${stableKey(state.bindings)}`;
       return run.declared === undefined
         ? { ast: run.ast, key }
         : { ast: run.declared.cofactor, declared: run.declared.product, key };

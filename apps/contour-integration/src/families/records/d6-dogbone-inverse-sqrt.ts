@@ -67,7 +67,7 @@ export const d6DogboneInverseSqrt: Family = {
   auxiliary: {
     integrand: "1/((z^2+a^2)*sqrt(1-z^2))",
     relation: "Re",
-    note: "the upper edge is the target itself; the lower edge is the target times +1, because W changes SIGN across the cut and the traversal is reversed — two minus signs, and the edges ADD",
+    note: "the upper edge is the target itself; the lower edge is the target times +1, because W changes sign across the cut and the traversal is reversed — two minus signs, and the edges ADD",
   },
 
   parameters: [{ name: "a", domain: "real", constraints: ["a > 0"] }],

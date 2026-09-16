@@ -73,7 +73,10 @@ export const targetCard: Card = ({ state, resolution, actions }) => {
       "ul",
       { key: "cites", class: "cites" },
       ...family.description.citations.map((c, i) =>
-        h("li", { key: `c${i}`, class: "muted small" }, citationLine(c)),
+        // Through `mathText`: three of the eight books are cited with a `note` carrying a formula
+        // — `compare the substitution $x=\\sin\\theta$` — and as a plain string that printed its own
+        // delimiters. Found by the sweep that asserts no `$` reaches a reader.
+        h("li", { key: `c${i}`, class: "muted small" }, ...mathText(citationLine(c), `c${i}`)),
       ),
     ),
   );

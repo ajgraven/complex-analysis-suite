@@ -2,7 +2,7 @@
 //
 // `shell2Drill.test.ts` pins everything the mask does to the DOM: the KILL rows leave the ledger, the
 // value card hides, the derivation folds, and all of it comes back. What it cannot pin is the
-// mask's other half, because jsdom has no canvas: at rung iii the CONTOUR must leave the stage too,
+// mask's other half, because jsdom has no canvas: at stage iii the CONTOUR must leave the stage too,
 // since the question there is which contour to close over and the record's own contour is that
 // answer, drawn.
 //
@@ -178,14 +178,14 @@ async function clickIn(host: Element, needle: string): Promise<void> {
  */
 async function openTask(root: Element, label: string): Promise<void> {
   const b = [...drillCard(root).querySelectorAll<HTMLButtonElement>("button")].find((x) =>
-    (x.getAttribute("aria-label") ?? "").startsWith(`open ${label} at rung `),
+    (x.getAttribute("aria-label") ?? "").startsWith(`open ${label} at stage `),
   );
   if (b === undefined) throw new Error(`no chooser row for '${label}'`);
   b.click();
   await settle();
 }
 
-/** Click the button whose text IS `label` — "circle" is a substring of "semicircle ↑". */
+/** Click the button whose text IS `label` — "circle" is a substring of "upper semicircle". */
 async function clickExact(host: Element, label: string): Promise<void> {
   const b = [...host.querySelectorAll("button")].find((x) => (x.textContent ?? "").trim() === label);
   if (b === undefined) throw new Error(`no button labelled exactly '${label}'`);
@@ -194,7 +194,7 @@ async function clickExact(host: Element, label: string): Promise<void> {
 }
 
 describe("the drill's mask, on the stage", () => {
-  it("takes the CONTOUR off the ink layer at rung iii, and gives it back on a pick", async () => {
+  it("takes the CONTOUR off the ink layer at stage iii, and gives it back on a pick", async () => {
     const { root, handle } = await app();
     const booted = inkPixels(root, poleCentres(root, handle));
     // The cold start's own contour is on screen: a contour is ink, and this is the control.
@@ -207,18 +207,18 @@ describe("the drill's mask, on the stage", () => {
     const worked = inkPixels(root, poleCentres(root, handle));
     expect(worked, "rung i draws the record's own contour").toBeGreaterThan(1000);
 
-    await clickIn(drillCard(root), "Next rung");
+    await clickIn(drillCard(root), "Next stage");
     expect(inkPixels(root, poleCentres(root, handle)), "rung ii masks the ledger, not the contour").toBeGreaterThan(
       1000,
     );
 
-    await clickIn(drillCard(root), "Next rung");
+    await clickIn(drillCard(root), "Next stage");
     // **THE CLAIM**: not "fewer pixels", not "a different picture" — none at all, once the pole
     // rings this rung deliberately keeps are set aside. The rest of the ink layer is the contour,
     // its handles and its cuts, and at this rung the reader has not chosen one.
     expect(inkPixels(root, poleCentres(root, handle)), "rung iii must leave NOTHING of the contour").toBe(0);
 
-    await clickExact(drillCard(root), "semicircle ↓");
+    await clickExact(drillCard(root), "lower semicircle");
     expect(
       inkPixels(root, poleCentres(root, handle)),
       "a pick is the reader's own contour, and is drawn",
@@ -235,8 +235,8 @@ describe("the drill's mask, on the stage", () => {
     handle.actions().setMode("drill");
     await settle();
     await openTask(root, "∫ cos x/(x²+1) dx");
-    await clickIn(drillCard(root), "Next rung");
-    await clickIn(drillCard(root), "Next rung");
+    await clickIn(drillCard(root), "Next stage");
+    await clickIn(drillCard(root), "Next stage");
     expect(inkPixels(root, poleCentres(root, handle))).toBe(0);
     expect(portraitColours(root), "the portrait survives the mask").toBeGreaterThan(12);
   });

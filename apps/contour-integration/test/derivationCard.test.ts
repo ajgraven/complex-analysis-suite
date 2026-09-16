@@ -394,8 +394,16 @@ describe("the Derivation card", () => {
     const rows = [...card.querySelectorAll<HTMLElement>(".poleTable tbody tr")];
     expect(rows.length).toBe(2);
     const inds = rows.map((r) => r.querySelectorAll("td")[3]);
-    const texts = inds.map((td) => td?.textContent ?? "");
-    expect(texts).toContain("undecided");
+    // The tag NAMES the quantity since step 2.1 — `$\\operatorname{Ind}_\\gamma$ undecided` — and
+    // KaTeX lays every formula down twice, so the tag's own text is read through the formula's
+    // accessible name and the words that follow it.
+    const texts = inds.map((td) => {
+      const m = td?.querySelector('[role="math"]');
+      return m === null || m === undefined
+        ? (td?.textContent ?? "")
+        : `${m.getAttribute("aria-label") ?? ""}${m.nextSibling?.nodeValue ?? ""}`;
+    });
+    expect(texts).toContain("\\operatorname{Ind}_\\gamma undecided");
     expect(texts).toContain("1");
     expect(texts).not.toContain("0");
     // …and it is flagged as a doubt, not set as a value: `tag warn` is what the rail styles a

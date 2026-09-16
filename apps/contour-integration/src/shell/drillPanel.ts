@@ -33,7 +33,6 @@ import {
 } from "./drillProgress.js";
 import {
   DISPOSALS,
-  DISPOSAL_LABEL,
   DRILL_TASKS,
   VERIFIED_ROLE_TEMPLATES,
   allCorrect,
@@ -51,7 +50,8 @@ import {
   type DrillTask,
   type WindingRow,
 } from "./drill.js";
-import { TEMPLATES, type TemplateId } from "./templates.js";
+import { type TemplateId } from "./templates.js";
+import { constraintLabel, disposalLabel, templateLabel } from "../engine/vocabulary.js";
 import { h, type Child, type Desc } from "./dom.js";
 import { mathPlain, mathText } from "./math.js";
 import type { Session } from "./session.js";
@@ -207,7 +207,7 @@ export function drillPanel(ctx: CardContext): Desc | null {
       "p",
       { key: "head", class: "pickRow" },
       h("span", { key: "n", class: "num" }, ...mathText(task.label, "tl")),
-      h("span", { key: "r", class: "tag" }, `rung ${stage} of ${LAST_STAGE}`),
+      h("span", { key: "r", class: "tag" }, `stage ${stage} of ${LAST_STAGE}`),
     ),
     ...rungBody(ctx, task, stage),
     footer(ctx, task, stage),
@@ -230,8 +230,8 @@ function taskList(ctx: CardContext): Desc {
     h(
       "p",
       { key: "ask", class: "muted small" },
-      "Four arguments, each faded a little further: the worked example, then the boundary terms " +
-        "masked, then the contour as well, then a blank plane and the pen.",
+      "Four stages: the worked argument; the boundary terms to fill in; a choice of contour; a " +
+        "blank plane. Where you start is where you left off.",
     ),
     h(
       "ul",
@@ -242,15 +242,14 @@ function taskList(ctx: CardContext): Desc {
           "li",
           { key: task.id, class: "pickRow" },
           h("span", { key: "n", class: "pieceName" }, ...mathText(task.label, `tl${task.id}`)),
-          h("span", { key: "r", class: "tag" }, `rung ${stage} of ${LAST_STAGE}`),
+          h("span", { key: "r", class: "tag" }, `stage ${stage} of ${LAST_STAGE}`),
           h(
             "button",
             {
               key: "go",
-              // `mathPlain`, for the reason the rung-ii selects give: the label is `∫ cos x/(x²+1) dx`
-              // in the `$…$` convention, and an accessible name carrying raw LaTeX is read aloud in
-              // the app's own source syntax.
-              "aria-label": `open ${mathPlain(task.label)} at rung ${stage}`,
+              // The SPOKEN twin, for the reason the rung-ii selects give: an accessible name
+              // carrying raw LaTeX is read aloud in the app's own source syntax.
+              "aria-label": `open ${task.labelText} at stage ${stage}`,
               onClick: () => ctx.actions.applyState(taskState(task, stage)),
             },
             "Open",
@@ -268,7 +267,7 @@ function rungBody(ctx: CardContext, task: DrillTask, stage: DrillStage): readonl
       h(
         "p",
         { key: "ask", class: "muted small" },
-        "The worked argument, as the gallery gives it: the contour, the ledger and the value.",
+        "The worked argument: contour, checks and value.",
       ),
     ];
   }
@@ -300,8 +299,7 @@ function rungKill(ctx: CardContext, task: DrillTask): readonly Child[] {
     h(
       "p",
       { key: "ask", class: "muted small" },
-      "The contour is given. Say what each piece is FOR — the pieces you cannot compute must either " +
-        "vanish or give you back the target times a constant.",
+      "State the role of each piece of the contour.",
     ),
   ];
 
@@ -331,7 +329,7 @@ function rungKill(ctx: CardContext, task: DrillTask): readonly Child[] {
             },
           },
           h("option", { key: "blank", value: "" }, "—"),
-          ...DISPOSALS.map((d) => h("option", { key: d, value: d }, DISPOSAL_LABEL[d])),
+          ...DISPOSALS.map((d) => h("option", { key: d, value: d }, disposalLabel(d))),
         ),
         // A WORD rather than a glyph: `✓`/`✗` needs a screen-reader-only sibling to mean anything,
         // and a tag that says "correct" needs neither.
@@ -364,7 +362,7 @@ function rungKill(ctx: CardContext, task: DrillTask): readonly Child[] {
           "button",
           {
             key: "go",
-            "aria-label": "check the boundary terms against the ledger",
+            "aria-label": "check the boundary terms",
             onClick: () => {
               ctx.session.drillGraded = true;
               if (allCorrect(gradePieces(questions, sheetOf(ctx.session)))) clearRung(task, 2);
@@ -388,8 +386,8 @@ function rungKill(ctx: CardContext, task: DrillTask): readonly Child[] {
     h(
       "p",
       { key: "verdict", class: "verdict" },
-      h("span", { key: "t", class: ok ? "tag" : "tag warn" }, ok ? "every piece" : "not every piece"),
-      ok ? " as the ledger has it." : " — the ledger's own claim is under each one.",
+      h("span", { key: "t", class: ok ? "tag" : "tag warn" }, ok ? "correct" : "not all correct"),
+      ok ? "." : "; the established statement is shown under each piece.",
     ),
     h(
       "div",
@@ -431,28 +429,27 @@ function rungMenu(ctx: CardContext, task: DrillTask): readonly Child[] {
     h(
       "p",
       { key: "ask", class: "muted small" },
-      "Only the integral is given — the contour is not drawn. Pick one to close over; the ledger will " +
-        "say whether the argument closes and whether the target is on it.",
+      "Only the integral is given. Choose a contour; the checks report whether the argument is " +
+        "complete and whether the target lies on it.",
     ),
     h(
       "div",
       { key: "menu", class: "segmented" },
-      ...offered.map((option) => {
-        const spec = TEMPLATES.find((t) => t.id === option);
-        return h(
+      ...offered.map((option) =>
+        h(
           "button",
           {
             key: option,
-            "aria-label": `close over the ${spec?.label ?? option}`,
+            "aria-label": `close over the ${templateLabel(option)}`,
             "aria-pressed": picked === option,
             onClick: () => {
               if (run !== null && menuVerdict(run, option).answers) clearRung(task, 3);
               ctx.actions.applyState(pickState(task, option));
             },
           },
-          spec?.label ?? option,
-        );
-      }),
+          templateLabel(option),
+        ),
+      ),
     ),
   ];
   // Once a pick is on screen the ledger is unmasked and says everything; the drill adds only the one
@@ -485,13 +482,16 @@ function rungMenu(ctx: CardContext, task: DrillTask): readonly Child[] {
 
 /** The ledger's own words for a pick, or the one sentence the ledger has no row for. */
 function verdictWords(v: ReturnType<typeof menuVerdict>, picked: TemplateId): readonly Child[] {
-  if (v.answers) return [" — the argument closes and the target is a piece of it."];
+  if (v.answers) return [" — complete; the target is a piece of the contour."];
   if (!v.hasTarget) {
-    // COVER, not KILL: the circle CLOSES. Saying "it does not close" would teach the wrong lesson
-    // about the one option that fails for a different reason from all the others.
-    return [" — the argument closes, but no piece of this contour is the target."];
+    // The target group, not the boundary terms: the circle CLOSES. Saying "it does not close" would
+    // teach the wrong lesson about the one option that fails for a different reason from the others.
+    return [" — complete, but the target is not a piece of this contour."];
   }
-  return [` — ${v.failedAt ?? "?"}: `, ...mathText(v.why ?? "the argument does not close", `mv${picked}`)];
+  return [
+    ` — incomplete (${v.failedAt === null ? "?" : constraintLabel(v.failedAt).toLowerCase()}): `,
+    ...mathText(v.why ?? "the argument is incomplete", `mv${picked}`),
+  ];
 }
 
 /**
@@ -510,7 +510,7 @@ function rungDraw(ctx: CardContext, task: DrillTask): readonly Child[] {
       "p",
       { key: "ask", class: "muted small" },
       goal === "one-pole"
-        ? "Draw a closed contour that encloses exactly ONE of the singularities — either one, either way round."
+        ? "Draw a closed contour that encloses exactly one of the singularities — either one, either way round."
         : goal === "as-recorded"
           ? "Draw a closed contour that winds about the singularities exactly as the worked one does."
           : "Draw a closed contour. There is nothing here to check about the enclosure:",
@@ -524,8 +524,11 @@ function rungDraw(ctx: CardContext, task: DrillTask): readonly Child[] {
     h(
       "p",
       { key: "caveat", class: "muted small" },
-      "A drawn contour is a fixed curve, so the ledger certifies ∮ over it — not the limit the target " +
-        "integral is defined by.",
+      ...mathText(
+        "A drawn contour is fixed, so only $\\oint_\\gamma f(z)\\,dz$ over it is checked, not the limit " +
+          "defining the target.",
+        "caveat",
+      ),
     ),
   );
   if (goal !== null) {
@@ -562,7 +565,7 @@ function rungDraw(ctx: CardContext, task: DrillTask): readonly Child[] {
         h("span", { key: "t", class: drawn.ok ? "tag" : "tag warn" }, drawn.ok ? "as recorded" : "not yet"),
         " ",
         ...mathText(
-          drawn.ok ? "Exactly that, and the winding numbers are decided exactly." : (drawn.why ?? "not yet"),
+          drawn.ok ? "Correct." : (drawn.why ?? "not yet"),
           "dr",
         ),
       ),
@@ -581,7 +584,7 @@ function footer(ctx: CardContext, task: DrillTask, stage: DrillStage): Desc {
       "button",
       {
         key: "next",
-        "aria-label": stage === 4 ? "start this task again at the worked argument" : `open rung ${onward}`,
+        "aria-label": stage === 4 ? "start this task again at the worked argument" : `open stage ${onward}`,
         onClick: () => {
           // **Reading the worked argument IS rung i's task**, so moving off it clears it. Every
           // other rung is cleared by its own check, and never by leaving it.
@@ -589,7 +592,7 @@ function footer(ctx: CardContext, task: DrillTask, stage: DrillStage): Desc {
           ctx.actions.applyState(taskState(task, onward));
         },
       },
-      stage === 4 ? "Start again" : "Next rung",
+      stage === 4 ? "Start again" : "Next stage",
     ),
     h(
       "button",
@@ -600,7 +603,7 @@ function footer(ctx: CardContext, task: DrillTask, stage: DrillStage): Desc {
         // rather than a second exit that would have to remember to.
         onClick: () => ctx.actions.setMode("explore"),
       },
-      "Leave the drill",
+      "Leave practice",
     ),
   );
 }

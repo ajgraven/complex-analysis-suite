@@ -28,8 +28,19 @@ import { compile, defaultState, resolveState, type ShellState } from "./state.js
 export interface ContrastCell {
   /** Stable across edits — the id a permalink and a test both name. */
   readonly id: string;
-  /** The integral, as a reader would write it. */
+  /** The integral, as a reader would write it — typeset, in the `$…$` convention. */
   readonly label: string;
+  /**
+   * The same integral as a sentence, for the places that are SPOKEN rather than shown.
+   *
+   * **A twin rather than a derivation, and step 2.1 measured why.** The labels were Unicode text
+   * until this step and `mathPlain` — which only strips the `$` — was a safe way to get an
+   * `aria-label` from one. Typesetting them turned that into raw LaTeX in three accessible names:
+   * the contrast column's Open button and the practice chooser's, where a screen reader would read
+   * `\int_0^{\infty} \frac{\sin x}{x}\,dx` out as "backslash int". The app already pairs a value's
+   * `latex` with its `text` everywhere else (step 0.4b); this is that pair, one level up.
+   */
+  readonly labelText: string;
   /** One line on what this cell IS. Never a lesson: no prose layer (M7 §0). */
   readonly note: string;
   readonly state: () => ShellState;
@@ -110,30 +121,40 @@ function sandboxCell(expr: string): ShellState {
   };
 }
 
+// **`answer` is a VALUE, not prose, and `contrastGrid.test.ts` is why.** The test compares each
+// declared answer against the engine's own text for that record's solved value — which is what makes
+// the declaration falsifiable rather than decorative — so putting it in `$…$` breaks the identity and
+// the cell starts asserting its own spelling. It is the one string in this file that is not rewritten
+// for the reader, and the grid renders it as the text it is.
 export const CONTRAST_CELLS: readonly ContrastCell[] = [
   {
     id: "rational",
-    label: "∫ dx/(x²+1)",
-    note: "the rational case: no frequency, so the arc dies by plain ML",
+    label: "$\\int_{-\\infty}^{\\infty} \\frac{dx}{x^2+1}$",
+    labelText: "∫ dx/(x²+1)",
+    note: "rational integrand; the arc vanishes by the ML-estimate",
     state: () => galleryCell(B1, { a: 0, b: 1 }),
   },
   {
     id: "oscillatory",
-    label: "∫ cos x/(x²+1) dx",
-    note: "the same integrand times a kernel — and the same contour",
+    label: "$\\int_{-\\infty}^{\\infty} \\frac{\\cos x}{x^2+1}\\,dx$",
+    labelText: "∫ cos x/(x²+1) dx",
+    // **Not "times a kernel".** In tier G a kernel is $\pi\cot\pi z$, the thing whose residues are
+    // the sum; here it would mean $e^{ix}$. One word, two meanings, three cells apart.
+    note: "the same contour, integrand multiplied by $e^{ix}$",
     state: () => galleryCell(B1, { a: 1, b: 1 }),
     differsAbove: {
       // **EXACTLY ONE ROW**, which is the ladder's whole premise and the pair worth having. The
       // contour, the pole, the winding and the target are word-for-word identical; what a reader
       // has to learn is a lemma, and the grid shows that it is a lemma and nothing else.
       rows: ["KILL/vanish#0"],
-      because: "the arc's lemma, and only that: plain ML → Jordan",
+      because: "only the arc estimate changes: the ML-estimate becomes Jordan's lemma",
       answer: "π/e",
     },
   },
   {
     id: "wrong-way",
     label: "… closed downward",
+    labelText: "… closed downward",
     note: "the same integrand, the arc taken through the other half-plane",
     state: () => sandboxCell("exp(i*z)/(1+z^2)"),
     differsAbove: {
@@ -141,32 +162,34 @@ export const CONTRAST_CELLS: readonly ContrastCell[] = [
       // as a rung rather than a mode, and it costs nothing because M3's gate computes it already.
       rows: ["KILL/vanish#0"],
       alsoDiffers: [
-        { key: "KILL/target#0", why: "the sandbox's template names the piece `the real axis`, the record `the real segment`" },
+        { key: "KILL/target#0", why: "the same piece is named differently in the sandbox and in the worked example" },
       ],
-      because: "the same row, now DIVERGING — the bound is the thing that chooses the half-plane",
+      because: "the same estimate now diverges: the sign of the exponent chooses the half-plane",
       closes: false,
       answer: null,
     },
   },
   {
     id: "forced-downward",
-    label: "∫ cos x/(x²+1) dx, a < 0",
-    note: "downward is now the RIGHT way — forced by the sign of a, never chosen",
+    label: "$\\int_{-\\infty}^{\\infty} \\frac{\\cos ax}{x^2+1}\\,dx$, $a < 0$",
+    labelText: "∫ cos ax/(x²+1) dx, a < 0",
+    note: "$a < 0$: the closing half-plane is the lower one",
     state: () => galleryCell(B1, { a: -1, b: 1 }),
     differsAbove: {
       rows: ["KILL/vanish#0"],
       alsoDiffers: [
         { key: "KILL/target#0", why: "crossing back from the sandbox to the record renames the same piece" },
       ],
-      because: "the same row satisfied again, on the lower arc — `sgnA` derives the side from `a`",
+      because: "the same estimate holds on the lower arc",
       closes: true,
       answer: "π/e",
     },
   },
   {
     id: "indented",
-    label: "∫ sin x/x dx",
-    note: "the pole moves onto the contour, and ∮ stops being the answer",
+    label: "$\\int_0^{\\infty} \\frac{\\sin x}{x}\\,dx$",
+    labelText: "∫₀^∞ sin x/x dx",
+    note: "the pole moves onto the contour, and $\\oint_\\gamma f\\,dz$ stops being the answer",
     state: () => galleryCell("indented-sinc", {}),
     differsAbove: {
       // **FIVE THINGS MOVE, NOT THE PLAN'S TWO**, and they were measured rather than reasoned:
@@ -185,7 +208,7 @@ export const CONTRAST_CELLS: readonly ContrastCell[] = [
       alsoDiffers: [
         { key: "LEGALITY/argument#1", why: "the row quotes the distance to the nearest singularity: 1.00, then 0.0500" },
       ],
-      because: "no pole is enclosed at all: the whole value comes from the indentation's iα·Res",
+      because: "no singularity is enclosed; the value comes from the indentation, $-i\\pi\\,\\operatorname{Res}(f, 0)$",
       pieceLimits: ["indent"],
       answer: "π/2",
     },
@@ -250,6 +273,8 @@ export interface ContrastTableRow {
 export interface ContrastTableCell {
   readonly id: string;
   readonly label: string;
+  /** {@link ContrastCell.labelText} — what the column is called where it is spoken. */
+  readonly labelText: string;
   readonly note: string;
   /** The record's solved answer where there is one, NOT the ledger's `∮`. */
   readonly answer: string | null;
@@ -360,6 +385,7 @@ export function contrastTable(cells: readonly ContrastCell[] = CONTRAST_CELLS): 
     cells: cells.map((c, i) => ({
       id: c.id,
       label: c.label,
+      labelText: c.labelText,
       note: c.note,
       answer: sides[i]?.answer ?? null,
       closes: sides[i]?.ledger.closes ?? false,

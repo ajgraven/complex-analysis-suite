@@ -65,6 +65,7 @@ import type { Cx } from "../kernel/geom.js";
 import { CONTRAST_CELLS } from "./contrastGrid.js";
 import { defaultState, type DrillState, type ShellState } from "./state.js";
 import { TEMPLATES, type TemplateId } from "./templates.js";
+import { templateLabel, type Disposal } from "../engine/vocabulary.js";
 
 /**
  * The rung. 1 is the worked example; 4 is a blank plane and a pen.
@@ -89,18 +90,9 @@ export const DRILL_STAGES: readonly DrillStage[] = [1, 2, 3, 4];
  * do — not vanish, but contribute a known amount exactly (C1's indentation and its `iα·Res`), which
  * is the entry that makes `∮` stop being the answer.
  */
-export type Disposal = "target" | "vanishes" | "limit" | "reproduces" | "fails";
+export type { Disposal };
 
 export const DISPOSALS: readonly Disposal[] = ["target", "vanishes", "limit", "reproduces", "fails"];
-
-/** One line of the offered vocabulary, for a picker. Not a lesson: a label. */
-export const DISPOSAL_LABEL: Readonly<Record<Disposal, string>> = {
-  target: "is the target",
-  vanishes: "vanishes in the limit",
-  limit: "contributes a known limit",
-  reproduces: "reproduces the target",
-  fails: "cannot be disposed of",
-};
 
 /**
  * The ledger's own decision about one piece.
@@ -227,7 +219,7 @@ export function menuVerdict(run: FamilyRun, template: TemplateId): MenuVerdict {
   const bad = a.ledger.rows.find((r) => r.status !== "satisfied");
   return {
     template,
-    label: spec.label,
+    label: templateLabel(template),
     answers: a.ledger.closes && a.ledger.hasTarget,
     closes: a.ledger.closes,
     hasTarget: a.ledger.hasTarget,
@@ -268,8 +260,11 @@ export interface DrawResult {
   readonly rows: readonly { readonly at: Cx; readonly want: number | null; readonly got: number; readonly decided: boolean }[];
 }
 
+// **ASCII `-`, not the typographic minus**, since M8 step 2.1: every caller wraps the result in
+// `$…$`, and in maths mode KaTeX sets a `-` as a proper minus while a U+2212 is a Unicode character
+// in maths mode — which its `strict` setting exists to complain about.
 const fmtAt = (at: Cx): string =>
-  `${at[0] === 0 ? "" : String(Number(at[0].toFixed(3)))}${at[1] === 0 ? (at[0] === 0 ? "0" : "") : `${at[1] > 0 ? (at[0] === 0 ? "" : "+") : "−"}${Math.abs(at[1]) === 1 ? "" : String(Number(Math.abs(at[1]).toFixed(3)))}i`}`;
+  `${at[0] === 0 ? "" : String(Number(at[0].toFixed(3)))}${at[1] === 0 ? (at[0] === 0 ? "0" : "") : `${at[1] > 0 ? (at[0] === 0 ? "" : "+") : "-"}${Math.abs(at[1]) === 1 ? "" : String(Number(Math.abs(at[1]).toFixed(3)))}i`}`;
 
 /**
  * Check a drawn contour's enclosure against the task's declared rule.
@@ -288,7 +283,7 @@ export function checkDrawing(
   if (undecided !== undefined) {
     return {
       ok: false,
-      why: `the winding number about ${fmtAt(undecided.at)} could not be decided — the contour passes too close to it`,
+      why: `$\\operatorname{Ind}_\\gamma(${fmtAt(undecided.at)})$ could not be decided; the contour passes too close`,
       rows: drawn.map((w) => ({ at: w.at, want: null, got: w.n, decided: w.decided })),
     };
   }
@@ -300,10 +295,13 @@ export function checkDrawing(
       why: ok
         ? null
         : wound.length === 0
-          ? "no singularity is enclosed, so the residue theorem has nothing to give back"
+          ? "no singularity is enclosed"
+          // **"their residues cancel" is true of this task's integrand and not of the sentence.**
+          // $1/(z^2+1)$ has conjugate residues, so enclosing both gives zero; a generic pair does
+          // not, and a sentence that says otherwise teaches a false rule for the sake of one cell.
           : wound.length > 1
-            ? `${wound.length} singularities are enclosed — their residues cancel here, and the target is not what is left`
-            : `the contour winds ${wound[0].n} times about ${fmtAt(wound[0].at)}; once is what the argument uses`,
+            ? `both singularities are enclosed; for this integrand their residues cancel`
+            : `$\\operatorname{Ind}_\\gamma(${fmtAt(wound[0].at)}) = ${wound[0].n}$; the argument needs 1`,
       rows: drawn.map((w) => ({ at: w.at, want: null, got: w.n, decided: w.decided })),
     };
   }
@@ -322,8 +320,8 @@ export function checkDrawing(
     return {
       ok: false,
       why:
-        `${fmtAt(missing.at)} is a singularity of the worked integrand and is not one of this ` +
-        "contour's — the enclosure cannot be compared",
+        `$${fmtAt(missing.at)}$ is a singularity of the worked integrand and not of this one, ` +
+        "so the enclosure cannot be compared",
       rows,
     };
   }
@@ -334,8 +332,8 @@ export function checkDrawing(
       wrong === undefined
         ? null
         : wrong.want === null
-          ? `${fmtAt(wrong.at)} is not one of the singularities the worked contour was measured against`
-          : `the contour winds ${wrong.got} times about ${fmtAt(wrong.at)}, where the argument needs ${wrong.want}`,
+          ? `$${fmtAt(wrong.at)}$ is not one of the singularities the worked contour was measured against`
+          : `$\\operatorname{Ind}_\\gamma(${fmtAt(wrong.at)}) = ${wrong.got}$; the argument needs ${wrong.want}`,
     rows,
   };
 }
@@ -358,6 +356,8 @@ export interface DrillTask {
   readonly id: string;
   /** The integral, as the cell writes it. */
   readonly label: string;
+  /** {@link ContrastCell.labelText} — the spoken twin, for an `aria-label`. */
+  readonly labelText: string;
   readonly record: string;
   readonly bindings: Bindings;
   /**
@@ -379,7 +379,7 @@ export interface DrillTask {
 /** The menu, one list for every task: what changes between tasks is which option works. */
 const MENU: readonly TemplateId[] = ["semicircle", "semicircleDown", "indented", "circle"];
 
-const DECLARED: Readonly<Record<string, Omit<DrillTask, "id" | "label" | "record" | "bindings">>> = {
+const DECLARED: Readonly<Record<string, Omit<DrillTask, "id" | "label" | "labelText" | "record" | "bindings">>> = {
   rational: {
     twin: "1/(z^2 + 1)",
     menu: MENU,
@@ -409,9 +409,8 @@ const DECLARED: Readonly<Record<string, Omit<DrillTask, "id" | "label" | "record
     alsoAnswers: [],
     drawCheck: {
       none:
-        "C1 encloses no singularity at all — its whole value comes from the indentation's $i\\alpha\\operatorname{Res}$, " +
-        "which is a limit a fixed drawn curve cannot take. There is nothing here to check about the " +
-        "enclosure that any loop missing the origin would not also satisfy.",
+        "This integral encloses no singularity; its value comes from a limit (the indentation) that a " +
+        "fixed drawn curve cannot take, so there is nothing to check here.",
     },
   },
 };
@@ -422,7 +421,9 @@ export const DRILL_TASKS: readonly DrillTask[] = CONTRAST_CELLS.flatMap((cell) =
   if (declared === undefined) return [];
   const state = cell.state();
   if (state.mode !== "gallery" || state.record === null) return [];
-  return [{ id: cell.id, label: cell.label, record: state.record, bindings: state.bindings, ...declared }];
+  return [
+    { id: cell.id, label: cell.label, labelText: cell.labelText, record: state.record, bindings: state.bindings, ...declared },
+  ];
 });
 
 export const taskById = (id: string): DrillTask | null => DRILL_TASKS.find((t) => t.id === id) ?? null;

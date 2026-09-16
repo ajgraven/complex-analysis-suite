@@ -50,7 +50,7 @@ export const d3KeyholeXToTheN: Family = {
   auxiliary: {
     integrand: "z^(a-1)/(1+z^n)",
     relation: "Re",
-    note: "the residue sum over the n-th roots of −1 is a geometric series in e^{2πia/n}, and the (1 − e^{2πia}) it produces is the SAME factor the two edges contribute — so the two cancel and what is left is sin(πa/n)",
+    note: "the residue sum over the n-th roots of −1 is a geometric series in e^{2πia/n}, and the (1 − e^{2πia}) it produces is the same factor the two edges contribute — so the two cancel and what is left is sin(πa/n)",
   },
 
   parameters: [

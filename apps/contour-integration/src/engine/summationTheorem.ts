@@ -191,7 +191,7 @@ export function applySummationTheorem(input: SummationTheoremInput): ResidueTheo
   if (merged.length > 0 && !cofactor.total.num.isZero()) {
     return declined(
       "∮ K·f dz",
-      "the contour encloses a MERGED pole, whose residue is in ℚ(i)(π), and a pole of the cofactor " +
+      "the contour encloses a merged pole, whose residue is in ℚ(i)(π), and a pole of the cofactor " +
         "away from the integers, whose residue carries the kernel's π times a quotient of " +
         "exponentials: no ring in this app holds both",
     );

@@ -99,14 +99,17 @@ export const cutsCard: Card = ({ state, resolution, actions }) => {
     ),
     // **The claim is not the same in the two cases, so the sentence is not either.** For a power
     // product `|f|` is single-valued and a level curve crosses the seam without noticing it; for a
-    // `log^m` the monodromy is ADDITIVE and the contours break at the cut.
+    // `log^m` the monodromy is additive and the contours break at the cut.
     isoOn
       ? h(
           "p",
           { key: "isoNote", class: "muted small" },
-          (declaredProduct?.factors ?? []).some((f) => f.kind === "log")
-            ? "|f| carries a log, so it is NOT single-valued: crossing the cut adds 2πi and the modulus jumps with it. These contours break at the cut, and no choice of argument window can make them meet."
-            : "|f| does not depend on the determination, so these contours run straight through any cut — which is the clearest evidence that a seam in the colour is a choice about the argument and not something the function does.",
+          ...mathText(
+            (declaredProduct?.factors ?? []).some((f) => f.kind === "log")
+              ? "Crossing the cut adds $2\\pi i$ to $\\log f$, so $|f|$ jumps with it and these contours break at the cut."
+              : "$|f|$ does not depend on the determination, so these contours run through any cut.",
+            "iso",
+          ),
         )
       : null,
     monodromy(shown),
@@ -123,9 +126,12 @@ export const cutsCard: Card = ({ state, resolution, actions }) => {
         : h(
             "p",
             { key: "sheet", class: "muted small" },
-            declaredProduct === null
-              ? "the colouring behind the contour is drawn in the principal branch of each factor; this record's determination is declared but not on the stage."
-              : "the colouring behind the contour is drawn in the determination this record DECLARES — each factor in its own argument window — so the picture and the ledger are on the same sheet.",
+            ...mathText(
+              declaredProduct === null
+                ? "The colouring is the principal branch of each factor; the declared determination is not on the stage."
+                : "The colouring is drawn in the declared determination, each factor in its own argument window, so the picture and the checks are on the same sheet.",
+              "sheetNote",
+            ),
           ),
     );
   }
@@ -141,7 +147,12 @@ export const cutsCard: Card = ({ state, resolution, actions }) => {
         "aria-pressed": String(branch.shadow === true),
         onClick: () => actions.setBranch(setShadow(branch, branch.shadow !== true)),
       },
-      "shadow cuts",
+      // **Unicode, not `$z_0$`, and the reason is a measurement.** This button wears `.segmented`,
+      // which is `display: flex` — so its text is an anonymous flex item, and a flex container
+      // trims the whitespace at the edges of one. The space before the formula disappeared and the
+      // label read `Cuts as rays fromz₀`. A picker label and a button label are the two places in
+      // this app where a formula is set in Unicode rather than typeset.
+      "Cuts as rays from z₀",
     ),
     h(
       "button",
@@ -173,7 +184,7 @@ export const cutsCard: Card = ({ state, resolution, actions }) => {
                 if (next !== null) actions.setBranch(next);
               },
             },
-            "join into one cut",
+            "Join into one cut",
           )
         : bounded === undefined
           ? null
@@ -186,7 +197,7 @@ export const cutsCard: Card = ({ state, resolution, actions }) => {
                   if (next !== null) actions.setBranch(next);
                 },
               },
-              "split into two rays",
+              "Split into rays",
             ),
   ];
 
@@ -197,7 +208,15 @@ export const cutsCard: Card = ({ state, resolution, actions }) => {
       ? h(
           "p",
           { key: "shadowNote", class: "muted small" },
-          "the cuts are the rays pointing away from z₀ — drag the base point to swing them. A branch point sitting on z₀ casts no shadow, so move one clear of the other. Every shadow reaches infinity, so a bounded arc — the dogbone — cannot be one: switch this off to build it.",
+          ...mathText(
+            // The middle sentence is not in the plan's replacement and is kept deliberately: the
+            // sandbox's own default put a branch point on $z_0$, where the mode refuses on the
+            // first click, correctly and uselessly, with nothing on screen to say why.
+            "Cuts are the rays from $z_0$; drag $z_0$ to move them. A branch point at $z_0$ casts no " +
+              "ray, so move one clear of the other. A bounded cut (dogbone) cannot be drawn in this mode; " +
+              "switch it off to build one.",
+            "shadowNote",
+          ),
         )
       : null,
     // **THE SANDBOX'S CUT AND THE SANDBOX'S COLOURING ARE DIFFERENT OBJECTS**, and a reader can see
@@ -207,9 +226,19 @@ export const cutsCard: Card = ({ state, resolution, actions }) => {
       : h(
           "p",
           { key: "seam", class: "muted small" },
-          state.declaration === null
-            ? "the colouring is the principal branch of the expression above; the cut is your declaration, and the two need not coincide. Moving the cut changes the verdict, not the seam."
-            : "the colouring is built from the factorisation you declared, each factor in its own window — so the seam IS your cut, as it is under a gallery record. Moving the cut still changes the verdict and not the seam, because ∮ reads the window and never the geometry.",
+          ...mathText(
+            // **Two cases, because the two objects on screen are not the same object.** A declared
+            // cut drawn beside a principal-branch colour seam is the one thing this note exists to
+            // separate; both cases close on the same invariance clause.
+            state.declaration === null
+              ? "The colouring is the principal branch of the expression above; the cut is your declaration, " +
+                  "and the two need not coincide. The cut is where the declared argument jumps; " +
+                  "$\\oint_\\gamma f\\,dz$ does not depend on where the cut lies while it avoids $\\gamma$."
+              : "The colouring is built from the factorisation you declared, each factor in its own window, " +
+                  "so the seam is your cut. The cut is where the declared argument jumps; " +
+                  "$\\oint_\\gamma f\\,dz$ does not depend on where the cut lies while it avoids $\\gamma$.",
+            "seam",
+          ),
         ),
   ];
 
@@ -229,9 +258,11 @@ export const cutsCard: Card = ({ state, resolution, actions }) => {
       h(
         "p",
         { key: "why", class: "muted small" },
-        "The integrand above is taken whole, in the principal branch of every sub-expression — so " +
-          "its residues are not decidable and there is no ∮. Declare a factorisation to get one: " +
-          "the box then holds R(z) and the factor is read in its own window.",
+        ...mathText(
+          "To integrate a multivalued integrand, declare its branch factor: " +
+            "$f(z) = z^{\\alpha}\\,R(z)$ with a chosen argument window. The box then holds $R(z)$.",
+          "why",
+        ),
       ),
       h(
         "div",
@@ -240,7 +271,7 @@ export const cutsCard: Card = ({ state, resolution, actions }) => {
           h(
             "button",
             { key: `d:${point.id}`, onClick: () => actions.declare(point.id) },
-            `declare a factor on ${point.label}`,
+            ...mathText(`Declare branch factor at $${point.label}$`, `dl:${point.id}`),
           ),
         ),
       ),
@@ -252,7 +283,7 @@ export const cutsCard: Card = ({ state, resolution, actions }) => {
       h(
         "div",
         { key: "win", class: "pickRow" },
-        h("span", { key: "l", class: "muted small" }, "window"),
+        h("span", { key: "l", class: "muted small" }, "Argument window"),
         h(
           "select",
           {
@@ -277,7 +308,7 @@ export const cutsCard: Card = ({ state, resolution, actions }) => {
         ? h(
             "div",
             { key: "orient", class: "pickRow" },
-            h("span", { key: "l", class: "muted small" }, "written"),
+            h("span", { key: "l", class: "muted small" }, "Factor form"),
             h(
               "button",
               {
@@ -291,7 +322,7 @@ export const cutsCard: Card = ({ state, resolution, actions }) => {
         : h(
             "label",
             { key: "logm", class: "pickRow" },
-            h("span", { key: "l", class: "muted small" }, "log^m, m ="),
+            h("span", { key: "l", class: "muted small" }, ...mathText("$\\log^m$, $m =$", "logm")),
             h("input", {
               key: "i",
               type: "number",
@@ -312,7 +343,7 @@ export const cutsCard: Card = ({ state, resolution, actions }) => {
       h(
         "label",
         { key: "sheet", class: "pickRow" },
-        h("span", { key: "l", class: "muted small" }, "sheet"),
+        h("span", { key: "l", class: "muted small" }, "Sheet"),
         h("input", {
           key: "i",
           type: "number",
@@ -328,11 +359,14 @@ export const cutsCard: Card = ({ state, resolution, actions }) => {
         h(
           "span",
           { key: "n", class: "muted small" },
-          shown.sheet === 0
-            ? "sheet 0 — the determination as declared"
-            : order.kind === "power"
-              ? `× e^(2πi·${formatFrac(order.alpha.mul(Frac.of(BigInt(shown.sheet))))}), and the cut does not move`
-              : `log + ${shown.sheet === 1 ? "" : `${shown.sheet}·`}2πi — a log's monodromy is ADDITIVE, so no factor closes it`,
+          ...mathText(
+            shown.sheet === 0
+              ? "Sheet 0: the determination as declared."
+              : order.kind === "power"
+                ? `$\\times e^{2\\pi i \\cdot ${formatFrac(order.alpha.mul(Frac.of(BigInt(shown.sheet))))}}$, and the cut does not move.`
+                : `$\\log + ${shown.sheet === 1 ? "" : `${shown.sheet}\\cdot`}2\\pi i$: a log's monodromy is additive, so no factor closes it.`,
+            `sheetN${shown.sheet}`,
+          ),
         ),
       ),
       h(
@@ -345,20 +379,24 @@ export const cutsCard: Card = ({ state, resolution, actions }) => {
             "aria-label": "undeclare the factor and put the whole integrand back in the box",
             onClick: () => actions.undeclare(),
           },
-          "undeclare",
+          "Remove branch factor",
         ),
         h("span", { key: "n", class: "muted small" }, "puts the whole integrand back in the box."),
       ),
       // ---- is the split the integrand it claims to be? ----
+      // **Through `mathText`, like every other engine sentence**, and step 2.1's browser pass is
+      // why: `splitCheck`'s refusal names $R(z)$, and printed as text it put two dollar signs on
+      // screen. A verdict is a sentence in the `$…$` convention wherever it is composed.
       resolution.kind === "declared-refused"
-        ? h("p", { key: "bad", class: "verdict" }, badge("⚠"), ` ${resolution.reason}`)
+        ? h("p", { key: "bad", class: "verdict" }, badge("⚠"), " ", ...mathText(resolution.reason, "bad"))
         : null,
       resolution.kind === "declared" && resolution.split !== null
         ? h(
             "p",
             { key: "split", class: "verdict" },
             badge(resolution.split.ok ? "≤" : "⚠"),
-            ` ${resolution.split.detail}`,
+            " ",
+            ...mathText(resolution.split.detail, "split"),
           )
         : null,
     );
@@ -369,10 +407,10 @@ export const cutsCard: Card = ({ state, resolution, actions }) => {
     "cuts",
     ...body,
     h("div", { key: "decl", class: "declaration" }, ...decl),
-    h("p", { key: "verdict", class: "verdict" }, badge(report.certificate.level), ` ${report.detail}`),
+    h("p", { key: "verdict", class: "verdict" }, badge(report.certificate.level), " ", ...mathText(report.detail, "adm")),
     report.ok || report.repair === undefined
       ? null
-      : h("p", { key: "repair", class: "muted small" }, report.repair),
+      : h("p", { key: "repair", class: "muted small" }, ...mathText(report.repair, "admfix")),
     h(
       "ul",
       { key: "points", class: "pieces2" },
@@ -380,7 +418,7 @@ export const cutsCard: Card = ({ state, resolution, actions }) => {
         h(
           "li",
           { key: `b:${point.id}` },
-          h("span", { key: "n", class: "pieceName" }, point.label),
+          h("span", { key: "n", class: "pieceName" }, ...mathText(`$${point.label}$`, `pl:${point.id}`)),
           h(
             "select",
             {

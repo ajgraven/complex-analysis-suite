@@ -175,7 +175,7 @@ describe("the rail speaks the reader's vocabulary, not the engine's ids", () => 
   it("heads each ledger row with the group's label", () => {
     const { root } = mount();
     // The Result card's own table, one row per ledger row, each headed by its constraint's name.
-    const groups = [...root.querySelectorAll(".ledgerRow .tag")].map((c) => c.textContent?.trim());
+    const groups = [...root.querySelectorAll(".checkRow .tag")].map((c) => c.textContent?.trim());
     expect(groups.length).toBeGreaterThan(0);
     expect(groups).toContain(constraintLabel("LEGALITY"));
     for (const id of ["LEGALITY", "CATCH", "KILL", "COVER"] as const) expect(groups).not.toContain(id);
@@ -196,7 +196,7 @@ const dialogOf = (): HTMLElement | null => document.querySelector<HTMLElement>('
 
 /** Put the ladder up the way a reader does, and hand back the dialog it built. */
 function openLadder(root: ParentNode): HTMLElement {
-  byLabel<HTMLButtonElement>(root, "compare five arguments that differ by one ledger row").click();
+  byLabel<HTMLButtonElement>(root, "compare five arguments that differ by one row of the checks").click();
   const dialog = dialogOf();
   if (dialog === null) throw new Error("the Contrasts button put no dialog up");
   return dialog;
@@ -238,7 +238,7 @@ describe("the contrast ladder, from the bar", () => {
 
   it("closes on Escape, tells the shell, and gives focus back to the bar", () => {
     const { root, app } = mount();
-    const button = byLabel<HTMLButtonElement>(root, "compare five arguments that differ by one ledger row");
+    const button = byLabel<HTMLButtonElement>(root, "compare five arguments that differ by one row of the checks");
     button.focus();
     const dialog = openLadder(root);
     dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
@@ -258,7 +258,7 @@ describe("the contrast ladder, from the bar", () => {
     expect(answersOf(dialog)).toEqual([
       "π",
       "π/e",
-      `⚠ does not close (${constraintLabel("KILL")})`,
+      `⚠ incomplete (${constraintLabel("KILL").toLowerCase()})`,
       "π/e",
       "π/2",
     ]);
@@ -276,7 +276,7 @@ describe("the contrast ladder, from the bar", () => {
 
   it("OPENS a cell into the app, which is the only thing the ladder does to the state", () => {
     const { root, app } = mount();
-    openColumn(openLadder(root), "∫ sin x/x dx");
+    openColumn(openLadder(root), "∫₀^∞ sin x/x dx");
     expect(dialogOf(), "the dialog stayed up over the state it had just applied").toBeNull();
     const state = app.currentState();
     expect(state.mode).toBe("gallery");
@@ -302,7 +302,7 @@ describe("the contrast ladder, from the bar", () => {
     expect(root.querySelectorAll("main")).toHaveLength(1);
     expect(root.querySelectorAll("h1")).toHaveLength(1);
     // The panel's own heading is a level 2, under the page's one level 1.
-    expect(q(dialog, "h2").textContent).toBe("One step at a time");
+    expect(q(dialog, "h2").textContent).toBe("Contrasting arguments");
     // **And it is NOT inside the landmark**, which is the new shell's reason for mounting it on the
     // root: `inert` is not defeasible from CSS, so a modal inside the element it makes inert is a
     // modal nobody can reach. That makes "outside `<main>`" a correctness fact rather than a

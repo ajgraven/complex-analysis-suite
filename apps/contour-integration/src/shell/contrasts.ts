@@ -157,7 +157,7 @@ function columnHead(cell: ContrastTableCell, onOpen: (id: string) => void): Desc
             "div",
             { key: "answer", class: "verdict" },
             badge("⚠", `w:${cell.id}`),
-            ` does not close (${failed ?? "?"})`,
+            ` incomplete (${failed === null ? "?" : failed.toLowerCase()})`,
           ),
   );
   body.push(
@@ -169,9 +169,10 @@ function columnHead(cell: ContrastTableCell, onOpen: (id: string) => void): Desc
         {
           key: "b",
           type: "button",
-          // The label names the column, because five buttons all reading "Open" name nothing. It is
-          // the plain-text form: an `aria-label` is read aloud, and a `$` in it would be spelled.
-          "aria-label": `open ${mathPlain(cell.label)} in the app`,
+          // The label names the column, because five buttons all reading "Open" name nothing — and
+          // it is the cell's SPOKEN twin, not `mathPlain` of the typeset one, which since step 2.1
+          // would be the LaTeX source read out backslash by backslash.
+          "aria-label": `open ${cell.labelText} in the app`,
           onClick: () => onOpen(cell.id),
         },
         "Open",
@@ -185,7 +186,11 @@ function columnHead(cell: ContrastTableCell, onOpen: (id: string) => void): Desc
 function gridOf(table: ContrastTable, onOpen: (id: string) => void): Desc {
   return h(
     "table",
-    { key: "grid", class: "numTable contrastGrid" },
+    // **Not `numTable`, which it wore until step 2.1 and should never have.** That class is for a
+    // table of NUMBERS — tabular figures, and `white-space: nowrap` on every heading — and this is a
+    // table of sentences. The nowrap is why the column heads never wrapped and why the fourth and
+    // fifth columns had been drawn off the edge of the dialog since the panel was built.
+    { key: "grid", class: "contrastGrid" },
     h(
       "thead",
       { key: "h" },
@@ -196,7 +201,7 @@ function gridOf(table: ContrastTable, onOpen: (id: string) => void): Desc {
         // it against the OPEN panel, and it is also the one place to say what the row headings are.
         // The a11y roster audits a page in its DEFAULT state, so a panel nothing opens is never
         // audited — which is why the emptiness survived to be found by hand.
-        h("th", { key: "corner", scope: "col" }, "Ledger row"),
+        h("th", { key: "corner", scope: "col" }, "Check"),
         ...table.cells.map((cell) => columnHead(cell, onOpen)),
       ),
     ),
@@ -236,7 +241,7 @@ export function createContrastsDialog(host: HTMLElement, page: HTMLElement, inpu
         h(
           "div",
           { key: "bar", class: "btnRow" },
-          h("h2", { key: "t", id: titleId }, "One step at a time"),
+          h("h2", { key: "t", id: titleId }, "Contrasting arguments"),
           h(
             "button",
             { key: "x", type: "button", "aria-label": "close the contrasts dialog", onClick: () => modal.dismiss() },

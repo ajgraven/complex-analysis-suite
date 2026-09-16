@@ -1301,7 +1301,7 @@ S	solve	the system	$\sum_i (a_i t + b_i) = \oint_\gamma f(z)\,dz$, solved for $t
 D	solve	=	satisfied		$\oint_\gamma f(z)\,dz = 2\pi i \cdot e^{-\frac{7i\pi}{10}}$	the argument is decided: a rational multiple of $\pi$ is guessed numerically and then verified in exact arithmetic · the branch point carries no residue; each pole of the rational cofactor contributes $z_0^{\alpha}\operatorname{Res}(R, z_0)$ in the declared determination	$\arg z \in [\tfrac{0}{1}\pi, \tfrac{2}{1}\pi)$
 P	solve	true	$\arg(-1) = \tfrac{1}{1}\pi$, verified exactly over $\mathbb{Q}(i)(\sqrt{d})$ by dividing $z_0$ by $e^{ir\pi}$ and finding a positive real of modulus 1
 P	solve	true	the determination is an input to the answer: the principal branch would change it by $e^{2\pi i\alpha}$ with nothing to warn you
-P	solve	true	the branch point is NOT a pole: there is no Laurent series at it and no residue to take
+P	solve	true	the branch point is not a pole: there is no Laurent series at it and no residue to take
 P	solve	false	no quadrature cross-check: sampling $z^{\alpha}$ needs a determination, and a naive evaluator would use the principal branch and answer a different question
 D	solve	=	satisfied		$I = \frac{\pi}{\sin\left(\frac{3\pi}{10}\right)}$	$\pi - \pi \cdot e^{-\frac{7i\pi}{5}} = c\,e^{(\beta_1+\beta_2)/2}\,2i\sin(\frac{3\pi}{10})$ · solved from $\sum_i (a_i t + b_i) = \oint_\gamma f\,dz$ in units of $\pi$, then Re applied	
 P	solve	true	$a - be^{\beta}$ with $|a| = |b|$ factors as $e^{\beta/2}(e^{-\beta/2} - e^{\beta/2})$; one rule, for one shape
@@ -1357,7 +1357,7 @@ S	solve	the system	$\sum_i (a_i t + b_i) = \oint_\gamma f(z)\,dz$, solved for $t
 D	solve	=	satisfied		$\oint_\gamma f(z)\,dz = 2\pi$	the argument is decided: a rational multiple of $\pi$ is guessed numerically and then verified in exact arithmetic · the branch point carries no residue; each pole of the rational cofactor contributes $z_0^{\alpha}\operatorname{Res}(R, z_0)$ in the declared determination	$\arg z \in [\tfrac{0}{1}\pi, \tfrac{2}{1}\pi)$
 P	solve	true	$\arg(-1) = \tfrac{1}{1}\pi$, verified exactly over $\mathbb{Q}(i)(\sqrt{d})$ by dividing $z_0$ by $e^{ir\pi}$ and finding a positive real of modulus 1
 P	solve	true	the determination is an input to the answer: the principal branch would change it by $e^{2\pi i\alpha}$ with nothing to warn you
-P	solve	true	the branch point is NOT a pole: there is no Laurent series at it and no residue to take
+P	solve	true	the branch point is not a pole: there is no Laurent series at it and no residue to take
 P	solve	false	no quadrature cross-check: sampling $z^{\alpha}$ needs a determination, and a naive evaluator would use the principal branch and answer a different question
 D	solve	=	satisfied		$I = \pi$	$\pi - \pi \cdot e^{-i\pi} = c\,e^{(\beta_1+\beta_2)/2}\,2i\sin(\frac{\pi}{2})$ · solved from $\sum_i (a_i t + b_i) = \oint_\gamma f\,dz$ in units of $\pi$, then Re applied	
 P	solve	true	$a - be^{\beta}$ with $|a| = |b|$ factors as $e^{\beta/2}(e^{-\beta/2} - e^{\beta/2})$; one rule, for one shape
@@ -1413,7 +1413,7 @@ S	solve	the system	$\sum_i (a_i t + b_i) = \oint_\gamma f(z)\,dz$, solved for $t
 D	solve	=	satisfied		$\oint_\gamma f(z)\,dz = 2\pi i \cdot e^{-\frac{i\pi}{4}}$	the argument is decided: a rational multiple of $\pi$ is guessed numerically and then verified in exact arithmetic · the branch point carries no residue; each pole of the rational cofactor contributes $z_0^{\alpha}\operatorname{Res}(R, z_0)$ in the declared determination	$\arg z \in [\tfrac{0}{1}\pi, \tfrac{2}{1}\pi)$
 P	solve	true	$\arg(-1) = \tfrac{1}{1}\pi$, verified exactly over $\mathbb{Q}(i)(\sqrt{d})$ by dividing $z_0$ by $e^{ir\pi}$ and finding a positive real of modulus 1
 P	solve	true	the determination is an input to the answer: the principal branch would change it by $e^{2\pi i\alpha}$ with nothing to warn you
-P	solve	true	the branch point is NOT a pole: there is no Laurent series at it and no residue to take
+P	solve	true	the branch point is not a pole: there is no Laurent series at it and no residue to take
 P	solve	false	no quadrature cross-check: sampling $z^{\alpha}$ needs a determination, and a naive evaluator would use the principal branch and answer a different question
 D	solve	=	satisfied		$I = \frac{\pi}{\sin\left(\frac{3\pi}{4}\right)}$	$\pi - \pi \cdot e^{-\frac{i\pi}{2}} = c\,e^{(\beta_1+\beta_2)/2}\,2i\sin(\frac{3\pi}{4})$ · solved from $\sum_i (a_i t + b_i) = \oint_\gamma f\,dz$ in units of $\pi$, then Re applied	
 P	solve	true	$a - be^{\beta}$ with $|a| = |b|$ factors as $e^{\beta/2}(e^{-\beta/2} - e^{\beta/2})$; one rule, for one shape
@@ -1469,7 +1469,7 @@ S	solve	the system	$\sum_i (a_i t + b_i) = \oint_\gamma f(z)\,dz$, solved for $t
 D	solve	=	satisfied		$\oint_\gamma f(z)\,dz = 2\pi i \cdot e^{-\frac{9i\pi}{10}}$	the argument is decided: a rational multiple of $\pi$ is guessed numerically and then verified in exact arithmetic · the branch point carries no residue; each pole of the rational cofactor contributes $z_0^{\alpha}\operatorname{Res}(R, z_0)$ in the declared determination	$\arg z \in [\tfrac{0}{1}\pi, \tfrac{2}{1}\pi)$
 P	solve	true	$\arg(-1) = \tfrac{1}{1}\pi$, verified exactly over $\mathbb{Q}(i)(\sqrt{d})$ by dividing $z_0$ by $e^{ir\pi}$ and finding a positive real of modulus 1
 P	solve	true	the determination is an input to the answer: the principal branch would change it by $e^{2\pi i\alpha}$ with nothing to warn you
-P	solve	true	the branch point is NOT a pole: there is no Laurent series at it and no residue to take
+P	solve	true	the branch point is not a pole: there is no Laurent series at it and no residue to take
 P	solve	false	no quadrature cross-check: sampling $z^{\alpha}$ needs a determination, and a naive evaluator would use the principal branch and answer a different question
 D	solve	=	satisfied		$I = \frac{\pi}{\sin\left(\frac{\pi}{10}\right)}$	$\pi - \pi \cdot e^{-\frac{9i\pi}{5}} = c\,e^{(\beta_1+\beta_2)/2}\,2i\sin(\frac{\pi}{10})$ · solved from $\sum_i (a_i t + b_i) = \oint_\gamma f\,dz$ in units of $\pi$, then Re applied	
 P	solve	true	$a - be^{\beta}$ with $|a| = |b|$ factors as $e^{\beta/2}(e^{-\beta/2} - e^{\beta/2})$; one rule, for one shape
@@ -1525,7 +1525,7 @@ S	solve	the system	$\sum_i (a_i t + b_i) = \oint_\gamma f(z)\,dz$, solved for $t
 D	solve	=	satisfied		$\oint_\gamma f(z)\,dz = 2\pi i \cdot e^{-\frac{i\pi}{10}}$	the argument is decided: a rational multiple of $\pi$ is guessed numerically and then verified in exact arithmetic · the branch point carries no residue; each pole of the rational cofactor contributes $z_0^{\alpha}\operatorname{Res}(R, z_0)$ in the declared determination	$\arg z \in [\tfrac{0}{1}\pi, \tfrac{2}{1}\pi)$
 P	solve	true	$\arg(-1) = \tfrac{1}{1}\pi$, verified exactly over $\mathbb{Q}(i)(\sqrt{d})$ by dividing $z_0$ by $e^{ir\pi}$ and finding a positive real of modulus 1
 P	solve	true	the determination is an input to the answer: the principal branch would change it by $e^{2\pi i\alpha}$ with nothing to warn you
-P	solve	true	the branch point is NOT a pole: there is no Laurent series at it and no residue to take
+P	solve	true	the branch point is not a pole: there is no Laurent series at it and no residue to take
 P	solve	false	no quadrature cross-check: sampling $z^{\alpha}$ needs a determination, and a naive evaluator would use the principal branch and answer a different question
 D	solve	=	satisfied		$I = \frac{\pi}{\sin\left(\frac{9\pi}{10}\right)}$	$\pi - \pi \cdot e^{-\frac{i\pi}{5}} = c\,e^{(\beta_1+\beta_2)/2}\,2i\sin(\frac{9\pi}{10})$ · solved from $\sum_i (a_i t + b_i) = \oint_\gamma f\,dz$ in units of $\pi$, then Re applied	
 P	solve	true	$a - be^{\beta}$ with $|a| = |b|$ factors as $e^{\beta/2}(e^{-\beta/2} - e^{\beta/2})$; one rule, for one shape
@@ -1583,7 +1583,7 @@ P	solve	true	$\arg(-2) = \tfrac{1}{1}\pi$, verified exactly over $\mathbb{Q}(i)(
 P	solve	true	the determination is an input to the answer: the principal branch would change it by $e^{2\pi i\alpha}$ with nothing to warn you
 P	solve	true	$\arg(-4) = \tfrac{1}{1}\pi$, verified exactly over $\mathbb{Q}(i)(\sqrt{d})$ by dividing $z_0$ by $e^{ir\pi}$ and finding a positive real modulus with $\ln = 2\ln 2$
 P	solve	true	the determination is an input to the answer: the principal branch would change it by $e^{2\pi i\alpha}$ with nothing to warn you
-P	solve	true	the branch point is NOT a pole: there is no Laurent series at it and no residue to take
+P	solve	true	the branch point is not a pole: there is no Laurent series at it and no residue to take
 P	solve	false	no quadrature cross-check: sampling $z^{\alpha}$ needs a determination, and a naive evaluator would use the principal branch and answer a different question
 D	solve	=	satisfied		$I = \pi - \frac{\pi\sqrt{2}}{2}$	$-\pi \cdot e^{i\pi} + \pi = c\,e^{(\beta_1+\beta_2)/2}\,2i\sin(\frac{\pi}{2})$ · solved from $\sum_i (a_i t + b_i) = \oint_\gamma f\,dz$ in units of $\pi$, then Re applied	
 P	solve	true	$a - be^{\beta}$ with $|a| = |b|$ factors as $e^{\beta/2}(e^{-\beta/2} - e^{\beta/2})$; one rule, for one shape
@@ -1641,7 +1641,7 @@ P	solve	true	$\arg(-1) = \tfrac{1}{1}\pi$, verified exactly over $\mathbb{Q}(i)(
 P	solve	true	the determination is an input to the answer: the principal branch would change it by $e^{2\pi i\alpha}$ with nothing to warn you
 P	solve	true	$\arg(-3) = \tfrac{1}{1}\pi$, verified exactly over $\mathbb{Q}(i)(\sqrt{d})$ by dividing $z_0$ by $e^{ir\pi}$ and finding a positive real modulus with $\ln = \ln 3$
 P	solve	true	the determination is an input to the answer: the principal branch would change it by $e^{2\pi i\alpha}$ with nothing to warn you
-P	solve	true	the branch point is NOT a pole: there is no Laurent series at it and no residue to take
+P	solve	true	the branch point is not a pole: there is no Laurent series at it and no residue to take
 P	solve	false	no quadrature cross-check: sampling $z^{\alpha}$ needs a determination, and a naive evaluator would use the principal branch and answer a different question
 D	solve	=	satisfied		$I = -\frac{\pi}{2} + \frac{\pi\sqrt{3}}{2}$	$-\pi \cdot e^{i\pi} + \pi = c\,e^{(\beta_1+\beta_2)/2}\,2i\sin(\frac{\pi}{2})$ · solved from $\sum_i (a_i t + b_i) = \oint_\gamma f\,dz$ in units of $\pi$, then Re applied	
 P	solve	true	$a - be^{\beta}$ with $|a| = |b|$ factors as $e^{\beta/2}(e^{-\beta/2} - e^{\beta/2})$; one rule, for one shape
@@ -1865,7 +1865,7 @@ P	solve	true	the pole has order 2, so 2 Laurent coefficient(s) of R meet 2 coeff
 P	solve	true	$\log(i) = \frac{i\pi}{2}$ in the declared determination, its argument verified exactly rather than read off atan2
 P	solve	true	the pole has order 2, so 2 Laurent coefficient(s) of R meet 2 coefficient(s) of log^2 — at order 2 the answer mixes both, and either half alone is a plausible wrong number
 P	solve	true	$\log(-i) = \frac{3i\pi}{2}$ in the declared determination, its argument verified exactly rather than read off atan2
-P	solve	true	the branch point at the origin is NOT a pole: there is no Laurent series at it and no residue to take
+P	solve	true	the branch point at the origin is not a pole: there is no Laurent series at it and no residue to take
 P	solve	false	no quadrature cross-check: sampling log^m z needs a determination, and a compiled evaluator would use the principal branch and answer a different question
 D	solve	=	satisfied		$I = −π/4$	$Mt = \oint_\gamma f\,dz - \sum_i b_i$ over $\mathbb{Q}(i)(\pi)$, split into its real and imaginary parts and solved exactly	
 T	verdict	Conclusion	The rigor of the conclusion is the weakest of its steps: $=$ exact, $\le$ rigorous bound, $\approx$ numerical.
@@ -1920,7 +1920,7 @@ P	solve	true	the pole has order 1, so 1 Laurent coefficient(s) of R meet 1 coeff
 P	solve	true	$\log(i) = \frac{i\pi}{2}$ in the declared determination, its argument verified exactly rather than read off atan2
 P	solve	true	the pole has order 1, so 1 Laurent coefficient(s) of R meet 1 coefficient(s) of log^2 — at order 2 the answer mixes both, and either half alone is a plausible wrong number
 P	solve	true	$\log(-i) = \frac{3i\pi}{2}$ in the declared determination, its argument verified exactly rather than read off atan2
-P	solve	true	the branch point at the origin is NOT a pole: there is no Laurent series at it and no residue to take
+P	solve	true	the branch point at the origin is not a pole: there is no Laurent series at it and no residue to take
 P	solve	false	no quadrature cross-check: sampling log^m z needs a determination, and a compiled evaluator would use the principal branch and answer a different question
 D	solve	=	satisfied		$I = 0$	$Mt = \oint_\gamma f\,dz - \sum_i b_i$ over $\mathbb{Q}(i)(\pi)$, split into its real and imaginary parts and solved exactly	
 T	verdict	Conclusion	The rigor of the conclusion is the weakest of its steps: $=$ exact, $\le$ rigorous bound, $\approx$ numerical.
@@ -1975,7 +1975,7 @@ P	solve	true	the pole has order 1, so 1 Laurent coefficient(s) of R meet 1 coeff
 P	solve	true	$\log(i) = \frac{i\pi}{2}$ in the declared determination, its argument verified exactly rather than read off atan2
 P	solve	true	the pole has order 1, so 1 Laurent coefficient(s) of R meet 1 coefficient(s) of log^3 — at order 2 the answer mixes both, and either half alone is a plausible wrong number
 P	solve	true	$\log(-i) = \frac{3i\pi}{2}$ in the declared determination, its argument verified exactly rather than read off atan2
-P	solve	true	the branch point at the origin is NOT a pole: there is no Laurent series at it and no residue to take
+P	solve	true	the branch point at the origin is not a pole: there is no Laurent series at it and no residue to take
 P	solve	false	no quadrature cross-check: sampling log^m z needs a determination, and a compiled evaluator would use the principal branch and answer a different question
 D	solve	=	satisfied		$I = π³/8$	$Mt = \oint_\gamma f\,dz - \sum_i b_i$ over $\mathbb{Q}(i)(\pi)$, split into its real and imaginary parts and solved exactly · resolved by running that record at the same bindings; its own verdict is =	
 P	solve	true	T0 was supplied from elsewhere; its own verdict meets into this one
@@ -2031,7 +2031,7 @@ P	solve	true	the pole has order 2, so 2 Laurent coefficient(s) of R meet 2 coeff
 P	solve	true	$\log(i) = \frac{i\pi}{2}$ in the declared determination, its argument verified exactly rather than read off atan2
 P	solve	true	the pole has order 2, so 2 Laurent coefficient(s) of R meet 2 coefficient(s) of log^3 — at order 2 the answer mixes both, and either half alone is a plausible wrong number
 P	solve	true	$\log(-i) = \frac{3i\pi}{2}$ in the declared determination, its argument verified exactly rather than read off atan2
-P	solve	true	the branch point at the origin is NOT a pole: there is no Laurent series at it and no residue to take
+P	solve	true	the branch point at the origin is not a pole: there is no Laurent series at it and no residue to take
 P	solve	false	no quadrature cross-check: sampling log^m z needs a determination, and a compiled evaluator would use the principal branch and answer a different question
 D	solve	=	satisfied		$I = π³/16$	$Mt = \oint_\gamma f\,dz - \sum_i b_i$ over $\mathbb{Q}(i)(\pi)$, split into its real and imaginary parts and solved exactly · resolved by running that record at the same bindings; its own verdict is =	
 P	solve	true	T0 was supplied from elsewhere; its own verdict meets into this one
@@ -2415,7 +2415,7 @@ P	solve	true	$\sum_j \alpha_j \arg(z_0 - b_j) = -\frac{1}{4}\pi$, and the indivi
 P	solve	true	the exact phase pins it modulo $\frac{1}{4}\pi$, and the declared determination picks which lift — the nearest alternative is $\frac{1}{4}\pi$ away
 P	solve	true	independent cross-check: a direct float evaluation of $c\prod_j|z_0-b_j|^{\alpha_j}e^{i\sum_j\alpha_j\theta_j}$ agrees to 0.00e+0, sharing no arithmetic with the exact route but the window
 P	solve	true	$\ln \prod_j|z_0 - b_j|^{\alpha_j} = \frac{\ln 2}{4} + \frac{3\ln 5}{4}$, over primes and therefore canonical
-P	solve	true	f = O(z^(0)) at infinity, which is NOT enough to make the residue vanish — 1/z is regular there and has Res = −1
+P	solve	true	f = O(z^(0)) at infinity, which is not enough to make the residue vanish — 1/z is regular there and has Res = −1
 P	solve	true	$\sum_j \alpha_j = 1 \in \mathbb{Z}$, so the monodromy round a large circle is $1$ and $f$ is single-valued there
 P	solve	true	the branch constant is $c\,e^{i\pi\cdot-\frac{1}{4}}$, derived along the direction $\arg z = \frac{1}{2}\pi$ where the declared windows give $\frac{1}{2}\pi$ at z = 0, $-\frac{1}{2}\pi$ at z = b — every one an exact rational, so the constant is a root of unity and not a fit
 P	solve	true	$\sigma = -1$, $\sum \operatorname{Res}$ over the 1 finite pole is $-e^{-\frac{i\pi}{4} + \frac{\ln 2}{4} + \frac{3\ln 5}{4}}$, and $\operatorname{Res}(f, \infty) = \frac{17}{4} \cdot e^{-\frac{i\pi}{4}}$ is the outer circle exactly, not an estimate of it
@@ -2491,7 +2491,7 @@ P	solve	true	$\sum_j \alpha_j \arg(z_0 - b_j) = -\frac{3}{4}\pi$, and the indivi
 P	solve	true	the exact phase pins it modulo $\frac{1}{4}\pi$, and the declared determination picks which lift — the nearest alternative is $\frac{1}{4}\pi$ away
 P	solve	true	independent cross-check: a direct float evaluation of $c\prod_j|z_0-b_j|^{\alpha_j}e^{i\sum_j\alpha_j\theta_j}$ agrees to 1.25e-16, sharing no arithmetic with the exact route but the window
 P	solve	true	$\ln \prod_j|z_0 - b_j|^{\alpha_j} = \frac{3\ln 2}{4} + \frac{\ln 5}{4}$, over primes and therefore canonical
-P	solve	true	f = O(z^(0)) at infinity, which is NOT enough to make the residue vanish — 1/z is regular there and has Res = −1
+P	solve	true	f = O(z^(0)) at infinity, which is not enough to make the residue vanish — 1/z is regular there and has Res = −1
 P	solve	true	$\sum_j \alpha_j = 1 \in \mathbb{Z}$, so the monodromy round a large circle is $1$ and $f$ is single-valued there
 P	solve	true	the branch constant is $c\,e^{i\pi\cdot-\frac{3}{4}}$, derived along the direction $\arg z = \frac{1}{2}\pi$ where the declared windows give $\frac{1}{2}\pi$ at z = 0, $-\frac{1}{2}\pi$ at z = b — every one an exact rational, so the constant is a root of unity and not a fit
 P	solve	true	$\sigma = -1$, $\sum \operatorname{Res}$ over the 1 finite pole is $-e^{-\frac{3i\pi}{4} + \frac{3\ln 2}{4} + \frac{\ln 5}{4}}$, and $\operatorname{Res}(f, \infty) = \frac{11}{4} \cdot e^{-\frac{3i\pi}{4}}$ is the outer circle exactly, not an estimate of it
@@ -2567,7 +2567,7 @@ P	solve	true	$\sum_j \alpha_j \arg(z_0 - b_j) = -\frac{1}{2}\pi$, and the indivi
 P	solve	true	the exact phase pins it modulo $\frac{1}{2}\pi$, and the declared determination picks which lift — the nearest alternative is $\frac{1}{2}\pi$ away
 P	solve	true	independent cross-check: a direct float evaluation of $c\prod_j|z_0-b_j|^{\alpha_j}e^{i\sum_j\alpha_j\theta_j}$ agrees to 1.62e-16, sharing no arithmetic with the exact route but the window
 P	solve	true	$\ln \prod_j|z_0 - b_j|^{\alpha_j} = \frac{\ln 5}{2} + \frac{\ln 7}{2}$, over primes and therefore canonical
-P	solve	true	f = O(z^(0)) at infinity, which is NOT enough to make the residue vanish — 1/z is regular there and has Res = −1
+P	solve	true	f = O(z^(0)) at infinity, which is not enough to make the residue vanish — 1/z is regular there and has Res = −1
 P	solve	true	$\sum_j \alpha_j = 1 \in \mathbb{Z}$, so the monodromy round a large circle is $1$ and $f$ is single-valued there
 P	solve	true	the branch constant is $c\,e^{i\pi\cdot-\frac{1}{2}}$, derived along the direction $\arg z = \frac{1}{2}\pi$ where the declared windows give $\frac{1}{2}\pi$ at z = 0, $-\frac{1}{2}\pi$ at z = b — every one an exact rational, so the constant is a root of unity and not a fit
 P	solve	true	$\sigma = -1$, $\sum \operatorname{Res}$ over the 1 finite pole is $i\sqrt{35}$, and $\operatorname{Res}(f, \infty) = -6i$ is the outer circle exactly, not an estimate of it
@@ -2643,7 +2643,7 @@ P	solve	true	$\sum_j \alpha_j \arg(z_0 - b_j) = -\frac{3}{4}\pi$, and the indivi
 P	solve	true	the exact phase pins it modulo $\frac{1}{4}\pi$, and the declared determination picks which lift — the nearest alternative is $\frac{1}{4}\pi$ away
 P	solve	true	independent cross-check: a direct float evaluation of $c\prod_j|z_0-b_j|^{\alpha_j}e^{i\sum_j\alpha_j\theta_j}$ agrees to 1.84e-16, sharing no arithmetic with the exact route but the window
 P	solve	true	$\ln \prod_j|z_0 - b_j|^{\alpha_j} = \ln 2 + \frac{3\ln 3}{4} + \frac{\ln 5}{4}$, over primes and therefore canonical
-P	solve	true	f = O(z^(0)) at infinity, which is NOT enough to make the residue vanish — 1/z is regular there and has Res = −1
+P	solve	true	f = O(z^(0)) at infinity, which is not enough to make the residue vanish — 1/z is regular there and has Res = −1
 P	solve	true	$\sum_j \alpha_j = 1 \in \mathbb{Z}$, so the monodromy round a large circle is $1$ and $f$ is single-valued there
 P	solve	true	the branch constant is $c\,e^{i\pi\cdot-\frac{3}{4}}$, derived along the direction $\arg z = \frac{1}{2}\pi$ where the declared windows give $\frac{1}{2}\pi$ at z = 0, $-\frac{1}{2}\pi$ at z = b — every one an exact rational, so the constant is a root of unity and not a fit
 P	solve	true	$\sigma = -1$, $\sum \operatorname{Res}$ over the 1 finite pole is $-2 \cdot e^{-\frac{3i\pi}{4} + \frac{3\ln 3}{4} + \frac{\ln 5}{4}}$, and $\operatorname{Res}(f, \infty) = 7 \cdot e^{-\frac{3i\pi}{4}}$ is the outer circle exactly, not an estimate of it

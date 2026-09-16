@@ -50,7 +50,7 @@ export const b2JordanStrict: Family = {
   auxiliary: {
     integrand: "z*exp(i*z)/(1 + z^2)",
     relation: "Im",
-    note: "sin x = Im e^{ix}; the IMAGINARY part is the target here, and the real part is the free companion ∫ x cos x/(1+x²) = 0",
+    note: "sin x = Im e^{ix}; the imaginary part is the target here, and the real part is the free companion ∫ x cos x/(1+x²) = 0",
   },
 
   parameters: [], // a is pinned at 1 by the gallery entry; the Jordan constant is π/a = π.

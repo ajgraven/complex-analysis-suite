@@ -142,7 +142,7 @@ function screen(root: Element): string {
 const rails = (root: Element): string => `${textOf(q(root, ".rail2.left"))}\n${textOf(q(root, ".rail2.right"))}`;
 
 /**
- * Type an integrand, pick the keyhole, and declare a factor on the point it seeds — through the
+ * Type an integrand, pick the keyhole, and Declare branch factor at the point it seeds — through the
  * controls a reader uses, because the declare button's own presence is half of what the first block
  * below is about.
  */
@@ -153,14 +153,14 @@ function declaredKeyhole(root: Element): void {
   const template = byLabel<HTMLSelectElement>(root, "replace the contour with a template");
   template.value = "keyhole";
   fire(template, "change");
-  clickNamed(q(root, ".rail2.left"), "declare a factor on");
+  clickNamed(q(root, ".rail2.left"), "Declare branch factor at");
 }
 
 describe("the argument window", () => {
   // **The declaration used to VANISH when the window changed**, and nothing in the app said so.
   // `buildDeclaration`'s canonical system carries the point id `"b"` while the reader's is `"b1"`,
   // and the old shell adopted that system wholesale — so `declaredOrder()` went null, the card
-  // reverted to "declare a factor on …", and the integrand box went on holding the COFACTOR under
+  // reverted to "Declare branch factor at …", and the integrand box went on holding the COFACTOR under
   // its `R(z) =` label. The app then integrated `R(z)` as the whole integrand and printed a
   // plausible number beside it: the same defect the "undeclare" button exists to prevent, through a
   // different door. It also meant M5.1c's own demonstration — switch to the principal window and
@@ -180,7 +180,7 @@ describe("the argument window", () => {
 
     const rail = rails(root);
     expect(rail).toContain("Declared factor");
-    expect(rail).not.toContain("declare a factor on");
+    expect(rail).not.toContain("Declare branch factor at");
     // The box still holds the cofactor, and its accessible name still says so — which is only
     // honest while the factor is still declared.
     expect(byLabel<HTMLInputElement>(root, "cofactor R(z)").value).toBe("1/(1+z)");
@@ -398,7 +398,7 @@ describe("the round trip is not vacuous", () => {
     expect(bare).not.toBe(declared);
     // And the cofactor is now being read as the whole integrand, which is what the box's own
     // accessible name says.
-    expect(bare).toContain("declare a factor on");
+    expect(bare).toContain("Declare branch factor at");
     expect(bare).not.toContain("Declared factor");
     expect(byLabel<HTMLInputElement>(root, "integrand f(z)").value).toBe("1/(1+z)");
   });
@@ -411,7 +411,7 @@ describe("the round trip is not vacuous", () => {
     // α = 1/2, so one whole turn multiplies the answer by e^(iπ) = −1: the same cut, a different
     // number. If the round trip dropped `sheet` this would be the identity.
     expect(screen(root)).not.toBe(sheet0);
-    expect(screen(root)).toContain("sheet");
+    expect(screen(root)).toContain("Sheet");
   });
 
   it("a family binding decides a record's numbers, so a moved one shows", () => {

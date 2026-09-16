@@ -11,7 +11,7 @@
 // **Under a record there is no picker and no pen.** The contour is the record's, and swapping it
 // would leave a worked example whose pieces no longer match the argument it is making.
 import { fmtCx } from "../../kernel/decimal.js";
-import { roleLabel } from "../../engine/vocabulary.js";
+import { roleLabel, tagLabel, templateLabel } from "../../engine/vocabulary.js";
 import { penPath } from "../../engine/contour/pen.js";
 import { TEMPLATES } from "../../shell/templates.js";
 import type { ContourIntegral } from "../../engine/contour/integrate.js";
@@ -54,7 +54,7 @@ export const contourCard: Card = (ctx) => {
           // The empty option is what a HAND-DRAWN contour selects: it has no template, and a picker
           // claiming it is a circle would be the one place the app lies about what is on screen.
           h("option", { key: "none", value: "" }, penPath(contour) === null ? "—" : "drawn by hand"),
-          ...TEMPLATES.map((t) => h("option", { key: t.id, value: t.id }, t.label)),
+          ...TEMPLATES.map((t) => h("option", { key: t.id, value: t.id }, templateLabel(t.id))),
         ),
       ),
     );
@@ -137,8 +137,8 @@ export const contourCard: Card = (ctx) => {
         ? null
         : integral?.quadratureSkipped === undefined
           ? h("span", { key: "v", class: "num pieceValue" }, fmtCx(value.value))
-          : h("span", { key: "v", class: "tag" }, "not sampled"),
-      value?.capped === true ? h("span", { key: "cap", class: "tag warn" }, "resolution capped") : null,
+          : h("span", { key: "v", class: "tag" }, tagLabel("not-sampled")),
+      value?.capped === true ? h("span", { key: "cap", class: "tag warn" }, tagLabel("quadrature-capped")) : null,
     );
   });
 

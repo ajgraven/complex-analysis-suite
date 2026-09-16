@@ -72,7 +72,7 @@ const drillCard = (root: ParentNode): HTMLElement | null => root.querySelector('
 const theDrillCard = (root: ParentNode): HTMLElement => q(root, '[data-card="drill"]');
 
 /** The button in `host` whose label IS `label` — never a substring, since "circle" is inside
- *  "semicircle ↑" and the substring clicker silently picked the wrong one. */
+ *  "upper semicircle" and the substring clicker silently picked the wrong one. */
 const clickExact = (host: ParentNode, label: string): void => {
   const b = [...host.querySelectorAll("button")].find((x) => (x.textContent ?? "").trim() === label);
   if (b === undefined) throw new Error(`no button labelled exactly '${label}'`);
@@ -97,7 +97,7 @@ const openPicker = (app: Shell2Handle): void => app.actions().setMode("drill");
  */
 function taskRow(root: ParentNode, label: string): { row: HTMLElement; open: HTMLButtonElement } {
   const open = [...root.querySelectorAll<HTMLButtonElement>('[data-card="drill"] button')].find((b) =>
-    (b.getAttribute("aria-label") ?? "").startsWith(`open ${label} at rung `),
+    (b.getAttribute("aria-label") ?? "").startsWith(`open ${label} at stage `),
   );
   const row = open?.closest("li");
   if (open === undefined || row === null || row === undefined) throw new Error(`no chooser row for '${label}'`);
@@ -113,7 +113,7 @@ const link = (id: string, stage: (typeof DRILL_STAGES)[number]): string => {
 
 /** The ledger's constraint names, in the order the Result card lists them. */
 const constraints = (root: ParentNode): string[] =>
-  [...root.querySelectorAll(".ledgerRow .tag")].map((t) => (t.textContent ?? "").trim());
+  [...root.querySelectorAll(".checkRow .tag")].map((t) => (t.textContent ?? "").trim());
 
 /**
  * The hypothesis disclosure's summary — the sentence a reader decides on WITHOUT opening it.
@@ -143,8 +143,8 @@ describe("the drill's own surface", () => {
     const card = theDrillCard(root);
     const rows = [...card.querySelectorAll("li")];
     expect(rows).toHaveLength(DRILL_TASKS.length);
-    // Nothing cleared yet, so every task opens at rung 1 — the worked example.
-    for (const li of rows) expect(textOf(li)).toContain("rung 1 of 4");
+    // Nothing cleared yet, so every task opens at stage 1 — the worked example.
+    for (const li of rows) expect(textOf(li)).toContain("stage 1 of 4");
     // **Still not IN the drill**: the chooser is a session flag and `shellMode` says Drill when a
     // RUNG is open, so a reader picking a task has nothing masked and nothing to leave.
     expect(app.currentState().drill).toBeNull();
@@ -166,7 +166,7 @@ describe("the drill's own surface", () => {
     const right = q(root, ".rail2.right");
     expect(right.firstElementChild?.getAttribute("data-card")).toBe("drill");
     const card = theDrillCard(root);
-    expect(textOf(card)).toContain("rung 1 of 4");
+    expect(textOf(card)).toContain("stage 1 of 4");
     expect(card.querySelector("li"), "the chooser is put away by the pick").toBeNull();
     // Rung i masks nothing: this is the app as it otherwise is — the record's own pieces on the left
     // and its ledger, every constraint of it, on the right.
@@ -199,7 +199,7 @@ describe("rung ii — the KILL column is MASKED, and comes back", () => {
     expect(rows).toContain(constraintLabel("LEGALITY"));
     // The derivation says which lemma kills which piece, so masking one and not the other would be
     // masking nothing.
-    expect(textOf(q(root, '[data-card="derivation"]'))).toContain("Masked");
+    expect(textOf(q(root, '[data-card="derivation"]'))).toContain("Hidden");
 
     // **And both come back on a CHECK, whatever the answers were.** The ledger is the answer sheet
     // from that moment — `drillMask` reads `drillGraded` and not whether the reader was right, which
@@ -211,7 +211,7 @@ describe("rung ii — the KILL column is MASKED, and comes back", () => {
     }
     clickExact(theDrillCard(root), "Check");
     expect(constraints(root)).toContain(constraintLabel("KILL"));
-    expect(textOf(q(root, '[data-card="derivation"]'))).not.toContain("Masked");
+    expect(textOf(q(root, '[data-card="derivation"]'))).not.toContain("Hidden");
   });
 
   it("counts the rows the table HAS in its summary, not the rows the ledger has", () => {
@@ -251,8 +251,8 @@ describe("rung iii — the whole argument is masked", () => {
     const { root, app } = mount();
     app.applyState(taskState(task("oscillatory"), 3));
     expect(constraints(root)).toHaveLength(0);
-    expect(textOf(q(root, '[data-card="result"]'))).toContain("Masked");
-    expect(textOf(q(root, '[data-card="derivation"]'))).toContain("Masked");
+    expect(textOf(q(root, '[data-card="result"]'))).toContain("Hidden");
+    expect(textOf(q(root, '[data-card="derivation"]'))).toContain("Hidden");
     // The rung's own question is still on screen — a masked page with nothing asking anything is
     // just a broken one.
     expect(theDrillCard(root).querySelectorAll('[aria-label^="close over"]').length).toBeGreaterThan(0);
@@ -274,7 +274,7 @@ describe("rung iv — the sandbox, and the pen", () => {
     // The goal, and the limitation — said rather than implied.
     const card = textOf(theDrillCard(root));
     expect(card).toContain("winds about the singularities exactly as the worked one does");
-    expect(card).toContain("fixed curve");
+    expect(card).toContain("A drawn contour is fixed");
     // Nothing is hidden here: the reader's own contour is what the ledger is judging.
     expect(constraints(root)).toContain(constraintLabel("KILL"));
   });
@@ -287,19 +287,19 @@ describe("rung iv — the sandbox, and the pen", () => {
 describe("a rung opened by a link", () => {
   it("opens MASKED, which is the half `drill.test.ts` cannot see", () => {
     // The model test round-trips every rung by verdict; what it cannot check is that a link arriving
-    // at rung ii lands with the ledger actually masked. The rung travels in the state and the mask is
+    // at stage ii lands with the ledger actually masked. The rung travels in the state and the mask is
     // read off it — but nothing asserted the two meet on the way IN, where the mask is applied by a
     // render the reader never asked for.
     const two = mount(link("oscillatory", 2));
     expect(two.app.currentState().drill).toEqual({ task: "oscillatory", stage: 2 });
     const card = theDrillCard(two.root);
-    expect(textOf(card)).toContain("rung 2 of 4");
+    expect(textOf(card)).toContain("stage 2 of 4");
     expect(card.querySelectorAll("select").length, "rung ii is the questions").toBeGreaterThan(0);
     expect(constraints(two.root)).not.toContain(constraintLabel("KILL"));
     expect(q(two.root, ".linkRefusal").hidden).toBe(true);
 
     const three = mount(link("indented", 3));
-    expect(textOf(q(three.root, '[data-card="result"]'))).toContain("Masked");
+    expect(textOf(q(three.root, '[data-card="result"]'))).toContain("Hidden");
     expect(constraints(three.root)).toHaveLength(0);
     expect(q(three.root, ".linkRefusal").hidden).toBe(true);
   });
@@ -316,7 +316,7 @@ describe("a rung opened by a link", () => {
     expect(drillCard(root), "not the chooser either — a refusal is not an invitation").toBeNull();
     const box = q(root, ".linkRefusal");
     expect(box.hidden).toBe(false);
-    expect(box.textContent).toContain("rung 9");
+    expect(box.textContent).toContain("stage 9");
   });
 
   it("opens every rung of every task without refusing — the roster the gate names", () => {
@@ -325,7 +325,7 @@ describe("a rung opened by a link", () => {
         const { root, app } = mount(link(t.id, stage));
         expect(app.currentState().drill, `${t.id}/${stage}`).toEqual({ task: t.id, stage });
         expect(q(root, ".linkRefusal").hidden, `${t.id}/${stage} refused its own link`).toBe(true);
-        expect(textOf(theDrillCard(root)), `${t.id}/${stage}`).toContain(`rung ${stage} of 4`);
+        expect(textOf(theDrillCard(root)), `${t.id}/${stage}`).toContain(`stage ${stage} of 4`);
       }
     }
   });
@@ -341,39 +341,39 @@ describe("the fade", () => {
     openPicker(first.app);
     taskRow(first.root, "∫ cos x/(x²+1) dx").open.click();
     // Reading the worked argument IS rung i's task, so moving off it clears it.
-    clickExact(theDrillCard(first.root), "Next rung");
+    clickExact(theDrillCard(first.root), "Next stage");
     expect(readProgress(window.localStorage).oscillatory).toBe(1);
 
     // A FRESH app, which knows nothing of the above: the store is the only thing carried over.
     const second = mount();
     openPicker(second.app);
     const { row, open } = taskRow(second.root, "∫ cos x/(x²+1) dx");
-    expect(textOf(row)).toContain("rung 2 of 4");
+    expect(textOf(row)).toContain("stage 2 of 4");
     // The button's own name says the same thing, which is the half a screen reader is given.
-    expect(open.getAttribute("aria-label")).toBe("open ∫ cos x/(x²+1) dx at rung 2");
+    expect(open.getAttribute("aria-label")).toBe("open ∫ cos x/(x²+1) dx at stage 2");
     open.click();
     expect(second.app.currentState().drill).toEqual({ task: "oscillatory", stage: 2 });
   });
 
   it("ignores a GARBAGE store rather than un-fading or throwing", () => {
     // Absence and garbage read identically (`drillProgress.ts` rule 2). At the shell that means a
-    // mount over one works and every task is offered at rung 1 — and that a rung cleared afterwards
+    // mount over one works and every task is offered at stage 1 — and that a rung cleared afterwards
     // REPLACES the payload rather than being written beside it, since the store is read and then
     // written on every clear.
     window.localStorage.setItem(PROGRESS_KEY, "{not json");
     const { root, app } = mount();
     expect(() => openPicker(app)).not.toThrow();
-    for (const li of theDrillCard(root).querySelectorAll("li")) expect(textOf(li)).toContain("rung 1 of 4");
+    for (const li of theDrillCard(root).querySelectorAll("li")) expect(textOf(li)).toContain("stage 1 of 4");
 
     taskRow(root, "∫ cos x/(x²+1) dx").open.click();
-    clickExact(theDrillCard(root), "Next rung");
+    clickExact(theDrillCard(root), "Next stage");
     expect(readProgress(window.localStorage)).toEqual({ oscillatory: 1 });
   });
 
   it("does not carry a GRADING into another rung, however the rung changes", () => {
     // **M7.4's defect, at the surface it was found on.** The derivation is unmasked once rung ii has
     // been checked (it is then the answer sheet), and `drillGraded` was a shell local `applyState`
-    // did not clear — so a state restored while graded would show the whole argument at rung iii,
+    // did not clear — so a state restored while graded would show the whole argument at stage iii,
     // where the argument is exactly what is masked. `enterDrill` happened to clear it and a link did
     // not. Here the flag is `session.drillGraded` and the door is `resetTransient`, so the property
     // is structural; this is the assertion that says the door really is on the path.
@@ -385,7 +385,7 @@ describe("the fade", () => {
     }
     clickExact(theDrillCard(root), "Check");
     expect(app.session().drillGraded).toBe(true);
-    expect(textOf(theDrillCard(root))).toContain("not every piece");
+    expect(textOf(theDrillCard(root))).toContain("not all correct");
     expect(root.querySelectorAll("[data-feedback]").length, "the answer sheet is on screen").toBeGreaterThan(0);
 
     // Straight to rung iii by restoring the state, as a link does.
@@ -393,10 +393,10 @@ describe("the fade", () => {
     expect(app.session().drillGraded).toBe(false);
     expect(app.session().drillAnswers).toEqual({});
     expect(root.querySelectorAll("[data-feedback]"), "the answer sheet is gone rather than half-filled").toHaveLength(0);
-    expect(textOf(theDrillCard(root))).toContain("rung 3 of 4");
+    expect(textOf(theDrillCard(root))).toContain("stage 3 of 4");
     // **And this is what the grading would have bought** — a grading that outlived its rung unmasks
     // the derivation, at the rung where the argument is exactly what is masked.
-    expect(textOf(q(root, '[data-card="derivation"]')), "the derivation must stay masked").toContain("Masked");
+    expect(textOf(q(root, '[data-card="derivation"]')), "the derivation must stay masked").toContain("Hidden");
     expect(constraints(root)).toHaveLength(0);
   });
 
@@ -409,12 +409,12 @@ describe("the fade", () => {
     const { root, app } = mount();
     app.applyState(taskState(task("oscillatory"), 2));
     expect(constraints(root), "masked to begin with").not.toContain(constraintLabel("KILL"));
-    clickExact(theDrillCard(root), "Leave the drill");
+    clickExact(theDrillCard(root), "Leave practice");
     expect(app.currentState().drill).toBeNull();
     expect(drillCard(root), "the card goes with the rung, and the chooser does not take its place").toBeNull();
     // Every row is back, KILL included, and the derivation with them.
     expect(constraints(root)).toContain(constraintLabel("KILL"));
-    expect(textOf(q(root, '[data-card="derivation"]'))).not.toContain("Masked");
+    expect(textOf(q(root, '[data-card="derivation"]'))).not.toContain("Hidden");
   });
 
   it("puts the CHOOSER away on Explore, not only the rung", () => {

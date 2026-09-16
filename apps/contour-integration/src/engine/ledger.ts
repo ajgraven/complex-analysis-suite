@@ -1077,7 +1077,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
             )
           : sumExact
             ? exact(
-                "the residue SUM",
+                "the residue sum",
                 "the residue sum over the $n$-th roots is computed as a geometric sum, without naming a root",
                 {
                   provenance: [
@@ -1202,7 +1202,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
             claimOf("kill.l5-unreadable", { piece: pieceArg(piece) }),
             unknown(
               piece.name,
-              "L5 needs z·f(z)'s limit, which needs that decomposition",
+              "this lemma needs the limit of $z\\,f(z)$, which needs that decomposition",
             ),
             piece.id,
           ),
@@ -1363,12 +1363,12 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
           unknown(
             `the arc ${piece.name}`,
             geom.kind === "arc" && (geom.center[0] !== 0 || geom.center[1] !== 0)
-              ? "every certified arc bound here reasons on |z| = R about the ORIGIN, and this arc is centred elsewhere — a dogbone's end caps need the bound taken about their own branch point instead"
+              ? "every certified arc bound here reasons on $|z| = R$ about the origin, and this arc is centred elsewhere — a dogbone's end caps need the bound taken about their own branch point instead"
               : unreadable
                 ? `an ML bound is the sweep times the radius times max|f|, so the sweep enters the number: it is read as an exact p/q·π with q ≤ ${MAX_PI_DENOMINATOR}, and this arc's is not one — a degenerate sweep included, whose bound would be a vacuous ≤ 0`
                 : input.power === undefined && input.log === undefined
                   ? "the certified bounds cover a rational integrand, one times e^{iaz}, λ·e^{w zⁿ} on a wedge measured from the positive real axis, or e^{az}·N(e^z)/D(e^z) on a vertical side of a strip; this is none of them"
-                  : "a branch factor's arc bound needs the lemma declared as L1 (ε → 0) or L2 (R → ∞), and a rational cofactor",
+                  : "a branch factor's arc bound needs the piece declared as a small arc ($\\varepsilon \\to 0$) or a large arc ($R \\to \\infty$), and a rational cofactor",
           ),
           piece.id,
           "the numeric value still stands, but the limit is not established",

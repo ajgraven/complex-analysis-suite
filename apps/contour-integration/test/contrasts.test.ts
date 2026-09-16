@@ -463,11 +463,14 @@ describe("the contrasts dialog — opening a cell", () => {
     expect(new Set(names).size, "two columns offer the same button name").toBe(5);
     // Each name is its OWN column's, checked against the table rather than against a shape: five
     // distinct names are still five wrong names if the buttons were built off the wrong index.
-    // **The `$`-freeness of these labels is NOT asserted here**, because none of the five column
-    // labels carries one, so the assertion could not fail and would say nothing — the falsifiable
-    // half of that rule is the claim tooltips, above.
-    const labels = contrastTable().cells.map((c) => c.label);
+    //
+    // **And `$`-free, which step 2.1 made falsifiable.** Until then none of the five labels carried
+    // a formula, so the assertion could not fail and would have said nothing; now four of them are
+    // typeset, and the button reads the SPOKEN twin — reading `c.label` here would put
+    // `\int_0^{\infty}` into a name a screen reader says out loud.
+    const labels = contrastTable().cells.map((c) => c.labelText);
     expect(names).toEqual(labels.map((l) => `open ${l} in the app`));
+    for (const n of names) expect(n, "an accessible name carrying LaTeX").not.toContain("\\");
   });
 });
 

@@ -26,7 +26,7 @@ import {
   type PoleRow,
   type Statement,
 } from "../../engine/derivation.js";
-import { constraintLabel } from "../../engine/vocabulary.js";
+import { constraintLabel, tagLabel } from "../../engine/vocabulary.js";
 import { drillMask } from "../drillPanel.js";
 import { contourIntegrandLatex, targetLatex } from "../../families/latex.js";
 import { relationText } from "../../families/describe.js";
@@ -165,7 +165,7 @@ function stepLine(step: { readonly ok: boolean; readonly text: string }, key: st
   return h(
     "p",
     // A ✗ step is the diagnostic, so it is coloured as one rather than left to be spotted among the
-    // ticks — three glyphs down a list is not a scannable difference (`.ledger2 > li.failed`'s
+    // ticks — three glyphs down a list is not a scannable difference (`.checkList > li.failed`'s
     // reason, applied to the trail).
     { key, class: step.ok ? "muted small" : "restriction small" },
     step.ok ? "✓ " : "✗ ",
@@ -291,8 +291,10 @@ function poleTable(rows: readonly PoleRow[]): Desc {
               "td",
               { key: "o", class: "num" },
               String(row.order),
-              row.orderCertain ? null : h("span", { key: "u", class: "tag warn" }, "uncertain"),
-              row.possiblyRemovable ? h("span", { key: "r", class: "tag warn" }, "may be removable") : null,
+              row.orderCertain ? null : h("span", { key: "u", class: "tag warn" }, tagLabel("order-uncertain")),
+              row.possiblyRemovable
+                ? h("span", { key: "r", class: "tag warn" }, tagLabel("possibly-removable"))
+                : null,
             ),
             h(
               "td",
@@ -301,7 +303,7 @@ function poleTable(rows: readonly PoleRow[]): Desc {
                 ? h(
                     "span",
                     { key: "n", class: "muted small" },
-                    row.basis === "exact" ? "—" : "located numerically",
+                    row.basis === "exact" ? "—" : tagLabel("numerical"),
                   )
                 : h("span", { key: "v", class: "num" }, row.residue),
             ),
@@ -312,7 +314,7 @@ function poleTable(rows: readonly PoleRow[]): Desc {
               { key: "i", class: "num" },
               row.windingDecided && row.winding !== undefined
                 ? fmt(row.winding)
-                : h("span", { key: "u", class: "tag warn" }, "undecided"),
+                : h("span", { key: "u", class: "tag warn" }, ...mathText(tagLabel("winding-undecided"), "wu")),
             ),
           ),
         ),
@@ -382,7 +384,7 @@ export const derivationCard: Card = (ctx) => {
   // masking nothing at all. `drillMask` already folds in the clause that brings it back the moment
   // the rung is checked, so both masked rungs are one test here rather than two conditions.
   if (drillMask(ctx) !== "none") {
-    return card("derivation", nothing("Masked: the derivation says what each piece is for."));
+    return card("derivation", nothing("Hidden: what each piece is for is the question."));
   }
   const { derivation, why } = factsOf(ctx);
   if (derivation === null) return card("derivation", nothing(why));

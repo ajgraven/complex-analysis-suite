@@ -63,7 +63,7 @@ export const f1WedgeRationalPower: Family = {
     integrand: "1/(1 + z^n)",
     // The outgoing ray IS the target: `f` is real and positive on `[0,∞)`, so no functional is taken.
     relation: "Re",
-    note: "the return ray is the outgoing ray rotated by ω = e^{2πi/n}, and since f(ωz) = f(z) it contributes −ω times the target — so the solve divides by 1 − ω, whose |1 − ω| = 2 sin(π/n) is the sin(π/n) of the answer",
+    note: "the return ray is the outgoing ray rotated by ω = e^{2πi/n}, and since f(ωz) = f(z) it contributes −ω times the target — so the identity is divided by 1 − ω, whose |1 − ω| = 2 sin(π/n) is the sin(π/n) of the answer",
   },
 
   parameters: [{ name: "n", domain: "integer", constraints: ["n >= 2"] }],

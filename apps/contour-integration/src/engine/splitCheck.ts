@@ -171,9 +171,9 @@ export function checkSplit(
       checked,
       worst,
       detail:
-        `the declared factor times R(z) is NOT the expression that was in the box: they differ by ` +
+        `the declared factor times $R(z)$ is not the expression that was in the box: they differ by ` +
         `${worst.toExponential(2)} relative, at points where the two determinations agree and so ` +
-        "ought to be identical. Either the branch factor is still inside R(z), or the exponent, " +
+        "ought to be identical. Either the branch factor is still inside $R(z)$, or the exponent, " +
         "orientation or constant does not match it",
     };
   }

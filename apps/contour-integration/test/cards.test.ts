@@ -210,6 +210,23 @@ describe("the Parameters card", () => {
     expect(card.textContent ?? "").toMatch(/R = /);
   });
 
+  it("tags a limit parameter with the limit IT is taken to, and not with the other one", () => {
+    // **The tag does not name its parameter, so the ROW is what says which limit belongs to which.**
+    // D1 takes `R → ∞` and `eps → 0⁺` at once, and swapping the two labels — telling a reader that
+    // the radius goes to zero and the lip to infinity — passed the whole suite before step 2.1's
+    // sweep. The tag is typeset, so it is read through its accessible name.
+    const { host } = rail(gallery("mellin-keyhole"));
+    const tags = new Map<string, string>();
+    for (const row of host.querySelectorAll('[data-card="parameters"] .paramRow2')) {
+      const name = (row.querySelector(".paramValue")?.textContent ?? "").split(" ")[0];
+      const tag = row.querySelector('.tag [role="math"]')?.getAttribute("aria-label");
+      if (tag !== null && tag !== undefined) tags.set(name, tag);
+    }
+    expect([...tags.keys()].sort(), "D1's two limit parameters are not both tagged").toEqual(["R", "eps"]);
+    expect(tags.get("R")).toBe("\\to \\infty");
+    expect(tags.get("eps")).toBe("\\to 0^+");
+  });
+
   it("writes a value through the slider's own scale, not through its stop count", () => {
     const { host, actions } = rail(sandbox());
     const slider = q<HTMLInputElement>(host, '[data-card="parameters"] input.slider');
@@ -275,12 +292,18 @@ describe("the Singularities card", () => {
     expect(said).toContain("not the same as there being none");
   });
 
-  it("says UNDECIDED where the winding was not decided, rather than 0", () => {
+  it("says undecided where the winding was not decided, rather than 0", () => {
     // A pole ON the contour has no winding number, and `0` is a coefficient no predicate established
     // — printing it would put a term into `2πi Σ n·Res` that the geometry refused to supply.
+    //
+    // Read through the tag's accessible name rather than its `textContent`: since step 2.1 the tag
+    // NAMES the quantity, `$\operatorname{Ind}_\gamma$ undecided`, and KaTeX lays every formula
+    // down twice — so the raw text carries two copies of the symbol around the word.
     const { host } = rail(sandbox({ expr: "1/(z-1.5)" }));
-    const ind = (host.querySelector('[data-card="singularities"] tbody tr td:nth-child(4)')?.textContent ?? "").trim();
-    expect(ind).toBe("undecided");
+    const cell = host.querySelector('[data-card="singularities"] tbody tr td:nth-child(4)');
+    const ind = (cell?.querySelector('[role="math"]')?.getAttribute("aria-label") ?? "") +
+      (cell?.querySelector('[role="math"]')?.nextSibling?.nodeValue ?? "");
+    expect(ind.trim()).toBe("\\operatorname{Ind}_\\gamma undecided");
   });
 
   it("typesets the residue from its LATEX twin, and names it by its text", () => {
@@ -474,12 +497,12 @@ describe("the Branch cuts card, in shadow mode", () => {
     const shadowed = { ...base, branch: setShadow(two, true) };
     const label = (st: ShellState): string[] =>
       [...rail(st).host.querySelectorAll('[data-card="cuts"] button')].map((b) => b.textContent ?? "");
-    expect(label(declared2), "the join is missing where it MEANS something").toContain("join into one cut");
-    expect(label(shadowed)).not.toContain("join into one cut");
-    expect(label(shadowed)).not.toContain("split into two rays");
+    expect(label(declared2), "the join is missing where it MEANS something").toContain("Join into one cut");
+    expect(label(shadowed)).not.toContain("Join into one cut");
+    expect(label(shadowed)).not.toContain("Split into rays");
     // And the mode says what a reader should do instead.
     expect(rail(shadowed).host.querySelector('[data-card="cuts"]')?.textContent ?? "").toContain(
-      "switch this off to build it",
+      "switch it off to build one",
     );
   });
 });

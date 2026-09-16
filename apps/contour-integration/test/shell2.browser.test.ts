@@ -599,7 +599,7 @@ describe("the accumulator strip, wired", () => {
 //
 // `test/shell2Drill.test.ts` pins everything the mask does to the DOM: the KILL rows leave the
 // ledger, the Result card goes, the derivation folds, and all of it comes back. It cannot pin the
-// other half, because jsdom has no canvas — and at rung iii the CONTOUR must leave the stage too,
+// other half, because jsdom has no canvas — and at stage iii the CONTOUR must leave the stage too,
 // since the question there is which contour to close over and the record's own contour is that
 // answer, drawn.
 //
@@ -737,7 +737,7 @@ describe("the phase portrait, under a record", () => {
 });
 
 describe("the drill's mask, on the stage", () => {
-  it("takes the CONTOUR off at rung iii, and the phase portrait stays", async () => {
+  it("takes the CONTOUR off at stage iii, and the phase portrait stays", async () => {
     const { root, app } = mount();
     const ink = root.querySelector<HTMLCanvasElement>("canvas.ink");
     const gl = root.querySelector<HTMLCanvasElement>("canvas.gl");

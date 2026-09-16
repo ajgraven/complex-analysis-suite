@@ -81,7 +81,7 @@ export const e3GaussianShiftZeroResidue: Family = {
     // As D4: the extraction IS the real/imaginary split of one complex identity, legitimate because
     // both unknowns are real.
     relation: "components",
-    note: "cos(bz) grows like e^{|b||y|} in BOTH half-planes, so the verticals would not vanish for it; the contour carries e^{ibz} and the cosine target is recovered from the real row, with the sine on the imaginary one",
+    note: "cos(bz) grows like e^{|b||y|} in both half-planes, so the verticals would not vanish for it; the contour carries e^{ibz} and the cosine target is recovered from the real row, with the sine on the imaginary one",
   },
 
   // WLOG b ≥ 0: cos is even in b, so the family reduces to b ≥ 0. Without that the rectangle's height
@@ -256,7 +256,7 @@ export const e3GaussianShiftZeroResidue: Family = {
       id: "cos-not-complexified",
       detect: "structural:contains(problem.contourIntegrand, 'cos(b*z)')",
       message:
-        "cos(bz) grows like e^{|b||y|} in BOTH half-planes, so the vertical sides would not vanish. Use e^{ibz} on the contour and read the cosine off the REAL row and the sine off the imaginary one — no real part needs to be taken by hand.",
+        "cos(bz) grows like e^{|b||y|} in both half-planes, so the vertical sides would not vanish. Use e^{ibz} on the contour and read the cosine off the REAL row and the sine off the imaginary one — no real part needs to be taken by hand.",
     },
   ],
 

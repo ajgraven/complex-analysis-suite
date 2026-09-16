@@ -100,7 +100,7 @@ export const resultCard: Card = (ctx) => {
   // one whose question is "which contour?" — where the value and the whole ledger ARE the answer.
   const mask = drillMask(ctx);
   if (mask === "argument") {
-    return card("result", nothing("Masked: the drill is asking which contour closes this integral."));
+    return card("result", nothing("Hidden until a contour is chosen."));
   }
 
   const failed = ledger.rows.some((r) => r.status === "failed");
@@ -187,7 +187,7 @@ export const resultCard: Card = (ctx) => {
   const rows = shown.map((row, i) =>
     h(
       "li",
-      { key: `row:${i}`, class: `ledgerRow ${row.status}` },
+      { key: `row:${i}`, class: `checkRow ${row.status}` },
       badge(row.status === "failed" ? "⚠" : row.evidence.level, "lv"),
       h("span", { key: "c", class: "tag" }, constraintLabel(row.constraint)),
       h("span", { key: "t", class: "claim" }, ...mathText(row.claim, `c${i}`)),
@@ -210,7 +210,7 @@ export const resultCard: Card = (ctx) => {
     failed
       ? `What was checked — ${shown.filter((r) => r.status === "failed").length} of ${shown.length} failed`
       : `What was checked — ${shown.length} rows`,
-    h("ul", { key: "l", class: "ledger2" }, ...rows),
+    h("ul", { key: "l", class: "checkList" }, ...rows),
   );
 
   // ── the numerics ──────────────────────────────────────────────────────────────────────────
@@ -270,7 +270,7 @@ function numericBody(integral: ContourIntegral, theorem: ResidueTheoremResult | 
         badge(theorem.crossCheck?.level ?? "⚠", "cb"),
         theorem.crossCheck !== undefined
           ? ` quadrature agrees to ${(theorem.disagreement ?? 0).toExponential(2)}`
-          : ` the quadrature DISAGREES by ${(theorem.disagreement ?? 0).toExponential(2)} — one of them is wrong`,
+          : ` the quadrature disagrees by ${(theorem.disagreement ?? 0).toExponential(2)} — one of them is wrong`,
       ),
     );
   }

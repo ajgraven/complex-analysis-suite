@@ -228,7 +228,7 @@ export function bar(ctx: CardContext): readonly Desc[] {
         "button",
         {
           key: "contrasts",
-          "aria-label": "compare five arguments that differ by one ledger row",
+          "aria-label": "compare five arguments that differ by one row of the checks",
           onClick: () => actions.setContrastsOpen(true),
         },
         "Contrasts",

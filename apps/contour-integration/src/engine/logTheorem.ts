@@ -99,7 +99,7 @@ export function applyLogTheorem(input: LogTheoremInput): ResidueTheoremResult {
         provenance: [
           {
             ok: true,
-            text: "the branch point at the origin is NOT a pole: there is no Laurent series at it and no residue to take",
+            text: "the branch point at the origin is not a pole: there is no Laurent series at it and no residue to take",
           },
           {
             ok: false,

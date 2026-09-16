@@ -97,7 +97,7 @@ export const d5LogCubedKeyhole: Family = {
   auxiliary: {
     integrand: "log(z)^3/(1+z^2)^p",
     relation: "components",
-    note: "the upper edge carries log³x; the lower edge carries (log x + 2πi)³, so the log³ terms cancel and all THREE lower powers survive the binomial",
+    note: "the upper edge carries log³x; the lower edge carries (log x + 2πi)³, so the log³ terms cancel and all three lower powers survive the binomial",
   },
 
   prerequisites: [

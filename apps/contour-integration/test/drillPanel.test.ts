@@ -17,6 +17,7 @@ import { describe, expect, it } from "vitest";
 import { circleTemplate, semicircleTemplate } from "../src/engine/contour/templates.js";
 import { reverseContour } from "../src/engine/contour/edit.js";
 import {
+  DISPOSALS,
   DRILL_TASKS,
   VERIFIED_ROLE_TEMPLATES,
   menuVerdict,
@@ -166,7 +167,7 @@ describe("drillMask — the one decision the whole page reads", () => {
     expect(maskOf(drillState("oscillatory", 4)), "rung iv is the sandbox; there is nothing to hide").toBe("none");
   });
 
-  it("stops masking at rung iii once the reader's OWN contour is on screen", () => {
+  it("stops masking at stage iii once the reader's OWN contour is on screen", () => {
     // A pick is an ordinary sandbox state, and from that moment the ledger is judging the reader's
     // contour rather than giving the record's away. Masking it would hide the reply to their move —
     // and this is the clause the old `mask()` spelled `&& mode === "gallery"`.
@@ -210,30 +211,30 @@ describe("the card itself", () => {
     expect(card.classList.contains("card2")).toBe(true);
     expect(card.querySelectorAll("h2")).toHaveLength(1);
     expect(host.querySelectorAll("section")).toHaveLength(1);
-    expect(card.textContent).toContain("rung 1 of 4");
+    expect(card.textContent).toContain("stage 1 of 4");
   });
 
   it("gives each rung its OWN controls and no other rung's", () => {
     // The defect this prevents is a card that renders every control and hides the irrelevant ones
-    // with CSS: rung iii's menu on screen at rung ii is the answer to the question being asked.
+    // with CSS: rung iii's menu on screen at stage ii is the answer to the question being asked.
     const at = (stage: DrillStage): HTMLElement => harness(drillState("oscillatory", stage)).host;
 
     const one = at(1);
     expect(one.querySelectorAll("select"), "rung i asks nothing").toHaveLength(0);
-    expect(buttons(one).map((b) => b.textContent)).toEqual(["Next rung", "Leave the drill"]);
+    expect(buttons(one).map((b) => b.textContent)).toEqual(["Next stage", "Leave practice"]);
 
     const two = at(2);
     expect(two.querySelectorAll("select").length, "rung ii is the questions").toBeGreaterThan(0);
-    expect(two.querySelector('[aria-label^="close over"]'), "no menu at rung ii").toBeNull();
+    expect(two.querySelector('[aria-label^="close over"]'), "no menu at stage ii").toBeNull();
     expect(buttons(two).map((b) => b.textContent)).toContain("Check");
 
     const three = at(3);
-    expect(three.querySelectorAll("select"), "no answer sheet at rung iii").toHaveLength(0);
+    expect(three.querySelectorAll("select"), "no answer sheet at stage iii").toHaveLength(0);
     expect(three.querySelectorAll('[aria-label^="close over"]').length).toBeGreaterThan(0);
 
     const four = at(4);
     expect(four.querySelectorAll("select")).toHaveLength(0);
-    expect(four.querySelector('[aria-label^="close over"]'), "no menu at rung iv").toBeNull();
+    expect(four.querySelector('[aria-label^="close over"]'), "no menu at stage iv").toBeNull();
     expect(buttons(four).map((b) => b.textContent)).toContain("Check the enclosure");
     expect(buttons(four).map((b) => b.textContent)).toContain("Start again");
   });
@@ -279,6 +280,20 @@ describe("rung ii — the KILL column", () => {
     expect(selects.map((s) => s.getAttribute("aria-label"))).toEqual(
       questions.map((k) => `what ${k.name.split("$").join("")} is for`),
     );
+  });
+
+  it("offers five DISTINCT answers, and none of them carries a `$`", () => {
+    // **A menu whose five options read the same is a question with no answer**, and until step 2.1's
+    // sweep nothing said otherwise: a `disposalLabel` returning one constant passed the whole suite.
+    // And the labels live in an `<option>`, which renders no markup — so `→ 0` is Unicode here where
+    // every other formula in the app is typeset, and a `$` would be four characters on screen.
+    const { host } = harness(drillState("indented", 2));
+    const options = [...host.querySelectorAll<HTMLSelectElement>("select")[0].options]
+      .map((o) => o.textContent ?? "")
+      .filter((t) => t !== "—");
+    expect(options).toHaveLength(DISPOSALS.length);
+    expect(new Set(options).size, "two of the five answers read the same").toBe(DISPOSALS.length);
+    for (const t of options) expect(t, "a picker option cannot typeset").not.toContain("$");
   });
 
   it("does NOT give a constant answer full marks — 5 of 10 across the four tasks", () => {
@@ -449,7 +464,7 @@ describe("rung iii — the menu", () => {
       VERIFIED_ROLE_TEMPLATES.map((id) => id as string),
     );
     for (const label of offered) {
-      const match = ["circle", "semicircle ↑", "semicircle ↓", "indented semicircle", "rectangle", "square (N+½)"];
+      const match = ["circle", "upper semicircle", "lower semicircle", "indented semicircle", "rectangle", "square (N+½)"];
       expect(match, `'${label}' is not a verified-role template`).toContain(label);
     }
     expect(verifiedLabels.size).toBeGreaterThan(0);
@@ -460,14 +475,14 @@ describe("rung iii — the menu", () => {
     // card reads `menuVerdict` rather than comparing the pick against `task.intended`: at `a = 0`
     // the lower semicircle answers, and with `e^{iz}` over it the same contour diverges.
     const good = harness(drillState("rational", 3));
-    clickExact(good.host, "semicircle ↓");
+    clickExact(good.host, "lower semicircle");
     const applied = last(good.actions.applied);
     expect(applied.contourSource?.template).toBe("semicircleDown");
     expect(applied.drill).toEqual({ task: "rational", stage: 3 });
 
     // Render the picked state: the verdict is the ledger's.
     const after = harness(applied);
-    expect(after.host.textContent ?? "").toContain("the target is a piece of it");
+    expect(after.host.textContent ?? "").toContain("the target is a piece of the contour");
     // **The MARK and the sentence must be the same verdict** — a sweep survivor, and the E2 defect
     // in miniature: a card that always marked a pick `answers` still prints the ledger's refusal
     // underneath, so the two disagree and the mark is the half a reader reads first.
@@ -476,12 +491,12 @@ describe("rung iii — the menu", () => {
     expect(after.host.textContent ?? "", "a declared second answer is named as one").toContain("nothing to force the half-plane");
 
     const bad = harness(drillState("oscillatory", 3));
-    clickExact(bad.host, "semicircle ↓");
+    clickExact(bad.host, "lower semicircle");
     const wrongPick = harness(last(bad.actions.applied));
     const clone = wrongPick.host.cloneNode(true) as HTMLElement;
     for (const m of clone.querySelectorAll(".katex-mathml")) m.remove();
     expect(clone.textContent ?? "").toContain("diverges");
-    expect(clone.textContent ?? "").toContain("KILL");
+    expect(clone.textContent ?? "").toContain("incomplete (boundary terms)");
     expect(q(wrongPick.host, ".verdict .tag").textContent).toBe("does not answer");
     expect(q(wrongPick.host, ".verdict .tag").classList.contains("warn")).toBe(true);
   });
@@ -492,7 +507,7 @@ describe("rung iii — the menu", () => {
     const { host, actions } = harness(drillState("oscillatory", 3));
     clickExact(host, "circle");
     const after = harness(last(actions.applied));
-    expect(after.host.textContent ?? "").toContain("no piece of this contour is the target");
+    expect(after.host.textContent ?? "").toContain("the target is not a piece of this contour");
   });
 
   it("clears the rung on a pick that ANSWERS, and not on one that does not", () => {
@@ -500,7 +515,7 @@ describe("rung iii — the menu", () => {
     const bad = harness(drillState("oscillatory", 3));
     clickExact(bad.host, "circle");
     expect(readProgress(window.localStorage).oscillatory ?? 0).toBeLessThan(3);
-    clickExact(bad.host, "semicircle ↑");
+    clickExact(bad.host, "upper semicircle");
     expect(readProgress(window.localStorage).oscillatory).toBe(3);
     window.localStorage.removeItem(PROGRESS_KEY);
   });
@@ -528,7 +543,7 @@ describe("rung iv — the enclosure", () => {
     expect(actions.calls).toContain("redraw");
     draw();
     const shown = host.textContent ?? "";
-    expect(shown).toContain("winds -1 times");
+    expect(shown).toContain("(i) = -1");
     expect(shown).toContain("needs 1");
     expect(host.querySelector(".tag.warn"), "refused, and marked as refused").not.toBeNull();
 
@@ -537,7 +552,7 @@ describe("rung iv — the enclosure", () => {
     const ok = harness(drawn("oscillatory", semicircleTemplate(3, "upper")));
     clickExact(ok.host, "Check the enclosure");
     ok.draw();
-    expect(ok.host.textContent ?? "").toContain("Exactly that");
+    expect(ok.host.textContent ?? "").toContain("Correct.");
   });
 
   it("refuses a contour that encloses BOTH poles where the task wants one", () => {
@@ -546,7 +561,7 @@ describe("rung iv — the enclosure", () => {
     const { host, draw } = harness(drillState("rational", 4));
     clickExact(host, "Check the enclosure");
     draw();
-    expect(host.textContent ?? "").toContain("2 singularities are enclosed");
+    expect(host.textContent ?? "").toContain("both singularities are enclosed");
   });
 
   it("offers NO check where there is nothing to check, and says why", () => {
@@ -583,7 +598,7 @@ describe("moving between rungs", () => {
     // `applyState` was called at all is the difference between this and a test a no-op would pass.
     for (const [from, to] of [[1, 2], [2, 3], [3, 4], [4, 1]] as const) {
       const { host, actions } = harness(drillState("oscillatory", from));
-      clickExact(host, from === 4 ? "Start again" : "Next rung");
+      clickExact(host, from === 4 ? "Start again" : "Next stage");
       const next = last(actions.applied);
       expect(next.drill, `rung ${from} moved somewhere else`).toEqual({ task: "oscillatory", stage: to });
     }
@@ -594,7 +609,7 @@ describe("moving between rungs", () => {
     // `drill.test.ts` — so the state the card asks for is the one that puts a pen under the right
     // integrand rather than merely a blank plane.
     const { host, actions } = harness(drillState("oscillatory", 3));
-    clickExact(host, "Next rung");
+    clickExact(host, "Next stage");
     const next = last(actions.applied);
     expect(next.mode).toBe("sandbox");
     expect(next.expr).toBe("exp(i*z)/(z^2 + 1)");
@@ -603,11 +618,11 @@ describe("moving between rungs", () => {
   it("clears rung i by LEAVING it, because reading the worked argument is its task", () => {
     window.localStorage.clear();
     const { host } = harness(drillState("rational", 1));
-    clickExact(host, "Next rung");
+    clickExact(host, "Next stage");
     expect(readProgress(window.localStorage).rational).toBe(1);
     // And no other rung is cleared merely by moving off it.
     const two = harness(drillState("rational", 2));
-    clickExact(two.host, "Next rung");
+    clickExact(two.host, "Next stage");
     expect(readProgress(window.localStorage).rational).toBe(1);
     window.localStorage.removeItem(PROGRESS_KEY);
   });
@@ -617,7 +632,7 @@ describe("moving between rungs", () => {
     // `drillMask`. An exit that wrote its own field would be a second place for the mask to be
     // wrong — and `shellMode` derives the mode from `drill`, so two writers cannot agree for long.
     const { host, actions } = harness(drillState("oscillatory", 2));
-    clickExact(host, "Leave the drill");
+    clickExact(host, "Leave practice");
     expect(actions.calls).toContain("mode:explore");
     expect(actions.applied, "leaving is not an applyState").toHaveLength(0);
   });
