@@ -395,7 +395,73 @@ tests `test/inspectorRows.test.ts` (new), `test/dataExport.test.ts`, `test/julia
 
 ---
 
-## WP7 — State integrity: share links, chips, profiles · effort M · closes S2, S3, S6 (hashchange, keyframes), U2
+## WP7 — State integrity: share links, chips, profiles · effort M · closes S2, S3, S6 (hashchange, keyframes), U2 · **DONE**
+
+> **Landed.** Gate green: lint, typecheck, **555 files / 5,803 tests**, build; CD browser suite 5 files /
+> 26 tests. Eight negative controls, one per fix, each reverted and confirmed red. **Measuring changed
+> three of the five bullets, and the test harness turned out to be the biggest finding.**
+>
+> **The shell test was running TWO APPS AT ONCE.** `document.body.innerHTML = …` replaces the DOM but
+> not the `window`, so a second `mount()` in the same file left the first `init()` still listening on
+> `window` and `document` — with the first one's plots in its closure. Found by the sphere test: the
+> stale init answered the `hashchange` first, cleared the checkbox in the LIVE document and set the
+> sphere on its own DETACHED plots, so the box said off and the plot said on. Every earlier assertion
+> in that file that mounts twice (the Enter tests, the share round trip) was running against both
+> apps; they agreed on the answer, which is exactly why nothing noticed. `mount()` now records what
+> `init()` attaches outside the body and detaches it on the next mount.
+>
+> **S3 (sphere).** Confirmed and fixed, and the checkbox is only half of it: `applyAppState` writes a
+> checkbox and stops, so the ids alone would have produced a link that opens with the box ticked over
+> a flat plot. One `applySphere()` is now the single path from checkbox to plot — the three change
+> handlers, the reset (which had been dispatching synthetic `change` events to reach the same code)
+> and `applyFullState` all go through it, after `setProjectionState` because the projection puts each
+> plot back at its linear view on the way out.
+>
+> **U2 (chips) — the defect is worse than "stale", and it was on screen in every session.** The chip
+> read the iterations INPUT while taking the centre and zoom from the plot, so it was a sentence about
+> two different views. The markup ships 100, the startup profile applies 200, and `applyProfile` never
+> refreshed the chip: **every session opened with both chips claiming a count the app was not using.**
+> The chip now reads `plot.n`, and `applyProfile` and the "Raise to N" suggestion refresh it.
+> **The plan's third clause is dropped, because measuring showed it would make things worse.** Moving
+> `refreshProfileLabel`'s listener to `document` was meant to catch the iterations / resolution boxes,
+> which live in `.plots-pane` — but those are DEFERRED fields, and a document listener would flip the
+> picker to "Custom…" on a value the user had typed and not applied. `readControls` reads
+> `plot.n` / `plot.res` instead, so the label describes the applied state by construction; the
+> `.controls-pane` listener already covers every live control and `applyChanges` covers the rest.
+>
+> **S6 (hashchange) — the guard the plan asked for is not needed, measured.** `history.replaceState`
+> does not fire `hashchange` (HTML spec), and the app has exactly one `replaceState`, in `shareLink`.
+> The one-line `lastHashApplied` check is kept anyway — it costs an assignment and means the writer
+> and the listener never have to know about each other — but it is recorded as insurance rather than
+> as the fix. A link that carries no CD view now says so instead of doing nothing at all.
+>
+> **S6 (keyframes) — the plan asked for dd interpolation and measuring found a second bug underneath
+> it.** The depth claim first: at 1e15× on a 500-pixel plot a pixel spans 8e-18 while one f64 ulp near
+> |c| ≈ 0.74 is 1.65e-16 — **20.6 pixels** — so an f64-only keyframe cannot name the view it captured,
+> and two keyframes a few pixels apart are the same keyframe. Then the endpoints: `interpolateView`
+> reached `t = 1` through `a + (b − a)·1`, and over 200,000 random pairs that **misses `b` in 9.2% of
+> cases** (the geometric zoom in 9.1%). The suite's own "hits the endpoints exactly" test passed
+> because its keyframes were 0, 2, 4, 1 and 100. And the double-double form is **worse, not better —
+> 38.7%** — two limbs giving it more ways to land an ulp out, so switching to dd alone would have made
+> the endpoint less exact while making the interior more so. A segment endpoint now returns the
+> captured keyframe itself. The recorders' restore path was dropping the lo limb too, so a clip
+> recorded at depth left the plot somewhere else afterwards.
+>
+> **S2 (copy properties).** `requestOnce()` is built as `settled()`, because a per-request promise
+> cannot work here: the client coalesces, a superseded request's callback never fires, and a promise
+> tied to one request id would hang for ever with the button disabled behind it. `settled()` waits for
+> "a result has been PAINTED (or a failure reported) since I asked", which a superseding result
+> answers — plus a 5 s backstop, so a worker that never replies cannot strand the button. Any row that
+> is still a placeholder when the wait ends is copied as "not measured" rather than as the app's
+> spinner text. **Its test needed a stubbed Worker to mean anything**: under jsdom there is no
+> `Worker`, the client falls back to a SYNCHRONOUS compute, and the defect cannot happen — so the
+> obvious test would have passed with or without the fix. It also needed a NON-POLYNOMIAL `f`: for
+> z²+c the Tier-1 analytic rows answer every question outright at every `c` tried (escaping, `c = 0`,
+> `c = −1`), so no row is ever a placeholder and there is nothing to wait for.
+
+**Files:** `apps/complex-dynamics/src/main.ts`, `src/state/appState.ts`, `src/render/keyframes.ts`,
+`src/render/juliaMetricsClient.ts`; tests `test/shell.test.ts`, `test/keyframes.test.ts`,
+`test/juliaMetricsClient.test.ts`.
 
 - **S3 sphere state.** `src/state/appState.ts:15-72`: add `sphere-param`, `sphere-dyn`, `sphere-light`
   to `SHARE_IDS`; `applyFullState` applies them after the plane state (the sphere toggle re-renders).

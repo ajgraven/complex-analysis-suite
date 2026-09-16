@@ -288,6 +288,15 @@ const isQuadraticFamily = (plot: { monicDegree: number | null }): boolean => plo
 /** Opens the glossary modal at an optional term anchor; assigned by setupGlossary(). */
 let openGlossary: (termId?: string) => void = () => {};
 
+/**
+ * The placeholder the image-derived Julia-properties rows hold until the Tier-2 worker returns.
+ *
+ * It is a constant because THREE readers compare against it — the worker-failure handler, the copy
+ * button's wait, and the copy itself — and a spinner string that three places match by hand is a
+ * string that eventually only two of them match. (WP7/S2.)
+ */
+const MEASURING = "measuring\u2026";
+
 /** Inspector row label → glossary term id, for the inline "?" links. */
 const TERM_FOR_ROW: Record<string, string> = {
   Fate: "escape-time",
@@ -1195,7 +1204,11 @@ export function init(): void {
               run: () => {
                 plot.n = String(res.suggestedIterations);
                 byId<HTMLInputElement>(inputId).value = String(res.suggestedIterations);
-                updateEffectiveIterations();
+                // The chip prints the applied cap and the profile label compares against it, so both
+                // are wrong the moment this action changes it. (updateViewChips also refreshes the
+                // effective-iteration hints.)
+                updateViewChips();
+                refreshProfileLabel();
                 showToast(
                   `Iterations raised to ${res.suggestedIterations} (${planeWord} plane).`,
                   "info",
@@ -1934,7 +1947,7 @@ export function init(): void {
   juliaMetricsClient.onError((message) => {
     for (const id of ["jp-dimension", "jp-area", "jp-bounding", "jp-symmetry", "jp-connectivity"]) {
       const el = document.getElementById(id);
-      if (el && el.textContent === "measuring…") el.textContent = "⚠ measurement failed";
+      if (el && el.textContent === MEASURING) el.textContent = "⚠ measurement failed";
     }
     console.warn("[julia metrics] worker failed:", message);
   });
@@ -2089,7 +2102,7 @@ export function init(): void {
             ? "totally disconnected — Cantor dust"
             : pc === "disconnected"
               ? "≈ disconnected (mixed critical orbits)"
-              : "measuring…", // non-polynomial ⇒ image estimate fills this from the Tier-2 pass
+              : MEASURING, // non-polynomial ⇒ image estimate fills this from the Tier-2 pass
       );
     } else {
       lastConnectivityRigorous = false;
@@ -2140,11 +2153,11 @@ export function init(): void {
 
     jSet(
       "jp-bounding",
-      p.boundingRadius !== null ? `|z| ≤ ${jNum(p.boundingRadius, 4)} (disk)` : "measuring…",
+      p.boundingRadius !== null ? `|z| ≤ ${jNum(p.boundingRadius, 4)} (disk)` : MEASURING,
     );
 
     if (d === null) {
-      jSet("jp-symmetry", "measuring…"); // measured from the image by the debounced Tier-2 pass
+      jSet("jp-symmetry", MEASURING); // measured from the image by the debounced Tier-2 pass
     } else {
       const base = d === 2 ? "central (z → −z)" : `${d}-fold rotational`;
       jSet("jp-symmetry", c[1] === 0 ? `${base} · real axis` : base);
@@ -2167,33 +2180,82 @@ export function init(): void {
 
   /** Copy the Julia-set properties (exactly as displayed) to the clipboard, computing the image
    *  metrics first so the report is complete. */
-  function copyJuliaProperties(): void {
-    if (byId<HTMLDetailsElement>("julia-props-group").open) measureJuliaImage();
+  /**
+   * Copy the Julia-properties readout.
+   *
+   * It used to fire the Tier-2 measurement and then read the rows in the SAME TICK, so the clipboard
+   * got `Box dimension: measuring…` — the placeholder, not a number — every time the panel had just
+   * been opened or `c` had just moved. It now waits for the measurement to land, with the button
+   * disabled and saying so, and any row that is STILL a placeholder when the wait ends is copied as
+   * "not measured" rather than as the app's internal spinner text. (WP7/S2, review 2026-09-16.)
+   */
+  async function copyJuliaProperties(): Promise<void> {
+    const btn = byId<HTMLButtonElement>("julia-props-copy");
+    if (byId<HTMLDetailsElement>("julia-props-group").open) {
+      // Registered BEFORE the request: with no Worker the compute is synchronous and would otherwise
+      // have been delivered before anything was waiting for it.
+      const landed = juliaMetricsClient.settled();
+      measureJuliaImage();
+      const pending = (): boolean =>
+        [...document.querySelectorAll<HTMLElement>("#julia-props-group .julia-prop dd")].some(
+          (dd) => dd.textContent === MEASURING,
+        );
+      if (pending()) {
+        const label = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = "Measuring\u2026";
+        try {
+          await landed;
+        } finally {
+          btn.disabled = false;
+          btn.textContent = label;
+        }
+      }
+    }
     const lines = [`Julia set properties — c = ${formatComplex(dynamicalView.plot.cValue)}`];
+    let incomplete = false;
     for (const row of document.querySelectorAll<HTMLElement>("#julia-props-group .julia-prop")) {
       const dt = row.querySelector("dt");
       const dd = row.querySelector("dd");
       if (!dt || !dd) continue;
       const label = (dt.textContent ?? "").replace(/\s*\?\s*$/, "").trim();
-      lines.push(`${label}: ${dd.textContent ?? ""}`);
+      const value = dd.textContent ?? "";
+      if (value === MEASURING) incomplete = true;
+      lines.push(`${label}: ${value === MEASURING ? "not measured" : value}`);
     }
-    void navigator.clipboard
-      .writeText(lines.join("\n"))
-      .then(() => showToast("Julia properties copied to the clipboard.", "info"))
-      .catch(() => showToast("Couldn't access the clipboard.", "warn"));
+    try {
+      await navigator.clipboard.writeText(lines.join("\n"));
+      showToast(
+        incomplete
+          ? "Julia properties copied — some rows had not finished measuring."
+          : "Julia properties copied to the clipboard.",
+        incomplete ? "warn" : "info",
+      );
+    } catch {
+      showToast("Couldn't access the clipboard.", "warn");
+    }
   }
 
   const paramChip = byId("param-view-chip");
   const dynChip = byId("dyn-view-chip");
-  /** Refresh the per-plot "view chip" summaries (centre · zoom · iterations). */
+  /**
+   * Refresh the per-plot "view chip" summaries (centre · zoom · iterations).
+   *
+   * The iteration count is read from `plot.n` — the APPLIED cap — and not from the input box, which
+   * may hold a number the user has typed and not applied. The centre and zoom beside it have always
+   * come from the plot, so reading one of the three from the DOM made the chip a sentence about two
+   * different views. It also went stale outright: the profile applied at startup sets 200 while the
+   * HTML default is 100, and `applyProfile` never refreshed the chip, so **every session opened with
+   * both chips claiming an iteration count the app was not using**. (WP7/U2, review 2026-09-16.)
+   */
   function updateViewChips(): void {
-    const fmt = (v: PlotView, nId: string): string => {
+    const fmt = (v: PlotView): string => {
       const p = (x: number, n: number): string => Number.parseFloat(x.toPrecision(n)).toString();
       const [cx, cy] = v.plot.center;
-      return `center ${p(cx, 4)}, ${p(cy, 4)} · zoom ${formatZoom(v.plot.zoom, 3)} · ${byId<HTMLInputElement>(nId).value} it`;
+      return `center ${p(cx, 4)}, ${p(cy, 4)} · zoom ${formatZoom(v.plot.zoom, 3)} · ${v.plot.n} it`;
     };
-    paramChip.textContent = fmt(parameterView, INPUT_IDS.paramN);
-    dynChip.textContent = fmt(dynamicalView, INPUT_IDS.dynN);
+    paramChip.textContent = fmt(parameterView);
+    dynChip.textContent = fmt(dynamicalView);
     updateEffectiveIterations();
   }
 
@@ -2829,6 +2891,19 @@ export function init(): void {
   }
 
   /** Re-apply every control to the plots (used after loading a shared permalink). */
+  /**
+   * Push the three Riemann-sphere checkboxes into both plots. Separate from the change handlers so a
+   * shared link / saved view / undo step reaches the plots too: `applyAppState` sets a checkbox and
+   * nothing else, and a checked box over a flat plot is the one state the app must not be in.
+   */
+  function applySphere(): void {
+    parameterView.setSphere(byId<HTMLInputElement>("sphere-param").checked);
+    dynamicalView.setSphere(byId<HTMLInputElement>("sphere-dyn").checked);
+    const lit = byId<HTMLInputElement>("sphere-light").checked;
+    parameterView.setSphereLight(lit);
+    dynamicalView.setSphereLight(lit);
+  }
+
   function applyAllControls(): void {
     // σ is a persistent peer VIEW now (ADR-0009), not an overlay dismissed on any control change: a control
     // apply re-renders the standard plots underneath and leaves σ mode intact. Leaving σ is explicit (its ↩
@@ -2948,6 +3023,9 @@ export function init(): void {
     }
     // The coordinate remap, once both centres are final — its anchor is relative to them.
     setProjectionState(state._proj);
+    // …then the sphere, in the same order the reset uses: the projection puts each plot back at its
+    // linear view on the way out, so setting the sphere first would be undone by it.
+    applySphere();
     // Restore pinned annotations. Present-only, like `_grad` / `_z0` / `_profile`: a state that does
     // not MENTION notes leaves them alone (decodeNotes returns null), and the validation + hostile-link
     // caps live with the codec in state/notes.ts. This used to clear them unconditionally — invisible
@@ -2976,7 +3054,9 @@ export function init(): void {
 
   /** Serialize the current view into the URL hash and copy a shareable link. */
   async function shareLink(): Promise<void> {
-    const url = `${location.origin}${location.pathname}${encodeState(readFullState())}`;
+    const hash = encodeState(readFullState());
+    const url = `${location.origin}${location.pathname}${hash}`;
+    lastHashApplied = hash; // so the hashchange listener cannot re-apply our own write
     history.replaceState(null, "", url);
     try {
       await navigator.clipboard.writeText(url);
@@ -5123,11 +5203,21 @@ export function init(): void {
     }
   }
 
+  /**
+   * The hash this session last read or wrote, so `hashchange` can tell a reader pasting a new link
+   * from the app's own address-bar write. `history.replaceState` does NOT fire `hashchange` (HTML
+   * spec — measured: the app has exactly one `replaceState`, in `shareLink`, and it produces no
+   * event), so this is not load-bearing today; it is one assignment that keeps the two writers from
+   * ever having to know about each other.
+   */
+  let lastHashApplied = "";
+
   /** If the URL hash holds a shared view, apply it. Returns whether it did. */
   function loadFromHash(): boolean {
     // A map deep-link (interchange) rides #s=; CD's own view-state permalink rides #vs= (its own key,
     // so the two never collide and neither has to sniff the other's payload). Try the map import
     // first, then CD's view-state.
+    lastHashApplied = location.hash;
     if (/^#s=/.test(location.hash) && importInterchange(location.hash)) return true;
     const state = decodeState(location.hash);
     if (!state) return false;
@@ -5396,12 +5486,29 @@ export function init(): void {
     byId<HTMLButtonElement>("kf-gif").disabled = !ready;
   }
 
-  /** Capture the current parameter-plane view as a keyframe. */
+  /**
+   * Capture the current parameter-plane view as a keyframe.
+   *
+   * Always with the exact double-double centre: past ~1e13× the f64 pair cannot name the view at
+   * all (one ulp is 20 pixels at 1e15×), so a path captured at depth was a path between two views
+   * the user had not chosen. (WP7/S6.)
+   */
   function addKeyframe(): void {
     const [cx, cy] = parameterView.plot.center;
-    keyframes.push({ center: [cx, cy], zoom: parameterView.plot.zoom });
+    keyframes.push({
+      center: [cx, cy],
+      zoom: parameterView.plot.zoom,
+      centerDD: parameterView.plot.centerDD,
+    });
     updateKeyframeUI();
     showToast(`Keyframe ${keyframes.length} added`, "info");
+  }
+
+  /** Move the parameter plane to an interpolated keyframe, exactly when the keyframe is exact. */
+  function seekKeyframe(plot: GLPlot, v: Keyframe): void {
+    if (v.centerDD) plot.setCenterDD(v.centerDD[0], v.centerDD[1]);
+    else plot.center = v.center;
+    plot.zoom = v.zoom;
   }
 
   function clearKeyframes(): void {
@@ -5414,8 +5521,7 @@ export function init(): void {
   function applyScrub(): void {
     if (keyframes.length < 2) return;
     const v = interpolateView(keyframes, Number(byId<HTMLInputElement>("kf-scrub").value));
-    parameterView.plot.center = v.center;
-    parameterView.plot.zoom = v.zoom;
+    seekKeyframe(parameterView.plot, v);
     // The plot's setters only schedule a render, so without this the scrub was invisible to
     // everything BUT the picture: the sidebar and view chip kept the pre-scrub centre/zoom, the
     // debounced history snapshot was built from those stale fields (so the scrubbed view never
@@ -5431,7 +5537,7 @@ export function init(): void {
       return;
     }
     const plot = parameterView.plot;
-    const [sx, sy] = plot.center;
+    const startCenter = plot.centerDD; // exact: restoring from the f64 pair moves a deep view
     const startZoom = plot.zoom;
     void recordAnimation(
       plot,
@@ -5439,13 +5545,11 @@ export function init(): void {
       "keyframe-path.webm",
       Math.max(2000, (keyframes.length - 1) * 2500),
       (t) => {
-        const v = interpolateView(keyframes, t);
-        plot.center = v.center;
-        plot.zoom = v.zoom;
+        seekKeyframe(plot, interpolateView(keyframes, t));
         plot.render();
       },
       () => {
-        plot.center = [sx, sy];
+        plot.setCenterDD(startCenter[0], startCenter[1]); // restore to the limb, not the head
         plot.zoom = startZoom;
         plot.scheduleRender();
       },
@@ -5536,7 +5640,7 @@ export function init(): void {
       return;
     }
     const plot = parameterView.plot;
-    const [sx, sy] = plot.center;
+    const startCenter = plot.centerDD; // exact: restoring from the f64 pair moves a deep view
     const startZoom = plot.zoom;
     void recordGif(
       plot,
@@ -5544,13 +5648,11 @@ export function init(): void {
       "keyframe-path.gif",
       Math.min(72, Math.max(24, (keyframes.length - 1) * 24)),
       (t) => {
-        const v = interpolateView(keyframes, t);
-        plot.center = v.center;
-        plot.zoom = v.zoom;
+        seekKeyframe(plot, interpolateView(keyframes, t));
         plot.render();
       },
       () => {
-        plot.center = [sx, sy];
+        plot.setCenterDD(startCenter[0], startCenter[1]); // restore to the limb, not the head
         plot.zoom = startZoom;
         plot.scheduleRender();
       },
@@ -6341,18 +6443,12 @@ export function init(): void {
   applySiegelCurves();
   // Riemann sphere (3D): toggle either plane into the live sphere render mode. Each plot keeps its own
   // flat centre/zoom untouched, so unchecking restores the exact view; drag/wheel are handled in
-  // PlotView. Works for any f (single precision). Not part of the serialized state for the MVP.
-  byId("sphere-param").addEventListener("change", () => {
-    parameterView.setSphere(byId<HTMLInputElement>("sphere-param").checked);
-  });
-  byId("sphere-dyn").addEventListener("change", () => {
-    dynamicalView.setSphere(byId<HTMLInputElement>("sphere-dyn").checked);
-  });
-  byId("sphere-light").addEventListener("change", () => {
-    const on = byId<HTMLInputElement>("sphere-light").checked;
-    parameterView.setSphereLight(on);
-    dynamicalView.setSphereLight(on);
-  });
+  // PlotView. Works for any f (single precision). It IS part of the serialized state (WP7/S3): the
+  // three checkboxes are in SHARE_IDS and applyFullState calls applySphere, which is also what the
+  // change handlers and the reset go through, so there is one path from checkbox to plot.
+  byId("sphere-param").addEventListener("change", applySphere);
+  byId("sphere-dyn").addEventListener("change", applySphere);
+  byId("sphere-light").addEventListener("change", applySphere);
   byId("sphere-reset").addEventListener("click", () => {
     parameterView.resetSphereView();
     dynamicalView.resetSphereView();
@@ -6379,7 +6475,7 @@ export function init(): void {
   byId("exterior-group").addEventListener("toggle", updateExteriorMap);
   byId("exterior-n").addEventListener("input", updateExteriorMap);
   byId("julia-props-group").addEventListener("toggle", updateJuliaProperties);
-  byId("julia-props-copy").addEventListener("click", copyJuliaProperties);
+  byId("julia-props-copy").addEventListener("click", () => void copyJuliaProperties());
   const copyCoeffs = (coeffs: Complex[] | null, title: string, symbol = "b"): void => {
     if (!coeffs) return;
     void navigator.clipboard
@@ -6601,14 +6697,10 @@ export function init(): void {
     // transition, which puts each plot back at the linear view it saved on entry.
     byId<HTMLSelectElement>("projection-mode").value = "linear";
     applyProjection();
-    for (const id of ["sphere-param", "sphere-dyn"]) {
-      const cb = byId<HTMLInputElement>(id);
-      cb.checked = false;
-      cb.dispatchEvent(new Event("change"));
-    }
-    const sphereLight = byId<HTMLInputElement>("sphere-light");
-    sphereLight.checked = true; // HTML default
-    sphereLight.dispatchEvent(new Event("change"));
+    byId<HTMLInputElement>("sphere-param").checked = false;
+    byId<HTMLInputElement>("sphere-dyn").checked = false;
+    byId<HTMLInputElement>("sphere-light").checked = true; // HTML default
+    applySphere();
     clearKeyframes();
     applyPreset(byId<HTMLSelectElement>("fractal_presets").value as PresetName);
   });
@@ -6712,8 +6804,12 @@ export function init(): void {
       critorbit: byId<HTMLInputElement>("critorbit").checked,
       farey: byId<HTMLInputElement>("farey").checked,
       rays: byId<HTMLInputElement>("rays").checked,
-      iterations: Math.round(Number(byId<HTMLInputElement>(INPUT_IDS.paramN).value)) || 0,
-      resolution: Math.round(Number(byId<HTMLInputElement>("inpParamRes").value)) || 0,
+      // Applied, not typed. These two are DEFERRED fields — a value sits in the box until Apply —
+      // so reading the box made the label depend on an edit the app had not acted on: typing 300 and
+      // then toggling `light` flipped the picker to "Custom…" partly because of the 300, although
+      // the view was still running at the profile's 200. (WP7/U2.)
+      iterations: Math.round(Number(parameterView.plot.n)) || 0,
+      resolution: parameterView.plot.res,
       juliaPanel: byId<HTMLDetailsElement>("julia-props-group").open,
     });
 
@@ -6769,7 +6865,7 @@ export function init(): void {
       byId<HTMLInputElement>(INPUT_IDS.dynN).value = String(p.iterations);
       byId<HTMLInputElement>("inpParamRes").value = String(res);
       byId<HTMLInputElement>("inpDynRes").value = String(res);
-      updateEffectiveIterations();
+      updateViewChips(); // the profile just changed the applied cap the chips print (WP7/U2)
       const panel = byId<HTMLDetailsElement>("julia-props-group");
       if (panel.open !== p.juliaPanel) {
         panel.open = p.juliaPanel;
@@ -6836,6 +6932,14 @@ export function init(): void {
   setupProfiles(); // apply the persisted profile (default skin) before any shared view
 
   loadFromHash(); // apply a shared view if the URL carries one (overrides the profile)
+  // A link pasted into the address bar of an ALREADY-OPEN tab used to do nothing at all: the hash
+  // changed, the page did not navigate (same document), and the app read the hash exactly once, at
+  // startup. Someone sent a permalink, the recipient pasted it over the one they had, and the view
+  // did not move. (WP7/S6, review 2026-09-16.)
+  window.addEventListener("hashchange", () => {
+    if (location.hash === lastHashApplied) return; // our own write, or the same link twice
+    if (!loadFromHash()) showToast("That link carries no Complex Dynamics view.", "warn");
+  });
   refreshProfileLabel(); // a shared view usually diverges from a named profile → "Custom…"
   lastSnapshot = readFullState(); // history baseline (after any shared view is applied)
   window.clearTimeout(recordTimer);

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { JuliaMetricsClient, type JuliaMetricsRequest } from "../src/render/juliaMetricsClient.js";
 import type { JuliaMetricsMessage } from "../src/render/juliaMetrics.worker.js";
 import type { JuliaImageMetrics } from "../src/render/juliaProperties.js";
@@ -152,5 +152,88 @@ describe("JuliaMetricsClient — a worker failure is reported, not swallowed", (
     client.request(req("r1"), () => {});
     w.respond(w.posted[0].reqId); // neither metrics nor error
     expect(errors).toEqual([]);
+  });
+});
+
+// WP7/S2 (review 2026-09-16). "Copy properties" fired the Tier-2 measurement and read the rows in
+// the SAME TICK, so the clipboard got the placeholder `measuring…` instead of a number. The copy
+// path needs to know when a result has landed — which is not the same question as "did MY request
+// return", because the client coalesces and a superseded request's callback never fires at all.
+describe("JuliaMetricsClient — settled()", () => {
+  let savedWorker: unknown;
+  beforeEach(() => {
+    savedWorker = (globalThis as { Worker?: unknown }).Worker;
+    (globalThis as { Worker?: unknown }).Worker = MockWorker as unknown;
+    MockWorker.instances = [];
+  });
+  afterEach(() => {
+    (globalThis as { Worker?: unknown }).Worker = savedWorker;
+  });
+
+  /** Whether `p` has settled by the time the microtask queue drains. */
+  async function settledYet(p: Promise<void>): Promise<boolean> {
+    const marker = Symbol("pending");
+    return (await Promise.race([p, Promise.resolve(marker)])) !== marker;
+  }
+
+  it("does not resolve before anything has landed, and does once a result paints", async () => {
+    const client = new JuliaMetricsClient();
+    const w = MockWorker.instances[0];
+    const landed = client.settled();
+    client.request(req("r1"), () => {});
+    expect(await settledYet(landed)).toBe(false); // the anti-vacuity clause
+    w.respond(w.posted[0].reqId, METRICS);
+    expect(await settledYet(landed)).toBe(true);
+  });
+
+  it("resolves on a FAILURE too — otherwise a caller waiting on it would hang", async () => {
+    const client = new JuliaMetricsClient();
+    const w = MockWorker.instances[0];
+    const landed = client.settled();
+    client.request(req("r1"), () => {});
+    w.fail(w.posted[0].reqId, "boom");
+    expect(await settledYet(landed)).toBe(true);
+  });
+
+  // The reason it is not a per-request promise: r1 is superseded by r2 and its callback never runs.
+  // A promise tied to r1 would wait for a result that is not coming; what the caller actually needs
+  // is "the panel has been refreshed since I asked", and r2's result is a fresher answer to that.
+  it("a SUPERSEDING result settles the wait", async () => {
+    const client = new JuliaMetricsClient();
+    const w = MockWorker.instances[0];
+    const painted: string[] = [];
+    client.request(req("r1"), () => void painted.push("r1"));
+    const landed = client.settled();
+    client.request(req("r2"), () => void painted.push("r2")); // coalesced behind r1
+    w.respond(w.posted[0].reqId); // r1 comes back with no metrics ⇒ never painted, lane freed
+    w.respond(w.posted[1].reqId, METRICS); // r2 paints
+    expect(await settledYet(landed)).toBe(true);
+    expect(painted).toEqual(["r2"]);
+  });
+
+  it("has a backstop, so a worker that never answers does not disable a button for ever", async () => {
+    vi.useFakeTimers();
+    try {
+      const client = new JuliaMetricsClient();
+      client.request(req("r1"), () => {});
+      const landed = client.settled(5000);
+      vi.advanceTimersByTime(4999);
+      expect(await settledYet(landed)).toBe(false);
+      vi.advanceTimersByTime(2);
+      expect(await settledYet(landed)).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("one delivery releases every waiter", async () => {
+    const client = new JuliaMetricsClient();
+    const w = MockWorker.instances[0];
+    const a = client.settled();
+    const b = client.settled();
+    client.request(req("r1"), () => {});
+    w.respond(w.posted[0].reqId, METRICS);
+    expect(await settledYet(a)).toBe(true);
+    expect(await settledYet(b)).toBe(true);
   });
 });

@@ -39,6 +39,15 @@ function runSync(req: JuliaMetricsRequest): JuliaImageMetrics {
 export class JuliaMetricsClient {
   private readonly client: ComputeClient<JuliaMetricsRequest, JuliaImageMetrics>;
   private errorCb: ((message: string) => void) | null = null;
+  /** One-shot waiters registered by {@link settled}, released by the next result or error. */
+  private waiters: (() => void)[] = [];
+
+  /** Release every {@link settled} waiter — one delivery answers all of them. */
+  private release(): void {
+    const w = this.waiters;
+    this.waiters = [];
+    for (const done of w) done();
+  }
 
   constructor() {
     this.client = createComputeClient<JuliaMetricsRequest, JuliaImageMetrics>({
@@ -55,13 +64,44 @@ export class JuliaMetricsClient {
         const r = data as JuliaMetricsResponse;
         return { reqId: r.reqId, result: r.metrics, error: r.error };
       },
-      onError: (message) => this.errorCb?.(message),
+      onError: (message) => {
+        this.release();
+        this.errorCb?.(message);
+      },
     });
   }
 
   /** Compute metrics for `req`; `cb` fires with the latest result (worker async, or sync fallback). */
   request(req: JuliaMetricsRequest, cb: (m: JuliaImageMetrics) => void): void {
-    this.client.request(req, cb);
+    this.client.request(req, (m) => {
+      cb(m);
+      this.release();
+    });
+  }
+
+  /**
+   * Resolves once a result has been PAINTED (or a failure reported), with a backstop timeout.
+   *
+   * Not "resolves when *my* request returns": the client coalesces, so a request can be superseded
+   * and its own callback never fire, and a promise tied to one request id would hang for ever. What
+   * a caller wanting to read the rows actually needs is "the panel has been refreshed since I
+   * asked", and a superseding result is a FRESHER answer to the same question, so it counts.
+   *
+   * Register it BEFORE the request: with no Worker the compute runs synchronously inside
+   * `request`, so a waiter added afterwards would have missed its own delivery. (WP7/S2.)
+   */
+  settled(timeoutMs = 5000): Promise<void> {
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        this.waiters = this.waiters.filter((w) => w !== done);
+        resolve();
+      }, timeoutMs);
+      const done = (): void => {
+        clearTimeout(timer);
+        resolve();
+      };
+      this.waiters.push(done);
+    });
   }
 
   /**
