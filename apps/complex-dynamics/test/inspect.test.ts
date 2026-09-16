@@ -298,9 +298,56 @@ describe("inspect — indifferent and slow parameters are classified exactly", (
   });
 
   it("declines where the attractor is a genuine higher-period cycle", () => {
-    // The anti-vacuity clause: in the 1/2 bulb α is REPELLING, so the fixed-point fallback must not
-    // answer — the settled-cycle path does, with period 2.
+    // In the 1/2 bulb α is REPELLING, so the fixed-point fallback must not answer — the settled-cycle
+    // path does, with period 2. NOTE this is not the fallback's anti-vacuity clause, though it was
+    // labelled as one: `classifyOrbit` settles c = −1 inside the budget, so `fate` is "periodic" and
+    // the fallback is never REACHED. Replacing its whole branch with `false` leaves this green. The
+    // cases that do reach it are below — they need an orbit the budget cannot decide.
     const r = inspect(F, ESC, "param", O, [-1, 0]);
     expect(r.period).toBe(2);
+  });
+
+  // --- The fallback's real decline rule (review follow-up, finding 1) ------------------------
+  //
+  // The band was NEUTRAL_TOL = 1e-3, a *display* tolerance used as an *acceptance* one, so a fixed
+  // point with |λ| up to 1.001 — repelling — was accepted, and `fate` was overwritten to
+  // "converged". Both parameters below reach the fallback (their orbits are genuinely undecided at
+  // the budget) and both have a repelling α, so both must be refused.
+
+  it("refuses a REPELLING α, and the orbit's fate stays unknown", () => {
+    // c = 0.25001 is OUTSIDE M — the critical orbit escapes, at iteration 990, well past the budget.
+    // |λ_α| = 1.00002: inside the old 1e-3 band, seven orders outside the new one.
+    const r = inspect(F, ESC, "param", O, [0.25001, 0]);
+    expect(r.fate, "the orbit neither escaped nor closed within the budget").toBe("undetermined");
+    expect(r.period, "no cycle is claimed").toBe(0);
+    expect(r.multiplier, "and no multiplier to classify a component from").toBeNull();
+    expect(fatouComponentType(r.multiplier, r.multiplierMag)).toBeNull();
+  });
+
+  it("refuses a repelling α inside M too — the refusal is about λ, not about membership", () => {
+    // c = −0.7501 IS in M (the 1/2 bulb, attracting 2-cycle at |λ₂| = 0.9996, which needs ≈ 3,500
+    // iterations). α is repelling at |λ| = 1.0001, so the fallback must decline here as well —
+    // before this fix it reported period 1 at the REPELLING α and a Lyapunov exponent of the wrong
+    // SIGN (+1e-4 against a true −2.0e-4).
+    const r = inspect(F, ESC, "param", O, [-0.7501, 0]);
+    expect(r.fate).toBe("undetermined");
+    expect(r.period).toBe(0);
+  });
+
+  it("but still answers every genuinely indifferent α — the band did not over-tighten", () => {
+    // The other direction, and the reason the band is 1e-12 rather than 0: these are the parameters
+    // the fallback exists for, and each lands within 2.3e-16 of |λ| = 1 through this code path.
+    // The cusp is the special one — a DOUBLE root, whose |λ| carries √ε ≈ 1e-8 of error — so it is
+    // decided by the collision before the band is consulted at all.
+    for (const [name, t] of [
+      ["golden-mean Siegel", (Math.sqrt(5) - 1) / 2],
+      ["parabolic 1/2", 0.5],
+      ["parabolic 1/3", 1 / 3],
+      ["the cusp (double root)", 0],
+    ] as [string, number][]) {
+      const r = inspect(F, ESC, "param", O, cardioid(t));
+      expect(r.period, name).toBe(1);
+      expect(fatouComponentType(r.multiplier, r.multiplierMag), name).not.toBeNull();
+    }
   });
 });

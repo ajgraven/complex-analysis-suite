@@ -445,6 +445,29 @@ describe("connectivity honesty: undetermined is not connected", () => {
     expect(p.connectivityUndetermined).toBe(false);
   });
 
+  it("a SLOW ESCAPER outside M stays undetermined — it is never reported as membership", () => {
+    // The regression this describe block was written against, reintroduced by WP5's fixed-point
+    // fallback and caught by the follow-up review. c = 0.25001 is OUTSIDE M: the critical orbit
+    // escapes at iteration 990, past the budget, so the honest answer is "undetermined". The
+    // fallback then found α at |λ| = 1.00002 — REPELLING, but inside the old 1e-3 acceptance band —
+    // and overwrote the fate to "converged", which collapses this flag and makes main.ts print
+    // "connected (c ∈ Mandelbrot set)" for a parameter that is not in it.
+    const p = props(2, [0.25001, 0]);
+    expect(p.escapes, "the budget ran out before the orbit escaped").toBe(false);
+    expect(p.connectivityUndetermined, "so membership must stay unclaimed").toBe(true);
+    expect(p.cycle, "and no cycle may be reported at a repelling fixed point").toBeNull();
+  });
+
+  it("an indifferent c still reports its cycle, and still does not claim membership", () => {
+    // The other direction, so the fix above cannot be satisfied by refusing everything: at the
+    // parabolic c = −3/4 the fallback still answers with period 1 and |λ| = 1 — what WP5 exists to
+    // reach — while the orbit's own fate remains undetermined, so the hedge is still in force.
+    const p = props(2, [-0.75, 0]);
+    expect(p.cycle?.period, "the parabolic fixed point is still found").toBe(1);
+    expect(p.cycle?.multiplierMag ?? 0).toBeCloseTo(1, 9);
+    expect(p.connectivityUndetermined).toBe(true);
+  });
+
   it("`connected` alone cannot distinguish bounded from iteration-limited", () => {
     // The contract that makes the flag safe to consume: whenever the orbit is undetermined,
     // `connected` is nonetheless true — so any caller reading `connected` on its own is at risk of
