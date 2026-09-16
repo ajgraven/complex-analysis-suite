@@ -6381,6 +6381,16 @@ export function init(): void {
       view.refreshOverlay();
     }
     updateProjectionNote(val);
+    // A projection REFUSES both deep-zoom kernels (WP9/R4), so `plot.perturbationActive` flips with
+    // this control — and both gates read it. Without re-running them, entering a projection with
+    // perturbation ticked left thirteen colouring modes disabled under "perturbation (deep zoom)
+    // renders escape / smooth colouring only" while the standard shader was in fact drawing; and
+    // LEAVING one was worse, because the kernel re-arms and draws `uMode = mode === 1 ? 1 : 0`, so a
+    // reader who had selected Orbit trap under the projection got plain escape time with the control
+    // still reading "Orbit trap" and no toast — the silent substitution WP8/S4 closed, reintroduced
+    // through a control WP8 never touched. (Review follow-up.)
+    updatePerturbationGating();
+    updateDerivativeGating();
   }
   byId("projection-mode").addEventListener("change", applyProjection);
   // --- serializing an active projection ------------------------------------------------------

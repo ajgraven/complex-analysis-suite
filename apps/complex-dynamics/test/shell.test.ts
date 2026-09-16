@@ -657,6 +657,53 @@ describe("WP8/S4 — a mode the app cannot draw says so, and says so when it mov
   });
 });
 
+describe("Review follow-up — the projection picker re-runs the gates it moves", () => {
+  // A projection REFUSES both deep-zoom kernels (WP9/R4), so `perturbationActive` flips with this
+  // control. `applyProjection` ran neither gate, so the UI kept describing the previous kernel.
+  const opts = (): HTMLOptionElement[] => [
+    ...byId<HTMLSelectElement>("mode").querySelectorAll("option"),
+  ];
+  const disabledModes = (): string[] =>
+    opts()
+      .filter((o) => o.disabled)
+      .map((o) => o.value);
+
+  it("entering a projection gives back the modes perturbation had taken away", async () => {
+    await mount();
+    byId<HTMLInputElement>("perturbation").checked = true;
+    fire("perturbation", "change");
+    expect(disabledModes().length, "perturbation greys the modes it cannot draw").toBeGreaterThan(0);
+    expect(byId("perturbation-note").hidden).toBe(false);
+
+    setVal("projection-mode", "poincare");
+    fire("projection-mode", "change");
+    expect(disabledModes(), "the standard shader is drawing, so nothing is greyed").toEqual([]);
+    expect(byId("perturbation-note").hidden, "and the note about it is down").toBe(true);
+  });
+
+  it("LEAVING a projection re-arms the kernel, and does not leave a mode it cannot draw", async () => {
+    // The dangerous direction. Under the projection every mode is selectable; pick one the
+    // perturbation kernel does not render, then switch back — the kernel re-arms and draws
+    // `uMode = mode === 1 ? 1 : 0`, i.e. plain escape time, while the control still says "Orbit
+    // trap". That is WP8/S4's silent substitution, through a control WP8 never touched.
+    await mount();
+    byId<HTMLInputElement>("perturbation").checked = true;
+    fire("perturbation", "change");
+    setVal("projection-mode", "poincare");
+    fire("projection-mode", "change");
+
+    const sel = byId<HTMLSelectElement>("mode");
+    sel.value = "orbit";
+    fire("mode", "change");
+    expect(sel.value).toBe("orbit");
+
+    setVal("projection-mode", "off");
+    fire("projection-mode", "change");
+    expect(sel.value, "the selection moved off a mode the kernel cannot draw").not.toBe("orbit");
+    expect(disabledModes(), "and orbit is greyed again").toContain("orbit");
+  });
+});
+
 describe("WP8/U7 — a panel that needs z²+c says so before you press anything", () => {
   it("disables the seven quadratic panels and names the current f", async () => {
     await mount();
