@@ -44,8 +44,13 @@ export function describeLegend(mode: string, setName: string): LegendModel {
       return {
         title: "Distance to the set",
         visual: "gradient",
+        // The ramp is the escape-time scalar `palette(s / uN)`, so these two ends are right. What the
+        // legend never said is that the result is MULTIPLIED by a factor that falls to 0 at the
+        // boundary (`de`, or `edge` for the screen-space variant) — which is the whole point of the
+        // mode and why the filaments read dark. (WP1/R3.)
         low: "far",
         high: "close to the edge",
+        note: "the boundary itself is darkened, picking out the filaments",
         interior: setName,
       };
     case "interiorDE":
@@ -60,8 +65,11 @@ export function describeLegend(mode: string, setName: string): LegendModel {
       return {
         title: "Orbit trap",
         visual: "gradient",
-        low: "orbit hugs the trap",
-        high: "stays away",
+        // shaderBuilder: `palette(1.0 - clamp(sqrt(trap) * 1.3, 0.0, 1.0))` — a SMALL closest
+        // approach maps to the TOP of the ramp, so hugging the trap is the high end, not the low
+        // one. The two labels were the wrong way round. (WP1/R3.)
+        low: "orbit stays away",
+        high: "hugs the trap",
         interior: setName,
       };
     case "stripe":
@@ -93,15 +101,19 @@ export function describeLegend(mode: string, setName: string): LegendModel {
       return {
         title: "Attracting period",
         visual: "gradient",
-        low: "period 1",
-        high: "higher period",
-        note: "interior by cycle period; exterior black",
+        // No low/high: the shader is `palette(fract(period * 0.618))`, a hash that spreads periods
+        // across the ramp so neighbouring components differ — it is deliberately NOT monotone in the
+        // period, and labelling the ends "period 1 → higher period" claimed an order the picture does
+        // not have. (WP1/R3.)
+        note: "interior by cycle period — a distinct hue per period, not an ordered scale; exterior black",
       };
     case "multiplier":
       return {
         title: "Multiplier λ",
         visual: "wheel",
-        note: "interior: hue = arg λ, brightness = |λ| (dark = superattracting)",
+        // shaderBuilder: `val = sqrt(1.0 - mag)` — brightness FALLS as |λ| rises, so the
+        // superattracting centre (|λ| = 0) is the bright end. The note said the opposite. (WP1/R3.)
+        note: "interior: hue = arg λ (the internal angle); bright at the superattracting centre, dark toward the component edge (|λ| → 1)",
       };
     case "newtonBasins":
       return {

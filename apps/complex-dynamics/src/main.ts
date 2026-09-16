@@ -5606,8 +5606,24 @@ function init(): void {
 
   // --- wire up the UI controls ------------------------------------------
 
+  // Enter applies — but ONLY from the deferred fields it is meant for. This listener used to be
+  // unconditional, so Enter from anywhere re-applied the whole app: keyboard-activating any button
+  // (Save view, Delete, the glossary ×, undo, a suggestion's action) ran a full applyChanges, Enter in
+  // the Views "view name" box applied the plots instead of saving the view, and Enter on a focused plot
+  // ran PlotView's own Enter (which moves c) and then re-applied both plots on the way up.
+  // The formula/escape boxes are <textarea>s where Enter legitimately inserts a newline, so they take
+  // Ctrl/Cmd+Enter instead — Enter alone just breaks the line, as it already did. (WP1/S1.)
+  const APPLY_ON_ENTER = new Set<string>([
+    ...Object.values(INPUT_IDS),
+    ...Object.values(CENTER_SUB_IDS),
+  ]);
   document.addEventListener("keyup", (event) => {
-    if (event.key === "Enter") applyChanges();
+    if (event.key !== "Enter") return;
+    const target = event.target as HTMLElement | null;
+    if (!target || !APPLY_ON_ENTER.has(target.id)) return;
+    // A multi-line field needs a modifier; a single-line one applies on a bare Enter.
+    if (target instanceof HTMLTextAreaElement && !(event.ctrlKey || event.metaKey)) return;
+    applyChanges();
   });
 
   // Deferred text fields: a user edit marks the view "dirty" until applied.
@@ -6540,8 +6556,12 @@ function init(): void {
   // Contextual Apply buttons in each plot's params bar — same commit as the sidebar Apply.
   byId("param-apply").addEventListener("click", applyChanges);
   byId("dyn-apply").addEventListener("click", applyChanges);
-  byId("apply_preset").addEventListener("click", () => {
-    applyPreset(byId<HTMLSelectElement>("fractal_presets").value as PresetName);
+  // A preset applies when you PICK it. It used to need a separate "apply" button, with no dirty
+  // highlight and no unapplied-edits hint on the select — so choosing "Herman ring" left the app
+  // showing z²+c with nothing on screen saying why, which measured as the most surprising interaction
+  // in the app. The button is gone from the markup; the select is the control. (WP1/U1.)
+  byId("fractal_presets").addEventListener("change", (event) => {
+    applyPreset((event.currentTarget as HTMLSelectElement).value as PresetName);
   });
   byId("reset_all").addEventListener("click", () => {
     // Reset every option, including coloring + lighting (which presets don't carry).

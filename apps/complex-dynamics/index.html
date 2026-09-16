@@ -1373,7 +1373,7 @@ z^2+c</textarea
               <div class="field">
                 <label for="fractal_presets">Presets</label>
                 <div class="inline-actions">
-                  <select id="fractal_presets" title="Pick a named fractal, then apply">
+                  <select id="fractal_presets" title="Pick a named fractal — it is applied as soon as you choose it">
                     <optgroup label="Polynomial">
                       <option value="mandelbrot">Mandelbrot set</option>
                       <option value="cubic">cubic (z³+c)</option>
@@ -1401,7 +1401,6 @@ z^2+c</textarea
                       <option value="biomorph">biomorph</option>
                     </optgroup>
                   </select>
-                  <button id="apply_preset" type="button" class="primary">apply</button>
                 </div>
               </div>
               <div class="field">
@@ -1833,7 +1832,7 @@ z^2+c</textarea
             <div class="inline-actions">
               <button id="apply_all" type="button" class="primary">apply changes</button>
               <span id="dirty-indicator" class="dirty-indicator" hidden
-                >● unapplied edits — press Enter or Apply</span
+                >● unapplied edits — press Enter (Ctrl+Enter in f) or Apply</span
               >
               <button
                 id="reset_all"
@@ -2687,8 +2686,16 @@ z^2+c</textarea
                         — handy for shrinking stacked plots so both fit on screen.
                       </li>
                       <li>
-                        Press "enter" or "apply changes" to apply edits; "reset" reverts every
-                        option to the selected preset.
+                        Press <strong>Enter</strong> in any edited field, or
+                        <strong>apply changes</strong>, to apply your edits. The
+                        <code>f(z, c)</code> and escape-test boxes are multi-line, so there Enter
+                        breaks the line and <strong>Ctrl</strong> (or <strong>⌘</strong>) +
+                        <strong>Enter</strong> applies. <strong>reset</strong> reverts every option
+                        to the selected preset.
+                      </li>
+                      <li>
+                        Choosing from <strong>Presets</strong> applies that preset straight away —
+                        there is no separate apply step for it.
                       </li>
                       <li>
                         Pick a colouring mode, palette, and anti-aliasing level with the coloring

@@ -1890,6 +1890,7 @@ export class GLPlot {
     const gl = this.gl;
     if (!this.collarTex) this.collarTex = gl.createTexture();
     if (this.collarSize !== size) {
+      gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, this.collarTex);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, size, size, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
@@ -1898,6 +1899,13 @@ export class GLPlot {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       this.collarSize = size;
     }
+    // MUST unbind. This texture becomes the collar FBO's colour attachment two lines later, and
+    // `setupDraw`'s default path binds nothing on unit 0 — so leaving it bound here left the `uCdf`
+    // sampler pointing at the render target, which is a sampler feedback loop. Every collar draw was
+    // rejected with GL_INVALID_OPERATION (1282), `collarValid` never became true, and the whole
+    // idle-overscan feature silently did nothing on every plot, in every session, since it shipped.
+    // The one-shot `collarWarned` guard made it look like a single hiccup. (WP1/R2, review 2026-09-16.)
+    gl.bindTexture(gl.TEXTURE_2D, null);
   }
 
   /**
@@ -1977,8 +1985,13 @@ export class GLPlot {
     gl.bindTexture(gl.TEXTURE_2D, sourceTex);
     gl.uniform1i(pp.uniforms.uScene, 0);
     gl.uniform2f(pp.uniforms.uResolution, size, size);
-    gl.uniform1f(pp.uniforms.uVignette, this._vignette);
-    gl.uniform1f(pp.uniforms.uGamma, this._gamma);
+    // The grade is applied only when post-processing is ON. `drawPost` is also the display path for
+    // the temporal accumulator (renderAccumulate), which runs with `accumulate` on by DEFAULT — so
+    // uploading the stored slider values unconditionally vignetted and gamma-graded the default view
+    // while a plain render and every export stayed ungraded. Identity values (no darkening, gamma 1)
+    // keep this pass a pure blit when post is off. (WP1/R1, review 2026-09-16.)
+    gl.uniform1f(pp.uniforms.uVignette, this._post ? this._vignette : 0);
+    gl.uniform1f(pp.uniforms.uGamma, this._post ? this._gamma : 1);
     gl.uniform1f(pp.uniforms.uAccumScale, scale);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.bindTexture(gl.TEXTURE_2D, null); // unbind so it can be a render target next frame

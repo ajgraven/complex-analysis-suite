@@ -48,3 +48,43 @@ describe("describeLegend", () => {
     }
   });
 });
+
+// ── WP1 / R3 (review 2026-09-16): the legend must describe what the shader DRAWS ──────────────
+// Four notes were checked against `shaderBuilder.ts` and three of them described the opposite of
+// the picture. These assertions are keyed to the shader expression in each case, so a future change
+// to the shader that is not mirrored here goes red.
+describe("the legend agrees with the shader", () => {
+  it("multiplier: bright at the superattracting centre, not dark (val = sqrt(1 - |λ|))", () => {
+    const m = describeLegend("multiplier", "filled Julia set");
+    const note = m.note ?? "";
+    expect(note).toMatch(/bright/i);
+    // The shipped wording was "brightness = |λ| (dark = superattracting)" — exactly backwards.
+    expect(note).not.toMatch(/dark\s*=\s*superattracting/i);
+  });
+
+  it("orbit trap: hugging the trap is the HIGH end (palette(1 - √trap·1.3))", () => {
+    const t = describeLegend("orbit", "filled Julia set");
+    expect(t.high).toMatch(/hugs the trap/i);
+    expect(t.low).toMatch(/stays away/i);
+  });
+
+  it("period: claims no ordering, because palette(fract(period·0.618)) has none", () => {
+    const p = describeLegend("period", "filled Julia set");
+    // A low/high pair on a gradient reads as an ordered scale; this mode's hue is a hash.
+    expect(p.low).toBeUndefined();
+    expect(p.high).toBeUndefined();
+    expect(p.note ?? "").toMatch(/not an ordered scale/i);
+  });
+
+  it("distance: keeps its (correct) ramp ends and now says the boundary is darkened", () => {
+    // Unlike the three above, this one was not inverted — `palette(s / uN)` really does run from
+    // fast escape to the boundary. What it never mentioned is the `* de` / `* edge` factor that
+    // darkens the boundary, which is the whole point of the mode.
+    for (const mode of ["distance", "distanceAnalytic"]) {
+      const d = describeLegend(mode, "filled Julia set");
+      expect(d.low).toBe("far");
+      expect(d.high).toBe("close to the edge");
+      expect(d.note ?? "").toMatch(/darkened/i);
+    }
+  });
+});
