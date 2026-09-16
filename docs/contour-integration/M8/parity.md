@@ -14,9 +14,11 @@ name, `data-testid` or `data-card`, and several assert something the old one cou
 behaviour itself moved — a bar button that failed on press becoming a card that refuses before it is
 pressed — the notes say so rather than pretending the assertion is the same.
 
-**A gap is a row, not an omission.** Three behaviours cannot be expressed against shell2 yet, each
-because a surface they drive arrives at a later step. They are listed with their step, and the step
-that builds the surface re-ports them.
+**A gap is a row, not an omission.** Three behaviours could not be expressed against shell2 when this
+file was written, each because a surface they drive arrived at a later step. They were listed with
+their step, and the step that built the surface re-ported them. **The stage's two
+generated-description rows are closed at step 1.9**, where `describeStage` was ported; the pen's row
+is marked against 1.8 below.
 
 ---
 
@@ -68,8 +70,8 @@ that builds the surface re-ports them.
 | 512 `has exactly one <main> and exactly one <h1>` | `shell2.test.ts` › `has exactly one <main> and exactly one <h1> above the cards' <h2>s` | Ported at step 1.1, so it held from the new shell's first commit rather than being fixed at the end of Phase 1. |
 | 521 `puts the suite nav BEFORE <main>, so it reads where it draws` | `shell2.test.ts` › same name | Ported at step 1.1. |
 | 532 `names every canvas, or hides it explicitly` | `shell2.test.ts` › same name | Ported at step 1.1. |
-| 549 `DERIVES both canvas descriptions from the ledger, and keeps them current` | **gap — step 1.9** | The strip's half is generated (`strip.ts`'s `describe`, and its step-count clause is ported below); the STAGE's description is still the static label `app.ts` mounts, and `describeStage` arrives with the stage modes at 1.9. Asserting the strip's half alone under this name would claim "both" for one. |
-| 572 `counts a pole's winding only where it was DECIDED` | **gap — step 1.9** | Same cause: it is a clause of the stage's generated description. It is the only assertion that pins `decided`-only counting in the text alternative, so 1.9 re-ports it. |
+| 549 `DERIVES both canvas descriptions from the ledger, and keeps them current` | `shell2.test.ts` › `DERIVES the stage's description from the ledger, and keeps it current` (**closed at 1.9**) | The strip's half was already generated (`strip.ts`'s `describe`); the stage's is now `stageView.ts`'s exported `describeStage`, refreshed from `render2` on every recompute. Re-expressed by opening the record through `applyState` rather than through the old shell's source toggle, which shell2 does not have. It gained a clause the old one could not have: the description names **what the backdrop is**, differently in each of the four stage modes — because the old shell's keyboard preamble opened by claiming "the integrand's phase portrait with the contour drawn over it", which on the textbook plate describes a picture nobody is showing. |
+| 572 `counts a pole's winding only where it was DECIDED` | `shell2.test.ts` › same name (**closed at 1.9**) | Ported verbatim in substance, including the shift by the circle's OWN radius — a hardcoded 1 merely encloses the pole at any other R and the test passes for the wrong reason, which the old shell measured happening. |
 | 597 `reports the accumulator's REAL step count, not a placeholder` | `shell2Page.test.ts` › same name | Same regex. `canvas.accCanvas` → `canvas.acc`, and the read awaits a frame, because the strip's name is written in `drawNow` and `schedule` coalesces. |
 
 ### the contrast grid

@@ -25,6 +25,7 @@ import type { Resolved } from "../kernel/geom.js";
 import type { PoleReport } from "../kernel/poles.js";
 import { plotToScreen, type View, type Viewport } from "../kernel/camera.js";
 import { DARK_INK, LIGHT_INK, type InkTheme } from "../ui/inkTheme.js";
+import type { StageMode } from "../ui/stage/mode.js";
 import { drawPoleGlyph, drawTextbookPlate } from "../ui/stage/ink.js";
 import { drillMask } from "./drillPanel.js";
 import { drawContour } from "../ui/stage/ink.js";
@@ -82,6 +83,56 @@ export interface StageView {
   /** Whether WebGL2 was available. The shell reports the reason rather than showing an empty box. */
   readonly glError: string | null;
   destroy(): void;
+}
+
+/**
+ * What the stage's backdrop IS, in words, per mode.
+ *
+ * **The mode is in the description because the mode decides whether the sentence is TRUE.** The old
+ * shell's keyboard preamble opened "the integrand's phase portrait with the contour drawn over it",
+ * which is a claim rather than an instruction — and on the textbook plate there is no portrait at
+ * all, so a reader who cannot see the stage would be told about a picture nobody is showing. M6.4's
+ * rule was that a hand-written alternative drifts the first time a record changes; a hand-written
+ * one that cannot see a MODE drifts the first time the reader presses a button.
+ */
+const STAGE_BACKDROP: Readonly<Record<StageMode, string>> = {
+  quiet: "over a muted phase portrait of the integrand",
+  full: "over a phase portrait of the integrand, hue carrying arg f and lightness log|f|",
+  iso: "over a phase portrait of the integrand, with a dark isoline every 30 degrees of arg f",
+  textbook: "on a plain plate with labelled axes and a unit grid, and no phase portrait behind it",
+};
+
+/**
+ * The stage's text alternative — M6.4's generated description, ported at step 1.9.
+ *
+ * Every clause comes from something the engine computed, which is the point: a description written
+ * by hand is wrong the first time a record changes, and this one is refreshed on every recompute.
+ *
+ * **"WOUND", not "enclosed", and the distinction is D6's.** This counts poles whose winding number
+ * the engine DECIDED to be non-zero, which is exactly what it says. The ledger's CATCH row can
+ * differ: the exterior residue theorem re-weights each pole by `n − σ`, so a dogbone with the cut
+ * inside it encloses its poles and still contributes nothing from them. Calling this count
+ * "enclosed" would put a claim in the text alternative that the ledger beside it does not make.
+ *
+ * `w.decided &&` is UNOBSERVABLE and kept deliberately — a mutation-sweep survivor recorded rather
+ * than deleted: every `decided: false` path in `kernel/winding.ts` returns `n: 0`, so the two
+ * conditions agree today. Dropping it would make this line depend on an invariant in another
+ * module, which is not a dependency a description should have.
+ */
+export function describeStage(input: {
+  readonly mode: StageMode;
+  readonly caption: { readonly title: string; readonly value: string; readonly verdict: string };
+  readonly pieces: number;
+  readonly windings: readonly { readonly n: number; readonly decided: boolean }[];
+}): string {
+  const { caption: c, pieces } = input;
+  const wound = input.windings.filter((w) => w.decided && w.n !== 0).length;
+  return (
+    `${c.title}. The contour is drawn ${STAGE_BACKDROP[input.mode]}. ` +
+    `${pieces} piece${pieces === 1 ? "" : "s"}; ` +
+    `${wound === 0 ? "the contour winds about no pole" : `it winds about ${wound} pole${wound === 1 ? "" : "s"}`}. ` +
+    `${c.value}. ${c.verdict}`
+  );
 }
 
 /** A pole's ring, in CSS pixels, before the order glyph is placed. */

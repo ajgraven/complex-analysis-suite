@@ -13,8 +13,9 @@ import { afterEach, expect, describe, it } from "vitest";
 
 import { mountShell2 } from "../src/shell2/app.js";
 import { CET_C6 } from "../src/ui/stage/cetC6.js";
-import { LIGHT_INK } from "../src/ui/inkTheme.js";
+import { DARK_INK, LIGHT_INK, type InkTheme } from "../src/ui/inkTheme.js";
 import type { StageMode } from "../src/ui/stage/mode.js";
+import { plotToScreen } from "../src/kernel/camera.js";
 
 import "katex/dist/katex.min.css";
 import "@cas/ui/nav.css";
@@ -133,6 +134,13 @@ describe("the stage modes", () => {
     expect(median).toBeGreaterThan(1.0);
     // The lines: measured 15,563 pixels of 369,408 (4.2%) at least 30% darker.
     expect(darkerBy30).toBeGreaterThan(0.02 * ratios.length);
+    // **AT STRENGTH, and that clause is load-bearing.** The first draft asked only for the darkest
+    // pixel, which a line drawn at a few per cent of its weight still supplies somewhere — and a
+    // mutation sweep proved it: reverting the ramp to measure from the MIDPOINT between lines,
+    // which is what made them nearly invisible on screen, left every assertion here green. What a
+    // reader can see is a population, so the population is what is asserted: measured 6,886 pixels
+    // (1.9%) at or past half the full frame's luma.
+    expect(ratios.filter((r) => r < 0.5).length).toBeGreaterThan(0.01 * ratios.length);
     // And the darkest pixel lands on the multiply's own factor — 0.42, measured 0.423. This is the
     // clause a removed isoline block fails: without it the minimum ratio is the dial's, ~0.75.
     expect(darkest).toBeLessThan(0.5);
@@ -150,5 +158,136 @@ describe("the stage modes", () => {
     }
     expect(darkest).toBeGreaterThan(90);
     expect(darkest).toBeLessThan(100);
+  });
+});
+
+// ── the plate, as the app draws it ──────────────────────────────────────────────────────────────
+//
+// Everything above is about the GL canvas. These are about the INK canvas, and about `stageView`'s
+// wiring rather than about `ink.ts`'s drawing, which `textbookInk.browser.test.ts` covers directly:
+// a sweep found that every one of those primitives could be left uncalled, drawn over the contour,
+// or fed the wrong theme without a test noticing.
+
+/** The ink canvas of a mounted app, at its native size. */
+async function inkLayer(mode: StageMode, sandbox: boolean, template?: string): Promise<{
+  readonly px: Uint8ClampedArray;
+  readonly width: number;
+  readonly height: number;
+  readonly app: ReturnType<typeof mountShell2>;
+}> {
+  const root = document.createElement("div");
+  root.style.cssText = "position:fixed;inset:0;width:1280px;height:900px";
+  document.body.replaceChildren(root);
+  const app = mountShell2(root);
+  mounted.push(app);
+  await settled();
+  if (sandbox) {
+    app.actions().toSandbox();
+    await settled();
+  }
+  if (template !== undefined) {
+    app.actions().setTemplate(template as never);
+    await settled();
+  }
+  app.actions().setStageMode(mode);
+  await settled();
+  const ink = root.querySelector<HTMLCanvasElement>("canvas.ink");
+  if (ink === null) throw new Error("no ink canvas");
+  const readback = document.createElement("canvas");
+  readback.width = ink.width;
+  readback.height = ink.height;
+  const ctx = readback.getContext("2d");
+  if (ctx === null) throw new Error("no 2d context to read the ink with");
+  ctx.drawImage(ink, 0, 0);
+  return { px: ctx.getImageData(0, 0, ink.width, ink.height).data, width: ink.width, height: ink.height, app };
+}
+
+const rgbOf = (hex: string): [number, number, number] => {
+  const n = Number.parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+};
+
+/** How many pixels carry a colour within `tol` of `hex`, at an alpha a reader would see. */
+function countNear(px: Uint8ClampedArray, hex: string, tol = 26): number {
+  const [r, g, b] = rgbOf(hex);
+  let n = 0;
+  for (let i = 0; i < px.length; i += 4) {
+    if (px[i + 3] > 60 && Math.abs(px[i] - r) <= tol && Math.abs(px[i + 1] - g) <= tol && Math.abs(px[i + 2] - b) <= tol) n++;
+  }
+  return n;
+}
+
+const piecePixels = (px: Uint8ClampedArray, theme: InkTheme): number =>
+  theme.pieces.reduce((n, hex) => n + countNear(px, hex), 0);
+
+describe("the textbook plate, as the stage draws it", () => {
+  it("LAYS THE PLATE DOWN — axes and a unit grid that the portrait modes do not have", async () => {
+    const plate = await inkLayer("textbook", false);
+    const overPortrait = await inkLayer("full", false);
+    // Measured on A6: 1,857 plate-ink pixels against 152 in `full`, where the only things in that
+    // colour are the handle rings and the marker. An uncalled `drawTextbookPlate` reads like the
+    // second number.
+    expect(countNear(plate.px, LIGHT_INK.plateInk)).toBeGreaterThan(1000);
+    expect(countNear(overPortrait.px, DARK_INK.plateInk)).toBeLessThan(600);
+  });
+
+  it("puts the plate UNDER the contour, which is what `destination-over` is for", async () => {
+    // **A6 is the decisive record, because its target piece lies exactly ON the real axis.** The
+    // plate draws that axis at full strength, and `drawContour` has already cleared the canvas — so
+    // the plate has to go beneath what is on it or the `Re` rule paints out the whole segment the
+    // argument is about. Measured: 1,829 piece-coloured pixels on the plate against 1,837 in
+    // `full`, 99.6% — the contour is untouched.
+    const plate = await inkLayer("textbook", false);
+    const overPortrait = await inkLayer("full", false);
+    expect(piecePixels(plate.px, LIGHT_INK)).toBeGreaterThan(0.9 * piecePixels(overPortrait.px, DARK_INK));
+  });
+
+  it("marks a pole with ⊗ on the plate, and with a bare ring over a portrait", async () => {
+    // The ink canvas is transparent at a ring's centre and inked at a ⊗'s. Over a portrait the pole
+    // is already the white anchor the shader paints, so a ring is an annotation on something
+    // visible; on a plate with no portrait behind it the glyph is the only mark there is, and a
+    // bare ring would be indistinguishable from a grabbable handle — which `drawContour` draws in
+    // the same shape on the same canvas.
+    // **The pole is moved OFF both axes, and the first draft of this test was vacuous without it.**
+    // `1/z`'s pole sits at the origin, which on the textbook plate is exactly where the `Re` and
+    // `Im` rules cross — so the centre pixel is inked whether the glyph has a cross through it or
+    // not, and a sweep proved it: removing the ⊗ branch entirely left this green. At `0.7 + 0.7i`
+    // the glyph is the only thing there.
+    const at = async (mode: StageMode): Promise<number> => {
+      const f = await inkLayer(mode, true);
+      f.app.actions().setExpr("1/(z-0.7-0.7i)");
+      await settled();
+      const ink = document.querySelector<HTMLCanvasElement>("canvas.ink");
+      if (ink === null) throw new Error("no ink canvas");
+      const rb = document.createElement("canvas");
+      rb.width = ink.width;
+      rb.height = ink.height;
+      const c = rb.getContext("2d");
+      if (c === null) throw new Error("no 2d context");
+      c.drawImage(ink, 0, 0);
+      const px = c.getImageData(0, 0, ink.width, ink.height).data;
+      const dpr = ink.width / (ink.getBoundingClientRect().width || ink.width);
+      const view = f.app.currentState().view;
+      const vp = { width: ink.width / dpr, height: ink.height / dpr };
+      const [sx, sy] = plotToScreen(0.7, 0.7, view, vp);
+      const i = (Math.round(sy * dpr) * ink.width + Math.round(sx * dpr)) * 4;
+      return px[i + 3];
+    };
+    expect(await at("textbook")).toBeGreaterThan(60);
+    expect(await at("full")).toBeLessThan(40);
+  });
+
+  it("dashes a cut on the plate and hatches it everywhere else", async () => {
+    // The keyhole template seeds a cut system (M4.6), so this is the reader's own route to one.
+    // Measured: 276 cut-coloured pixels hatched against 132 dashed — the hatching's ticks are the
+    // difference, and both are far from zero, which is what stops this passing on a cut that was
+    // not drawn at all.
+    const plate = await inkLayer("textbook", true, "keyhole");
+    const overPortrait = await inkLayer("full", true, "keyhole");
+    const hatched = countNear(overPortrait.px, DARK_INK.cutInk, 40);
+    const dashed = countNear(plate.px, LIGHT_INK.cutInk, 40);
+    expect(hatched).toBeGreaterThan(150);
+    expect(dashed).toBeGreaterThan(60);
+    expect(dashed).toBeLessThan(0.75 * hatched);
   });
 });

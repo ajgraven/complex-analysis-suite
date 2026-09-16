@@ -30,7 +30,7 @@ import { patch, h } from "./dom.js";
 import { render, type ShellActions } from "./render.js";
 import { defaultSession, resetTransient, type Session } from "./session.js";
 import { createStageController, type StageController } from "./stageController.js";
-import { createStageView } from "./stageView.js";
+import { createStageView, describeStage } from "./stageView.js";
 import { createStripView, type StripDraw } from "./strip.js";
 import { createContrastsDialog } from "./contrasts.js";
 import { createFrontDoor } from "./frontDoor.js";
@@ -68,6 +68,19 @@ export type CommitReason = "init" | "edit" | "gesture" | "gesture-end" | "link";
 
 /** The work ceiling while a gesture is live — the old shell's number, so the two behave alike. */
 const DRAFT_EVALUATIONS = 768;
+
+/**
+ * What the stage's keys DO — and nothing about what it shows.
+ *
+ * The old shell's copy opened by naming the picture ("the integrand's phase portrait with the
+ * contour drawn over it"), which put a claim inside the instructions and made both wrong in the one
+ * mode that draws no portrait. The picture is {@link describeStage}'s, refreshed on every
+ * recompute; this is the half that never changes.
+ */
+const STAGE_KEYS =
+  "The complex plane. Arrow keys pan, plus and minus zoom. Press Enter to grab the contour, one " +
+  "of its radius handles, or a branch point or branch cut, after which the arrow keys move what " +
+  "you grabbed and shift with an arrow pans.";
 
 /** How long after the last change the address bar catches up. The old shell's number. */
 const HASH_SETTLE_MS = 250;
@@ -486,6 +499,9 @@ export function mountShell2(root: Element): Shell2Handle {
     // `!== null` guard then declined to clear a box it thought was already clear — so a contrast
     // cell or a drill rung left the page still saying a link could not be opened, about a state the
     // reader had since left. One reader, and the question cannot be answered twice.
+    // The stage's text alternative, regenerated with everything else it describes. M6.4's rule:
+    // a hand-written alternative drifts the first time a record changes.
+    inkCanvas.setAttribute("aria-label", stageLabel());
     const why = session.linkRefusal;
     linkBox.hidden = why === null;
     linkBox.textContent =
@@ -531,6 +547,25 @@ export function mountShell2(root: Element): Shell2Handle {
     return injectPngText(new Uint8Array(await blob.arrayBuffer()), figureMetadata(permalink, caption));
   }
 
+  /** The stage's accessible name: what the keys do, then what is on screen right now. */
+  function stageLabel(): string {
+    const r = resolution;
+    const windings =
+      r.kind === "gallery"
+        ? (r.run?.integral.windings ?? [])
+        : r.kind === "plain" || r.kind === "declared"
+          ? r.analysis.integral.windings
+          : [];
+    return `${STAGE_KEYS} ${describeStage({
+      mode: state.stageMode,
+      caption: captionNow(),
+      // The contour the stage DREW, which in gallery mode is the record's output and not
+      // `state.contour` — M6.1's finding, and the same call `stageView` makes to draw it.
+      pieces: stageView.resolvedPieces(state, r).length,
+      windings,
+    })}`;
+  }
+
   /** What the plate says it is a picture of — the same facts the Result card reads. */
   function captionNow(): FigureCaption {
     const r = resolution;
@@ -572,7 +607,9 @@ export function mountShell2(root: Element): Shell2Handle {
   // are named so that the four structural invariants hold from the first commit rather than being
   // fixed at the end of Phase 1.
   const stageA11y = attachCanvasA11y(inkCanvas, {
-    label: "the complex plane, with the contour drawn over a phase portrait of the integrand",
+    // Through the same generator `render2` refreshes it with, so the name has ONE source even at
+    // this one moment before the first render — `strip.ts`'s idiom, and the old shell's.
+    label: stageLabel(),
     role: "application",
     render: glCanvas,
     liveRegionHost: stageWrap,

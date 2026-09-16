@@ -54,6 +54,34 @@ function darkPixels(ctx: CanvasRenderingContext2D, threshold = 6): number {
 }
 
 describe("the textbook plate's furniture", () => {
+  it("draws NO axis whose origin is off screen, rather than pinning a rule to the edge", () => {
+    // A rule labelled `Re` that is not the real axis is a figure asserting something false, which
+    // is worse than a figure with one fewer rule.
+    //
+    // **The camera is chosen so the guard is OBSERVABLE, which took measuring.** With the origin far
+    // off screen, removing the guard changes nothing a reader can see — the rule is drawn at a `y`
+    // outside the canvas and clipped away, so the test passes with the guard gone. What is visible
+    // is the LABEL, which sits 14 px from its own rule: at `oy = 610` on a 600-tall plate the rule
+    // is invisible and `Re` is not. So the origin is put just past each edge. Measured at
+    // `halfHeight 2` on an 800×600 plate, grid off: 4,299 dark pixels with both axes on screen,
+    // 0 with the origin just outside, and 67 with the `Re` guard removed — its label alone.
+    const grid = false;
+    const at = (center: [number, number]): number => {
+      const ctx = plate();
+      drawTextbookPlate(ctx, { center, halfHeight: 2 }, VP, { theme: LIGHT_INK, grid });
+      return darkPixels(ctx);
+    };
+    expect(at([0, 0])).toBeGreaterThan(1500);
+    // `oy = 610` and `ox = −10`: each axis is ten pixels outside the plate, and each label would be
+    // four pixels inside it.
+    expect(at([2.7333, 2.0667])).toBe(0);
+    // One in, one out — so the count is between, and neither "always draws" nor "never draws" fits.
+    const onlyVertical = at([0, 2.0667]);
+    expect(onlyVertical).toBeGreaterThan(0);
+    expect(onlyVertical).toBeLessThan(at([0, 0]));
+  });
+
+
   it("lays down ink, and the grid is the part that goes away", () => {
     // The blank control, first and in the test rather than only in the header: if this were not 0
     // then every other count in the file would be measuring the paper.

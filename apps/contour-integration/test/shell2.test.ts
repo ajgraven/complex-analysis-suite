@@ -19,6 +19,8 @@ import { handlesOf, onContour } from "../src/engine/contour/edit.js";
 import { resolveAll } from "../src/engine/contour/model.js";
 import { CENTER_MAX, plotToScreen, scale } from "../src/kernel/camera.js";
 import { pointAt } from "../src/kernel/geom.js";
+import { translateContour } from "../src/engine/contour/edit.js";
+import { STAGE_MODES } from "../src/ui/stage/mode.js";
 import { h, patch } from "../src/shell2/dom.js";
 import { math, mathPlain, mathText, renderedCount } from "../src/shell2/math.js";
 import { mountShell2 } from "../src/shell2/app.js";
@@ -1103,5 +1105,88 @@ describe("a disclosure, live", () => {
       (d) => (d.querySelector("summary")?.textContent ?? "") === "Numerics",
     ) as HTMLDetailsElement | undefined;
     expect(after?.open, "a recompute shut a disclosure the reader opened").toBe(true);
+  });
+});
+
+describe("the stage's text alternative — M6.4's generated description, ported at M8 step 1.9", () => {
+  const ink = (root: HTMLElement): string => q(root, "canvas.ink").getAttribute("aria-label") ?? "";
+
+  it("DERIVES the stage's description from the ledger, and keeps it current", () => {
+    // The old shell's row, against the new one. The sandbox's boot state is `1/z` on a circle,
+    // which closes at 2πi; opening a record must move every clause, because a hand-written
+    // alternative would now be describing the previous picture — which is the whole reason these
+    // are generated.
+    const { root, app } = mount();
+    expect(ink(root)).toContain("Arrow keys pan");
+    expect(ink(root)).toContain("winds about 1 pole");
+    expect(ink(root)).toContain("2πi");
+
+    // The sandbox's circle is ONE piece, and the record's is not — which is the clause that says
+    // the count comes from the contour the stage DREW. In gallery mode that is the record's output
+    // (M6.1's finding) and `state.contour` is still the reader's parked sandbox curve, so a
+    // description reading the state would go on saying "1 piece" about a four-piece figure.
+    expect(ink(root)).toContain("1 piece;");
+
+    const s = app.currentState();
+    app.applyState({ ...s, mode: "gallery", record: "indented-sinc", fixture: 0 });
+    expect(app.currentState().record).toBe("indented-sinc");
+    // C1's contour winds about NO pole — its whole answer comes from the indentation — so the
+    // description has to say so rather than implying a residue sum carried it.
+    expect(ink(root)).toContain("winds about no pole");
+    const pieces = /(\d+) pieces?;/.exec(ink(root));
+    expect(pieces, "the description does not say how many pieces the record has").not.toBeNull();
+    expect(Number(pieces?.[1]), "C1's contour is more than one piece").toBeGreaterThan(1);
+    // And the parked sandbox contour is untouched, so the two really are different curves.
+    expect(app.currentState().sandboxContour?.pieces.length).toBe(1);
+  });
+
+  it("counts a pole's winding only where it was DECIDED, so a contour parked on one claims nothing", () => {
+    // The app's own headline property, in the text alternative: "park it on the pole and there is
+    // no number at all". Shifted by the circle's OWN radius, read off the state, so the pole lands
+    // exactly on it — a hardcoded 1 would merely enclose it at any other R and the test would pass
+    // for the wrong reason (measured in the old shell: it did, at the boot radius).
+    const { root, app } = mount();
+    expect(ink(root)).toContain("winds about 1 pole");
+    const s = app.currentState();
+    const r = s.contour.params.R.value;
+    app.applyState({
+      ...s,
+      contour: translateContour(s.contour, [r, 0]),
+      contourSource: { template: "circle", shift: [r, 0] },
+    });
+    expect(ink(root)).toContain("winds about no pole");
+    expect(ink(root)).not.toContain("winds about 1 pole");
+  });
+
+  it("says WHAT THE BACKDROP IS, differently in each of the four stage modes", () => {
+    // **The clause exists because the mode decides whether the sentence is true.** The old shell's
+    // keyboard preamble opened by naming the picture — "the integrand's phase portrait with the
+    // contour drawn over it" — which on the textbook plate describes a picture nobody is showing.
+    // Four modes, four distinct sentences, and the one that draws no portrait says so.
+    const { root, app } = mount();
+    const seen = new Set<string>();
+    for (const mode of STAGE_MODES) {
+      app.applyState({ ...app.currentState(), stageMode: mode });
+      const label = ink(root);
+      const m = /The contour is drawn ([^.]+)\./.exec(label);
+      expect(m, `${mode}: the description does not say what the backdrop is`).not.toBeNull();
+      seen.add(m?.[1] ?? "");
+    }
+    expect(seen.size, "two modes describe the same backdrop").toBe(STAGE_MODES.length);
+    app.applyState({ ...app.currentState(), stageMode: "textbook" });
+    expect(ink(root)).toContain("no phase portrait behind it");
+    app.applyState({ ...app.currentState(), stageMode: "full" });
+    expect(ink(root)).not.toContain("no phase portrait");
+  });
+
+  it("keeps the KEYS out of the picture's description", () => {
+    // Two halves with two lifetimes: what the keys do never changes, what is on screen changes on
+    // every recompute. They were one string in the old shell, which is how a claim came to live
+    // inside a set of instructions.
+    const { root, app } = mount();
+    app.applyState({ ...app.currentState(), stageMode: "textbook" });
+    const label = ink(root);
+    expect(label).toContain("Arrow keys pan");
+    expect(label.indexOf("Arrow keys pan")).toBeLessThan(label.indexOf("The contour is drawn"));
   });
 });
