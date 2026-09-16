@@ -27,6 +27,7 @@ import {
   type Statement,
 } from "../../engine/derivation.js";
 import { constraintLabel } from "../../engine/vocabulary.js";
+import { drillMask } from "../drillPanel.js";
 import { contourIntegrandLatex, targetLatex } from "../../families/latex.js";
 import { relationText } from "../../families/describe.js";
 import { fmt, fmtCx } from "../../kernel/decimal.js";
@@ -376,6 +377,13 @@ function stageBlock(ctx: CardContext, stage: DerivationStage): Desc {
 }
 
 export const derivationCard: Card = (ctx) => {
+  // **THE DERIVATION CARRIES RUNG ii's ANSWERS IN PROSE** — its KILL stage says which lemma
+  // discharges which piece — so masking the ledger's KILL column and leaving this open would be
+  // masking nothing at all. `drillMask` already folds in the clause that brings it back the moment
+  // the rung is checked, so both masked rungs are one test here rather than two conditions.
+  if (drillMask(ctx) !== "none") {
+    return card("derivation", nothing("Masked: the derivation says what each piece is for."));
+  }
   const { derivation, why } = factsOf(ctx);
   if (derivation === null) return card("derivation", nothing(why));
 

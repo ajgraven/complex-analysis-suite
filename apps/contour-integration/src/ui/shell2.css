@@ -153,6 +153,15 @@
   gap: 0.5rem;
   background: var(--g-panel-2);
 }
+/* **A card keeps its own height and the RAIL scrolls**, which is the other half of the same defect.
+   `.card2` is a flex item and flex items shrink by default, so with more cards than fit the rail
+   squeezed every one of them below its content instead of scrolling — measured under a record at
+   1280 x 900, the Singularities card at 22 px of 114 and the Result card at 166 of 371, its ledger
+   disclosure cut off mid-row. The rail already has `overflow: auto`; it was never reached. */
+.shell2 > .rail2 > .card2 {
+  flex: 0 0 auto;
+}
+
 .shell2 > .rail2.left {
   grid-area: left;
 }
@@ -418,9 +427,18 @@
   white-space: nowrap;
 }
 /* The rail is 19rem and a four-pole residue is wider than that. Scrolling the TABLE keeps every
-   other card's width, where wrapping the formula destroys the formula. */
-.shell2 .card2[data-card="singularities"] {
+   other card's width, where wrapping the formula destroys the formula.
+   **On a wrapper INSIDE the card, and it was on the card**: `overflow-x: auto` silently computes
+   `overflow-y: auto` too (CSS Overflow §3 — `visible` beside a scrolling axis becomes `auto`), so
+   the card became a scroll box in both directions and the rail's flex then crushed it to 22 px of
+   114 under a record. The wrapper carries `tabindex` in the markup, which is what a scrollable
+   region with no focusable content needs to be reachable from a keyboard. */
+.shell2 .tableScroll {
   overflow-x: auto;
+}
+.shell2 .tableScroll:focus-visible {
+  outline: 2px solid var(--g-accent);
+  outline-offset: 2px;
 }
 /* The three-way highlight's rail end (step 1.10 completes the others). */
 .shell2 .poleTable tr.hot {

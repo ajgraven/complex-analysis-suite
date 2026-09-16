@@ -110,22 +110,39 @@ export const singularitiesCard: Card = ({ state, resolution, session, poles, act
           "of the cofactor R(z) — the branch point carries no residue of its own, and Res(f, z₀) is this times the branch factor there.",
         )
       : null,
+    // **The SCROLL is on this wrapper, not on the card.** It was on the card, where `overflow-x:
+    // auto` silently computes `overflow-y: auto` as well — so under a record the rail's flex crushed
+    // the card to 22 px of 114 and the poles were effectively gone. Moving it here leaves the card
+    // its natural height; `tabindex` and a name are what axe's `scrollable-region-focusable` asks
+    // for, and this region has no focusable content of its own to satisfy it (a table of numbers).
+    // Measured by hand, because the a11y roster audits a page's DEFAULT state and the sandbox's one
+    // pole never overflows: 0 rules on the sandbox, one `serious` the moment a record opens.
     h(
-      "table",
-      { key: "tbl", class: "poleTable" },
+      "div",
+      {
+        key: "scroll",
+        class: "tableScroll",
+        tabIndex: 0,
+        role: "group",
+        "aria-label": "the singular set — scroll sideways for the residues",
+      },
       h(
-        "thead",
-        { key: "h" },
+        "table",
+        { key: "tbl", class: "poleTable" },
         h(
-          "tr",
-          { key: "hr" },
-          h("th", { key: "a", scope: "col" }, "z₀"),
-          h("th", { key: "o", scope: "col" }, "order"),
-          h("th", { key: "res", scope: "col" }, "Res(f, z₀)"),
-          h("th", { key: "ind", scope: "col" }, "Ind(γ, z₀)"),
+          "thead",
+          { key: "h" },
+          h(
+            "tr",
+            { key: "hr" },
+            h("th", { key: "a", scope: "col" }, "z₀"),
+            h("th", { key: "o", scope: "col" }, "order"),
+            h("th", { key: "res", scope: "col" }, "Res(f, z₀)"),
+            h("th", { key: "ind", scope: "col" }, "Ind(γ, z₀)"),
+          ),
         ),
+        h("tbody", { key: "b" }, ...rows),
       ),
-      h("tbody", { key: "b" }, ...rows),
     ),
   );
 };

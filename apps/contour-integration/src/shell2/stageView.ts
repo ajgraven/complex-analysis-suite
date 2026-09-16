@@ -23,6 +23,7 @@ import type { Resolved } from "../kernel/geom.js";
 import type { PoleReport } from "../kernel/poles.js";
 import { plotToScreen, type View, type Viewport } from "../kernel/camera.js";
 import { DARK_INK, type InkTheme } from "../ui/inkTheme.js";
+import { drillMask } from "./drillPanel.js";
 import { drawContour } from "../ui/stage/ink.js";
 import { GLStage } from "../ui/stage/glStage.js";
 import type { ShellState, StateResolution } from "../shell/state.js";
@@ -225,13 +226,19 @@ export function createStageView(host: HTMLElement): StageView {
       return;
     }
 
-    const pieces = resolvedPieces(d.state, d.resolution);
-    const { radius } = handles(d.state, d.resolution);
+    // **Masked by drawing an EMPTY piece list, never by skipping the call.** M7.3's first
+    // implementation masked the contour by leaving `drawContour` out, and `drawContour` begins with
+    // `clearRect` — so the previous frame's contour stayed on the ink layer with the ledger hidden,
+    // the value hidden and the ANSWER still drawn. The poles stay: at the rung whose question is
+    // "which contour?" the singularities are the question's data, not its answer.
+    const hidden = drillMask(d) === "argument";
+    const pieces = hidden ? [] : resolvedPieces(d.state, d.resolution);
+    const { radius } = hidden ? { radius: [] as readonly Handle[] } : handles(d.state, d.resolution);
     const hoveredHandle = d.session.hover.handle;
     // **The rail's hover, on the stage.** `session.hover.piece` is one id read by the piece list,
     // the stage and (at 1.9) the accumulator, so hovering a row lights the same curve it names —
     // three surfaces, one identifier, which is what stops a highlight meaning different things.
-    const drawnPieces = contourOf(d.state, d.resolution).pieces;
+    const drawnPieces = hidden ? [] : contourOf(d.state, d.resolution).pieces;
     drawContour(ctx, pieces, view, vp, {
       theme: t,
       highlight: drawnPieces.findIndex((p) => p.id === d.session.hover.piece),
@@ -240,7 +247,7 @@ export function createStageView(host: HTMLElement): StageView {
         at: handle.at,
         emphasis: d.session.gesture === "handle" && hoveredHandle === i ? "grabbed" : hoveredHandle === i ? "hover" : "none",
       })),
-      cuts: drawnCuts(effectiveBranch(d.state.branch), view, vp),
+      cuts: hidden ? [] : drawnCuts(effectiveBranch(d.state.branch), view, vp),
     });
     drawPoles(ctx, d, view, vp, t);
   }

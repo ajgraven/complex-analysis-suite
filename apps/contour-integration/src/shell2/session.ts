@@ -124,6 +124,16 @@ export interface Session {
   /** Rung iv's last enclosure check, or null. Same reasoning as {@link Session.drillAnswers}. */
   drillDrawn: unknown;
   /**
+   * Whether the drill's TASK LIST is showing in the right rail's top slot.
+   *
+   * SESSION, for {@link Session.contrastsOpen}'s reason and one of its own: a reader who is choosing
+   * a task is not in the drill yet — `shellMode` says Drill when a RUNG is open — so this is where
+   * their hands are rather than part of the argument, and a permalink that reopened the chooser
+   * would hand someone else a menu over the thing they came to look at. Picking a task is an
+   * `applyState`, so `resetTransient` puts the list away without anyone remembering to.
+   */
+  drillPicker: boolean;
+  /**
    * Why the link this page was opened with could not be honoured, or null.
    *
    * **A refusal is not an absence** — M6.2's third finding. `decodeShell` returns `null` for *there
@@ -160,6 +170,7 @@ export function defaultSession(): Session {
     contrastsOpen: false,
     drillAnswers: {},
     drillDrawn: null,
+    drillPicker: false,
     linkRefusal: null,
   };
 }
@@ -183,6 +194,7 @@ export function resetTransient(session: Session): void {
   session.drillGraded = false;
   session.drillAnswers = {};
   session.drillDrawn = null;
+  session.drillPicker = false;
   session.notice = null;
   session.contrastsOpen = false;
   // The reader has gone somewhere else; a sentence about the link they arrived on is no longer

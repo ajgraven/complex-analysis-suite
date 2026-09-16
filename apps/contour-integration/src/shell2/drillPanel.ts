@@ -23,10 +23,18 @@
 // what is masked. `resetTransient` clears it on every `applyState` now, so the one thing this file
 // must not do is keep its own copy — it reads `session.drillGraded` and writes it in place.
 import type { FamilyRun } from "../families/runFamily.js";
-import { LAST_STAGE, readProgress, withCleared, writeProgress, type KeyStore } from "../shell/drillProgress.js";
+import {
+  LAST_STAGE,
+  readProgress,
+  stageFor,
+  withCleared,
+  writeProgress,
+  type KeyStore,
+} from "../shell/drillProgress.js";
 import {
   DISPOSALS,
   DISPOSAL_LABEL,
+  DRILL_TASKS,
   VERIFIED_ROLE_TEMPLATES,
   allCorrect,
   checkDrawing,
@@ -53,6 +61,19 @@ import { card, type CardContext } from "./cards/card.js";
 export type DrillMask = "none" | "kill" | "argument";
 
 /**
+ * Everything {@link drillMask} reads, and nothing else.
+ *
+ * Narrower than `CardContext` on purpose: the STAGE is one of the three readers and a `StageDraw`
+ * carries no actions, so a mask that demanded a card's context would have made the stage derive the
+ * answer a second way — which is the defect this function exists to prevent, the old shell having
+ * spread the question over three readers that each grew a clause of their own.
+ */
+export interface MaskInput {
+  readonly state: CardContext["state"];
+  readonly session: CardContext["session"];
+}
+
+/**
  * What the drill is hiding right now.
  *
  * The old shell's `mask()`, with the clause its three readers each carried folded in:
@@ -73,7 +94,7 @@ export type DrillMask = "none" | "kill" | "argument";
  * `resetTransient` clears it on every `applyState`, and every rung change is one — so the case is
  * unreachable; were it reachable, unmasking there is M7.4's defect exactly.
  */
-export function drillMask(ctx: CardContext): DrillMask {
+export function drillMask(ctx: MaskInput): DrillMask {
   const rung = ctx.state.drill;
   if (rung === null) return "none";
   if (rung.stage === 2) return ctx.session.drillGraded ? "none" : "kill";
@@ -171,7 +192,10 @@ function windingsNow(ctx: CardContext): readonly WindingRow[] {
  */
 export function drillPanel(ctx: CardContext): Desc | null {
   const rung = ctx.state.drill;
-  if (rung === null) return null;
+  // The chooser, when the reader has pressed Drill and no rung is open. It is the drill's only door:
+  // before it existed `DRILL_TASKS` was reachable from a permalink and from nothing a reader could
+  // press, while the bar's own refusal named a panel nothing built.
+  if (rung === null) return ctx.session.drillPicker ? taskList(ctx) : null;
   const task = taskById(rung.task);
   // A link naming a task this build does not have. No card rather than an empty one: there is no
   // rung open, and a heading over nothing claims otherwise.
@@ -189,6 +213,52 @@ export function drillPanel(ctx: CardContext): Desc | null {
     footer(ctx, task, stage),
   ];
   return card("drill", ...body);
+}
+
+/**
+ * The four tasks, each at the rung it has REACHED.
+ *
+ * The rung comes from `stageFor`, which reads the store — so a reader who cleared rung ii yesterday
+ * is offered rung iii today, and a store that is absent, blocked or garbage reads as no progress
+ * rather than throwing (`drillProgress.ts`'s own rule). The store is read ONCE here rather than per
+ * task, so the four rows cannot describe different moments.
+ */
+function taskList(ctx: CardContext): Desc {
+  const progress = readProgress(store());
+  return card(
+    "drill",
+    h(
+      "p",
+      { key: "ask", class: "muted small" },
+      "Four arguments, each faded a little further: the worked example, then the boundary terms " +
+        "masked, then the contour as well, then a blank plane and the pen.",
+    ),
+    h(
+      "ul",
+      { key: "tasks", class: "pieces2" },
+      ...DRILL_TASKS.map((task) => {
+        const stage = stageFor(progress, task.id);
+        return h(
+          "li",
+          { key: task.id, class: "pickRow" },
+          h("span", { key: "n", class: "pieceName" }, ...mathText(task.label, `tl${task.id}`)),
+          h("span", { key: "r", class: "tag" }, `rung ${stage} of ${LAST_STAGE}`),
+          h(
+            "button",
+            {
+              key: "go",
+              // `mathPlain`, for the reason the rung-ii selects give: the label is `∫ cos x/(x²+1) dx`
+              // in the `$…$` convention, and an accessible name carrying raw LaTeX is read aloud in
+              // the app's own source syntax.
+              "aria-label": `open ${mathPlain(task.label)} at rung ${stage}`,
+              onClick: () => ctx.actions.applyState(taskState(task, stage)),
+            },
+            "Open",
+          ),
+        );
+      }),
+    ),
+  );
 }
 
 /** The rung's own question and controls. Exactly one of the four, by construction. */

@@ -312,17 +312,27 @@ export function mountShell2(root: Element): Shell2Handle {
     },
 
     setMode: (mode) => {
-      // Whichever field the derivation reads, and only that one. Leaving Drill means clearing the
-      // rung; entering it without a task is not a mode this action can express, so a reader gets
-      // there through a drill card or a link (step 1.7's drill panel owns the task choice).
+      // Whichever field the derivation reads, and only that one.
+      //
+      // **Pressing Drill with no rung open OFFERS THE TASKS**, and it used to refuse — with the
+      // sentence "Choose a drill task from the panel", about a panel nothing built. A refusal naming
+      // an action the app does not offer is the defect M4.7d found in the ledger's own repair line,
+      // and here it was the only door: `DRILL_TASKS` was reachable from a permalink and from nowhere
+      // a reader could press. The chooser is a SESSION flag rather than a mode, because a reader who
+      // is picking a task is not in the drill yet — `shellMode` says Drill when a RUNG is open — and
+      // picking one is an `applyState`, which puts the list away through `resetTransient`.
       if (mode === "drill") {
         if (state.drill === null) {
-          say("Choose a drill task from the panel.", "⚠");
+          session.drillPicker = true;
+          render2();
           return;
         }
         commit({ ...state, workedExample: false }, "edit");
         return;
       }
+      // And leaving clears the chooser as well as the rung, so `Explore` means the same thing from
+      // both — a list left standing after the reader said Explore is a menu outliving its mode.
+      session.drillPicker = false;
       commit({ ...state, drill: null, workedExample: mode === "worked" }, "edit");
     },
     setRail: (side, folded) => {

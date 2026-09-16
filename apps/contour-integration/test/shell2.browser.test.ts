@@ -10,7 +10,7 @@
 // It also holds the one guard the node sweep could not kill: the portrait's program is relinked when
 // the INTEGRAND changes and not when the camera moves. M5.1's review found the old shell relinking
 // on every frame of a contour drag, which is invisible to every test that does not count.
-import { expect, describe, it, vi } from "vitest";
+import { afterEach, expect, describe, it, vi } from "vitest";
 
 import { mountShell2 } from "../src/shell2/app.js";
 import { GLStage } from "../src/ui/stage/glStage.js";
@@ -24,20 +24,46 @@ import "../src/ui/app.css";
 import "../src/ui/theme.css";
 import "../src/ui/shell2.css";
 
+/**
+ * Every shell this file mounts, destroyed after each test — and the address bar put back.
+ *
+ * **Not tidiness: three tests in this file went red without it**, each passing alone and in every
+ * subset, all three failing in a full run. The cause is the permalink, and it took measuring to see
+ * rather than guessing: a shell writes `#vs=` 250 ms after its last change, and the NEXT shell reads
+ * `window.location.hash` at boot — one document, one address bar, so a mount inherits whatever the
+ * previous test left there. The pole test ends by applying `z^2` as its own control, which is
+ * entire; the mount after it therefore booted with no pole to ring, no contour to stroke and no
+ * accumulation to trail, and all three read 0 ink.
+ *
+ * `destroy()` cancels the pending write and the observer; clearing the hash covers the tests that
+ * settle long enough to have written one already. (The first guess was WebGL contexts accumulating
+ * past Chromium's cap — twenty undestroyed mounts in one test, and ten across ten tests, all drew
+ * 10,963 ink pixels apiece, so that was simply wrong.)
+ */
+const mounted: ReturnType<typeof mountShell2>[] = [];
+afterEach(() => {
+  for (const app of mounted.splice(0)) app.destroy();
+  if (window.location.hash !== "") window.history.replaceState(null, "", window.location.pathname);
+});
+
 function mount(): { root: HTMLElement; app: ReturnType<typeof mountShell2> } {
   const root = document.createElement("div");
   // The app's grid needs a box with a size; the browser harness's default body has none, and M7.2
   // spent a slice discovering that a test aimed at an unsized stage is aimed at an artefact.
   root.style.cssText = "position:fixed;inset:0;width:1280px;height:900px";
   document.body.replaceChildren(root);
-  return { root, app: mountShell2(root) };
+  const app = mountShell2(root);
+  mounted.push(app);
+  return { root, app };
 }
 
 /** Mount straight into the body, so the shell's own sizing is what is measured. */
 function mountInBody(): ReturnType<typeof mountShell2> {
   const root = document.createElement("div");
   document.body.replaceChildren(root);
-  return mountShell2(root);
+  const app = mountShell2(root);
+  mounted.push(app);
+  return app;
 }
 
 /** Wait for the rAF coalescer to have drawn. */
@@ -543,5 +569,81 @@ describe("the accumulator strip, wired", () => {
     const quarter = trail();
     expect(quarter, "the strip ignored the scrub").toBeLessThan(full);
     expect(quarter, "the strip drew nothing at a quarter of the way along").toBeGreaterThan(0);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+// The drill's mask, on a real canvas — M8 step 1.7.
+//
+// `test/shell2Drill.test.ts` pins everything the mask does to the DOM: the KILL rows leave the
+// ledger, the Result card goes, the derivation folds, and all of it comes back. It cannot pin the
+// other half, because jsdom has no canvas — and at rung iii the CONTOUR must leave the stage too,
+// since the question there is which contour to close over and the record's own contour is that
+// answer, drawn.
+//
+// **The old shell's first implementation got this wrong in a way only a browser could find**
+// (M7.3): `drawContour` begins with `clearRect`, so masking by SKIPPING the call left the previous
+// frame's contour standing — the ledger hidden, the value hidden, and the answer still on screen.
+// The port to `stageView.ts` draws an empty piece list, and this is the guard. `test/drillInk.
+// browser.test.ts` is the same claim against `src/shell/`, and goes with it at step 1.12.
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+
+describe("the drill's mask, on the stage", () => {
+  it("takes the CONTOUR off at rung iii, and the phase portrait stays", async () => {
+    const { root, app } = mount();
+    const ink = root.querySelector<HTMLCanvasElement>("canvas.ink");
+    const gl = root.querySelector<HTMLCanvasElement>("canvas.gl");
+    if (ink === null || gl === null) throw new Error("no stage");
+    await drawn();
+
+    const lit = (): number => {
+      const ctx = ink.getContext("2d");
+      if (ctx === null) throw new Error("no 2d context");
+      const { data } = ctx.getImageData(0, 0, ink.width, ink.height);
+      let n = 0;
+      for (let i = 3; i < data.length; i += 4) if (data[i] > 24) n++;
+      return n;
+    };
+
+    const open = (stage: 1 | 2 | 3): void => {
+      app.applyState({
+        ...app.currentState(),
+        mode: "gallery",
+        record: "jordan-cosine-kernel",
+        fixture: 0,
+        drill: { task: "oscillatory", stage },
+      });
+    };
+
+    open(1);
+    await drawn();
+    const worked = lit();
+    expect(worked, "rung i drew no contour at all").toBeGreaterThan(1000);
+
+    // **Rung ii leaves the contour alone**, and that is the point of the rung: the contour is GIVEN
+    // and the question is what each piece is for. Equality rather than "roughly": the same state
+    // draws the same ink, so a difference here would mean the mask had reached a rung it must not.
+    open(2);
+    await drawn();
+    expect(lit(), "rung ii moved the contour, which is given at that rung").toBe(worked);
+
+    open(3);
+    await drawn();
+    const masked = lit();
+    // The AXES remain — they are the plane, not the argument — so the floor is not zero. It is a
+    // small fraction of the contour's own ink, and asserting a fraction rather than a number keeps
+    // the test honest about what it can know.
+    expect(masked, "the contour survived the rung that is asking which contour to draw").toBeLessThan(
+      worked / 4,
+    );
+    expect(masked, "the axes went too, so the reader has no plane to answer in").toBeGreaterThan(0);
+
+    // And the portrait is untouched: the INTEGRAND is the question, and hiding it would leave the
+    // rung asking which contour closes an integral the reader cannot see.
+    const glCtx = gl.getContext("webgl2");
+    expect(glCtx, "no WebGL2 — this whole suite is about the half jsdom cannot reach").not.toBeNull();
+    const px = new Uint8Array(4);
+    glCtx?.readPixels(Math.floor(gl.width / 4), Math.floor(gl.height / 4), 1, 1, glCtx.RGBA, glCtx.UNSIGNED_BYTE, px);
+    expect(px[3], "the phase portrait went with the contour").toBeGreaterThan(0);
   });
 });

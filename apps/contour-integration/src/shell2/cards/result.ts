@@ -21,6 +21,7 @@ import type { ContourIntegral } from "../../engine/contour/integrate.js";
 import type { ResidueTheoremResult } from "../../engine/residueTheorem.js";
 import type { PoleReport } from "../../kernel/poles.js";
 import { constraintLabel } from "../../engine/vocabulary.js";
+import { drillMask } from "../drillPanel.js";
 import { fmtApprox, fmtNum } from "../format.js";
 import { h, type Child, type Desc } from "../dom.js";
 import { math, mathText } from "../math.js";
@@ -93,6 +94,14 @@ function factsOf(ctx: CardContext): Facts {
 export const resultCard: Card = (ctx) => {
   const { ledger, integral, theorem, poles, solved } = factsOf(ctx);
   if (ledger === null || integral === null) return card("result", nothing("There is no integrand."));
+
+  // **The drill's mask, read here rather than re-derived.** `drillMask` is the one decision (its own
+  // module records why); this card is one of its three readers, and the rung it hides most of is the
+  // one whose question is "which contour?" — where the value and the whole ledger ARE the answer.
+  const mask = drillMask(ctx);
+  if (mask === "argument") {
+    return card("result", nothing("Masked: the drill is asking which contour closes this integral."));
+  }
 
   const failed = ledger.rows.some((r) => r.status === "failed");
   const refused = integralRefusal(integral, ledger);
@@ -171,7 +180,11 @@ export const resultCard: Card = (ctx) => {
   }
 
   // ── the hypotheses ────────────────────────────────────────────────────────────────────────
-  const rows = ledger.rows.map((row, i) =>
+  // At rung ii the KILL column is the reader's to supply, so its rows come off the table — which is
+  // exactly what the drill's own questions ask for, one per piece. The rest of the ledger stays: the
+  // rung is about what each piece is FOR, not about whether the hypotheses hold.
+  const shown = mask === "kill" ? ledger.rows.filter((row) => row.constraint !== "KILL") : ledger.rows;
+  const rows = shown.map((row, i) =>
     h(
       "li",
       { key: `row:${i}`, class: `ledgerRow ${row.status}` },
@@ -195,8 +208,8 @@ export const resultCard: Card = (ctx) => {
     // of the other. Step 0.2's decision is that the reader's words are decided in one file; a card
     // that spends one of them on a wider set is the same drift from the other end.
     failed
-      ? `What was checked — ${ledger.rows.filter((r) => r.status === "failed").length} of ${ledger.rows.length} failed`
-      : `What was checked — ${ledger.rows.length} rows`,
+      ? `What was checked — ${shown.filter((r) => r.status === "failed").length} of ${shown.length} failed`
+      : `What was checked — ${shown.length} rows`,
     h("ul", { key: "l", class: "ledger2" }, ...rows),
   );
 
