@@ -181,8 +181,13 @@ about it passed.
 
 ## What the port found
 
-Nine defects in shell2 and one in the browser harness, all found by writing a counterpart or by
-opening a state a test cannot reach — none by reading the code.
+Twelve defects in shell2, one in a renderer three surfaces share, and one in the browser harness —
+all found by writing a counterpart, or by opening a state a test cannot reach, or by measuring a
+claim a plan made. None by reading the code.
+
+The first ten are step 1.7's; 11 to 13 were found while building 1.8 and are recorded here because
+they were found the same way — and because two of them had been true for several steps with a green
+suite over them.
 
 1. **The pen's card was dead in the live app.** `penStart` / `penStop` / `penBack` went through the
    controller, whose `redraw` was `scheduleDraw` — the stage and nothing else. Pressing `Draw` gave a
@@ -233,3 +238,22 @@ opening a state a test cannot reach — none by reading the code.
     half-height — a sane magnification pointed at nothing. The test firing exactly that event is
     called *a flick cannot lose the plane* and asserted the half-height alone. `syncHash` then
     minted a permalink to that camera, and the next mount in the same document opened it.
+11. **The new shell drew NO phase portrait for any gallery record**, and had not since the stage was
+    built at step 1.3. `stageView.ts` read `resolution.kind === "plain" ? resolution.ast : null`, so
+    `gallery` AND `declared` both fell to `stage.clear()` — all 28 records showed a contour over a
+    flat ground, and so did the sandbox whenever a branch factor was declared, which is M5.1c's whole
+    point. Measured: a record's canvas carried **1** distinct colour, `15,17,21`, against the
+    sandbox's 3,556. **It survived five steps of browser passes because of an assertion in this
+    table's own step**: the rung-iii test read the pixel's ALPHA, and a cleared canvas is opaque, so
+    `px[3] > 0` was true of a picture of nothing. Found by the read-only measurement for the A6 cold
+    start, which went looking for a blast radius and found that *"the app opens on A6"* would have
+    shipped a blank backdrop.
+12. **`drawContour` took a theme and ignored it for the piece strokes**, reading the module-level
+    `PIECE_COLOURS` — `DARK_INK.pieces` — two lines from a `t.refusedInk` that does read the theme.
+    On the thumbnails' light ground the stage's hues measure **1.61:1 to 2.27:1**, where the light
+    palette's own darkened hues give 5.11:1 to 7.22:1; WCAG AA for graphical objects is 3:1, so the
+    old palette failed on all six hues and the new one clears on all six. `inkTheme.ts`'s own comment
+    for `LIGHT_INK` said it had been darkened for exactly this reason.
+13. **Three functions that say "sandbox" meant "whatever the app boots into"** — the ladder's
+    wrong-way cell and the drill's rungs iii and iv all spread `defaultState`. Production behaviour,
+    31 of the cold start's 121 failures, and unmentioned by the plan.
