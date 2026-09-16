@@ -8,7 +8,13 @@
 
 import "./styles/main.css";
 import type { Vec2 } from "./arrays";
-import { formatComplex, parseComplex, truncateComplex, type Complex } from "./complex";
+import {
+  formatComplex,
+  formatComplexDisplay,
+  parseComplex,
+  truncateComplex,
+  type Complex,
+} from "./complex";
 import { PROJECTIONS, type ProjectionMode } from "./render/projection";
 import { getMaxTextureSize, downloadCanvas, copyCanvasToClipboard, ensurePngName } from "./hiResExport";
 import { PlotView } from "./render/plotView";
@@ -19,6 +25,8 @@ import { inspect, findNucleus, findMisiurewicz, type InspectResult } from "./ren
 import { matingVerdict } from "./render/mating";
 import { buildInspectorRows } from "./ui/inspectorRows";
 import { pushEscapeLayer } from "./ui/escapeStack";
+import { mountSidebarTabs, type SidebarTabs } from "./ui/sidebarTabs";
+import { renderActiveSettings } from "./ui/activeSettings";
 import { describeLevel } from "@cas/rigor";
 import { CANONICAL_MATINGS, mateBulbWithBasilica, mateBulbs, mateableLimbs } from "./render/matingEngine";
 import { computeOrbit, orbitAndClassify, type Annotation } from "./render/overlay";
@@ -69,7 +77,7 @@ import {
 import { fToRational } from "@cas/expr/rational";
 import { computeJuliaProperties, type Extent } from "./render/juliaProperties";
 import { JuliaMetricsClient } from "./render/juliaMetricsClient";
-import { polynomialCoeffs, polynomialConnectivity } from "./render/critical";
+import { polynomialCoeffs, polynomialConnectivity, quadraticCriticalBounded } from "./render/critical";
 import { drawOrbitPreview, renderJuliaPreview } from "./render/orbitPreview";
 import type { Node as ExprNode } from "@cas/expr/ast";
 import { dynamicRay, parameterRay, parseAngle, rayDepthForZoom } from "./render/rays";
@@ -255,10 +263,7 @@ const TRAPS: Record<string, number> = {
 };
 
 /** Format a plot coordinate as a complex number for the hover readout. */
-function formatCoord([x, y]: Vec2): string {
-  const f = (v: number): string => Number(v.toPrecision(6)).toString();
-  return `${f(x)} ${y >= 0 ? "+" : "-"} ${f(Math.abs(y))}i`;
-}
+const formatCoord = ([x, y]: Vec2): string => formatComplexDisplay([x, y]);
 
 /** Build an `onHover` handler that writes the coordinate into a readout element. */
 function hoverReadout(elementId: string): (coord: Vec2 | null) => void {
@@ -354,7 +359,9 @@ function updateMatingVerdict(): void {
 function showInspect(info: InspectResult, point: Vec2, plane: FractType): void {
   const pt = truncateComplex([point[0], point[1]]);
   byId("inspector-title").textContent =
-    plane === "param" ? `Parameter c = ${formatComplex(pt)}` : `Orbit of z₀ = ${formatComplex(pt)}`;
+    plane === "param"
+      ? `Parameter c = ${formatComplexDisplay(pt)}`
+      : `Orbit of z\u2080 = ${formatComplexDisplay(pt)}`;
 
   const body = byId("inspector-body");
   body.replaceChildren();
@@ -385,6 +392,16 @@ function showInspect(info: InspectResult, point: Vec2, plane: FractType): void {
     dd.textContent = value;
     body.append(dt, dd);
   }
+  // The inspector's ACTION controls — the Siegel jump, the Misiurewicz finder, the note pin — act on
+  // the inspected point, so they mean nothing before there is one. They used to sit open from first
+  // load under an empty "Point inspector" heading, which is most of why the pane opened as tall as
+  // it did: three rows of inputs for a point nobody had chosen. (WP10/U4, review 2026-09-16.)
+  for (const id of ["inspector-siegel", "inspector-misiur", "inspector-note"]) {
+    const el = document.getElementById(id);
+    if (el) el.hidden = false;
+  }
+  const hint = document.getElementById("inspector-hint");
+  if (hint) hint.hidden = true;
   byId("inspector").hidden = false;
 }
 
@@ -508,6 +525,14 @@ function setupTheme(): void {
  * interactive — so it closes via the FAB, the sheet header's ✕, or Escape. Entirely inert on
  * desktop, where the FAB/handle are `display:none` and the pane renders in normal flow / the grid.
  */
+/**
+ * Hide / show the mobile controls FAB. σ is a full takeover of the workspace, so while it is up the
+ * floating button opened a pane that was behind it — a control that did nothing, on the one layout
+ * where screen space is scarcest. Assigned by {@link setupMobileSheet}. (WP10/U4, review
+ * 2026-09-16.)
+ */
+let setSheetAvailable: (on: boolean) => void = () => {};
+
 function setupMobileSheet(): void {
   const fab = byId<HTMLButtonElement>("controls-fab");
   const pane = byId<HTMLElement>("controls-pane");
@@ -521,6 +546,10 @@ function setupMobileSheet(): void {
   };
   fab.addEventListener("click", () => setOpen(!pane.classList.contains("is-open")));
   closeBtn.addEventListener("click", () => setOpen(false));
+  setSheetAvailable = (on: boolean): void => {
+    fab.hidden = !on;
+    if (!on) setOpen(false); // …and shut it, rather than leaving it open behind the takeover
+  };
   // Widening past the mobile breakpoint clears the sheet state so desktop never shows it half-open.
   window.matchMedia("(max-width: 720px)").addEventListener("change", (e) => {
     if (!e.matches) setOpen(false);
@@ -994,6 +1023,12 @@ export function init(): void {
   // Use-case profile picker: refreshes the "Custom…" label when the live controls diverge from the
   // applied profile. Assigned by setupProfiles(); called from the control-change handlers.
   let refreshProfileLabel: () => void = () => {};
+  /** Redraw both colour legends; assigned once the legend elements exist (see `legendSetName`). */
+  let refreshLegends: () => void = () => {};
+  /** The five-tab sidebar, once mounted; `reveal` is what the active-settings strip presses. */
+  let sidebarTabs: SidebarTabs | null = null;
+  /** Re-read the controls and redraw the active-settings strip. */
+  let refreshActiveSettings: () => void = () => {};
   // Adopt a profile NAME carried by a shared view / saved state, so the picker shows it (the settings
   // themselves are reproduced by the rest of the state). Assigned by setupProfiles().
   let adoptProfile: (name: string | undefined) => void = () => {};
@@ -1551,16 +1586,7 @@ export function init(): void {
   const dynCValue = byId("dyn-c-value");
   const paramCValue = byId("param-c-value");
   /** Format a complex literal (`-0.7-i*0.4`) as a clean `a + bi` for display. */
-  function prettyComplex(s: string): string {
-    const f = (x: number): string => Number.parseFloat(x.toPrecision(4)).toString();
-    const [re, im] = parseComplex(s);
-    const r = f(re);
-    if (im === 0) return r;
-    const sign = im < 0 ? "-" : "+";
-    const imStr = Math.abs(im) === 1 ? "i" : `${f(Math.abs(im))}i`;
-    if (re === 0) return `${im < 0 ? "-" : ""}${imStr}`;
-    return `${r} ${sign} ${imStr}`;
-  }
+  const prettyComplex = (s: string): string => formatComplexDisplay(parseComplex(s));
   /**
    * The seven panels whose whole subject is the quadratic family z²+c — external angles, angles of
    * a point, component data, the Yoccoz puzzle, the lamination, the symbolic console and the mating
@@ -2449,6 +2475,12 @@ export function init(): void {
   function syncDynamicalC(): void {
     dynamicalView.plot.c = formatComplex(parameterView.plot.z0);
     updateDynCaption();
+    // A new c can change the Julia set's CONNECTIVITY, and with it the swatch's name. Through the
+    // late-bound hook rather than `updateLegends` directly: this runs during init, before the
+    // legend elements exist, and a direct call is a temporal-dead-zone throw inside the fatal
+    // boundary — i.e. the whole app reports "WebGL2 unavailable". Same idiom as
+    // `refreshProfileLabel` and `openGlossary`.
+    refreshLegends();
     dynamicalView.plot.scheduleRender();
   }
   syncDynamicalC();
@@ -2517,6 +2549,7 @@ export function init(): void {
     updateYoccoz(); // …and the puzzle / lamination panels' own gating
     updateLamination();
     updateQuadraticPanels(); // last — it re-enables only what it disabled (WP8/U7)
+    refreshActiveSettings();
     setDirty(false);
     updateViewChips();
     announce(`Changes applied. Dynamical plane for c = ${dynCValue.textContent}.`);
@@ -2558,6 +2591,7 @@ export function init(): void {
     updateYoccoz();
     updateLamination();
     updateQuadraticPanels(); // last — it re-enables only what it disabled (WP8/U7)
+    refreshActiveSettings();
     setDirty(false);
     updateViewChips();
     scheduleRecord();
@@ -2753,11 +2787,27 @@ export function init(): void {
     /* localStorage unavailable (private mode) — default on */
   }
 
-  /** The interior's name on a plane: the Mandelbrot set (z²+c parameter plane), the filled Julia set
-   *  (dynamical plane), or a generic "set" for other parameter families. */
+  /**
+   * The interior's name on a plane: the Mandelbrot set (z²+c parameter plane), the filled Julia set
+   * (dynamical plane), or a generic "in the set" for other parameter families.
+   *
+   * **A DISCONNECTED Julia set has empty interior**, so "filled Julia set" names something that is
+   * not on screen: the black pixels are "did not escape within the iteration cap", which is a
+   * statement about the cap. The old default parameter was exactly such a c, so the app opened
+   * labelling a Cantor dust as a filled set — and a reader can always drag to one, which is why
+   * this is fixed independently of the default. Decided by the same predicate the lamination and
+   * puzzle overlays use (`quadraticCriticalBounded`), and only where it applies: for a general f
+   * the Fatou–Julia criterion needs every critical orbit, so the wording stays unqualified there.
+   * (WP10/U3, review 2026-09-16.)
+   */
   function legendSetName(view: PlotView, plane: "param" | "dyn"): string {
-    if (plane === "dyn") return "filled Julia set";
-    return isQuadraticFamily(view.plot) ? "Mandelbrot set" : "the set";
+    if (plane === "dyn") {
+      const quadratic = isQuadraticFamily(view.plot);
+      return quadratic && !quadraticCriticalBounded(view.plot.cValue)
+        ? "Julia set (no interior)"
+        : "filled Julia set";
+    }
+    return isQuadraticFamily(view.plot) ? "Mandelbrot set" : "in the set";
   }
 
   /** Redraw both plot legends for the current colouring (or clear them when the toggle is off; an
@@ -2780,6 +2830,7 @@ export function init(): void {
     }
   }
 
+  refreshLegends = updateLegends;
   legendToggle.checked = legendEnabled;
   legendToggle.addEventListener("change", () => {
     legendEnabled = legendToggle.checked;
@@ -3179,6 +3230,7 @@ export function init(): void {
     // …then the sphere, in the same order the reset uses: the projection puts each plot back at its
     // linear view on the way out, so setting the sphere first would be undone by it.
     applySphere();
+    refreshActiveSettings(); // a shared view writes checkboxes without firing `change`
     // Restore pinned annotations. Present-only, like `_grad` / `_z0` / `_profile`: a state that does
     // not MENTION notes leaves them alone (decodeNotes returns null), and the validation + hostile-link
     // caps live with the codec in state/notes.ts. This used to clear them unconditionally — invisible
@@ -3203,6 +3255,41 @@ export function init(): void {
     } else if (schwarzSession) {
       exitSchwarzView();
     }
+  }
+
+  /**
+   * Move the parameter plane's white point to `c` and bring everything that follows from it into
+   * step: the coupled dynamical parameter, the `c` input, the caption, the legend, the announcement
+   * and the inspector report at the new parameter.
+   *
+   * FIVE copies of this block — the nucleus finder, the internal-address console, the angle
+   * navigator, the mating renderer and the Misiurewicz finder — had drifted into four different
+   * spellings, and none of them refreshed the legend, so every one of them could leave "filled Julia
+   * set" over a parameter that had just become a dust. That is the shape of a defect duplication
+   * produces: the fix goes in wherever it is noticed, and the other four keep the bug.
+   * (WP10/U11, review 2026-09-16.)
+   */
+  function snapCAndReinspect(
+    c: Vec2,
+    opts: { announce?: boolean; reinspect?: boolean } = {},
+  ): void {
+    parameterView.plot.moveZ0(c);
+    parameterView.refreshOverlay();
+    dynamicalView.plot.c = formatComplex(c);
+    setCInput(c);
+    updateDynCaption();
+    refreshLegends(); // a new c can change the set's connectivity (WP10/U3)
+    if (opts.announce !== false) announce(`Parameter c = ${dynCValue.textContent}`);
+    if (opts.reinspect === false) return;
+    const info = inspect(
+      parameterView.plot.fAst,
+      parameterView.plot.escAst,
+      "param",
+      parameterView.plot.criticalPoint,
+      c,
+      parameterView.plot.paramA,
+    );
+    handleInspect(info, c, "param");
   }
 
   /** Serialize the current view into the URL hash and copy a shareable link. */
@@ -3241,6 +3328,8 @@ export function init(): void {
   // The active σ session — the reconstruction inputs a redraw needs at the current view. null ⇔ not shown.
   /** Release for σ's escape-stack layer, held for as long as a σ session is live. */
   let releaseSchwarzEscape: (() => void) | null = null;
+  /** The builder values the live σ view belongs to; re-entering the same map keeps the view. */
+  let schwarzPhiKey: string | null = null;
 
   let schwarzSession:
     | {
@@ -4164,6 +4253,15 @@ export function init(): void {
         console.warn("schwarzGL setPhi failed; falling back to the CPU field:", err);
       }
     }
+    // **Keep the σ window when the map has not changed.** Leaving σ and coming back used to throw
+    // away the centre, the zoom, the coordinate view and the sphere camera every time, so a reader
+    // who stepped out to check the Julia set — which is the whole point of σ being a peer view —
+    // paid for it by navigating back to where they had been. The view is discarded only when the
+    // map that the view is OF has changed, keyed by the builder's own values, which is the same
+    // rule the stage's rebuild guard uses. (WP10/U6, review 2026-09-16.)
+    const phiKey = JSON.stringify([phi.family ?? "unbounded", phi.c, phi.F, phi.w0, phi.branches]);
+    const sameMap = phiKey === schwarzPhiKey;
+    schwarzPhiKey = phiKey;
     schwarzSession = { engine, poly, phi, boundedOmega, mode };
     // σ is an Escape layer like any other (WP8/S5). Registering here rather than in the key handler
     // is what retires the hand-written "defer to an open modal" special case below: the glossary
@@ -4171,17 +4269,19 @@ export function init(): void {
     // Idempotent — re-generating φ without leaving σ must not stack a second layer.
     releaseSchwarzEscape?.();
     releaseSchwarzEscape = pushEscapeLayer(() => exitSchwarzView());
-    // A new σ starts on the w-plane, with every coordinate view at its default: both flat windows (F2b) and
-    // the sphere camera (F2d).
-    schwarzViewMode = "plane";
-    schwarzViews.plane = { ...SCHWARZ_DEFAULT_VIEW };
-    schwarzViews.z = { ...SCHWARZ_ZDISK_DEFAULT_VIEW };
-    schwarzView = { ...SCHWARZ_DEFAULT_VIEW };
-    schwarzSphereRot = SCHWARZ_SPHERE_DEFAULT_ROT;
-    schwarzSphereZoom = 1;
+    // A NEW σ starts on the w-plane, with every coordinate view at its default: both flat windows
+    // (F2b) and the sphere camera (F2d). Re-entering the SAME σ keeps where the reader was.
+    if (!sameMap) {
+      schwarzViewMode = "plane";
+      schwarzViews.plane = { ...SCHWARZ_DEFAULT_VIEW };
+      schwarzViews.z = { ...SCHWARZ_ZDISK_DEFAULT_VIEW };
+      schwarzView = { ...SCHWARZ_DEFAULT_VIEW };
+      schwarzSphereRot = SCHWARZ_SPHERE_DEFAULT_ROT;
+      schwarzSphereZoom = 1;
+    }
     syncSchwarzViewModeSeg();
-    schwarzInspect = null; // a new φ ⇒ any previous orbit is stale
-    schwarzHover = null;
+    if (!sameMap) schwarzInspect = null; // a new φ ⇒ any previous orbit is stale
+    schwarzHover = null; // the hover preview is about the cursor, which is not where it was
     schwarzPreimageTree = null; // a new φ ⇒ any previous tiling tree is stale
     schwarzLimitSetCloud = null; // …and any previous limit-set cloud
     schwarzLimitDim = NaN;
@@ -4201,7 +4301,8 @@ export function init(): void {
     renderSchwarzExplicitForm(); // F4i: show the generated map's closed form
     refreshSchwarzSingularities(); // F4h: find the branch points + σ-poles of the new map
     renderSchwarzLegendChip(); // reflect the current colormap + scale in the legend
-    document.querySelector(".workspace")?.classList.add("schwarz-active"); // enter σ mode → show the pane
+    document.querySelector(".workspace")?.classList.add("schwarz-active");
+    setSheetAvailable(false); // σ takes the whole workspace — the controls sheet is behind it // enter σ mode → show the pane
     try {
       paintSchwarz();
     } catch (err) {
@@ -4519,6 +4620,7 @@ export function init(): void {
       schwarzRaf = 0;
     }
     document.querySelector(".workspace")?.classList.remove("schwarz-active");
+    setSheetAvailable(true);
     // Clear the σ error box on EVERY exit. Only the ↩ button used to do it, so leaving by Escape —
     // or by importing a non-σ map — left a stale "could not build φ" over the pane, waiting to
     // reappear the next time σ was opened. (WP8/S6.)
@@ -4879,6 +4981,7 @@ export function init(): void {
       // pane). Show the pane first regardless, so a validation error lands on the now-visible error line.
       const generate = (): void => {
         document.querySelector(".workspace")?.classList.add("schwarz-active");
+    setSheetAvailable(false); // σ takes the whole workspace — the controls sheet is behind it
         try {
           const family = familySel.value === "bounded" ? "bounded" : "unbounded";
           renderSchwarzFromPhi(buildSchwarzPhi({ family, c: cIn.value, F: fIn.value, w0: w0In.value, poles: polesIn.value }));
@@ -5365,15 +5468,83 @@ export function init(): void {
     return true;
   }
 
-  /** Prompt the user to paste an interchange link / JSON, then import it. */
-  function promptImportInterchange(): void {
-    const input = window.prompt(
-      "Paste an interchange deep link or JSON (e.g. from the Quadrature Domains app's Export map):",
-    );
-    if (input && !importInterchange(input)) {
-      showToast("That is not a valid @cas/interchange link or JSON.", "info");
+  /**
+   * Open the import dialog: paste an interchange link / JSON, press Load.
+   *
+   * It replaces a `window.prompt`, which has no room to say what a valid payload looks like or
+   * where one comes from, cannot be styled or made accessible, is blocked outright by some
+   * browsers' pop-up rules, and throws away a long pasted link on a stray Escape with nothing to
+   * try again from. The dialog keeps the text when the parse fails and says so in place, so a
+   * mis-copied link is one edit rather than one re-paste. It goes through `withModalFocus`, so it
+   * traps Tab, restores focus and joins the escape stack like every other overlay. (WP10, review
+   * 2026-09-16.)
+   */
+  let openImportDialog: () => void = () => {};
+
+  function setupImportDialog(): void {
+    const overlay = document.getElementById("import-dialog");
+    const text = document.getElementById("import-dialog-text");
+    const error = document.getElementById("import-dialog-error");
+    const load = document.getElementById("import-dialog-load");
+    const cancel = document.getElementById("import-dialog-cancel");
+    const close = document.getElementById("import-dialog-close");
+    if (
+      !(overlay instanceof HTMLElement) ||
+      !(text instanceof HTMLTextAreaElement) ||
+      !(error instanceof HTMLElement) ||
+      !load ||
+      !cancel ||
+      !close
+    ) {
+      return;
     }
+    const setError = (msg: string | null): void => {
+      error.textContent = msg ?? "";
+      error.hidden = msg === null;
+    };
+    const modal = withModalFocus(
+      overlay,
+      text,
+      () => {
+        overlay.hidden = false;
+      },
+      () => {
+        overlay.hidden = true;
+      },
+    );
+    openImportDialog = (): void => {
+      setError(null);
+      modal.open();
+    };
+    const attempt = (): void => {
+      const raw = text.value.trim();
+      if (raw === "") {
+        setError("Paste a link or its JSON first.");
+        return;
+      }
+      if (!importInterchange(raw)) {
+        // The text STAYS, so a mis-copied link is one edit rather than one re-paste.
+        setError("That is not a valid @cas/interchange link or JSON.");
+        return;
+      }
+      text.value = "";
+      modal.close();
+    };
+    load.addEventListener("click", attempt);
+    cancel.addEventListener("click", () => modal.close());
+    close.addEventListener("click", () => modal.close());
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) modal.close();
+    });
+    // Ctrl/Cmd+Enter loads, the same modifier the formula box uses for a multi-line field.
+    text.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        attempt();
+      }
+    });
   }
+  setupImportDialog();
 
   /**
    * The hash this session last read or wrote, so `hashchange` can tell a reader pasting a new link
@@ -5890,7 +6061,15 @@ export function init(): void {
   applyColoring();
   updateDerivativeGating();
   byId("inspector-close").addEventListener("click", () => {
+    // Back to the hint: closing it means there is no inspected point again, and the actions act on
+    // one. (Re-opening is one click on either plot.)
     byId("inspector").hidden = true;
+    for (const id of ["inspector-siegel", "inspector-misiur", "inspector-note"]) {
+      const el = document.getElementById(id);
+      if (el) el.hidden = true;
+    }
+    const hint = document.getElementById("inspector-hint");
+    if (hint) hint.hidden = false;
   });
   byId("inspector-nucleus").addEventListener("click", () => {
     if (!lastNucleusSeed) return;
@@ -5907,23 +6086,8 @@ export function init(): void {
       return;
     }
     // Snap the parameter white point (c) to the exact component centre; keep the view.
-    parameterView.plot.moveZ0(nucleus);
-    parameterView.refreshOverlay();
-    // Mirror the parameter→dynamical coupling a normal point move performs.
-    dynamicalView.plot.c = formatComplex(nucleus);
-    setCInput(nucleus);
-    updateDynCaption();
-    announce(`Parameter c = ${dynCValue.textContent}`);
-    // Re-inspect at the centre so the panel updates (period unchanged, |λ| → 0).
-    const info = inspect(
-      parameterView.plot.fAst,
-      parameterView.plot.escAst,
-      "param",
-      parameterView.plot.criticalPoint,
-      nucleus,
-      parameterView.plot.paramA,
-    );
-    handleInspect(info, nucleus, "param");
+    // …and re-inspect there, so the panel updates (period unchanged, |λ| → 0).
+    snapCAndReinspect(nucleus);
     scheduleRecord();
   });
   byId("spider-go").addEventListener("click", () => {
@@ -5978,11 +6142,7 @@ export function init(): void {
       landDesc = `the Misiurewicz point c = ${fmtPt(landing.point)}`;
     }
 
-    parameterView.plot.moveZ0(target);
-    parameterView.refreshOverlay();
-    dynamicalView.plot.c = formatComplex(target);
-    setCInput(target);
-    updateDynCaption();
+    snapCAndReinspect(target, { announce: false, reinspect: false });
 
     // Where does the same angle's ray land on the Julia set we've navigated to?
     const dynLand = dynamicalLanding(pn, qn, target);
@@ -6133,15 +6293,8 @@ export function init(): void {
       const nuc = findNucleus(fAst, crit, land.period, land.seed, pa);
       if (nuc) c = [nuc[0], nuc[1]];
     }
-    parameterView.plot.moveZ0(c);
-    parameterView.refreshOverlay();
-    dynamicalView.plot.c = formatComplex(c);
-    setCInput(c);
-    updateDynCaption();
-    announce(`Parameter c = ${dynCValue.textContent}`);
+    snapCAndReinspect(c);
     showToast(`Internal address ${res.address.join("-")} → period-${res.period} centre.`, "info");
-    const info = inspect(fAst, parameterView.plot.escAst, "param", crit, c, pa);
-    handleInspect(info, c, "param");
     scheduleRecord();
   });
   // Projection view modes: remap both planes (single precision). Save each plot's linear view on
@@ -6315,21 +6468,7 @@ export function init(): void {
     const lx = Math.cos(ang);
     const ly = Math.sin(ang);
     const c: [number, number] = [lx / 2 - (lx * lx - ly * ly) / 4, ly / 2 - (2 * lx * ly) / 4];
-    parameterView.plot.moveZ0(c);
-    parameterView.refreshOverlay();
-    dynamicalView.plot.c = formatComplex(c);
-    setCInput(c);
-    updateDynCaption();
-    announce(`Parameter c = ${dynCValue.textContent}`);
-    const info = inspect(
-      parameterView.plot.fAst,
-      parameterView.plot.escAst,
-      "param",
-      parameterView.plot.criticalPoint,
-      c,
-      parameterView.plot.paramA,
-    );
-    handleInspect(info, c, "param");
+    snapCAndReinspect(c);
     scheduleRecord();
   });
   byId("mate-check").addEventListener("click", updateMatingVerdict);
@@ -6451,21 +6590,7 @@ export function init(): void {
       showToast("No Misiurewicz point found near the view centre for those m, k.", "warn");
       return;
     }
-    parameterView.plot.moveZ0(mis);
-    parameterView.refreshOverlay();
-    dynamicalView.plot.c = formatComplex(mis);
-    setCInput(mis);
-    updateDynCaption();
-    announce(`Parameter c = ${dynCValue.textContent}`);
-    const info = inspect(
-      parameterView.plot.fAst,
-      parameterView.plot.escAst,
-      "param",
-      parameterView.plot.criticalPoint,
-      mis,
-      parameterView.plot.paramA,
-    );
-    handleInspect(info, mis, "param");
+    snapCAndReinspect(mis);
     scheduleRecord();
   });
   byId("inspector-rays").addEventListener("click", () => {
@@ -6660,7 +6785,7 @@ export function init(): void {
     downloadBlob(new Blob([coeffsToCsv(coeffs)], { type: "text/csv" }), file);
     showToast(`Exported ${coeffs.length} coefficients to ${file}.`, "info");
   };
-  byId("import-map").addEventListener("click", promptImportInterchange);
+  byId("import-map").addEventListener("click", () => openImportDialog());
   byId("exterior-param-copy").addEventListener("click", () =>
     copyCoeffs(lastParamCoeffs, "Multibrot/Mandelbrot exterior map", "a"),
   );
@@ -7039,6 +7164,7 @@ export function init(): void {
       byId<HTMLInputElement>("inpParamRes").value = String(res);
       byId<HTMLInputElement>("inpDynRes").value = String(res);
       updateViewChips(); // the profile just changed the applied cap the chips print (WP7/U2)
+      refreshActiveSettings(); // …and the settings the strip lists
       const panel = byId<HTMLDetailsElement>("julia-props-group");
       if (panel.open !== p.juliaPanel) {
         panel.open = p.juliaPanel;
@@ -7102,6 +7228,24 @@ export function init(): void {
     }
     applyProfile(pref, false);
   }
+  // --- The five-tab sidebar + the active-settings strip (WP10/U4) ------------------------------
+  // Mounted AFTER every group's handlers are wired: mounting moves the groups into the panels, and
+  // a listener attached to an element survives its move, so order only matters for readability.
+  // The pinned footer takes the global actions off whichever tab they happened to be on.
+  {
+    // The pane's own action row — `.inline-actions` also names rows inside other panels, so it is
+    // found through the button it holds rather than by class alone.
+    const actions = byId("apply_all").closest(".inline-actions");
+    if (actions instanceof HTMLElement) byId("pane-actions").append(actions);
+    sidebarTabs = mountSidebarTabs(byId("sidebar-tablist"), byId("sidebar-panels"));
+    const strip = byId("active-settings");
+    refreshActiveSettings = () =>
+      renderActiveSettings(strip, (control) => sidebarTabs?.reveal(control));
+    // The strip is a view of the controls, so it follows any control change anywhere — cheap
+    // (eleven `getElementById`s) and impossible to forget from a new call site.
+    document.addEventListener("change", () => refreshActiveSettings());
+  }
+
   setupProfiles(); // apply the persisted profile (default skin) before any shared view
 
   loadFromHash(); // apply a shared view if the URL carries one (overrides the profile)
@@ -7114,6 +7258,9 @@ export function init(): void {
     if (!loadFromHash()) showToast("That link carries no Complex Dynamics view.", "warn");
   });
   refreshProfileLabel(); // a shared view usually diverges from a named profile → "Custom…"
+  // Last, so the strip describes the state the app actually ENDED UP in: the profile and any shared
+  // view both write checkboxes programmatically, which fires no `change` event.
+  refreshActiveSettings();
   lastSnapshot = readFullState(); // history baseline (after any shared view is applied)
   window.clearTimeout(recordTimer);
   updateHistoryButtons();

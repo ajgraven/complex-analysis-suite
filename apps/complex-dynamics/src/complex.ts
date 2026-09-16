@@ -56,6 +56,27 @@ export function truncateComplex([re, im]: Complex): Complex {
   return [Number.parseFloat(re.toPrecision(6)), Number.parseFloat(im.toPrecision(6))];
 }
 
+/**
+ * A complex number as a reader sees it: `-0.122561 + 0.744862i`.
+ *
+ * ONE function, because there were four. The dynamical caption printed 4 significant figures with a
+ * spaced `+ bi`; the hover readout printed 6 with the same shape; the overlay's white-point label
+ * and the inspector's title both printed 6 in the PARSEABLE `a+i*b` form. So the same parameter
+ * appeared on screen, at the same moment, written three different ways — and the one that looked
+ * most like a value to copy was the one nobody was meant to copy. The parseable form stays where it
+ * belongs: {@link formatComplex}, used by the input fields, the share link and the CSV export.
+ * (WP10/U3, review 2026-09-16.)
+ */
+export function formatComplexDisplay([re, im]: Complex, digits = 6): string {
+  const f = (x: number): string => Number.parseFloat(x.toPrecision(digits)).toString();
+  const r = f(re);
+  if (im === 0) return r;
+  const mag = Math.abs(im);
+  const imStr = f(mag) === "1" ? "i" : `${f(mag)}i`;
+  if (re === 0) return `${im < 0 ? "-" : ""}${imStr}`;
+  return `${r} ${im < 0 ? "-" : "+"} ${imStr}`;
+}
+
 /** Argument of z in degrees, normalised to [0, 360) — e.g. the multiplier's rotation angle. */
 export function argDegrees([re, im]: Complex): number {
   return ((Math.atan2(im, re) * 180) / Math.PI + 360) % 360;

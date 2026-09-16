@@ -327,7 +327,7 @@
                         type="text"
                         id="inpc"
                         placeholder="a+b*i"
-                        value="-.7-.4*i"
+                        value="-.122561+.744862*i"
                         size="14"
                         title="Parameter c as a complex number, e.g. -.7-.4*i"
                       />
@@ -1188,6 +1188,18 @@ abs(z)>2</textarea
             </button>
           </div>
           <!-- Point inspector: click either plot to report its orbit's dynamics. -->
+          <!-- Five-tab sidebar (WP10/U4). The tablist and the panels are BUILT in main.ts from one
+               table (ui/sidebarTabs.ts) and the existing groups are MOVED into them, so the mapping
+               lives in one place and this markup keeps its structure. The strip above them lists
+               every non-default setting that changes the render, so a setting parked on another tab
+               is still visible from this one. -->
+          <div id="active-settings" class="pane-strip" hidden></div>
+          <div id="sidebar-tablist" class="pane-tabs" role="tablist" aria-label="Controls"></div>
+          <div id="sidebar-panels" class="pane-panels"></div>
+          <!-- apply / reset / undo / redo are GLOBAL, so they are pinned here rather than living on
+               one tab, where they would be stranded the moment a reader switched away. main.ts moves
+               the existing .inline-actions into it. -->
+          <div id="pane-actions" class="pane-actions"></div>
           <aside id="inspector" class="inspector" aria-live="polite">
             <div class="inspector-head">
               <strong id="inspector-title">Point inspector</strong>
@@ -1249,7 +1261,7 @@ abs(z)>2</textarea
             >
               Export orbit
             </button>
-            <div class="inspector-siegel">
+            <div class="inspector-siegel" id="inspector-siegel" hidden>
               <label for="siegel-theta">Siegel c for θ =</label>
               <input
                 type="text"
@@ -1266,7 +1278,7 @@ abs(z)>2</textarea
                 Go
               </button>
             </div>
-            <div class="inspector-misiur">
+            <div class="inspector-misiur" id="inspector-misiur" hidden>
               <label for="misiur-pre">Misiurewicz</label>
               <input
                 type="number"
@@ -1301,7 +1313,7 @@ abs(z)>2</textarea
                 ?
               </button>
             </div>
-            <div class="inspector-note">
+            <div class="inspector-note" id="inspector-note" hidden>
               <input
                 type="text"
                 id="note-text"
@@ -1320,7 +1332,7 @@ abs(z)>2</textarea
                 Clear
               </button>
             </div>
-            <p class="inspector-hint">
+            <p class="inspector-hint" id="inspector-hint">
               Click any point on a plot to inspect its orbit — period, multiplier, internal angle,
               and distance to the set.
             </p>
@@ -1339,6 +1351,15 @@ abs(z)>2</textarea
                 >
 z^2+c</textarea
                 >
+              </div>
+              <div class="field" id="newton-field">
+                <label
+                  class="checkbox"
+                  for="newton"
+                  title="Iterate the Newton map z − f/f′ (root-finding); colours by which root each point reaches"
+                >
+                  <input type="checkbox" id="newton" /> Newton's method
+                </label>
               </div>
               <div class="field">
                 <button
@@ -1449,26 +1470,9 @@ z^2+c</textarea
                   <option value="lattice">Gaussian lattice</option>
                 </select>
               </div>
-              <details class="control-group">
+              <details class="control-group" id="appearance-group">
                 <summary>Appearance</summary>
                 <div class="control-grid">
-                  <div class="field">
-                    <label for="aa">anti-aliasing</label>
-                    <select id="aa" title="Supersampling — smoother edges, slower to render">
-                      <option value="1">Off</option>
-                      <option value="2">2&times;</option>
-                      <option value="3">3&times;</option>
-                    </select>
-                  </div>
-                  <div class="field">
-                    <label
-                      class="checkbox"
-                      for="accumulate"
-                      title="While the view sits still, average jittered sub-pixel samples for a cleaner, anti-aliased image"
-                    >
-                      <input type="checkbox" id="accumulate" /> refine while idle
-                    </label>
-                  </div>
                   <div class="field">
                     <label for="paletteRotation">rotation</label>
                     <input
@@ -1571,6 +1575,23 @@ z^2+c</textarea
                         <input type="range" id="outlineWidth" min="0" max="100" value="30" disabled
                       /></label>
                     </div>
+                  </div>
+                  <div class="field">
+                    <label
+                      class="checkbox"
+                      for="legend-toggle"
+                      title="Show a small colour legend in each plot's corner explaining what the colours mean for the current mode — on by default"
+                    >
+                      <input type="checkbox" id="legend-toggle" checked /> colour legend
+                    </label>
+                    <button
+                      class="gloss-link"
+                      type="button"
+                      data-term="color-legend"
+                      aria-label="What is the colour legend?"
+                    >
+                      ?
+                    </button>
                   </div>
                 </div>
               </details>
@@ -1701,16 +1722,24 @@ z^2+c</textarea
                   </div>
                 </div>
               </details>
-              <details class="control-group">
+              <details class="control-group" id="precision-group">
                 <summary>Iteration &amp; precision</summary>
                 <div class="control-grid">
                   <div class="field">
+                    <label for="aa">anti-aliasing</label>
+                    <select id="aa" title="Supersampling — smoother edges, slower to render">
+                      <option value="1">Off</option>
+                      <option value="2">2&times;</option>
+                      <option value="3">3&times;</option>
+                    </select>
+                  </div>
+                  <div class="field">
                     <label
                       class="checkbox"
-                      for="newton"
-                      title="Iterate the Newton map z − f/f′ (root-finding); colours by which root each point reaches"
+                      for="accumulate"
+                      title="While the view sits still, average jittered sub-pixel samples for a cleaner, anti-aliased image"
                     >
-                      <input type="checkbox" id="newton" /> Newton's method
+                      <input type="checkbox" id="accumulate" /> refine while idle
                     </label>
                   </div>
                   <div class="field">
@@ -1807,23 +1836,6 @@ z^2+c</textarea
                       type="button"
                       data-term="orbit-preview"
                       aria-label="What is the orbit preview?"
-                    >
-                      ?
-                    </button>
-                  </div>
-                  <div class="field">
-                    <label
-                      class="checkbox"
-                      for="legend-toggle"
-                      title="Show a small colour legend in each plot's corner explaining what the colours mean for the current mode — on by default"
-                    >
-                      <input type="checkbox" id="legend-toggle" checked /> colour legend
-                    </label>
-                    <button
-                      class="gloss-link"
-                      type="button"
-                      data-term="color-legend"
-                      aria-label="What is the colour legend?"
                     >
                       ?
                     </button>
@@ -2598,6 +2610,31 @@ z^2+c</textarea
           <!-- Opened from the app-bar "Help" button. A position:fixed overlay (like the glossary
                modal), so its place in the DOM is immaterial; it stays here next to the controls it
                documents. Mirrors the glossary modal's structure, styling, and open/close behaviour. -->
+          <!-- Paste-an-interchange-link dialog (WP10). It replaces a `window.prompt`, which cannot be
+               styled, cannot say what a valid payload looks like, is blocked outright in some
+               browsers, and drops the paste on a stray Escape with nothing to try again from. -->
+          <div id="import-dialog" class="onboarding glossary-overlay" role="dialog" aria-modal="true"
+            aria-labelledby="import-dialog-title" hidden>
+            <div class="onboarding-card import-card">
+              <div class="glossary-head">
+                <h2 id="import-dialog-title">Import a map</h2>
+                <button type="button" id="import-dialog-close" aria-label="Close import">&times;</button>
+              </div>
+              <p>
+                Paste an <strong>@cas/interchange</strong> deep link or its JSON — for example from the
+                Quadrature&nbsp;Domains app's <em>Export map</em>, which hands over a Schwarz reflection
+                &sigma; or a Laurent map.
+              </p>
+              <label class="import-field" for="import-dialog-text">Link or JSON</label>
+              <textarea id="import-dialog-text" rows="5" spellcheck="false"
+                placeholder="#s=... or {&quot;v&quot;:1,&quot;kind&quot;:&quot;map&quot;,...}"></textarea>
+              <p id="import-dialog-error" class="control-note import-error" hidden></p>
+              <div class="inline-actions">
+                <button type="button" id="import-dialog-load" class="primary">Load</button>
+                <button type="button" id="import-dialog-cancel">Cancel</button>
+              </div>
+            </div>
+          </div>
           <div id="help-ref" class="onboarding glossary-overlay" hidden>
             <div
               class="onboarding-card glossary-card"

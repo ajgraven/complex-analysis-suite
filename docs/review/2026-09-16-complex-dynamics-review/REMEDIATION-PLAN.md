@@ -688,7 +688,77 @@ light, mode}` into an `ExportOptions` object at entry and `setupDraw` reads that
 
 ---
 
-## WP10 — Shell UX: first run, sidebar, σ as a peer, import, labels · effort L · closes U3, U4, U6, U8, U11 (duplication)
+## WP10 — Shell UX: first run, sidebar, σ as a peer, import, labels · effort L · closes U3, U4, U6, U8, U11 (duplication) · **DONE (one item deferred, below)**
+
+> **Landed.** Gate green: lint, typecheck, **559 files / 5,855 tests**, build; CD browser suite 6 files /
+> 35 tests. Seven negative controls, each reverted and confirmed red.
+>
+> **U3 — measured, and the old default was worse than "not the best choice".** At `c = −0.7 − 0.4i`
+> the critical orbit ESCAPES, so the dynamical pane — half the app — opened on a Cantor dust:
+> **0.00 % of the default window is inside the set**, against **13.75 %** for the Douady rabbit
+> (measured by counting non-escaping pixels over a 400² grid at the preset's own centre and zoom).
+> The first thing a reader saw was the degenerate case, with the properties panel saying "totally
+> disconnected". The dynamical preset now starts at the CRITICAL POINT, so the drawn orbit is the
+> superattracting 3-cycle and the inspector says so. The disconnected-set wording is fixed
+> independently, since a reader can always drag to a dust: a disconnected Julia set has EMPTY
+> interior, so "filled Julia set" named something not on screen — the black pixels are "did not
+> escape within the cap", a statement about the cap. And the three-into-one formatter turned out to
+> be **four** into one: the caption printed 4 significant figures spaced, the hover readout 6 the
+> same way, and the overlay label and the inspector title 6 in the PARSEABLE `a+i*b` form — so the
+> one that most looked like a value to copy was the one nobody was meant to copy.
+>
+> **U4 — the five tabs, built as a table rather than as a restructured document.** Each tab is a list
+> of element ids and the groups are MOVED into the panels at mount, so the mapping lives in one place
+> (`ui/sidebarTabs.ts`) and every group keeps the internal ids, handlers and styles it already had.
+> Four controls are genuinely re-homed in the markup, each because the tab that owns its MEANING is
+> not the one it was on: **Newton** changes what is iterated, not how accurately (→ Function);
+> **anti-aliasing** and **refine while idle** are how hard the plot works, not how it is coloured (→
+> Precision); the **colour legend** is about colour (→ Appearance). The global actions are pinned in
+> a sticky footer, the strip lists every non-default render-changing setting and each entry switches
+> tab and focuses the control, and the WAI-ARIA pattern (roving `tabindex`, Left/Right/Home/End,
+> `aria-selected`, `aria-controls`/`aria-labelledby`) is asserted rather than promised. The open tab
+> is in `localStorage` and a test pins that it is NOT in `SHARE_IDS`. The inspector shows its hint
+> until a point is inspected — its three rows of action inputs used to sit open from first load under
+> an empty heading, which is a good part of why the pane opened as tall as it did.
+>
+> **Three findings while wiring it.** The strip listed `refine while idle: off` at startup, because
+> it rendered before `setupProfiles()` — and the profile writes checkboxes PROGRAMMATICALLY, which
+> fires no `change` event, so it also needed refreshing from the profile, the preset, a shared view
+> and the end of init. `reveal` could not find a control the strip names (`perturbation`) because the
+> member table knows only the group that was moved (`precision-group`); it resolves by containment
+> now. And an unguarded `scrollIntoView` threw out of the strip's click handler, taking the focus
+> move — the point of `reveal` — with it.
+>
+> **U11 — the duplication was hiding a bug, which is the argument for the extraction.** Five copies
+> of "move the white point to c and bring everything with it" had drifted into four spellings, and
+> **none of them refreshed the legend**, so every one could leave "filled Julia set" over a parameter
+> that had just become a dust. `snapCAndReinspect` fixes that by construction.
+>
+> **Import.** `window.prompt` cannot say what a valid payload looks like or where one comes from,
+> cannot be made accessible, is blocked outright by some browsers, and throws away a long pasted link
+> on a stray Escape. The dialog rides `withModalFocus`, so it traps Tab and joins the escape stack —
+> and it KEEPS the text when the parse fails, which makes a mis-copied link one edit rather than one
+> re-paste.
+>
+> **U6 — two of the three.** Re-entering σ used to discard the centre, the zoom, the coordinate view
+> and the sphere camera every time, so a reader who stepped out to check the Julia set (the whole
+> point of σ being a peer) paid for it by navigating back; the view is now kept unless the BUILDER'S
+> VALUES changed, the same rule the stage's rebuild guard uses. And the mobile FAB is put away while
+> σ has the workspace, where it opened a pane that was behind it.
+>
+> **DEFERRED, with its reason: the σ analysis overlays do not yet travel in a link.** `SigmaViewState`
+> already carries the view, the colouring, the boundary and singularity toggles and the tiling
+> params; what it does not carry is the orbit family, the level curves, the cycles, the forward
+> curves and the limit set. Those are POINT CLOUDS — a limit set is a `Float64Array` of thousands of
+> samples — so the only honest form is the recipe (parameters + which analyses were on) with a
+> recompute on open, and a recompute costs seconds for the cloud and the cycle search. That is a
+> design decision about what a link may make a reader wait for, not a wiring job, and it is recorded
+> here rather than guessed at. The tour step for the σ button goes with it.
+
+**Files:** `apps/complex-dynamics/src/ui/sidebarTabs.ts` (new), `src/ui/activeSettings.ts` (new),
+`src/main.ts`, `src/presets.ts`, `src/complex.ts`, `src/render/overlay.ts`, `index.html`,
+`src/styles/main.css`; tests `test/defaultView.test.ts` (new), `test/shell.test.ts`,
+`test/appState.test.ts`.
 
 **All three decisions are made** (2026-09-16), with the measurements behind them in
 [`WP10-DESIGN-QUESTIONS.md`](WP10-DESIGN-QUESTIONS.md) and the sidebar mockups at

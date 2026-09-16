@@ -709,3 +709,242 @@ describe("WP8/S6 — an error banner comes down when its cause does", () => {
     expect(err.textContent).toBe("");
   });
 });
+
+describe("WP10/U4 — the sidebar is five tabs", () => {
+  const tabs = (): HTMLButtonElement[] => [
+    ...document.querySelectorAll<HTMLButtonElement>('#sidebar-tablist [role="tab"]'),
+  ];
+  const panels = (): HTMLElement[] => [
+    ...document.querySelectorAll<HTMLElement>('#sidebar-panels [role="tabpanel"]'),
+  ];
+  const openPanel = (): HTMLElement => {
+    const shown = panels().filter((p) => !p.hidden);
+    expect(shown, "exactly one panel is shown").toHaveLength(1);
+    return shown[0];
+  };
+
+  it("carries every group, and each group lands on exactly one tab", async () => {
+    await mount();
+    expect(tabs().map((t) => (t.textContent ?? "").trim())).toEqual([
+      "Function",
+      "Appearance",
+      "Precision",
+      "Instruments",
+      "Studio",
+    ]);
+    // Nothing the pane used to hold is lost, and nothing is in two places.
+    for (const id of [
+      "inpf",
+      "newton",
+      "fractal_presets",
+      "mode",
+      "palette",
+      "appearance-group",
+      "overlays-group",
+      "precision-group",
+      "aa",
+      "accumulate",
+      "legend-toggle",
+      "julia-props-group",
+      "mating-group",
+      "herman-group",
+      "view-group",
+      "studio-group",
+    ]) {
+      const el = byId(id);
+      const owning = panels().filter((p) => p.contains(el));
+      expect(owning, `${id} is on exactly one tab`).toHaveLength(1);
+    }
+  });
+
+  it("the four re-homed controls are on the tab that owns their MEANING", async () => {
+    await mount();
+    const on = (id: string): string =>
+      panels().find((p) => p.contains(byId(id)))?.id ?? "(none)";
+    // Newton changes what is ITERATED, not the accuracy of iterating it.
+    expect(on("newton")).toBe("tabpanel-function");
+    // Anti-aliasing and idle refine are how HARD the plot works, not how it is coloured.
+    expect(on("aa")).toBe("tabpanel-precision");
+    expect(on("accumulate")).toBe("tabpanel-precision");
+    // …and the colour legend is about colour.
+    expect(on("legend-toggle")).toBe("tabpanel-appearance");
+  });
+
+  it("apply / reset / undo / redo are pinned, not tabbed", async () => {
+    await mount();
+    for (const id of ["apply_all", "reset_all", "undo-btn", "redo-btn"]) {
+      expect(byId("pane-actions").contains(byId(id)), id).toBe(true);
+      expect(panels().some((p) => p.contains(byId(id))), `${id} is not on a tab`).toBe(false);
+    }
+  });
+
+  it("follows the WAI-ARIA tabs pattern", async () => {
+    await mount();
+    const ts = tabs();
+    expect(ts.filter((t) => t.getAttribute("aria-selected") === "true")).toHaveLength(1);
+    expect(ts.filter((t) => t.tabIndex === 0)).toHaveLength(1); // roving tabindex
+    for (const t of ts) {
+      const panel = document.getElementById(t.getAttribute("aria-controls") ?? "");
+      expect(panel, `${t.id} controls a panel`).not.toBeNull();
+      expect(panel?.getAttribute("aria-labelledby")).toBe(t.id); // …and it names itself from the tab
+    }
+  });
+
+  it("Left / Right / Home / End move between tabs", async () => {
+    await mount();
+    const ts = tabs();
+    const key = (el: HTMLElement, k: string): void =>
+      void el.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true }));
+    ts[0].click();
+    expect(openPanel().id).toBe("tabpanel-function");
+    key(ts[0], "ArrowRight");
+    expect(openPanel().id).toBe("tabpanel-appearance");
+    key(ts[1], "End");
+    expect(openPanel().id).toBe("tabpanel-studio");
+    key(ts[4], "ArrowRight"); // wraps
+    expect(openPanel().id).toBe("tabpanel-function");
+    key(ts[0], "ArrowLeft"); // …in both directions
+    expect(openPanel().id).toBe("tabpanel-studio");
+    key(ts[4], "Home");
+    expect(openPanel().id).toBe("tabpanel-function");
+  });
+
+  it("remembers the open tab per viewer, and does not put it in the shared state", async () => {
+    await mount();
+    tabs()[3].click();
+    expect(openPanel().id).toBe("tabpanel-instruments");
+    expect(localStorage.getItem("cdjs.tab")).toBe("instruments");
+
+    const { SHARE_IDS } = await import("../src/state/appState");
+    // Which tab the sender had open is not part of a mathematical view.
+    expect((SHARE_IDS as readonly string[]).some((id) => id.includes("tab"))).toBe(false);
+  });
+});
+
+describe("WP10/U4 — the active-settings strip", () => {
+  const strip = (): HTMLElement => byId("active-settings");
+  const entries = (): string[] =>
+    [...strip().querySelectorAll(".pane-strip-item")].map((b) => (b.textContent ?? "").trim());
+
+  it("is empty and hidden while everything that changes the render is at its default", async () => {
+    await mount();
+    expect(entries()).toEqual([]);
+    expect(strip().hidden).toBe(true); // the common case costs no height
+  });
+
+  it("names a setting the moment it is on, from whichever tab you are on", async () => {
+    await mount();
+    byId<HTMLInputElement>("perturbation").checked = true;
+    fire("perturbation", "change");
+    expect(strip().hidden).toBe(false);
+    expect(entries()).toContain("perturbation");
+
+    byId<HTMLInputElement>("newton").checked = true;
+    fire("newton", "change");
+    expect(entries()).toEqual(expect.arrayContaining(["Newton's method", "perturbation"]));
+
+    byId<HTMLInputElement>("perturbation").checked = false;
+    fire("perturbation", "change");
+    expect(entries()).not.toContain("perturbation");
+  });
+
+  it("an entry switches to the owning tab and focuses the control — S4 made visible", async () => {
+    await mount();
+    // Start somewhere else entirely.
+    byId("tab-studio").click();
+    byId<HTMLInputElement>("perturbation").checked = true;
+    fire("perturbation", "change");
+    const item = [...strip().querySelectorAll<HTMLButtonElement>(".pane-strip-item")].find(
+      (b) => (b.textContent ?? "").trim() === "perturbation",
+    );
+    expect(item).toBeDefined();
+    item?.click();
+    expect(byId("tabpanel-precision").hidden).toBe(false);
+    expect(document.activeElement).toBe(byId("perturbation"));
+  });
+
+  it("lists a default that has been turned OFF as well as one turned on", async () => {
+    await mount();
+    const accum = byId<HTMLInputElement>("accumulate");
+    expect(accum.checked, "refine-while-idle ships on").toBe(true);
+    accum.checked = false;
+    fire("accumulate", "change");
+    expect(entries()).toContain("refine while idle: off");
+  });
+
+  it("ignores a purely cosmetic change — the picture already shows it", async () => {
+    await mount();
+    const pal = byId<HTMLSelectElement>("palette");
+    pal.value = "viridis";
+    fire("palette", "change");
+    expect(entries()).toEqual([]);
+    expect(strip().hidden).toBe(true);
+  });
+});
+
+describe("WP10 — the rest of the shell pass", () => {
+  it("U4: the inspector shows its hint, not three rows of inputs for a point nobody picked", async () => {
+    await mount();
+    expect(byId("inspector-hint").hidden).toBe(false);
+    for (const id of ["inspector-siegel", "inspector-misiur", "inspector-note"]) {
+      expect(byId(id).hidden, id).toBe(true);
+    }
+  });
+
+  it("U4: …and they appear once a point IS inspected, and go away again when it is closed", async () => {
+    await mount();
+    // Through a real app action with the inspect as its postcondition: a pointer gesture on the
+    // overlay needs a layout jsdom does not do, but the Siegel jump ends in the same `showInspect`.
+    setVal("siegel-theta", "1/5");
+    byId("siegel-go").click();
+    expect(byId("inspector").hidden).toBe(false);
+    expect(byId("inspector-hint").hidden).toBe(true);
+    for (const id of ["inspector-siegel", "inspector-misiur", "inspector-note"]) {
+      expect(byId(id).hidden, id).toBe(false);
+    }
+
+    byId("inspector-close").click();
+    expect(byId("inspector-hint").hidden).toBe(false);
+    expect(byId("inspector-note").hidden).toBe(true);
+  });
+
+  it("the import dialog replaces the prompt, and keeps the text when the parse fails", async () => {
+    await mount();
+    const prompt = vi.spyOn(window, "prompt");
+    byId("import-map").click();
+    expect(prompt, "no window.prompt anywhere in the path").not.toHaveBeenCalled();
+    prompt.mockRestore();
+
+    const dlg = byId("import-dialog");
+    expect(dlg.hidden).toBe(false);
+    const text = byId<HTMLTextAreaElement>("import-dialog-text");
+    text.value = "not a link";
+    byId("import-dialog-load").click();
+    expect(dlg.hidden, "a bad paste does not close the dialog").toBe(false);
+    expect(byId("import-dialog-error").hidden).toBe(false);
+    expect(text.value, "…and the text survives, so it is one edit not one re-paste").toBe("not a link");
+  });
+
+  it("U11: every way of moving c keeps the caption, the input and the legend in step", async () => {
+    await mount();
+    const before = byId("dyn-c-value").textContent;
+    setVal("siegel-theta", "1/3");
+    byId("siegel-go").click();
+    const after = byId("dyn-c-value").textContent;
+    expect(after).not.toBe(before); // the jump happened
+    // The five copies of this block had drifted; one helper now does all of them.
+    expect(val("inpc")).toContain(after?.split(" ")[0] ?? "@@");
+  });
+
+  it("U6: the controls FAB is put away while σ has the workspace", async () => {
+    await mount();
+    const fab = byId<HTMLButtonElement>("controls-fab");
+    expect(fab.hidden).toBe(false);
+    byId("schwarz-open").click();
+    const workspace = document.querySelector(".workspace") as HTMLElement;
+    expect(workspace.classList.contains("schwarz-active"), "σ opened").toBe(true);
+    expect(fab.hidden, "a button that opens a pane behind the takeover").toBe(true);
+    escape();
+    expect(fab.hidden).toBe(false);
+  });
+});

@@ -10,7 +10,7 @@
  */
 
 import type { Vec2 } from "../arrays";
-import { formatComplex, truncateComplex, type Complex } from "../complex";
+import { formatComplexDisplay, type Complex } from "../complex";
 import type { Node } from "@cas/expr/ast";
 import { getComplexFn, getEscapeFn } from "@cas/expr/evaluate";
 import { fareyLabels, fareyMaxDenominator } from "./farey";
@@ -969,14 +969,25 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): vo
   // the point under the cursor, and the two are different sentences about different sequences.
   const label = p.fractType === "param" ? "c=" : "z0=";
   const what = p.fractType === "param" ? "critical orbit " : "";
-  const text = `${label}${formatComplex(truncateComplex([p.z0[0], p.z0[1]]))} · ${what}${fateLabel(info)}`;
+  const text = `${label}${formatComplexDisplay([p.z0[0], p.z0[1]])} · ${what}${fateLabel(info)}`;
   ctx.font = `${15 * s}px sans-serif`;
   ctx.textBaseline = "bottom";
+  // **Keep the label on the canvas.** It was drawn unconditionally up and to the RIGHT of the white
+  // point, so a point near the right edge — which is where a reader puts one when they are chasing a
+  // filament outward — had its parameter and its fate clipped off, and a point near the top had them
+  // clipped at the ceiling. The label flips to the point's left when it would overrun, and drops
+  // below it when it would overrun upward; the label is what the overlay is FOR, so it is the thing
+  // that moves. (WP10/U8, review 2026-09-16.)
+  const pad = 6 * s;
+  const width = ctx.measureText(text).width;
+  const flipX = px + pad + width > size - pad;
+  const tx = flipX ? Math.max(pad, px - pad - width) : px + pad;
+  const ty = py - pad < 16 * s ? Math.min(size - pad, py + 20 * s) : py - pad;
   // Dark casing under the white text so it reads over any palette.
   ctx.lineJoin = "round";
   ctx.lineWidth = 3 * s;
   ctx.strokeStyle = HALO;
-  ctx.strokeText(text, px + 6 * s, py - 6 * s);
+  ctx.strokeText(text, tx, ty);
   ctx.fillStyle = "white";
-  ctx.fillText(text, px + 6 * s, py - 6 * s);
+  ctx.fillText(text, tx, ty);
 }

@@ -64,7 +64,14 @@ export type PresetName =
 export const paramPresets: Record<PresetName, Preset> = {
   mandelbrot: {
     f: "z^2+c",
-    c: "-.7-.4*i",
+    // The DOUADY RABBIT, not the old `-.7-.4*i`. That parameter's critical orbit ESCAPES, so the
+    // dynamical pane — half the app — opened on a Cantor dust: measured, 0.00 % of the default
+    // window is inside the set, against 13.75 % for the rabbit, and the Julia-properties panel
+    // opened saying "totally disconnected". The first thing a reader saw was the degenerate case.
+    // The rabbit is the period-3 superattracting centre, so the critical orbit is a 3-cycle and the
+    // inspector, the overlay and the properties panel all have something to say about it.
+    // (WP10/U3, review 2026-09-16.)
+    c: "-.122561+.744862*i",
     n: "100",
     nplot: "7",
     escape: "abs(z)>2",
@@ -216,8 +223,11 @@ export const paramPresets: Record<PresetName, Preset> = {
     nplot: "6",
     escape: "abs(z)>1000",
     mode: "period",
-    zoom: 1.1,
-    center: [0.5, 0],
+    // Opened at 1.1× on [0.5, 0], which frames the parameter c but not the TONGUES — the structure
+    // the preset exists to show. Widened to 2 units across about the origin so the rotation-number
+    // tongues along the unit interval are in frame on arrival. (WP10/U8, review 2026-09-16.)
+    zoom: 2,
+    center: [0.25, 0],
     criticalPoint: [0.5470656, 0],
   },
 };
@@ -225,8 +235,12 @@ export const paramPresets: Record<PresetName, Preset> = {
 export const dynPresets: Record<PresetName, Preset> = {
   mandelbrot: {
     f: "z^2+c",
-    c: ".2541-.0333*i",
-    z0: ".2541-.0333*i",
+    // `c` is overwritten by `syncDynamicalC` from the parameter plane's white point; it is kept in
+    // step here so the preset reads as one view rather than two. `z0` is the CRITICAL POINT, which
+    // is the orbit worth opening on: for the rabbit it is the superattracting 3-cycle, so the drawn
+    // orbit closes on itself and the inspector reports "period 3". (WP10/U3.)
+    c: "-.122561+.744862*i",
+    z0: "0",
     n: "100",
     nplot: "7",
     escape: "abs(z)>2",
