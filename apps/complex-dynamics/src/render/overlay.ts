@@ -637,15 +637,33 @@ const orbitCache = new Map<"dyn" | "param", OrbitCacheEntry>();
 
 function orbitData(p: OverlayParams, cc: Complex, a: Complex): OrbitCacheEntry {
   const crit = p.criticalPoint ?? [0, 0];
-  const key = `${p.z0[0]},${p.z0[1]};${cc[0]},${cc[1]};${a[0]},${a[1]};${p.nplot};${p.critical ? 1 : 0};${crit[0]},${crit[1]}`;
+  // **Which orbit the parameter plane shows.** It used to be the orbit of the clicked point `c`
+  // itself, while the inspector panel beside it classified the CRITICAL orbit — so one press of the
+  // mouse produced two escape counts that differed, and the plot's own "critical orbit" overlay
+  // drew a third, dashed, one step away. Measured on z²+c the two counts differ by exactly one at
+  // every escaping parameter (f(0) = c, so the orbit of c IS the critical orbit one step in) and the
+  // fate is identical at every interior one; on z²−2z+c, where the critical point is 1, the three
+  // seeds 0 / 1 / c escape at 5, 2 and 4 iterations and no two agree.
+  //
+  // The critical orbit is the one that means something here — it decides membership, and it is what
+  // `inspect`, `computeJuliaProperties`, `findNucleus` and `exactCriticalPeriod` all already use
+  // (seven of the eight CPU call sites). Seeding the INSPECTOR at `c` instead was the other way to
+  // make them agree and is wrong for a second reason: `escapeDistance` carries D₀ = 0, which is
+  // ∂z₀/∂c for a c-independent critical point, so the same change would have silently scaled the
+  // distance estimate — measured, by 1.007× at c = 0.26, 1.05× near the boundary and **3.38×** at
+  // c = 1+i. (WP8/S7, review 2026-09-16.)
+  const seed: Vec2 = p.fractType === "param" ? crit : p.z0;
+  const key = `${seed[0]},${seed[1]};${cc[0]},${cc[1]};${a[0]},${a[1]};${p.nplot};${p.critical ? 1 : 0};${crit[0]},${crit[1]};${p.fractType}`;
   const hit = orbitCache.get(p.fractType);
   if (hit && hit.fAst === p.fAst && hit.escapeAst === p.escapeAst && hit.key === key) {
     return hit;
   }
-  const { orbit, info } = orbitAndClassify(p.fAst, p.escapeAst, p.z0, cc, p.nplot, a);
+  const { orbit, info } = orbitAndClassify(p.fAst, p.escapeAst, seed, cc, p.nplot, a);
   let critOrbit: Complex[] | null = null;
   let critInfo: OrbitInfo | null = null;
-  if (p.critical) {
+  // On the parameter plane the main orbit IS the critical orbit, so the dashed overlay would trace
+  // the identical polyline; it stays a dynamical-plane instrument.
+  if (p.critical && p.fractType !== "param") {
     const cr = orbitAndClassify(p.fAst, p.escapeAst, crit, cc, p.nplot, a);
     critOrbit = cr.orbit;
     critInfo = cr.info;
@@ -947,8 +965,11 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, p: OverlayParams): vo
   ctx.fillStyle = "white";
   ctx.fill();
 
+  // Name the orbit: on the parameter plane the fate beside `c` is the CRITICAL orbit's, not that of
+  // the point under the cursor, and the two are different sentences about different sequences.
   const label = p.fractType === "param" ? "c=" : "z0=";
-  const text = `${label}${formatComplex(truncateComplex([p.z0[0], p.z0[1]]))} · ${fateLabel(info)}`;
+  const what = p.fractType === "param" ? "critical orbit " : "";
+  const text = `${label}${formatComplex(truncateComplex([p.z0[0], p.z0[1]]))} · ${what}${fateLabel(info)}`;
   ctx.font = `${15 * s}px sans-serif`;
   ctx.textBaseline = "bottom";
   // Dark casing under the white text so it reads over any palette.

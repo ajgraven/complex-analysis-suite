@@ -1600,7 +1600,7 @@ z^2+c</textarea
                       for="farey"
                       title="Label the main cardioid's bulbs by internal angle p/q (z²+c only)"
                     >
-                      <input type="checkbox" id="farey" /> Farey bulb labels
+                      <input type="checkbox" id="farey" /> Farey bulb labels <span class="only">(z²+c)</span>
                     </label>
                     <button
                       class="gloss-link"
@@ -1617,7 +1617,7 @@ z^2+c</textarea
                       for="rays"
                       title="Trace the external ray at the entered angle on both planes (z²+c only)"
                     >
-                      <input type="checkbox" id="rays" /> external ray
+                      <input type="checkbox" id="rays" /> external ray <span class="only">(z²+c)</span>
                     </label>
                     <button
                       class="gloss-link"
@@ -1648,7 +1648,7 @@ z^2+c</textarea
                       for="ray-pairs"
                       title="Draw both external rays landing at each visible Farey bulb's root (z²+c only)"
                     >
-                      <input type="checkbox" id="ray-pairs" /> bulb ray pairs
+                      <input type="checkbox" id="ray-pairs" /> bulb ray pairs <span class="only">(z²+c)</span>
                     </label>
                   </div>
                   <div class="field">
@@ -1657,7 +1657,7 @@ z^2+c</textarea
                       for="inverse-julia"
                       title="Paint the Julia set by inverse iteration — random backward orbits z ↦ ±√(z−c) (dynamical plane, z²+c)"
                     >
-                      <input type="checkbox" id="inverse-julia" /> inverse-iteration Julia
+                      <input type="checkbox" id="inverse-julia" /> inverse-iteration Julia <span class="only">(z²+c)</span>
                     </label>
                   </div>
                   <div class="field">
@@ -1666,7 +1666,7 @@ z^2+c</textarea
                       for="siegel-curves"
                       title="Draw the Siegel-disc invariant curves at an irrationally-indifferent parameter (dynamical plane, z²+c)"
                     >
-                      <input type="checkbox" id="siegel-curves" /> Siegel invariant curves
+                      <input type="checkbox" id="siegel-curves" /> Siegel invariant curves <span class="only">(z²+c)</span>
                     </label>
                   </div>
                   <div class="field">
@@ -1753,8 +1753,10 @@ z^2+c</textarea
                       <input type="checkbox" id="perturbation" /> perturbation (deep zoom)
                     </label>
                     <p id="perturbation-note" class="control-note" hidden>
-                      Perturbation renders escape / smooth colouring only — relief lighting,
-                      boundary outline, and equipotential overlays use the standard view.
+                      Relief lighting, boundary outline and equipotential contours are unavailable
+                      while perturbation is on — the deep-zoom kernel does not compute them. The
+                      colouring modes it cannot draw are greyed out in the list above, each with its
+                      reason.
                     </p>
                   </div>
                   <div class="field">

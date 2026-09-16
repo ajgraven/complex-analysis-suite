@@ -523,3 +523,189 @@ describe("WP7/S2 — 'Copy properties' waits for the measurement", () => {
     }
   });
 });
+
+const escape = (): void =>
+  void document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+
+describe("WP8/S5 — Escape closes one layer, not all of them", () => {
+  it("shuts the glossary and leaves the expanded plot expanded", async () => {
+    await mount();
+    const workspace = document.querySelector(".workspace") as HTMLElement;
+    byId("expand-param").click();
+    expect(workspace.classList.contains("expand-param")).toBe(true);
+    byId("help-btn").click();
+    expect(byId("glossary").hidden).toBe(false);
+
+    escape();
+    expect(byId("glossary").hidden).toBe(true);
+    expect(workspace.classList.contains("expand-param")).toBe(true); // used to close too
+
+    escape();
+    expect(workspace.classList.contains("expand-param")).toBe(false); // …and now it is its turn
+  });
+
+  it("re-opening a layer does not leave its old registration behind", async () => {
+    await mount();
+    const workspace = document.querySelector(".workspace") as HTMLElement;
+    byId("expand-param").click();
+    for (let i = 0; i < 3; i++) {
+      byId("help-btn").click();
+      escape();
+      expect(byId("glossary").hidden, `round ${i}`).toBe(true);
+      expect(workspace.classList.contains("expand-param"), `round ${i}`).toBe(true);
+    }
+  });
+
+  it("closing by the ✕ gives the key back to the layer underneath", async () => {
+    await mount();
+    const workspace = document.querySelector(".workspace") as HTMLElement;
+    byId("expand-param").click();
+    byId("help-btn").click();
+    byId("glossary-close").click();
+    escape();
+    expect(workspace.classList.contains("expand-param")).toBe(false);
+  });
+});
+
+describe("WP8/S4 — a mode the app cannot draw says so, and says so when it moves", () => {
+  it("greys out the derivative modes for a non-holomorphic f, with the reason on each", async () => {
+    await mount();
+    const analytic = byId<HTMLOptionElement>("mode-distance-analytic");
+    expect(analytic.disabled).toBe(false);
+    expect(analytic.title).toBe("");
+
+    setVal("inpf", "conjugate(z^2)+c"); // not holomorphic
+    byId("apply_all").click();
+    expect(analytic.disabled).toBe(true);
+    expect(analytic.title).toContain("not holomorphic"); // the reason, on the greyed option
+  });
+
+  it("moving the SELECTED mode is announced instead of happening silently", async () => {
+    await mount();
+    const sel = byId<HTMLSelectElement>("mode");
+    sel.value = "multiplier";
+    fire("mode", "change");
+    expect(sel.value).toBe("multiplier");
+
+    setVal("inpf", "conjugate(z^2)+c");
+    byId("apply_all").click();
+    expect(sel.value).toBe("smooth"); // it always did this
+    const toast = [...document.querySelectorAll(".toast")].map((t) => t.textContent ?? "").join(" ");
+    expect(toast).toContain("Multiplier map"); // …but now it says which mode it took away
+    expect(toast).toContain("not holomorphic"); // …and why
+    expect(toast).toContain("Smooth"); // …and what is showing instead
+  });
+
+  it("perturbation greys out every mode its kernel does not render", async () => {
+    // The kernel draws `uMode = mode === 1 ? 1 : 0` — smooth, else escape — so ten of the sixteen
+    // modes were selectable while something else was drawn. Four were already disabled for other
+    // reasons; the other six were silent substitutions.
+    await mount();
+    const sel = byId<HTMLSelectElement>("mode");
+    const before = [...sel.options].filter((o) => o.disabled).map((o) => o.value);
+    byId<HTMLInputElement>("perturbation").checked = true;
+    fire("perturbation", "change");
+    const after = [...sel.options].filter((o) => o.disabled).map((o) => o.value);
+    expect(after.length).toBeGreaterThan(before.length);
+    for (const o of sel.options) {
+      expect(o.disabled, o.value).toBe(o.value !== "escape" && o.value !== "smooth");
+      if (o.disabled) expect(o.title).toContain("perturbation (deep zoom)");
+    }
+    byId<HTMLInputElement>("perturbation").checked = false;
+    fire("perturbation", "change");
+    expect([...sel.options].filter((o) => o.disabled).map((o) => o.value)).toEqual(before);
+  });
+});
+
+describe("WP8/U7 — a panel that needs z²+c says so before you press anything", () => {
+  it("disables the seven quadratic panels and names the current f", async () => {
+    await mount();
+    const btn = byId<HTMLButtonElement>("angles-find");
+    expect(btn.disabled).toBe(false);
+    expect(document.querySelector("#angle-group > p.gate-note")).toBeNull();
+
+    setVal("inpf", "z^3+c");
+    byId("apply_all").click();
+    expect(btn.disabled).toBe(true);
+    const note = document.querySelector("#angle-group > p.gate-note");
+    expect(note?.textContent ?? "").toContain("Needs f = z²+c");
+    expect(note?.textContent ?? "").toContain("z^3+c"); // …and what f actually is
+
+    setVal("inpf", "z^2+c");
+    byId("apply_all").click();
+    expect(btn.disabled).toBe(false);
+    expect(document.querySelector("#angle-group > p.gate-note")).toBeNull();
+  });
+
+  it("does not re-enable a control some OTHER rule had disabled", async () => {
+    // `updateLamination` greys out the detail slider while both its toggles are off. Going
+    // non-quadratic and back must leave it grey — the gate only undoes its own work.
+    await mount();
+    const detail = byId<HTMLInputElement>("lamination-detail");
+    expect(detail.disabled).toBe(true);
+    setVal("inpf", "z^3+c");
+    byId("apply_all").click();
+    expect(byId<HTMLButtonElement>("angles-find").disabled).toBe(true); // the gate IS in effect
+    setVal("inpf", "z^2+c");
+    byId("apply_all").click();
+    expect(byId<HTMLButtonElement>("angles-find").disabled).toBe(false); // …and has let go
+    expect(detail.disabled).toBe(true); // but the slider is not its to hand back
+  });
+
+  it("leaves the glossary links alone — a definition is still worth reading", async () => {
+    await mount();
+    setVal("inpf", "z^3+c");
+    byId("apply_all").click();
+    const panel = byId("mating-group");
+    const gated = [...panel.querySelectorAll<HTMLButtonElement>("button")].filter(
+      (b) => !b.classList.contains("gloss-link"),
+    );
+    expect(gated.length, "the panel has action buttons to gate").toBeGreaterThan(0);
+    expect(gated.every((b) => b.disabled), "the gate IS in effect").toBe(true);
+    const links = [...panel.querySelectorAll<HTMLButtonElement>(".gloss-link")];
+    expect(links.length, "the panel has glossary links").toBeGreaterThan(0);
+    for (const g of links) expect(g.disabled).toBe(false);
+  });
+});
+
+describe("WP8/S6 — an error banner comes down when its cause does", () => {
+  it("unticking Newton clears the error ticking it raised", async () => {
+    await mount();
+    const box = byId("input-errors");
+    setVal("inpf", "conjugate(z^2)+c"); // no analytic derivative ⇒ Newton cannot compile
+    byId("apply_all").click();
+    byId<HTMLInputElement>("newton").checked = true;
+    fire("newton", "change");
+    // Non-vacuity first: unless ticking Newton actually RAISES a banner, "it comes down" is a
+    // statement about nothing. (The error is CPU-side — `updateIteration` refusing to build the
+    // Newton map without f′ — so jsdom reaches it without a real shader compile.)
+    expect(box.hidden).toBe(false);
+    expect(box.textContent ?? "").not.toBe("");
+
+    byId<HTMLInputElement>("newton").checked = false;
+    fire("newton", "change");
+    // Before WP8 `reportCompileErrors` only ever ADDED, so this banner stayed for the session.
+    expect(box.hidden).toBe(true);
+    expect(box.textContent ?? "").toBe("");
+  });
+
+  it("leaving the σ view by Escape clears its error box, not only the ↩ button", async () => {
+    await mount();
+    const err = byId("schwarz-error");
+    byId("schwarz-open").click(); // opens the σ pane and generates the default deltoid
+    const workspace = document.querySelector(".workspace") as HTMLElement;
+    if (!workspace.classList.contains("schwarz-active")) {
+      // σ needs its engine to build; if it could not here, there is nothing to assert about
+      // leaving it. The test says so rather than passing quietly on an empty premise.
+      throw new Error("σ did not open under jsdom — this test's premise is gone");
+    }
+    // Put an error up the way a bad φ would.
+    err.textContent = "could not build φ";
+    err.hidden = false;
+
+    escape();
+    expect(workspace.classList.contains("schwarz-active")).toBe(false);
+    expect(err.hidden).toBe(true); // only the ↩ button used to do this
+    expect(err.textContent).toBe("");
+  });
+});

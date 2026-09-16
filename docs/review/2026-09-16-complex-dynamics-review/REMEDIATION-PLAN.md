@@ -488,7 +488,73 @@ tests `test/inspectorRows.test.ts` (new), `test/dataExport.test.ts`, `test/julia
 
 ---
 
-## WP8 — Shell logic: modes, errors, Esc, orbit start · effort S · closes S4, S5, S6 (Newton banner, σ error), S7, U7
+## WP8 — Shell logic: modes, errors, Esc, orbit start · effort S · closes S4, S5, S6 (Newton banner, σ error), S7, U7 · **DONE**
+
+> **Landed.** Gate green: lint, typecheck, **557 files / 5,825 tests**, build; CD browser suite 5 files /
+> 26 tests. Nine negative controls, one per fix, each reverted and confirmed red. **S7's recommendation
+> was measured and INVERTED**; S4 turned out to be twice the size the plan gave it.
+>
+> **S7 — the plan picked the wrong side, and the reason is in the distance estimate.** The plan said
+> "pick the critical point … and fix the overlay + shader start to match". Measured, the shader and
+> the overlay already AGREE (both seed `z₀ = c` on the parameter plane) and the inspector is the
+> outlier — but the inspector is also the one that is right, and the shader is the one that must not
+> move. Three measurements decided it. **(1)** On z²+c the two conventions differ by exactly one
+> iteration at every escaping parameter (`f(0) = c`, so the orbit of `c` IS the critical orbit one
+> step in) and the fate is identical at every interior one; on `z²−2z+c`, whose critical point is 1,
+> the seeds 0 / 1 / c escape at 5, 2 and 4 and no two agree. **(2)** Seeding the INSPECTOR at `c` —
+> the other way to make them agree — would have silently corrupted the distance estimate:
+> `escapeDistance` carries `D₀ = 0`, which is `∂z₀/∂c` for a c-independent critical point, and with
+> the pixel seed the same code returns **1.007× at c = 0.26, 1.05× near the boundary and 3.38× at
+> c = 1+i**. **(3)** Seven of the eight CPU call sites already use the critical point (`inspect`,
+> `computeJuliaProperties`, `findNucleus`, `exactCriticalPeriod`, the nucleus / Misiurewicz /
+> component-data paths); the overlay is the sole exception. So the OVERLAY moves to the critical
+> orbit, the label names which orbit it is reporting, and the shader is left alone — its loop count
+> is never printed, only rendered as a colour band, and changing it would shift every parameter-plane
+> image ever exported for a one-iteration cosmetic offset. A consequence worth stating: on the
+> parameter plane the dashed "critical orbit" overlay would now trace the identical polyline over the
+> solid one, so it becomes a dynamical-plane instrument. **What the plan's test asked for is the
+> test that landed** — the inspector's escape count equals the overlay label's — read back off a
+> recording 2-D context, since the overlay had no test at all.
+>
+> **S4 was two defects, and the plan named the smaller one.** The silent mode change is real and now
+> toasts with the mode it took away, the reason, and what is showing instead. The larger one: the
+> perturbation kernel draws `uMode = mode === 1 ? 1 : 0` — smooth, else escape — so **ten of the
+> sixteen colouring modes were selectable while something else was drawn**, four of them already
+> disabled for other reasons and six a silent substitution. `modeUnavailable` is now one function
+> returning the SENTENCE, and the disabled state, the `title` on the greyed option and the toast all
+> read it, so the three cannot drift.
+>
+> **U7.** The `(z²+c only)` lived in a `title` on a control that is DISABLED when it applies — which
+> is the one state in which a title is least likely to be shown and impossible to reach by keyboard.
+> It is label text now. The seven quadratic-only panels get one visible line naming the current `f`
+> and their action controls disabled, instead of a toast when a button is pressed. The gate re-enables
+> only what it itself disabled (`data-gated`), so it cannot hand back the depth / detail sliders that
+> `updateYoccoz` and `updateLamination` grey out for their own reasons — asserted in both directions.
+>
+> **S5.** Six document-level Escape handlers, each testing its own visibility, became one stack. The
+> defect is exactly what that arrangement implies — the glossary opened over an expanded plot took
+> the plot down with it — and the σ handler already carried a hand-written exception for one of the
+> five pairs ("a modal reachable from σ must close WITHOUT also exiting σ"), which is what a missing
+> stack looks like just before it is written. Hooking it into `withModalFocus` means the glossary and
+> the keyboard reference got it for free.
+>
+> **S6.** `reportCompileErrors` only ever ADDED, so a Newton error raised on a non-differentiable `f`
+> could not be taken down by unticking Newton — it clears first now, a proven no-op for its other two
+> callers, which both clear immediately before calling it. And only the ↩ button cleared σ's error
+> box, so leaving by Escape (or by importing a non-σ map) left a stale "could not build φ" waiting to
+> reappear; `exitSchwarzView` owns it now, and the button's own call is gone rather than duplicated.
+> **σ turns out to open under jsdom**, so both halves are tested in the node gate.
+>
+> **Two test findings.** The Newton test passed VACUOUSLY at first — under jsdom no shader compile
+> ever fails, so "the banner comes down" was a statement about a banner that never went up; it
+> asserts the banner appears first (the error is CPU-side, from `updateIteration` refusing to build
+> the Newton map without f′). And two of the three U7 tests passed with the whole gate removed, being
+> regression guards rather than tests of the feature; each now asserts that the gate IS in effect at
+> the moment it checks what the gate did not touch.
+
+**Files:** `apps/complex-dynamics/src/ui/escapeStack.ts` (new), `src/main.ts`, `src/render/overlay.ts`,
+`index.html`, `src/styles/main.css`; tests `test/escapeStack.test.ts` (new),
+`test/overlayOrbit.test.ts` (new), `test/shell.test.ts`.
 
 - **S4 silent mode change.** `main.ts:2851-2861`: when `updateDerivativeGating` has to move `#mode`,
   toast "Distance (analytic) needs a holomorphic f — showing Smooth" and set a `title` on the disabled

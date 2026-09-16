@@ -18,6 +18,7 @@ import { ddCenterToString, ddCenterFromString, ddToNumber } from "./render/dd";
 import { inspect, findNucleus, findMisiurewicz, type InspectResult } from "./render/inspect";
 import { matingVerdict } from "./render/mating";
 import { buildInspectorRows } from "./ui/inspectorRows";
+import { pushEscapeLayer } from "./ui/escapeStack";
 import { describeLevel } from "@cas/rigor";
 import { CANONICAL_MATINGS, mateBulbWithBasilica, mateBulbs, mateableLimbs } from "./render/matingEngine";
 import { computeOrbit, orbitAndClassify, type Annotation } from "./render/overlay";
@@ -511,15 +512,15 @@ function setupMobileSheet(): void {
   const fab = byId<HTMLButtonElement>("controls-fab");
   const pane = byId<HTMLElement>("controls-pane");
   const closeBtn = byId<HTMLButtonElement>("controls-close");
+  let release: (() => void) | null = null;
   const setOpen = (open: boolean): void => {
     pane.classList.toggle("is-open", open);
     fab.setAttribute("aria-expanded", open ? "true" : "false");
+    release?.();
+    release = open ? pushEscapeLayer(() => setOpen(false)) : null;
   };
   fab.addEventListener("click", () => setOpen(!pane.classList.contains("is-open")));
   closeBtn.addEventListener("click", () => setOpen(false));
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && pane.classList.contains("is-open")) setOpen(false);
-  });
   // Widening past the mobile breakpoint clears the sheet state so desktop never shows it half-open.
   window.matchMedia("(max-width: 720px)").addEventListener("change", (e) => {
     if (!e.matches) setOpen(false);
@@ -537,8 +538,11 @@ function setupOnboarding(): void {
   }
   if (seen) return;
   el.hidden = false;
+  let release: (() => void) | null = null;
   const dismiss = (): void => {
     el.hidden = true;
+    release?.();
+    release = null;
     try {
       localStorage.setItem("cdjs.onboarded", "1");
     } catch {
@@ -565,9 +569,7 @@ function setupOnboarding(): void {
   el.addEventListener("click", (e) => {
     if (e.target === el) dismiss(); // click the backdrop to dismiss
   });
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !el.hidden) dismiss();
-  });
+  release = pushEscapeLayer(dismiss);
   byId<HTMLButtonElement>("onboarding_dismiss").focus();
 }
 
@@ -632,11 +634,14 @@ function setupLayout(): void {
     sync();
   });
   // Per-plot expand (focus mode): transient, not persisted; restores to the stack/collapse state.
+  let releaseExpand: (() => void) | null = null;
   const setExpand = (which: "param" | "dyn" | null): void => {
     workspace.classList.toggle("expand-param", which === "param");
     workspace.classList.toggle("expand-dyn", which === "dyn");
     clearPlotSizes();
     sync();
+    releaseExpand?.();
+    releaseExpand = which === null ? null : pushEscapeLayer(() => setExpand(null));
   };
   expandParamBtn.addEventListener("click", () =>
     setExpand(workspace.classList.contains("expand-param") ? null : "param"),
@@ -644,14 +649,6 @@ function setupLayout(): void {
   expandDynBtn.addEventListener("click", () =>
     setExpand(workspace.classList.contains("expand-dyn") ? null : "dyn"),
   );
-  document.addEventListener("keydown", (e) => {
-    if (
-      e.key === "Escape" &&
-      (workspace.classList.contains("expand-param") || workspace.classList.contains("expand-dyn"))
-    ) {
-      setExpand(null);
-    }
-  });
 
   // Drag-to-resize: a corner grip on each plot sets its .canvas-stack width (the canvas fills it in
   // the enlarged modes). Clamped to [240px, the plot's content width] so it never overflows the
@@ -730,6 +727,9 @@ function withModalFocus(
   rawClose: () => void,
 ): { open: () => void; close: () => void } {
   let returnFocus: HTMLElement | null = null;
+  // Escape belongs to the stack, not to a document listener per modal: an overlay opened over an
+  // expanded plot used to lose the plot's layout to the same key press (WP8/S5).
+  let releaseEscape: (() => void) | null = null;
   const onKeydown = (e: KeyboardEvent): void => {
     if (e.key !== "Tab") return;
     const items = [...overlay.querySelectorAll<HTMLElement>(MODAL_FOCUSABLE)].filter(
@@ -751,10 +751,14 @@ function withModalFocus(
       returnFocus = document.activeElement as HTMLElement | null;
       rawOpen();
       overlay.addEventListener("keydown", onKeydown);
+      releaseEscape?.(); // a second open without a close would otherwise stack two layers
+      releaseEscape = pushEscapeLayer(() => this.close());
       initialFocus.focus();
     },
     close() {
       overlay.removeEventListener("keydown", onKeydown);
+      releaseEscape?.();
+      releaseEscape = null;
       rawClose();
       if (returnFocus && typeof returnFocus.focus === "function") returnFocus.focus();
       returnFocus = null;
@@ -823,9 +827,6 @@ function setupGlossary(): void {
   byId("glossary-close").addEventListener("click", close);
   overlay.addEventListener("click", (e) => {
     if (e.target === overlay) close(); // backdrop click
-  });
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !overlay.hidden) close();
   });
   // Static "?" links on the overlay labels (the inspector-row ones are wired in showInspect).
   for (const btn of document.querySelectorAll<HTMLButtonElement>(".gloss-link[data-term]")) {
@@ -920,9 +921,6 @@ function setupHelpReference(): void {
   byId("help-ref-close").addEventListener("click", close);
   overlay.addEventListener("click", (e) => {
     if (e.target === overlay) close(); // backdrop click
-  });
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !overlay.hidden) close();
   });
 }
 
@@ -1498,8 +1496,17 @@ export function init(): void {
     errorBox.hidden = true;
   }
 
-  /** After applying, surface any shader-compile error the renderer kept. */
+  /**
+   * After applying, surface any shader-compile error the renderer kept.
+   *
+   * It CLEARS first, so this is "recompute the banner" rather than "add to it". Before WP8 it only
+   * ever added: `applyNewton` calls it, and a non-differentiable `f` under Newton put an error up
+   * that unticking Newton could not take down — the banner stayed for the rest of the session,
+   * describing a state the app had left. Provably a no-op for the other two callers, which both
+   * clear immediately before calling it. (WP8/S6, review 2026-09-16.)
+   */
   function reportCompileErrors(): void {
+    clearInputErrors();
     const errors: FieldError[] = [];
     if (parameterView.plot.lastError) {
       errors.push({
@@ -1529,6 +1536,68 @@ export function init(): void {
     if (re === 0) return `${im < 0 ? "-" : ""}${imStr}`;
     return `${r} ${sign} ${imStr}`;
   }
+  /**
+   * The seven panels whose whole subject is the quadratic family z²+c — external angles, angles of
+   * a point, component data, the Yoccoz puzzle, the lamination, the symbolic console and the mating
+   * check. Their titles say "(z²+c)"; nothing else did.
+   */
+  const QUADRATIC_PANELS = [
+    "angle-group",
+    "angles-of-point-group",
+    "component-data-group",
+    "yoccoz-group",
+    "lamination-group",
+    "address-group",
+    "mating-group",
+  ] as const;
+
+  /**
+   * Disable a quadratic-only panel's controls while `f` is something else, and say so in one visible
+   * line naming the current `f`.
+   *
+   * Before WP8 most of these panels either toasted when a button was PRESSED — "external rays are
+   * defined for z²+c only" — or, worse, did not check at all. Either way the reader had to attempt
+   * the thing to find out it was not available, and the "(z²+c)" in the panel title is easy to read
+   * as a description of what the panel computes rather than as a precondition. (WP8/U7.)
+   *
+   * It only ever re-enables what it itself disabled (`data-gated`), so it cannot fight the panels
+   * that manage their own control state — `updateYoccoz` and `updateLamination` both grey their
+   * depth / detail inputs out while their toggles are off, and that must survive.
+   */
+  function updateQuadraticPanels(): void {
+    const eligible = isQuadraticFamily(parameterView.plot);
+    const fNow = getFInput().trim();
+    for (const id of QUADRATIC_PANELS) {
+      const panel = document.getElementById(id);
+      if (!panel) continue;
+      let note = panel.querySelector<HTMLParagraphElement>(":scope > p.gate-note");
+      if (!eligible) {
+        if (!note) {
+          note = document.createElement("p");
+          note.className = "gate-note";
+          panel.querySelector("summary")?.after(note);
+        }
+        note.textContent = `Needs f = z²+c — the current f is ${fNow}.`;
+      } else {
+        note?.remove();
+      }
+      for (const el of panel.querySelectorAll<
+        HTMLButtonElement | HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+      >("button, input, select, textarea")) {
+        if (el.classList.contains("gloss-link")) continue; // a definition is still worth reading
+        if (!eligible) {
+          if (!el.disabled) {
+            el.disabled = true;
+            el.dataset.gated = "1";
+          }
+        } else if (el.dataset.gated === "1") {
+          el.disabled = false;
+          delete el.dataset.gated;
+        }
+      }
+    }
+  }
+
   /** Update the dynamical-plane caption to the current parameter c. */
   function refreshDynPanels(): void {
     window.clearTimeout(dynPanelsTimer);
@@ -1537,6 +1606,9 @@ export function init(): void {
     updateJuliaProperties(); // …and the Julia-set properties readout (also gated on its panel)
     updateYoccoz(); // …and the Yoccoz puzzle / parapuzzle overlays (a no-op while their toggles are off)
     updateLamination(); // …and the pinched-disk lamination widget (a no-op while its toggle is off)
+    // Last: it must see the state the two updaters above just set, so that it only re-enables the
+    // controls IT disabled and leaves theirs alone.
+    updateQuadraticPanels();
   }
   // During a coupled white-point drag the c-dependent panels are debounced (the cheap caption text
   // still updates live); they recompute once on release via coupling.setDraft(false).
@@ -2403,6 +2475,9 @@ export function init(): void {
     updateExteriorMap(); // a new f may change the degree / coefficients
     applyLaurent();
     updateJuliaProperties();
+    updateYoccoz(); // …and the puzzle / lamination panels' own gating
+    updateLamination();
+    updateQuadraticPanels(); // last — it re-enables only what it disabled (WP8/U7)
     setDirty(false);
     updateViewChips();
     announce(`Changes applied. Dynamical plane for c = ${dynCValue.textContent}.`);
@@ -2428,6 +2503,7 @@ export function init(): void {
     // preset forced (e.g. "period" from a Herman / rational family) doesn't linger onto it.
     byId<HTMLSelectElement>("mode").value = paramPresets[name].mode ?? "smooth";
     applyColoring();
+    updateDerivativeGating(); // the preset may have chosen a mode this configuration cannot draw
     applyFarey();
     applyRays();
     applyRayPairs();
@@ -2440,6 +2516,9 @@ export function init(): void {
     updateExteriorMap();
     applyLaurent();
     updateJuliaProperties();
+    updateYoccoz();
+    updateLamination();
+    updateQuadraticPanels(); // last — it re-enables only what it disabled (WP8/U7)
     setDirty(false);
     updateViewChips();
     scheduleRecord();
@@ -2846,34 +2925,69 @@ export function init(): void {
    * not f), and not under perturbation (its kernel ignores the mode). Disable both options
    * when unavailable, falling the selection back to a safe mode if one was active.
    */
-  function updateDerivativeGating(): void {
-    const available =
-      parameterView.plot.holomorphic &&
-      !byId<HTMLInputElement>("newton").checked &&
-      !parameterView.plot.perturbationActive &&
-      !dynamicalView.plot.perturbationActive;
-    byId<HTMLOptionElement>("mode-distance-analytic").disabled = !available;
-    byId<HTMLOptionElement>("mode-multiplier").disabled = !available;
-    byId<HTMLOptionElement>("mode-marty").disabled = !available;
-    // Interior DE is the z²+c Mandelbrot-interior formula specifically (parameter plane); gate it
-    // on a quadratic map (its recurrence hard-codes f′ = 2z) and off under Newton / perturbation.
-    const interiorDEAvailable =
-      parameterView.plot.monicDegree === 2 &&
-      !byId<HTMLInputElement>("newton").checked &&
-      !parameterView.plot.perturbationActive &&
-      !dynamicalView.plot.perturbationActive;
-    byId<HTMLOptionElement>("mode-interior-de").disabled = !interiorDEAvailable;
-    const sel = byId<HTMLSelectElement>("mode");
-    if (!available && sel.value === "distanceAnalytic") {
-      sel.value = "distance";
-      applyColoring();
-    } else if (!available && (sel.value === "multiplier" || sel.value === "marty")) {
-      sel.value = "smooth";
-      applyColoring();
-    } else if (!interiorDEAvailable && sel.value === "interiorDE") {
-      sel.value = "smooth";
-      applyColoring();
+  /** Colouring modes the perturbation kernel actually renders. Everything else it draws as plain
+   *  escape time (glPlot's `uMode = mode === 1 ? 1 : 0`), which is a SILENT substitution. */
+  const PERTURBATION_MODES = new Set(["escape", "smooth"]);
+  /** Modes that need an analytic f′ (and therefore f itself, not the Newton map). */
+  const DERIVATIVE_MODES = new Set(["distanceAnalytic", "multiplier", "marty"]);
+  /** Where each mode falls back to when it becomes unavailable (default: smooth, always available). */
+  const MODE_FALLBACK: Record<string, string> = { distanceAnalytic: "distance" };
+
+  /**
+   * Why `value` cannot be drawn right now, or null if it can.
+   *
+   * One function so that the disabled state, the `title` a reader gets on the greyed option, and the
+   * message shown when the app has to MOVE the selection all come from the same sentence — three
+   * places that would otherwise drift apart.
+   */
+  function modeUnavailable(value: string): string | null {
+    const perturbing =
+      parameterView.plot.perturbationActive || dynamicalView.plot.perturbationActive;
+    // Perturbation first: it is the broadest restriction, and the one that used to be invisible.
+    // Ten of the sixteen modes were left selectable while the kernel drew escape time instead.
+    if (perturbing && !PERTURBATION_MODES.has(value)) {
+      return "perturbation (deep zoom) renders escape / smooth colouring only";
     }
+    if (byId<HTMLInputElement>("newton").checked && (DERIVATIVE_MODES.has(value) || value === "interiorDE")) {
+      return "Newton iterates the Newton map N_f, so f′ is not the derivative this needs";
+    }
+    if (DERIVATIVE_MODES.has(value) && !parameterView.plot.holomorphic) {
+      return "this needs an analytic f′, and the current f is not holomorphic";
+    }
+    // Interior DE is the z²+c Mandelbrot-interior formula specifically; its recurrence hard-codes
+    // f′ = 2z, so it is a quadratic-family instrument and not a general one.
+    if (value === "interiorDE" && parameterView.plot.monicDegree !== 2) {
+      return "the interior distance recurrence hard-codes f′ = 2z, so it needs f = z²+c";
+    }
+    return null;
+  }
+
+  /**
+   * Disable the colouring modes the current configuration cannot draw, say why on each, and — if the
+   * SELECTED one has just become unavailable — move it and say so out loud.
+   *
+   * The move was silent before WP8: picking Newton, or a non-holomorphic f, reset the colouring
+   * under the reader with no message anywhere, and the reason lived only in a `title` that a
+   * disabled `<option>` does not reliably show. (WP8/S4, review 2026-09-16.)
+   */
+  function updateDerivativeGating(): void {
+    const sel = byId<HTMLSelectElement>("mode");
+    const name = (v: string): string =>
+      ([...sel.options].find((o) => o.value === v)?.textContent ?? v).trim();
+    let moved: string | null = null;
+    for (const opt of sel.options) {
+      const why = modeUnavailable(opt.value);
+      opt.disabled = why !== null;
+      opt.title = why === null ? "" : `Unavailable: ${why}.`;
+      if (why !== null && sel.value === opt.value) moved = why;
+    }
+    if (moved === null) return;
+    const from = sel.value;
+    const wanted = MODE_FALLBACK[from] ?? "smooth";
+    const to = modeUnavailable(wanted) === null ? wanted : "smooth";
+    sel.value = to;
+    applyColoring();
+    showToast(`${name(from)} is unavailable — ${moved}. Showing ${name(to)}.`, "info");
   }
 
   /** Apply the live parameter `a` slider value to both plots and update its readout. */
@@ -3086,6 +3200,9 @@ export function init(): void {
   // (permanently CPU). It owns a private offscreen canvas whose result we drawImage onto #JCSSchwarz.
   let schwarzGL: SchwarzGLRenderer | null | undefined;
   // The active σ session — the reconstruction inputs a redraw needs at the current view. null ⇔ not shown.
+  /** Release for σ's escape-stack layer, held for as long as a σ session is live. */
+  let releaseSchwarzEscape: (() => void) | null = null;
+
   let schwarzSession:
     | {
         engine: ReturnType<typeof schwarzEngineFromMapSpec>;
@@ -3999,6 +4116,12 @@ export function init(): void {
       }
     }
     schwarzSession = { engine, poly, phi, boundedOmega, mode };
+    // σ is an Escape layer like any other (WP8/S5). Registering here rather than in the key handler
+    // is what retires the hand-written "defer to an open modal" special case below: the glossary
+    // opened FROM σ pushes on top and Escape closes it alone, with no test for which is showing.
+    // Idempotent — re-generating φ without leaving σ must not stack a second layer.
+    releaseSchwarzEscape?.();
+    releaseSchwarzEscape = pushEscapeLayer(() => exitSchwarzView());
     // A new σ starts on the w-plane, with every coordinate view at its default: both flat windows (F2b) and
     // the sphere camera (F2d).
     schwarzViewMode = "plane";
@@ -4340,11 +4463,21 @@ export function init(): void {
   /** Leave the σ peer view — back to the Parameter & Dynamical plots. Idempotent (safe if not in σ mode). */
   function exitSchwarzView(): void {
     schwarzSession = null;
+    releaseSchwarzEscape?.();
+    releaseSchwarzEscape = null;
     if (schwarzRaf) {
       cancelAnimationFrame(schwarzRaf);
       schwarzRaf = 0;
     }
     document.querySelector(".workspace")?.classList.remove("schwarz-active");
+    // Clear the σ error box on EVERY exit. Only the ↩ button used to do it, so leaving by Escape —
+    // or by importing a non-σ map — left a stale "could not build φ" over the pane, waiting to
+    // reappear the next time σ was opened. (WP8/S6.)
+    const err = document.getElementById("schwarz-error");
+    if (err) {
+      err.textContent = "";
+      err.hidden = true;
+    }
   }
 
   // σ interaction: drag to pan, wheel to zoom (about the cursor), Esc to exit. Handlers are installed
@@ -4563,22 +4696,15 @@ export function init(): void {
     // σ keyboard (E2 — parity with the standard plots, adapted to σ's full-screen mode). Only ONE view is
     // active in σ mode, so — unlike CD's side-by-side plots, which key off canvas focus — the shortcuts act
     // whenever a σ session is live, EXCEPT while typing in a field (so the centre / zoom / filename inputs and
-    // the range sliders keep their native arrow behaviour). Esc exits (unguarded, as before); arrows pan a
+    // the range sliders keep their native arrow behaviour). Esc is the escape stack's; arrows pan a
     // quarter-window; +/- zoom ×2 about the centre; i inspects the centre point. Pan/zoom draft then refine.
     window.addEventListener(
       "keydown",
       (e) => {
       if (!schwarzSession) return;
-      if (e.key === "Escape") {
-        // A modal reachable from σ (the glossary / help behind the "?" links) must close on Escape WITHOUT
-        // also exiting σ out from under it. This is a capture-phase listener, so it runs BEFORE the modal's
-        // own document-level close handler — returning here lets the event bubble on to close the modal
-        // while σ stays put. With no modal open, Escape exits σ as before.
-        if (document.querySelector(".glossary-overlay:not([hidden])")) return;
-        e.preventDefault();
-        exitSchwarzView();
-        return;
-      }
+      // Escape is NOT handled here: σ registers itself with the escape stack on entry, so a modal
+      // opened from σ closes alone and σ stays put — without this listener having to ask which is
+      // on top. (WP8/S5; the guard it replaces tested for one overlay by class name.)
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) {
         return; // don't hijack typing / slider nudges
@@ -4643,7 +4769,7 @@ export function init(): void {
       }
       e.preventDefault();
       },
-      true, // capture: σ keys act before other handlers; Escape defers to an open modal (guard above)
+      true, // capture: σ keys act before other handlers (Escape is the stack\u2019s, not ours)
     );
     // Re-fit the backing resolution when the display size / devicePixelRatio changes (window resize, or the
     // A3 side-panel reflowing the canvas cell). Draft first, then the idle refine renders crisp at the new size.
@@ -4714,10 +4840,7 @@ export function init(): void {
       };
       openBtn.addEventListener("click", generate); // sidebar entry → open σ + render the current φ (deltoid)
       genBtn.addEventListener("click", generate); // in-pane "Generate σ" → re-render the edited φ (stays in σ)
-      exitBtn.addEventListener("click", () => {
-        exitSchwarzView();
-        setError(null);
-      });
+      exitBtn.addEventListener("click", () => exitSchwarzView()); // clears the error itself
       presetSel.addEventListener("change", () => {
         if (presetSel.value) {
           fill(presetSel.value);
@@ -6819,6 +6942,7 @@ export function init(): void {
       byId<HTMLSelectElement>("palette").value = p.palette;
       byId<HTMLSelectElement>("aa").value = p.aa;
       applyColoring();
+      updateDerivativeGating(); // …and so may the profile
       byId<HTMLInputElement>("light").checked = p.light;
       applyLighting();
       byId<HTMLInputElement>("post").checked = p.post;
