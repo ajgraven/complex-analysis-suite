@@ -30,6 +30,19 @@ describe("fmtApprox", () => {
     expect(fmtApprox([1e-20, -3e-19], 1e-6)).toBe("0");
   });
 
+  it("says NOT A NUMBER rather than dropping a NaN as though it were noise", () => {
+    // The drop rule asks `Math.abs(x) > floor`, which is false for `NaN` — so a pair of them printed
+    // as `0`, an exact-looking zero for a value that does not exist, and a single one vanished
+    // leaving a plausible purely-imaginary answer. `removable-one-minus-cos` reaches this: a
+    // midpoint lands on the removable singularity and every later partial sum is `NaN`.
+    expect(fmtApprox([Number.NaN, Number.NaN], 1e-6)).toBe("not a number");
+    expect(fmtApprox([Number.NaN, 6.28], 1e-6)).toBe("not a number");
+    expect(fmtApprox([6.28, Number.NaN], 1e-6)).toBe("not a number");
+    // An INFINITY is a different claim and keeps its own word: it is a number the arithmetic
+    // reached, not one it failed to.
+    expect(fmtApprox([Number.POSITIVE_INFINITY, 0], 1e-6)).toBe("Infinity");
+  });
+
   it("falls back to full precision when there is no estimate to limit it", () => {
     // `0` and a non-finite estimate both mean "nothing is known about the error", which must not be
     // read as "the error is zero, so print one digit".

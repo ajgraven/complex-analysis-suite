@@ -505,3 +505,43 @@ describe("hovering a piece row", () => {
     expect(hue(), "the emphasis outlived the pointer").toBe(before);
   });
 });
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+// The strip, mounted — M8 step 1.6.
+//
+// `strip.ts` has its own suites; what is asserted HERE is the wiring, which is the only thing they
+// cannot see: that `mountShell2` actually draws it, and that a scrub through the shell reaches it.
+// The sweep found both unguarded — a shell that never called `stripView.schedule` left every strip
+// test passing over a panel that rendered nothing.
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+
+describe("the accumulator strip, wired", () => {
+  it("is DRAWN by the shell, and follows a scrub made through it", async () => {
+    const { root, app } = mount();
+    await drawn();
+    const canvas = root.querySelector<HTMLCanvasElement>("canvas.acc");
+    if (canvas === null) throw new Error("no accumulator canvas");
+    // The trail's own hue: the piece colours are chromatic where the axes and the head dot are not,
+    // which is what survives antialiasing on an un-premultiplied read (`strip.ts`'s own finding).
+    const trail = (): number => {
+      const ctx = canvas.getContext("2d");
+      if (ctx === null) throw new Error("no 2d context");
+      const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      let lit = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] < 32) continue;
+        const [r, g, bl] = [data[i], data[i + 1], data[i + 2]];
+        if (Math.max(r, g, bl) - Math.min(r, g, bl) > 24) lit++;
+      }
+      return lit;
+    };
+    const full = trail();
+    expect(full, "the strip drew no trail at all").toBeGreaterThan(200);
+    // A scrub through the SHELL's own action — the path a reader takes — must reach the canvas.
+    app.applyState({ ...app.currentState(), scrub: 0.25 });
+    await drawn();
+    const quarter = trail();
+    expect(quarter, "the strip ignored the scrub").toBeLessThan(full);
+    expect(quarter, "the strip drew nothing at a quarter of the way along").toBeGreaterThan(0);
+  });
+});

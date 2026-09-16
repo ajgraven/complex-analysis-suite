@@ -18,10 +18,12 @@ changed.
   boots it in the new visual system over a live, DRAGGABLE stage with **all six left-rail cards**
   working. Step 1.4 was SPLIT, on the pattern M5.1 and 0.5b used: 1.4a was Target / Integrand /
   Parameters / Singularities, and 1.4b the Contour and Branch-cuts cards — ~430 lines of the old
-  shell between them — plus the rail → stage half of the three-way highlight. **Step 1.5 is SPLIT
-  the same way:** 1.5a is `format.ts` + the **Result** card (done); **1.5b** is the Derivation and
-  Share cards.
-  **Next execution action: step 1.5b.** The branch may be
+  shell between them — plus the rail → stage half of the three-way highlight. **Steps 1.5 and 1.6
+  are done**: all nine cards render and the accumulator strip is mounted, scrubs, and carries a
+  generated description. 1.5b and 1.6 were written by three agents in parallel, each owning a
+  disjoint file set, with the shared plumbing landed first and the review, the sweep and the gate
+  kept here.
+  **Next execution action: step 1.7** (modes, the bar, permalinks, contrasts and drill). The branch may be
   red between 1.1 and 1.12 and must be green at 1.13; it is green now. The look is recorded at
   [`M8/screens/1.2-shell2-1440x900.png`](screens/1.2-shell2-1440x900.png) and
   [`1.3-shell2-stage-1440x900.png`](screens/1.3-shell2-stage-1440x900.png) /
@@ -30,7 +32,8 @@ changed.
   [`1.4b-shell2-keyhole-1440x900.png`](screens/1.4b-shell2-keyhole-1440x900.png) /
   [`1.4b-shell2-declared-1440x900.png`](screens/1.4b-shell2-declared-1440x900.png) /
   [`1.5-shell2-result-1440x900.png`](screens/1.5-shell2-result-1440x900.png) /
-  [`1.5-shell2-refused-1440x900.png`](screens/1.5-shell2-refused-1440x900.png).
+  [`1.5-shell2-refused-1440x900.png`](screens/1.5-shell2-refused-1440x900.png) /
+  [`1.5b-shell2-full-1440x900.png`](screens/1.5b-shell2-full-1440x900.png).
 - **Last commit:** see `git log -1` on the branch; this file is updated in the same commit as the work
   it describes.
 
@@ -55,6 +58,8 @@ changed.
 
 | 2026-09-15 | **0.5b-i** | 597697d | the five decisions applied to the ledger's 72 own sentences; `shell/math.ts` + KaTeX; 43 wording-pinned tests re-keyed on templates; new `ledger-dump.txt` baseline |
 
+| 2026-09-16 | **1.5b + 1.6** | (this commit) | the **Derivation** card (stages as `<details>`, the failing one open, lines typeset with their method / restriction / repair, provenance nested, the pole table in Residues only, `pieceId` hover-linked), the **Share** card, and the **accumulator strip** (`src/shell2/strip.ts` — cached accumulation, a scrub that maps to a STEP INDEX shared with the drawn head, compare toggles, a generated `role="img"` description) wired into `mountShell2`. Written by three agents in parallel on disjoint files; plumbing, review, sweep and gate here. Sweeps: 35/35 (derivation), 11/11 (strip), 10/10 (share), 8/9 mine with one recorded gap. Full gate green: 560 files / 5870 tests, lint and typecheck silent, browser suite 160/160, a11y no regressions |
+
 | 2026-09-15 | **1.5a** | 3a6404d | `src/shell2/format.ts` (`fmtApprox` / `fmtNum` — the error estimate decides the digits AND what is shown at all) + the **Result** card: headline, the solved value and the exact `∮` each badged from their OWN evidence, the hypothesis table opening on failure, the Numerics disclosure opening when the approximate value IS the answer, and `session.open` as the tri-state that lets a click win. `ShellActions` gains `setOpen`. `test/format.test.ts` (9) + 7 card tests + 1 live; sweep **17/18 applicable, one recorded equivalent, one guard removed as dead**. Full gate green: 558 files / 5829 tests, lint and typecheck silent, browser suite 148/148, a11y no regressions |
 
 | 2026-09-15 | **1.4b** | 159f985 | the last two left-rail cards: `cards/contour.ts` (template menu, pen, **Reverse orientation**, the piece list with colour / name / role / its own value) and `cards/cuts.ts` (the old `renderBranchCard` + `renderDeclaration` ported structurally and KEYED); `reverseContour` in `engine/contour/edit.ts`; the rail → stage half of the three-way highlight; `ShellActions` gains eleven members. `test/contourEdit.test.ts` (3) + 11 card tests + 2 live + 1 browser; sweep **22/23, one recorded equivalent**. Full gate green: 557 files / 5810 tests, lint and typecheck silent, browser suite 148/148, a11y no regressions |
@@ -76,6 +81,57 @@ changed.
 | 2026-09-15 | **0.5b-ii** | 573fb8c | the five rules through `kernel/bounds/*`, the three theorem identities, `derivation.ts`'s solve stage and `solveTarget.ts`; `latex` on the solved value; 65 wording-pinned tests updated; 191 → 152 flagged |
 
 ## Findings (things learned while executing; each names its step)
+
+- **(1.5b) `fmtApprox` printed `0` for a `NaN`** — the drop rule asks `Math.abs(x) > floor`, which is
+  false for `NaN`, so a pair of them read as an exact-looking zero and a single one vanished leaving
+  a plausible purely-imaginary answer. `removable-one-minus-cos` reaches it: a midpoint lands on the
+  removable singularity and every later partial sum is `NaN`. Found by the strip, which was the
+  formatter's SECOND consumer — which is what a second consumer is for.
+- **(1.5b) A card keyed on `state.declaration !== null` calls the box a cofactor when the declaration
+  is ORPHANED.** A declaration names a branch POINT; remove the point and `declaredOrder` returns
+  null, so `resolveState` falls through to the plain branch and integrates the box WHOLE while the
+  label still says `R(z)` — M6.1's own finding in a new place. Both cards key on `declaredOrder` now.
+  **And the 1.4a test built exactly that state and asserted the buggy answer**, which is how it would
+  have survived; it is replaced, and the orphan is now its own test.
+- **(1.5b) `encodeShell` held two postures.** The contour's recipe is rebuilt and compared before a
+  link is minted; a declaration was written straight out and `decodeShell` refused it on arrival —
+  loud rather than silent, so nothing was ever wrong, but the failure was deferred onto whoever
+  OPENED the link, who is exactly the reader who cannot act on it. It refuses at encode now.
+- **(1.5b) The Result card spent the vocabulary's word for ONE constraint on all four.** `Hypotheses`
+  is LEGALITY's name (`vocabulary.ts` `GROUP`), and 1.5a used it for the whole ledger — so a browser
+  pass showed `Hypotheses — 6 checked` in Result beside `Hypotheses — 2 steps` in Derivation two
+  cards down, inviting a reader to take one for a subset of the other. It reads `What was checked`
+  now. Step 0.2's decision read from the other end: a card that spends a decided word on a wider set
+  is the same drift.
+- **(1.5b) A `role="status"` region must be rendered UNCONDITIONALLY**, contents only coming and
+  going. One inserted with its text already inside is not reliably announced, so the natural
+  `notice === null ? null : h(...)` would make every notice silent for exactly the readers who
+  cannot see the badge.
+- **(1.6) The step index had to be `drawAccumulator`'s, not the plan's.** The plan says
+  `round(scrub·(N−1))`; the renderer derives its drawn head from `upTo` alone as
+  `max(1, round(upTo·N)) − 1`, and the two differ at almost every position — so the readout and the
+  stage marker would have named a term the picture does not end on. The strip takes the renderer's
+  rule, and the off-by-one is killed by a browser test comparing bytes against the same renderer
+  re-driven at `(index + 1)/N` rather than by a centroid, because consecutive steps are 0.75 px apart
+  and a tolerance loose enough for antialiasing absorbs a whole one-term error.
+- **(1.6) Alpha alone cannot separate the two accumulator trails.** Measured: with no comparison
+  drawn, the band `60 < a ≤ 200` already held 128 pixels of the real trail's own antialiased edges.
+  The test separates by HUE — chromatic piece colours against the achromatic axes and head dot —
+  which survives antialiasing on an un-premultiplied read.
+- **(1.6) `.strip2` had to become two columns.** It was a block with the canvas `position: absolute;
+  inset: 0`, which painted over the side panel the moment one existed; a sibling panel needs the
+  canvas laid out rather than taken out of flow.
+- **(1.6) Two live regions is the PACKAGE's behaviour, not this step's** — measured: the old shell
+  has two as well, because `attachCanvasA11y` makes one per attached canvas and defaults its host to
+  the canvas's parent. Not changed.
+- **(1.5b/1.6) One agent claim did NOT hold, and checking is why it matters.** The strip's report
+  said `.shell2 .num` lacks `font-variant-numeric: tabular-nums`; it is set in `theme.css`, and the
+  report had read only `shell2.css`'s rule cancelling the old sheet's monospace. Everything else in
+  all three reports checked out against the code.
+- **(1.5b) One gap left open and named: nothing asserts the strip is in the FIGURE.** The sweep's
+  `strip-not-in-figure` survives — `stripView.drawNow` inside `figureBytes` guarantees the plate
+  carries this frame's trail rather than the last coalesced one, and the honest instrument for that
+  is the figure-export test Phase 2 step 2.3 builds. Recorded rather than contrived.
 
 - **(1.5a) A TEST THAT PASSED ON THE WRONG SENTENCE.** The numerics note is asserted to say "a
   convergence estimate, not a proved error bound" — and the quadrature's own verdict carries a

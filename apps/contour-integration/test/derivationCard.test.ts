@@ -164,6 +164,45 @@ describe("the Derivation card", () => {
     expect(text).toContain("1/(z-1.5)");
     expect(text).toContain("contour");
     expect(setup.querySelectorAll(".tag").length).toBe(2);
+    // And the stage's standing rationale — why this step is in the argument at all. It is a property
+    // of the METHOD rather than of this integral, which is why `derivation.ts` carries it as data;
+    // dropping it here would leave the headings with nothing under them but their own titles.
+    expect(text).toContain("The integral to be evaluated, the integrand on the contour");
+  });
+
+  // **A restricted claim that loses its restriction is not a vaguer claim, it is a false one**
+  // (`@cas/rigor`'s own words), and a repair is the only part of a refusal a reader can act on. So
+  // neither is ever behind a disclosure, and both are asserted where they occur: the keyhole's
+  // `arg z ∈ [0, 2π)` rides its solve and verdict lines, and the repair rides the refusing sandbox's
+  // failed hypothesis.
+  //
+  // The selector is a DIRECT child of the line's body on purpose — a failed audit STEP also carries
+  // `restriction`, so a loose `.restriction` would count the trail's ✗ marks and pass with the
+  // line's own restriction gone.
+  it("keeps a restriction and a repair in the open", () => {
+    const state = gallery("mellin-keyhole");
+    const resolution = resolveState(state, compile(state.expr));
+    if (resolution.kind !== "gallery" || resolution.run === null) throw new Error("no run");
+    const run = resolution.run;
+    const restricted = buildDerivation({
+      ledger: run.ledger,
+      poles: run.poles,
+      integral: run.integral,
+      theorem: run.theorem,
+      spec: run.contour.pieces,
+      ...(resolution.solved === null ? {} : { solved: resolution.solved }),
+    })
+      .stages.flatMap((st) => st.lines)
+      .filter((l) => l.restriction !== undefined).length;
+    expect(restricted).toBeGreaterThan(0);
+    expect(
+      derivationOf(state).card.querySelectorAll("li > .pieceValue > p.restriction").length,
+    ).toBe(restricted);
+
+    const refused = derivationOf(refusing()).card;
+    const repairs = [...refused.querySelectorAll<HTMLElement>("li > .pieceValue > p.repair")];
+    expect(repairs.length).toBe(1);
+    expect((repairs[0]?.textContent ?? "").length).toBeGreaterThan(0);
   });
 
   // **A stage with no LINES is not an empty stage.** `The problem` carries the record's target and
@@ -251,6 +290,44 @@ describe("the Derivation card", () => {
     }
   });
 
+  // **How a claim was established travels with it.** A derivation whose lines carried only their
+  // badge would say `=` beside a sentence and leave a reader with no way to ask what produced it —
+  // which is the whole difference between this card and a list of results. One method line per
+  // line, and its text is the certificate's own `method` string, not a paraphrase.
+  it("prints each line's method beneath it", () => {
+    const state = sandbox({ expr: "1/z" });
+    const compiled = compile(state.expr);
+    const resolution = resolveState(state, compiled);
+    if (resolution.kind !== "plain" || !compiled.ok) throw new Error("no analysis");
+    const a = resolution.analysis;
+    const methods = buildDerivation({
+      ledger: a.ledger,
+      poles: compiled.poles,
+      integral: a.integral,
+      theorem: a.theorem,
+      spec: state.contour.pieces,
+    })
+      .stages.flatMap((st) => st.lines)
+      .map((l) => l.method);
+
+    const { card } = derivationOf(state);
+    const drawn = [...card.querySelectorAll<HTMLElement>("li > .pieceValue > p.muted.small")].map(
+      (p) => p.textContent ?? "",
+    );
+    expect(drawn.length).toBe(methods.length);
+    // The header counts the same lines the stages hold. `8 steps, each with its evidence` is the
+    // card's one summary of its own size, and a constant there would go on reading right while the
+    // argument beneath it grew or shrank.
+    expect(card.querySelector("p.muted.small")?.textContent ?? "").toBe(
+      `${methods.length} steps, each with its evidence`,
+    );
+    // Compared only on the methods carrying no `$`, because a typeset one's `textContent` is
+    // KaTeX's rendering and not the source — asserting those by string would be asserting KaTeX.
+    const plain = methods.filter((m) => !m.includes("$"));
+    expect(plain.length).toBeGreaterThan(0);
+    for (const m of plain) expect(drawn).toContain(m);
+  });
+
   // The rail end of the three-surface highlight: the piece list, the stage and this line all key it
   // on `Piece.id`. A line that asked with the piece's NAME would break the first time two pieces
   // were named alike — a keyhole's two lips are — and `hover(undefined)` would not clear anything.
@@ -293,6 +370,36 @@ describe("the Derivation card", () => {
       if (stage === residues) continue;
       expect(stage.querySelectorAll(".poleTable").length, summaryOf(stage)).toBe(0);
     }
+  });
+
+  // **A winding nobody DECIDED is not a winding of zero.** `integrateContour` weighs every pole the
+  // report found, so a missing entry means the geometry said nothing — and printing `0` there would
+  // put a coefficient into `2πi Σ n·Res` that no predicate established. The contrast is the whole
+  // assertion: `1/((z-1.5)(z-0.2))` on the circle of radius 1.5 has one pole ON the curve, which is
+  // undecidable, and one strictly inside, which decides to 1. A card that printed `0` for the first
+  // would look exactly as confident as the second.
+  it("says undecided where the winding was not decided, and the number where it was", () => {
+    const { card } = derivationOf(sandbox({ expr: "1/((z-1.5)*(z-0.2))" }));
+    const rows = [...card.querySelectorAll<HTMLElement>(".poleTable tbody tr")];
+    expect(rows.length).toBe(2);
+    const inds = rows.map((r) => r.querySelectorAll("td")[3]);
+    const texts = inds.map((td) => td?.textContent ?? "");
+    expect(texts).toContain("undecided");
+    expect(texts).toContain("1");
+    expect(texts).not.toContain("0");
+    // …and it is flagged as a doubt, not set as a value: `tag warn` is what the rail styles a
+    // withheld number by, and a plain cell reading "undecided" would be indistinguishable from a
+    // residue that happened to be called that.
+    const doubtful = inds.find((td) => (td?.textContent ?? "") === "undecided");
+    expect(doubtful?.querySelector(".tag.warn")).not.toBeNull();
+
+    // The row's other two facts, which are the reason the table is here at all: `2πi Σ n·Res` needs
+    // the residue and the coefficient side by side, and an order column that drew nothing would
+    // leave a double pole looking like a simple one.
+    expect(rows.map((r) => r.querySelectorAll("td")[1]?.textContent ?? "")).toEqual(["1", "1"]);
+    const residues = rows.map((r) => r.querySelectorAll("td")[2]?.textContent ?? "");
+    expect(residues.some((t) => t.includes("10/13"))).toBe(true);
+    expect(residues.every((t) => t !== "")).toBe(true);
   });
 
   // The audit trail is a NESTED disclosure, shut, because a satisfied line's ✓ steps are evidence
@@ -344,8 +451,15 @@ describe("the Derivation card", () => {
         spec: run.contour.pieces,
         ...(resolution.solved === null ? {} : { solved: resolution.solved }),
       }).conclusion;
-      const badge = derivationOf(state).card.querySelector<HTMLElement>(".verdict > .badge");
+      const conclusion = derivationOf(state).card.querySelector<HTMLElement>(".verdict");
+      const badge = conclusion?.querySelector<HTMLElement>(".badge");
       expect(badge?.textContent, record).toBe(expected?.level);
+      // A badge with no value beside it is a label on nothing. The text is compared only when the
+      // record's own form carries no `$` — a typeset one reads back as KaTeX's rendering, not as
+      // the source, and asserting that would be asserting KaTeX.
+      const text = expected?.text ?? "";
+      expect(text.length, record).toBeGreaterThan(0);
+      if (!text.includes("$")) expect(conclusion?.textContent ?? "", record).toContain(text);
       drawn.push(badge?.textContent ?? "");
     }
     expect(new Set(drawn).size).toBe(2);

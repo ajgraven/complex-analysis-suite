@@ -545,10 +545,13 @@ describe("the Result card", () => {
     expect((fine as HTMLDetailsElement).open, "the hypotheses opened with nothing wrong").toBe(false);
     const broken = right(sandbox({ expr: "1/(z-1.5)" })).host;
     const opened = [...broken.querySelectorAll("details")].find((d) =>
-      (d.querySelector("summary")?.textContent ?? "").startsWith("Hypotheses"),
+      (d.querySelector("summary")?.textContent ?? "").startsWith("What was checked"),
     );
     expect(opened?.open, "a failed hypothesis did not open its own table").toBe(true);
     expect(opened?.querySelector("summary")?.textContent ?? "").toMatch(/\d+ of \d+ failed/);
+    // **And it does not spend the vocabulary's word for one CONSTRAINT on all four.** `Hypotheses`
+    // is LEGALITY's name; the Derivation card two cards down uses it for that stage alone.
+    expect(opened?.querySelector("summary")?.textContent ?? "").not.toContain("Hypotheses");
   });
 
   it("lets an explicit click WIN over the computed default", () => {
@@ -560,7 +563,7 @@ describe("the Result card", () => {
     const host = document.createElement("div");
     patch(host, render(state, resolveState(state, compile(state.expr)), session, spyActions(), null).right);
     const table = [...host.querySelectorAll("details")].find((d) =>
-      (d.querySelector("summary")?.textContent ?? "").startsWith("Hypotheses"),
+      (d.querySelector("summary")?.textContent ?? "").startsWith("What was checked"),
     );
     expect(table?.open, "the reader's own choice was overridden by the default").toBe(false);
   });

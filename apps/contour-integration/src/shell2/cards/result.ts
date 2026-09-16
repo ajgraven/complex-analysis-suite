@@ -187,9 +187,16 @@ export const resultCard: Card = (ctx) => {
     failed,
     // The summary says how many and whether any failed, so a reader deciding whether to open it does
     // not have to open it to find out.
+    //
+    // **NOT "Hypotheses".** That is `vocabulary.ts`'s name for the LEGALITY group alone, and this
+    // table is every row of the ledger — all four constraints. The first draft used it, and a
+    // browser pass put `Hypotheses — 6 checked` here beside the Derivation card's `Hypotheses —
+    // 2 steps` for the LEGALITY stage, two cards apart, inviting a reader to take one for a subset
+    // of the other. Step 0.2's decision is that the reader's words are decided in one file; a card
+    // that spends one of them on a wider set is the same drift from the other end.
     failed
-      ? `Hypotheses — ${ledger.rows.filter((r) => r.status === "failed").length} of ${ledger.rows.length} failed`
-      : `Hypotheses — ${ledger.rows.length} checked`,
+      ? `What was checked — ${ledger.rows.filter((r) => r.status === "failed").length} of ${ledger.rows.length} failed`
+      : `What was checked — ${ledger.rows.length} rows`,
     h("ul", { key: "l", class: "ledger2" }, ...rows),
   );
 

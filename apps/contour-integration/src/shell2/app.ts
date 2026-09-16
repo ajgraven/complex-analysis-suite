@@ -30,6 +30,7 @@ import { render, type ShellActions } from "./render.js";
 import { defaultSession, resetTransient, type Session } from "./session.js";
 import { createStageController, type StageController } from "./stageController.js";
 import { createStageView } from "./stageView.js";
+import { createStripView, type StripDraw } from "./strip.js";
 
 /** A mounted shell, from the outside — the same two functions the old shell exposes. */
 export interface Shell2Handle {
@@ -95,9 +96,6 @@ export function mountShell2(root: Element): Shell2Handle {
   const strip = document.createElement("footer");
   strip.className = "strip2";
 
-  const accCanvas = document.createElement("canvas");
-  accCanvas.className = "acc";
-  strip.append(accCanvas);
   shell.append(bar, left, stageWrap, right, strip);
   root.replaceChildren(navHost, shell);
   mountNavHeader(navHost, { current: "contour-integration" });
@@ -121,6 +119,22 @@ export function mountShell2(root: Element): Shell2Handle {
   const familyNow = (): Family | null => (resolution.kind === "gallery" ? resolution.family : null);
 
   const drawState = (): StageDraw => ({ state, resolution, session, poles: polesNow() });
+
+  // --- the strip ------------------------------------------------------------------------------
+  //
+  // Its own module (step 1.6), because the accumulator is a second PICTURE rather than a card: it
+  // has a canvas, a coalesced draw and a cached accumulation, which is `stageView`'s shape and not
+  // `render`'s. **It owns its canvas and its own accessible name**, which is generated on every
+  // draw from the step count and the step the scrub is on — a static label would go stale the first
+  // time a record changed, and this app's P0 picture (research 02 §8) went completely unannounced
+  // until M6.4.
+  const stripView = createStripView(strip, {
+    setScrub: (t) => commit({ ...state, scrub: t }, "gesture"),
+    setContrast: (mode) => commit({ ...state, contrast: mode }, "edit"),
+    announce: (message) => stageA11y.announce(message),
+  });
+  const accCanvas = stripView.canvas;
+  const stripState = (): StripDraw => ({ state, resolution, session });
   const scheduleDraw = (): void => stageView.schedule(drawState);
 
   // --- the one door ---------------------------------------------------------------------------
@@ -309,6 +323,9 @@ export function mountShell2(root: Element): Shell2Handle {
     // The GL context has `preserveDrawingBuffer`, but the buffer holds the LAST frame; drawing now
     // makes the plate a picture of the state the caption is about (M6.3's finding).
     stageView.drawNow(drawState());
+    // The strip too: the plate composites it, and a coalesced draw would put the LAST frame's trail
+    // under this frame's caption.
+    stripView.drawNow(stripState());
     const caption = captionNow();
     const enc = encodeShell(state);
     const permalink = enc.ok ? window.location.origin + window.location.pathname + enc.hash : null;
@@ -359,6 +376,7 @@ export function mountShell2(root: Element): Shell2Handle {
     patch(left, out.left);
     patch(right, out.right);
     scheduleDraw();
+    stripView.schedule(stripState);
   }
 
   // --- accessibility ---------------------------------------------------------------------------
@@ -383,10 +401,6 @@ export function mountShell2(root: Element): Shell2Handle {
     commit: (next, why) => commit(next, why),
     redraw: scheduleDraw,
     announce: (message) => stageA11y.announce(message),
-  });
-  attachCanvasA11y(accCanvas, {
-    label: "the running partial sum of f(z) dz along the contour",
-    role: "img",
   });
 
   commit(state, "init");
@@ -423,6 +437,7 @@ export function mountShell2(root: Element): Shell2Handle {
     destroy: () => {
       controller?.destroy();
       stageView.destroy();
+      stripView.destroy();
       observer?.disconnect();
     },
   };

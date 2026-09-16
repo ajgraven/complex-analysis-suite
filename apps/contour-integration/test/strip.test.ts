@@ -155,7 +155,14 @@ describe("the scrub is a STEP INDEX, and the readout is on it", () => {
     view.drawNow(start);
     expect(view.stepAt(start)?.index).toBe(0);
     expect(text(host, "[data-testid=acc-step]")).toBe(`step 1 of ${acc.steps.length}`);
-    expect(text(host, "[data-testid=acc-value]")).not.toBe(end);
+    // **Not `≠ end`, and a mutation sweep is why**: a readout that printed `acc.total` at every
+    // position — the whole walk, wherever the scrub is — still differs from the string above,
+    // because `roundingFloor` grows with the step count and the two are the same number at
+    // different precisions. So the claim is about the VALUE: one term of a 240-term walk toward
+    // `2πi` is about 0.026, and nothing near 6.28 may appear at the start.
+    const first = text(host, "[data-testid=acc-value]");
+    expect(first).not.toMatch(/6\.28/);
+    expect(first).not.toBe(end);
   });
 
   it("is a function of the INDEX and not of the slider position", () => {

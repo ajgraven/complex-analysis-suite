@@ -41,6 +41,9 @@ import { circleTemplate } from "../src/engine/contour/templates.js";
 import { compile, defaultState, resolveState, type ShellState } from "../src/shell/state.js";
 import { defaultSession } from "../src/shell2/session.js";
 import { createStripView, type StripDraw, type StripView } from "../src/shell2/strip.js";
+import { drawAccumulator } from "../src/ui/accumulator.js";
+import { DARK_INK } from "../src/ui/inkTheme.js";
+import type { Accumulation } from "../src/engine/contour/accumulate.js";
 
 /** The box `.strip2` gives the canvas at a desktop width, with the side panel taking the rest. */
 const W = 860;
@@ -139,6 +142,65 @@ describe("the strip draws its trail", () => {
     expect(view.accumulation(refused), "a pole ON the contour withholds the value").toBe(null);
     view.drawNow(refused);
     expect(inkOf(view)).toEqual({ trail: 0, compare: 0, any: 0 });
+    view.destroy();
+  });
+});
+
+describe("the drawn trail ENDS on the step `stepAt` names", () => {
+  /**
+   * **The one coupling nothing else can check.** `stepIndex` transcribes `drawAccumulator`'s own
+   * slice rule — `count = max(1, round(upTo·N))`, head at `steps[count − 1]` — and the two live in
+   * different modules, so a node test comparing the readout to `stepAt` compares one formula with
+   * itself: both go through `stepIndex` and would agree after any edit to it. What decides the
+   * question is what the RENDERER drew.
+   *
+   * Asked as an exact picture comparison rather than by finding the head dot, and a measurement is
+   * why: the walk is 240 terms over this box, so consecutive steps are **0.75 px apart** and the
+   * head's centroid carries about half a pixel of bias from the pixel grid — a tolerance loose
+   * enough to absorb antialiasing absorbed a whole one-term error too, and the off-by-one
+   * `round(t·(N−1))` survived it. Re-drawing the panel with `upTo` set from the index instead of
+   * from the slider needs no tolerance at all: if the two agree about which term is last, the two
+   * canvases are byte-identical, and if they do not, they are not.
+   */
+  function bytesOf(canvas: HTMLCanvasElement): Uint8ClampedArray {
+    const ctx = canvas.getContext("2d");
+    if (ctx === null) throw new Error("no 2-D context");
+    return ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+  }
+
+  /** The panel drawn to a chosen LAST STEP, through the same renderer the strip uses. */
+  function upToStep(view: StripView, d: StripDraw, acc: Accumulation, last: number): Uint8ClampedArray {
+    const ref = document.createElement("canvas");
+    ref.width = view.canvas.width;
+    ref.height = view.canvas.height;
+    const ctx = ref.getContext("2d");
+    if (ctx === null) throw new Error("no 2-D context");
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawAccumulator(ctx, acc, W, H, {
+      theme: DARK_INK,
+      upTo: (last + 1) / acc.steps.length,
+      contrast: d.state.contrast,
+      // The strip reads these off the contour, so the reference must too — a hardcoded `[0]` would
+      // happen to be right for the circle and would make this a test of one template.
+      pieceColours: d.state.contour.pieces.map((p) => p.colour),
+    });
+    return bytesOf(ref);
+  }
+
+  it.each([0, 0.25, 0.5, 0.75, 1])("at scrub %s", (scrub) => {
+    const view = mount();
+    const d = drawOf({ scrub });
+    view.drawNow(d);
+    const acc = view.accumulation(d);
+    const at = view.stepAt(d);
+    if (acc === null || at === null) throw new Error("no accumulation");
+    expect([...bytesOf(view.canvas)]).toEqual([...upToStep(view, d, acc, at.index)]);
+    // **And the comparison discriminates**, which is the half that makes the equality above worth
+    // asserting: ending one term earlier is a different picture, so byte equality is not something
+    // any two draws of this panel would satisfy.
+    const other = at.index === 0 ? 1 : at.index - 1;
+    expect([...bytesOf(view.canvas)]).not.toEqual([...upToStep(view, d, acc, other)]);
     view.destroy();
   });
 });

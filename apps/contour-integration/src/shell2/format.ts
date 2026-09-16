@@ -46,6 +46,12 @@ export function fmtNum(x: number, digits = 4): string {
  * supports and is the one number a reader can act on.
  */
 export function fmtApprox(value: readonly [number, number], err: number): string {
+  // **A `NaN` IS NOT A SMALL NUMBER.** `NaN > floor` is false, so the drop rule below silently
+  // discards it — and a pair of them printed as `0`, an exact-looking zero for a walk that has no
+  // value at all. Reached in practice: `removable-one-minus-cos` samples a midpoint exactly on the
+  // removable singularity of `(1 − cos z)/z²`, so every later partial sum is `NaN`. Found by the
+  // accumulator strip's first reader, which is what a second consumer is for.
+  if (Number.isNaN(value[0]) || Number.isNaN(value[1])) return "not a number";
   const digits = decimalsFor(err);
   const floor = Number.isFinite(err) && err > 0 ? err : 0;
   const [re, im] = value;
