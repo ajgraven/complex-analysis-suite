@@ -7,14 +7,11 @@
 // The card is absent in the sandbox rather than empty — `render.ts` filters it out — since a card
 // reading "—" forever teaches a reader the app has a target it is failing to find.
 import { fixtureLabel, isVariant } from "../../families/describe.js";
+import { citationLine } from "../../families/describe.js";
 import { targetLatex } from "../../families/latex.js";
 import { h } from "../dom.js";
 import { math, mathText } from "../math.js";
 import { card, nothing, type Card } from "./card.js";
-
-/** `Ahlfors, Ch. 4 §5.3 — Jordan's lemma`, with the covering phrase only where the record gives one. */
-const citationLine = (c: { text: string; book: string; where: string }): string =>
-  c.text === "" ? `${c.book}, ${c.where}` : `${c.book}, ${c.where} — ${c.text}`;
 
 export const targetCard: Card = ({ state, resolution, actions }) => {
   if (resolution.kind !== "gallery") return card("target", nothing("The sandbox has no record."));

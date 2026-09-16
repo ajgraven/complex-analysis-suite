@@ -15,7 +15,7 @@ import { evaluate, parse, type Complex } from "@cas/expr";
 
 import { fmt } from "../kernel/decimal.js";
 
-import type { Family, FamilyTarget, Golden } from "./schema.js";
+import type { Citation, Family, FamilyTarget, Golden } from "./schema.js";
 
 /** The real quantity a record is about: `∫ (0 → 2π)  1/(a + b*cos(theta))  dtheta`. */
 export function targetText(t: FamilyTarget): string {
@@ -214,4 +214,17 @@ export function fixtureLabel(family: Family, g: Golden): string {
     .map(([k, v]) => `${k} = ${typeof v === "number" ? fmt(v) : String(v)}`);
   if (g.label !== undefined) parts.push(g.label);
   return parts.length > 0 ? parts.join(", ") : "no parameters";
+}
+
+/**
+ * `Ahlfors, Ch. 4 §5.3 — Jordan's lemma`, with the covering phrase only where the record gives one.
+ *
+ * **Here on the second-consumer rule**, having been a module const in `shell2/cards/target.ts` until
+ * the front door's cards wanted the same line. Three fields composed one way is exactly the kind of
+ * thing two readers come to disagree about — `Citation.text` may be empty, and a second copy is one
+ * `?? ""` away from printing a trailing dash — and this file is where the schema's own vocabulary is
+ * turned into sentences.
+ */
+export function citationLine(c: Citation): string {
+  return c.text === "" ? `${c.book}, ${c.where}` : `${c.book}, ${c.where} — ${c.text}`;
 }

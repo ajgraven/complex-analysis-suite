@@ -13,8 +13,9 @@
 // screen.
 import { targetText } from "../families/describe.js";
 import { FAMILIES } from "../families/index.js";
+import { citationLine } from "../families/describe.js";
 import { closedFormLatex, targetLatex } from "../families/latex.js";
-import { TAXONOMY_SECTIONS, type Citation, type Family, type Golden, type TaxonomySection } from "../families/schema.js";
+import { TAXONOMY_SECTIONS, type Family, type Golden, type TaxonomySection } from "../families/schema.js";
 import type { ShellState } from "../shell/state.js";
 import { h, patch, type Child, type Desc } from "./dom.js";
 import { math, mathText } from "./math.js";
@@ -118,15 +119,6 @@ export function frontDoorState(current: ShellState, recordId: string): ShellStat
     workedExample: false,
   };
 }
-
-/**
- * `Ahlfors, Ch. 4 §5.3 — Jordan's lemma`.
- *
- * A copy of `cards/target.ts`'s `citationLine`, which is a module const there. It is three fields
- * and one branch, and the two are now the second consumer of one rule — the formatter belongs in
- * `families/describe.ts` beside the schema it reads, and moving it is a step that owns both files.
- */
-const citationLine = (c: Citation): string => (c.text === "" ? `${c.book}, ${c.where}` : `${c.book}, ${c.where} — ${c.text}`);
 
 /**
  * The identity a card leads with: the target at its first fixture, and what it comes to.
