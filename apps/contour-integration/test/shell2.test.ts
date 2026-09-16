@@ -21,14 +21,14 @@ import { CENTER_MAX, plotToScreen, scale } from "../src/kernel/camera.js";
 import { pointAt } from "../src/kernel/geom.js";
 import { translateContour } from "../src/engine/contour/edit.js";
 import { STAGE_MODES } from "../src/ui/stage/mode.js";
-import { h, patch } from "../src/shell2/dom.js";
-import { math, mathPlain, mathText, renderedCount } from "../src/shell2/math.js";
-import { mountShell2 } from "../src/shell2/app.js";
-import { createStageController } from "../src/shell2/stageController.js";
-import { createStageView } from "../src/shell2/stageView.js";
+import { h, patch } from "../src/shell/dom.js";
+import { math, mathPlain, mathText, renderedCount } from "../src/shell/math.js";
+import { mountShell2 } from "../src/shell/app.js";
+import { createStageController } from "../src/shell/stageController.js";
+import { createStageView } from "../src/shell/stageView.js";
 import { COLD_START_RECORD, compile, defaultState, shellMode } from "../src/shell/state.js";
 import { circleTemplate } from "../src/engine/contour/templates.js";
-import { defaultSession, resetTransient } from "../src/shell2/session.js";
+import { defaultSession, resetTransient } from "../src/shell/session.js";
 import { resolveState } from "../src/shell/state.js";
 
 /**
@@ -1590,5 +1590,39 @@ describe("undo and redo — M8 step 1.11", () => {
     // And a third press, with nothing left, changes nothing rather than oscillating.
     ctrlZ();
     expect(app.currentState().expr).toBe(start);
+  });
+});
+
+describe("the pen's controls, ported from `test/pen.test.ts` at the cutover — M8 step 1.12", () => {
+  const byLabel = (root: HTMLElement, label: string): HTMLButtonElement | null =>
+    root.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`);
+
+  it("offers the pen only in the SANDBOX, since a record's contour is the record's", () => {
+    const { root, app } = mount();
+    expect(byLabel(root, "draw a contour by hand"), "no pen in the sandbox").not.toBeNull();
+    app.applyState({ ...app.currentState(), mode: "gallery", record: COLD_START_RECORD, fixture: 0 });
+    expect(byLabel(root, "draw a contour by hand"), "the pen is offered on a record").toBeNull();
+  });
+
+  it("shows the GRAMMAR while drawing, because an undiscoverable gesture is no gesture", () => {
+    const { root } = mount();
+    byLabel(root, "draw a contour by hand")?.click();
+    const text = q(root, '[data-card="contour"]').textContent ?? "";
+    for (const clause of ["Click to place a corner", "drag to bow", "Backspace", "Escape", "Alt"]) {
+      expect(text, `the grammar does not mention ${clause}`).toContain(clause);
+    }
+  });
+
+  it("ABANDONS on Cancel, leaving the contour that was there", () => {
+    const { root, app, ink } = mountStage();
+    const before = app.currentState().contour.pieces;
+    byLabel(root, "draw a contour by hand")?.click();
+    for (const [x, y] of [[10, 10], [40, 10]]) ink.dispatchEvent(pointer("pointerdown", x, y));
+    expect(app.session().pen, "the clicks placed nothing").not.toBeNull();
+    byLabel(root, "abandon the drawn path")?.click();
+    expect(app.currentState().contour.pieces).toEqual(before);
+    // And the pen is put away, so the button that starts it is back.
+    expect(byLabel(root, "draw a contour by hand")).not.toBeNull();
+    expect(app.session().pen).toBeNull();
   });
 });

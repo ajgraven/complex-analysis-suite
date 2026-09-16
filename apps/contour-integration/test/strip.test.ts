@@ -16,8 +16,8 @@ import { semicircleTemplate, circleTemplate } from "../src/engine/contour/templa
 import type { Contour } from "../src/engine/contour/model.js";
 import { compile, defaultState, resolveState, type ShellState } from "../src/shell/state.js";
 import type { Cx } from "../src/kernel/geom.js";
-import { defaultSession } from "../src/shell2/session.js";
-import { createStripView, stepIndex, type StripDraw, type StripInput, type StripView } from "../src/shell2/strip.js";
+import { defaultSession } from "../src/shell/session.js";
+import { createStripView, stepIndex, type StripDraw, type StripInput, type StripView } from "../src/shell/strip.js";
 import type { ContrastMode } from "../src/ui/accumulator.js";
 
 HTMLCanvasElement.prototype.getContext = (() => null) as never;

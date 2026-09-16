@@ -12,7 +12,7 @@
 // on every frame of a contour drag, which is invisible to every test that does not count.
 import { afterEach, expect, describe, it, vi } from "vitest";
 
-import { mountShell2 } from "../src/shell2/app.js";
+import { mountShell2 } from "../src/shell/app.js";
 import { GLStage } from "../src/ui/stage/glStage.js";
 // **The stylesheets `main.ts` loads, all of them.** Mounting without one does not give a plainer
 // layout, it gives a DIFFERENT one — M7.2 lost a slice to that. Without `nav.css` the suite nav is
@@ -20,9 +20,8 @@ import { GLStage } from "../src/ui/stage/glStage.js";
 // below measured the shell against a window the nav was wrongly claiming a third of.
 import "katex/dist/katex.min.css";
 import "@cas/ui/nav.css";
-import "../src/ui/app.css";
 import "../src/ui/theme.css";
-import "../src/ui/shell2.css";
+import "../src/ui/shell.css";
 
 /**
  * Every shell this file mounts, destroyed after each test — and the address bar put back.

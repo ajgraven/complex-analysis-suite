@@ -29,10 +29,10 @@ import {
 } from "../src/shell/drill.js";
 import { PROGRESS_KEY, readProgress } from "../src/shell/drillProgress.js";
 import { compile, defaultState, resolveState, type ShellState } from "../src/shell/state.js";
-import { patch } from "../src/shell2/dom.js";
-import { defaultSession, resetTransient, type Session } from "../src/shell2/session.js";
-import { drillMask, drillPanel } from "../src/shell2/drillPanel.js";
-import type { CardContext, ShellActions } from "../src/shell2/cards/card.js";
+import { patch } from "../src/shell/dom.js";
+import { defaultSession, resetTransient, type Session } from "../src/shell/session.js";
+import { drillMask, drillPanel } from "../src/shell/drillPanel.js";
+import type { CardContext, ShellActions } from "../src/shell/cards/card.js";
 
 // ──────────────────────────────────────────────────────────────────────────────────────────────
 // Helpers — `cards.test.ts`'s, plus the two this file needs (a live session and the applied state).

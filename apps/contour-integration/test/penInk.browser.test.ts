@@ -21,20 +21,66 @@
 // 1200 × 154 somewhere inside it — two boxes that in the real app are the same box. A test aiming at
 // either is aiming at an artefact, which is how the first draft came to place "vertices" outside the
 // drawing surface and then read the snap that never fired as a pen defect. So this file loads the
-// two stylesheets `src/main.ts` loads, and the browser project sets a desktop viewport (the default
-// is a phone, see `vitest.browser.config.ts`). Measured with both: the stage is 928 × 564 at y = 80
-// and does not move for the rest of the gesture.
-import { describe, expect, it } from "vitest";
-import "../src/ui/app.css";
+// stylesheets `src/main.ts` loads — FOUR of them since step 1.12, `app.css` having gone with the old
+// shell — and the browser project sets a desktop viewport (the default is a phone, see
+// `vitest.browser.config.ts`). Re-measured on the new shell: `canvas.ink` is 592 × 613 at
+// (304, 95) with a half-height of 1.94, and does not move for the rest of the gesture. It is
+// NARROWER than the old shell's 928 × 564 because shell2 has two rails, which is why every offset
+// below stays inside ±180 px of the centre.
+//
+// **MOUNTED ON THE NEW SHELL SINCE M8 STEP 1.12.** `mountApp` is gone; the pen is `mountShell2`'s
+// stage controller (`src/shell/stageController.ts`), which is the same grammar with the same
+// numbers — the drag still bows the piece ENDING at the new vertex, the close still needs three
+// vertices, `snapTo` still names the constraint. Four things about the route changed and each one
+// is a way to aim at nothing:
+//
+//  - **The pointer events go to `canvas.ink`.** The old shell listened on a transparent overlay
+//    `div.stage`; shell2's controller binds to the ink canvas itself, and an event dispatched at the
+//    host would bubble UP past it rather than down into it. So `surface()` reads the ink canvas's
+//    own rect, which is also the rect `stagePoint` reads.
+//  - **`setPointerCapture` has to be stubbed.** A synthetic `PointerEvent` carries a `pointerId` the
+//    browser has no active pointer for, and `onPointerDown`'s pen branch captures — which throws
+//    `NotFoundError` and takes the click with it. `shell2.browser.test.ts` records the same.
+//  - **The app opens on a RECORD (A6) rather than the sandbox**, and the pen is offered in the
+//    sandbox only. `toSandbox()` is the reader's own route back to the circle at `1/z` — the state
+//    the cold start was built on — and it frames, so the geometry every offset below is aimed at is
+//    the one a reader would be looking at.
+//  - **Every mount is destroyed**, for `shell2.browser.test.ts`'s reason: a shell writes `#vs=` 250 ms
+//    after its last change and the next one reads it at boot, and since step 1.11 it also holds a
+//    `keydown` listener on the DOCUMENT.
+//
+// The two surfaces the assertions read moved with the shell: the pending vertex count is the Contour
+// card's `.num` (`[data-card="contour"]`), and the snap's name is the stage overlay's chip
+// (`.stageChip.snap`) rather than a `.snapNote` in the rail — it is beside the pointer now, which is
+// where research 07 rule 5 wants it.
+import { afterEach, describe, expect, it } from "vitest";
+import "katex/dist/katex.min.css";
 import "@cas/ui/nav.css";
-import { mountApp } from "../src/shell/app.js";
+import "../src/ui/theme.css";
+import "../src/ui/shell.css";
+import { mountShell2 } from "../src/shell/app.js";
 import { penPath } from "../src/engine/contour/pen.js";
 
-/** Mount the app and let it settle. It sizes itself from the viewport, as it does in the page. */
-async function app(): Promise<{ root: HTMLElement; handle: ReturnType<typeof mountApp> }> {
+const mounted: ReturnType<typeof mountShell2>[] = [];
+afterEach(() => {
+  for (const handle of mounted.splice(0)) handle.destroy();
+  if (window.location.hash !== "") window.history.replaceState(null, "", window.location.pathname);
+});
+
+/**
+ * Mount the app, put it in the sandbox, and let it settle.
+ *
+ * The root is given the harness's own desktop box: the viewport is 1280 x 900 but the body has no
+ * size, and the shell's grid needs one.
+ */
+async function app(): Promise<{ root: HTMLElement; handle: ReturnType<typeof mountShell2> }> {
   const root = document.createElement("div");
+  root.style.cssText = "position:fixed;inset:0;width:1280px;height:900px";
   document.body.replaceChildren(root);
-  const handle = mountApp(root);
+  const handle = mountShell2(root);
+  mounted.push(handle);
+  // The reader's own route to the pen: the Contour card offers it in the sandbox only.
+  handle.actions().toSandbox();
   await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
   await new Promise((r) => setTimeout(r, 350));
   return { root, handle };
@@ -77,8 +123,17 @@ function surface(root: Element): {
   readonly el: Element;
   readonly at: (dx: number, dy: number) => readonly [number, number];
 } {
-  const el = root.querySelector(".stage");
-  if (el === null) throw new Error("no stage");
+  // **`canvas.ink`, not its host.** The controller's listeners are on the canvas and `stagePoint`
+  // measures from the canvas's own rect, so a point built from the host's would be right only for as
+  // long as the two boxes agree — and would be silently wrong the day they stop.
+  const el = root.querySelector("canvas.ink");
+  if (el === null) throw new Error("no ink canvas");
+  // A synthetic pointer's id belongs to no active pointer, and the pen branch of `onPointerDown`
+  // captures: unstubbed, the first click throws `NotFoundError` instead of placing a vertex.
+  const cap = el as Element & Record<string, unknown>;
+  cap.setPointerCapture = (): void => {};
+  cap.releasePointerCapture = (): void => {};
+  cap.hasPointerCapture = (): boolean => false;
   const first = el.getBoundingClientRect();
   // A real layout, which is the whole point of running this here — and the assertion that fails
   // loudly if the stylesheets ever stop arriving instead of quietly aiming at nothing.
@@ -186,7 +241,8 @@ describe("the pen, drawn with a real pointer", () => {
     // Back onto the FIRST vertex with only two placed: this must place a third, not close.
     await place(-180, 120);
     expect(root.querySelector('[aria-label="draw a contour by hand"]'), "still drawing").toBeNull();
-    const num = root.querySelector(".penRow .num")?.textContent ?? "";
+    // The Contour card's own count, which is where the pen row lives now.
+    const num = root.querySelector('[data-card="contour"] .num')?.textContent ?? "";
     expect(num).toContain("3 vertex");
   });
 
@@ -195,7 +251,8 @@ describe("the pen, drawn with a real pointer", () => {
     // exists or that Alt turns snapping off. Both need a real tolerance, so both live here.
     const { root } = await app();
     const { el: stage, at } = surface(root);
-    const snapNote = (): string | null => root.querySelector(".snapNote")?.textContent ?? null;
+    // The stage's own chip, beside the pointer — the rail's `.snapNote` went with the old shell.
+    const snapNote = (): string | null => root.querySelector(".stageChip.snap")?.textContent ?? null;
 
     byLabel<HTMLButtonElement>(root, "draw a contour by hand").click();
     for (const [dx, dy] of [
@@ -273,8 +330,10 @@ describe("the pen, drawn with a real pointer", () => {
     }
     await new Promise((r) => setTimeout(r, 500));
 
-    const rail = root.querySelector(".rail");
-    const text = (rail?.textContent ?? "").replace(/\s+/g, " ");
+    const text = ([...root.querySelectorAll(".rail2")].map((r) => r.textContent ?? "").join(" ")).replace(
+      /\s+/g,
+      " ",
+    );
     // The hand-drawn contour is certified, not estimated: the value comes from the residue theorem
     // and the quadrature merely agrees with it.
     expect(text).toContain("2πi");

@@ -12,7 +12,7 @@
 // field in the wrong object — a question with an answer instead of a habit.
 import type { PenNode } from "../engine/contour/pen.js";
 import type { Cx } from "../kernel/geom.js";
-import type { ShellState } from "../shell/state.js";
+import type { ShellState } from "./state.js";
 
 /** What the pointer is currently doing. `none` is not a gesture; it is the absence of one. */
 export type Gesture = "none" | "contour" | "handle" | "branch" | "view" | "pen";

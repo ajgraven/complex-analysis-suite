@@ -21,7 +21,7 @@ import type { Contour } from "../src/engine/contour/model.js";
 import { penContour, sameShape } from "../src/engine/contour/pen.js";
 import { COLD_START_RECORD, offeredCorpus, shellMode, type ShellState } from "../src/shell/state.js";
 import { decodeShell, encodeShell } from "../src/shell/viewState.js";
-import { mountShell2, type Shell2Handle } from "../src/shell2/app.js";
+import { mountShell2, type Shell2Handle } from "../src/shell/app.js";
 
 /**
  * Mount a fresh app. jsdom has no canvas, and the shell already handles not getting a context.

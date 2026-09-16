@@ -225,6 +225,101 @@ function along(
   return null;
 }
 
+/**
+ * The cut system's draggable marks — M8 step 1.12, ported from the old shell at the cutover.
+ *
+ * **It was missing, and a parity sweep is what found it.** `stageView` computed the handles and
+ * `stageController` hit-tested them from step 1.3, so a branch point and a cut vertex could be
+ * grabbed, dragged and announced — and nothing painted them, so the reader was aiming at a spot on
+ * an empty plane. The old shell drew them all along (`shell/app.ts`'s `drawBranchHandles`); this is
+ * that code, moved to where the rest of the ink lives.
+ *
+ * **A branch POINT is a square and a cut vertex is a diamond**, which is the old shell's own reason
+ * kept verbatim: the two are told apart without colour, and neither can be mistaken for the round
+ * poles, radius handles and integration marker that share this canvas. That is four round things
+ * avoided rather than a decoration.
+ */
+export function drawBranchHandles(
+  ctx: CanvasRenderingContext2D,
+  handles: readonly { readonly at: Cx; readonly square: boolean; readonly emphasis: "none" | "hover" | "grabbed" }[],
+  view: View,
+  vp: Viewport,
+  t: InkTheme,
+): void {
+  for (const handle of handles) {
+    const [x, y] = plotToScreen(handle.at[0], handle.at[1], view, vp);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    const r = handle.emphasis === "none" ? 5 : 7;
+    ctx.beginPath();
+    if (handle.square) ctx.rect(x - r, y - r, 2 * r, 2 * r);
+    else {
+      ctx.moveTo(x, y - r);
+      ctx.lineTo(x + r, y);
+      ctx.lineTo(x, y + r);
+      ctx.lineTo(x - r, y);
+      ctx.closePath();
+    }
+    ctx.strokeStyle = t.haloStrong;
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    // `cutHandle`, because a mark on the cut system belongs to the cut system: the same purple the
+    // cuts themselves are stroked in, so the handle and the thing it moves read as one object.
+    ctx.strokeStyle = handle.emphasis === "grabbed" ? t.handleGrabbed : t.cutHandle;
+    ctx.lineWidth = handle.emphasis === "none" ? 1.6 : 2.4;
+    ctx.stroke();
+  }
+}
+
+/**
+ * The pen's path so far, plus the piece it is about to place — M8 step 1.12, ported at the cutover.
+ *
+ * **It was missing too, and the pen is unusable without it**: shell2 drew the crosshair cursor and
+ * the snap chip and nothing else, so every vertex a reader placed was invisible until they committed
+ * the whole path. `inkTheme.ts` has carried a `penPreview` colour since step 1.2 that nothing drew
+ * with, which is the same gap seen from the palette's side.
+ *
+ * **Dashed, because the ledger says nothing about it.** A path in progress is not a contour: it has
+ * no roles, no value and no verdict, and drawing it like a finished piece would claim otherwise.
+ * That is the one place in this app where a dash means "not yet" rather than "not certified" or
+ * "refused" — and it is survivable for `dashCuts`' reason, that nothing else on the canvas looks
+ * like it: a thin blue open path with a crosshair at its end.
+ */
+export function drawPenPath(
+  ctx: CanvasRenderingContext2D,
+  pieces: readonly Resolved[],
+  view: View,
+  vp: Viewport,
+  t: InkTheme,
+): void {
+  if (pieces.length === 0) return;
+  ctx.save();
+  ctx.setLineDash([6, 4]);
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  for (const g of pieces) {
+    const pts = screenPath(g, view, vp);
+    tracePath(ctx, pts);
+    ctx.strokeStyle = t.halo;
+    ctx.lineWidth = 4.5;
+    ctx.stroke();
+    tracePath(ctx, pts);
+    ctx.strokeStyle = t.penPreview;
+    ctx.lineWidth = 1.8;
+    ctx.stroke();
+  }
+  ctx.restore();
+  // The vertices the reader has actually PLACED, so a path of two segments reads as two decisions
+  // rather than as one bent line. Small filled dots: the open rings on this canvas mean "grab me",
+  // and one of these is not grabbable until it is committed.
+  ctx.fillStyle = t.penPreview;
+  for (const g of pieces) {
+    const [sx, sy] = plotToScreen(pointAt(g, 0)[0], pointAt(g, 0)[1], view, vp);
+    ctx.beginPath();
+    ctx.arc(sx, sy, 2.6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
 export function drawContour(
   ctx: CanvasRenderingContext2D,
   pieces: readonly Resolved[],

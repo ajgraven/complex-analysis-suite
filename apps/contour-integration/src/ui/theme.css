@@ -76,6 +76,38 @@
 }
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
+   The DOCUMENT — M8 step 1.12.
+
+   **These were `app.css`'s, and deleting it took them with it.** Scoping every rule under `.shell2`
+   was right while both shells shared a page (the note at the top of this file says why), and it left
+   the document itself unstyled the moment the other sheet went: `body` fell back to the browser's
+   serif on a white ground, and everything OUTSIDE the grid — the phone notice, the link-refusal
+   banner — was drawn in it. Measured in a real browser at 390 px, which is the only place it shows.
+
+   The values are `app.css`'s, read from this file's own tokens rather than copied: one font stack,
+   one ground, one ink.
+   ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--f-ui);
+  font-size: var(--t-m);
+  line-height: 1.45;
+  color: var(--g-text);
+  background: var(--g-ground);
+  -webkit-font-smoothing: antialiased;
+  /* The app fills the viewport and every scrollable region is its own; a document scrollbar would be
+     the sign that something overflowed, which `test/phoneNotice.browser.test.ts` measures rather
+     than hides. `hidden` is `app.css`'s value and is kept for the same reason it had it. */
+  overflow: hidden;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
    Type and prose, inside the new shell only.
    ════════════════════════════════════════════════════════════════════════════════════════════ */
 

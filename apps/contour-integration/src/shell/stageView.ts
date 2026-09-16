@@ -19,19 +19,20 @@ import { drawnCuts } from "../engine/branchEdit.js";
 import { effectiveBranch } from "../kernel/branch/model.js";
 import { handlesOf, type Handle } from "../engine/contour/edit.js";
 import { resolveAll } from "../engine/contour/model.js";
+import { penContour } from "../engine/contour/pen.js";
 import type { Node } from "@cas/expr";
 import type { DeclaredProduct } from "../kernel/branch/declared.js";
-import type { Resolved } from "../kernel/geom.js";
+import type { Cx, Resolved } from "../kernel/geom.js";
 import type { PoleReport } from "../kernel/poles.js";
 import { plotToScreen, type View, type Viewport } from "../kernel/camera.js";
 import { DARK_INK, LIGHT_INK, type InkTheme } from "../ui/inkTheme.js";
 import type { StageMode } from "../ui/stage/mode.js";
 import { drawPoleGlyph, drawTextbookPlate } from "../ui/stage/ink.js";
 import { drillMask } from "./drillPanel.js";
-import { drawContour } from "../ui/stage/ink.js";
+import { drawBranchHandles, drawContour, drawPenPath } from "../ui/stage/ink.js";
 import { GLStage } from "../ui/stage/glStage.js";
-import { drawnContour } from "../shell/state.js";
-import type { ShellState, StateResolution } from "../shell/state.js";
+import { drawnContour } from "./state.js";
+import type { ShellState, StateResolution } from "./state.js";
 import { h, patch } from "./dom.js";
 import { readout } from "./readout.js";
 import { mathPlain, mathText } from "./math.js";
@@ -386,7 +387,9 @@ export function createStageView(host: HTMLElement): StageView {
     // "which contour?" the singularities are the question's data, not its answer.
     const hidden = drillMask(d) === "argument";
     const pieces = hidden ? [] : resolvedPieces(d.state, d.resolution);
-    const { radius } = hidden ? { radius: [] as readonly Handle[] } : handles(d.state, d.resolution);
+    const { radius, branch } = hidden
+      ? { radius: [] as readonly Handle[], branch: [] as readonly BranchHandle[] }
+      : handles(d.state, d.resolution);
     const hoveredHandle = d.session.hover.handle;
     // **The rail's hover, on the stage.** `session.hover.piece` is one id read by the piece list,
     // the stage and (at 1.9) the accumulator, so hovering a row lights the same curve it names —
@@ -406,7 +409,45 @@ export function createStageView(host: HTMLElement): StageView {
       // dash and why it is survivable here.
       dashCuts: textbook,
     });
+
+    // **The cut system's own handles.** Computed since step 1.3 and hit-tested since then, and never
+    // drawn until the cutover's parity sweep found it: a reader could grab a branch point, drag it
+    // and hear it announced, with nothing on screen at the place they were aiming. `held` is the
+    // session's, which is what the keyboard sets; the pointer's grab shows through `gesture`.
+    const heldAt = d.session.held?.at ?? null;
+    drawBranchHandles(
+      ctx,
+      hidden
+        ? []
+        : branch.map((handle) => ({
+            at: handle.at,
+            square: handle.grab.kind === "point",
+            emphasis:
+              heldAt !== null && heldAt[0] === handle.at[0] && heldAt[1] === handle.at[1]
+                ? ("grabbed" as const)
+                : ("none" as const),
+          })),
+      view,
+      vp,
+      t,
+    );
     drawPoles(ctx, d, view, vp, t);
+
+    // **The pen's path so far, over everything else**, because it is the thing the reader is making
+    // and the contour underneath is the thing they are making it beside. Drawn last for that reason
+    // and not because of any z-order rule — the committed contour is still fully legible under a
+    // dashed open path.
+    const draft = d.session.pen;
+    if (draft !== null) {
+      const pending = draft.at === null ? [] : [{ at: [draft.at[0], draft.at[1]] as Cx }];
+      const nodes = [...draft.nodes, ...pending];
+      // Two nodes make one piece; one makes none, and `penContour` of a single node is an empty
+      // chain rather than a point, so the guard is about what can be DRAWN rather than about a
+      // crash.
+      if (nodes.length >= 2) {
+        drawPenPath(ctx, resolveAll(penContour({ nodes, closed: false })), view, vp, t);
+      }
+    }
 
     // **The textbook plate's furniture goes UNDER everything, and is drawn LAST.** `drawContour`
     // opens with `clearRect` — which M7.3 made a rule rather than an accident, because masking by

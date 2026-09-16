@@ -18,7 +18,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import { CONTRAST_CELLS, contrastTable } from "../src/shell/contrastGrid.js";
-import { createContrastsDialog, type ContrastsDialog } from "../src/shell2/contrasts.js";
+import { createContrastsDialog, type ContrastsDialog } from "../src/shell/contrasts.js";
 import type { ShellState } from "../src/shell/state.js";
 
 /** What a mounted dialog is tested against: a real page, a real opener, and a record of the asks. */

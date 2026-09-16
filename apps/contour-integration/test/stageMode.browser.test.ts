@@ -11,7 +11,7 @@
 // them measured as the mode that does not.
 import { afterEach, expect, describe, it } from "vitest";
 
-import { mountShell2 } from "../src/shell2/app.js";
+import { mountShell2 } from "../src/shell/app.js";
 import { CET_C6 } from "../src/ui/stage/cetC6.js";
 import { DARK_INK, LIGHT_INK, type InkTheme } from "../src/ui/inkTheme.js";
 import type { StageMode } from "../src/ui/stage/mode.js";
@@ -19,9 +19,8 @@ import { plotToScreen } from "../src/kernel/camera.js";
 
 import "katex/dist/katex.min.css";
 import "@cas/ui/nav.css";
-import "../src/ui/app.css";
 import "../src/ui/theme.css";
-import "../src/ui/shell2.css";
+import "../src/ui/shell.css";
 
 const mounted: ReturnType<typeof mountShell2>[] = [];
 afterEach(() => {

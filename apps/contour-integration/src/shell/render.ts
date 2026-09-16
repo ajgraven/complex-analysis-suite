@@ -11,7 +11,7 @@
 // so the shape here is the shape they land into rather than scaffolding to be thrown away.
 import { LEFT_CARDS, RIGHT_CARDS, cardTitle, type CardId } from "../engine/vocabulary.js";
 import type { PoleReport } from "../kernel/poles.js";
-import type { ShellState, StateResolution } from "../shell/state.js";
+import type { ShellState, StateResolution } from "./state.js";
 import { bar } from "./bar.js";
 import { drillPanel } from "./drillPanel.js";
 import { contourCard } from "./cards/contour.js";

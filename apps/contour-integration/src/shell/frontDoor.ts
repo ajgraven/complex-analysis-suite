@@ -16,7 +16,7 @@ import { FAMILIES } from "../families/index.js";
 import { citationLine } from "../families/describe.js";
 import { closedFormLatex, targetLatex } from "../families/latex.js";
 import { TAXONOMY_SECTIONS, type Family, type Golden, type TaxonomySection } from "../families/schema.js";
-import type { ShellState } from "../shell/state.js";
+import type { ShellState } from "./state.js";
 import { h, patch, type Child, type Desc } from "./dom.js";
 import { math, mathText } from "./math.js";
 import { createModal } from "./modal.js";

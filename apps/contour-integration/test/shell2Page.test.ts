@@ -20,7 +20,7 @@ import { describe, expect, it } from "vitest";
 
 import { constraintLabel, roleLabel } from "../src/engine/vocabulary.js";
 import { sameShape } from "../src/engine/contour/pen.js";
-import { mountShell2 } from "../src/shell2/app.js";
+import { mountShell2 } from "../src/shell/app.js";
 import { decodeShell, encodeShell } from "../src/shell/viewState.js";
 
 /**

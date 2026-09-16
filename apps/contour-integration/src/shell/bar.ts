@@ -20,7 +20,7 @@
 // on a click and empties itself six seconds later).
 import { targetText } from "../families/describe.js";
 import { targetLatex } from "../families/latex.js";
-import { shellMode, type ShellMode } from "../shell/state.js";
+import { shellMode, type ShellMode } from "./state.js";
 import { STAGE_MODE_LABELS, STAGE_MODES } from "../ui/stage/mode.js";
 import type { CardContext } from "./cards/card.js";
 import { h, type Desc } from "./dom.js";
@@ -176,7 +176,7 @@ function recordButton(ctx: CardContext): Desc {
 /**
  * The whole bar, as descriptions. `render.ts` patches these into `<header class="bar2">`.
  *
- * **Five children and exactly ONE of them carries `.barBtn`.** `shell2.css` gives that class
+ * **Five children and exactly ONE of them carries `.barBtn`.** `shell.css` gives that class
  * `margin-left: auto`, and a flex line distributes free space EQUALLY among every auto margin on it
  * — so four `.barBtn` buttons would not sit together at the right end, they would be strewn evenly
  * across the bar with the gaps growing as the window does. The tools go in one wrapper, the wrapper

@@ -16,9 +16,9 @@ import { addBranchPoint } from "../src/engine/branchEdit.js";
 import { circleTemplate } from "../src/engine/contour/templates.js";
 import type { Cx } from "../src/kernel/geom.js";
 import { compile, defaultState, resolveState, type ShellState, type StateResolution } from "../src/shell/state.js";
-import { patch } from "../src/shell2/dom.js";
-import { readout, readoutRows, type ReadoutRow } from "../src/shell2/readout.js";
-import { NO_HOVER } from "../src/shell2/session.js";
+import { patch } from "../src/shell/dom.js";
+import { readout, readoutRows, type ReadoutRow } from "../src/shell/readout.js";
+import { NO_HOVER } from "../src/shell/session.js";
 
 const sandbox = (over: Partial<ShellState> = {}): ShellState => ({
   ...defaultState(circleTemplate([0, 0], 1.5)),

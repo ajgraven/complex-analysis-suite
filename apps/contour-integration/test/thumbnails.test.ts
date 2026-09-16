@@ -29,7 +29,7 @@ import {
   THUMBNAIL_SIZE,
   thumbnailById,
   thumbnailFor,
-} from "../src/shell2/thumbnails.js";
+} from "../src/shell/thumbnails.js";
 import type { Family } from "../src/families/schema.js";
 
 /** One committed mark: the ink it was laid down in, where it landed, and how it was composited. */

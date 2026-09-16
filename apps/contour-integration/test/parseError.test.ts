@@ -8,7 +8,7 @@
 import { describe, expect, it } from "vitest";
 
 import { compile } from "../src/shell/state.js";
-import { parseErrorSentence } from "../src/shell2/cards/parseError.js";
+import { parseErrorSentence } from "../src/shell/cards/parseError.js";
 
 /** Broken expressions of the shapes a reader actually types, one per throw site we claim to cover. */
 const BROKEN: readonly { readonly src: string; readonly expect: RegExp }[] = [

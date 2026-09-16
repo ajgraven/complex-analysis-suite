@@ -14,7 +14,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { FAMILIES } from "../src/families/index.js";
 import { TAXONOMY_SECTIONS } from "../src/families/schema.js";
-import { createFrontDoor, frontDoorState, FRONT_DOOR_GROUPS, FRONT_ROW, type FrontDoorDialog } from "../src/shell2/frontDoor.js";
+import { createFrontDoor, frontDoorState, FRONT_DOOR_GROUPS, FRONT_ROW, type FrontDoorDialog } from "../src/shell/frontDoor.js";
 import { defaultState, resolveState, type ShellState } from "../src/shell/state.js";
 import { circleTemplate } from "../src/engine/contour/templates.js";
 import { splitMath } from "../src/shell/math.js";

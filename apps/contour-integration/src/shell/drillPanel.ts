@@ -30,7 +30,7 @@ import {
   withCleared,
   writeProgress,
   type KeyStore,
-} from "../shell/drillProgress.js";
+} from "./drillProgress.js";
 import {
   DISPOSALS,
   DISPOSAL_LABEL,
@@ -50,8 +50,8 @@ import {
   type DrillStage,
   type DrillTask,
   type WindingRow,
-} from "../shell/drill.js";
-import { TEMPLATES, type TemplateId } from "../shell/templates.js";
+} from "./drill.js";
+import { TEMPLATES, type TemplateId } from "./templates.js";
 import { h, type Child, type Desc } from "./dom.js";
 import { mathPlain, mathText } from "./math.js";
 import type { Session } from "./session.js";

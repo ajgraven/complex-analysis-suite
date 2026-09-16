@@ -31,7 +31,7 @@ import { Frac } from "@cas/exact";
 
 import type { DeclaredProduct } from "../kernel/branch/declared.js";
 import type { Cx } from "../kernel/geom.js";
-import type { ShellState, StateResolution } from "../shell/state.js";
+import type { ShellState, StateResolution } from "./state.js";
 import { h, type Desc } from "./dom.js";
 import { mathText } from "./math.js";
 import { fmtNum } from "./format.js";

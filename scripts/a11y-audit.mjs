@@ -159,14 +159,20 @@ const PAGES = [
     // The faded drill at rung ii (M7.3), reached by its own permalink: the ledger's KILL column is
     // masked and replaced by a question per piece, which is a different set of controls from
     // anything the default page shows. `expect` is what keeps this honest — a link this build no
-    // longer honours leaves `.drillCard` hidden, and the run fails by name instead of auditing the
+    // longer honours leaves the card absent, and the run fails by name instead of auditing the
     // landing state under a label that claims otherwise.
+    //
+    // **The selector changed at M8 step 1.12**, with the shell it points into: the drill is a
+    // right-rail card rather than a full-screen overlay, so it is `[data-card="drill"]` and its
+    // question rows are ordinary selects inside `.pickRow` rather than a class of their own. It is
+    // also no longer `hidden` when shut — it is simply not rendered, which is what `render.ts` does
+    // with every card a mode does not offer.
     id: "contour-integration-drill",
     mount: "contour-integration",
     dist: "apps/contour-integration/dist",
     file: "index.html",
     hash: viewState("ci", { m: "g", r: "jordan-cosine-kernel", bi: { a: 1, b: 1 }, dr: ["oscillatory", 2] }),
-    expect: ".drillCard:not([hidden]) select.drillPick",
+    expect: '[data-card="drill"] .pickRow select',
   },
   {
     id: "correspondences",

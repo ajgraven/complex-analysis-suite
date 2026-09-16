@@ -25,10 +25,10 @@ import {
   shellMode,
   type ShellState,
 } from "../src/shell/state.js";
-import { bar } from "../src/shell2/bar.js";
-import type { ShellActions } from "../src/shell2/cards/card.js";
-import { patch } from "../src/shell2/dom.js";
-import { defaultSession } from "../src/shell2/session.js";
+import { bar } from "../src/shell/bar.js";
+import type { ShellActions } from "../src/shell/cards/card.js";
+import { patch } from "../src/shell/dom.js";
+import { defaultSession } from "../src/shell/session.js";
 import { STAGE_MODE_LABELS, STAGE_MODES } from "../src/ui/stage/mode.js";
 
 /** Actions that record what was asked for, so a control can be pressed and the ask inspected. */
@@ -342,7 +342,7 @@ describe("what a press asks for", () => {
 
 describe("the bar's shape", () => {
   it("carries exactly ONE `.barBtn` among the bar's own children", () => {
-    // **`shell2.css` gives `.barBtn` `margin-left: auto`, and a flex line splits the free space
+    // **`shell.css` gives `.barBtn` `margin-left: auto`, and a flex line splits the free space
     // EQUALLY among every auto margin on it.** Four `.barBtn` buttons are not a cluster at the right
     // end — they are strewn across the bar with the gaps growing as the window does. The tools go in
     // one wrapper and the wrapper takes the margin.

@@ -784,6 +784,17 @@ passing**: a round trip that is consistently lossy is still a fixed point, so 11
 survived it. The test now restores a state the app is **not** in and requires it to land on the state
 that was applied — 20/20.
 
+**M8 (the shell rebuild, ADR-0043) — Phase 1 is cut over.** The presentation layer is rebuilt on the
+same engine: two rails, KaTeX throughout, textbook vocabulary, a front door over the 28 records, four
+stage modes on Kovesi's CET-C6, a hover readout, one hover identifier linking the piece list, the
+contour and the accumulator's trail, and undo/redo. At step 1.12 `src/main.ts` stopped choosing —
+`src/shell/app.ts`, `src/ui/app.css` and the three old jsdom specs are deleted, `src/shell2/` has
+become `src/shell/`, and the stylesheet budget is `theme.css` + `shell.css`. Below 900 px the grid is
+replaced by a notice naming a desktop, which is the honest form of a decision the old shell met with
+two media queries and 656 px of sideways scroll. What survived the rebuild and what deliberately did
+not is [`M8/parity.md`](../../docs/contour-integration/M8/parity.md), row by row; the live state is
+[`M8/STATUS.md`](../../docs/contour-integration/M8/STATUS.md).
+
 ## Documentation
 
 | document | what it is for |
@@ -805,7 +816,8 @@ src/kernel/   pure maths — no DOM, no upward imports. Where the golden corpus 
 src/engine/   problem semantics: contour, substitution, residue theorem, ledger.
 src/families/ the gallery records as data: schema, loader + invariants, Pass-5 solve.
 src/ui/       Stage (WebGL2) and panels.
-src/shell/    app wiring, URL state, workers, figure export.
+src/shell/    the browser shell — the two rails' cards, the stage, the strip, the bar,
+              the modals, URL state and the figure export. Rebuilt at M8 Phase 1.
 ```
 
 `src/families/` is where the 28 gallery entries become executable. A record is **dropped, not

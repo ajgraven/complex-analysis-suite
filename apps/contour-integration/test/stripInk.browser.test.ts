@@ -39,8 +39,8 @@ import { describe, expect, it } from "vitest";
 
 import { circleTemplate } from "../src/engine/contour/templates.js";
 import { compile, defaultState, resolveState, type ShellState } from "../src/shell/state.js";
-import { defaultSession } from "../src/shell2/session.js";
-import { createStripView, type StripDraw, type StripView } from "../src/shell2/strip.js";
+import { defaultSession } from "../src/shell/session.js";
+import { createStripView, type StripDraw, type StripView } from "../src/shell/strip.js";
 import { drawAccumulator } from "../src/ui/accumulator.js";
 import { DARK_INK } from "../src/ui/inkTheme.js";
 import type { Accumulation } from "../src/engine/contour/accumulate.js";

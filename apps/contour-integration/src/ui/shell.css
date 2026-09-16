@@ -691,7 +691,7 @@
    can reach. So it carries the class and this rule cancels the grid the class otherwise means.
 
    **`modalBackdrop` / `modalDialog`, and they were `contrast…`.** Neither rule ever said anything
-   about the ladder — they are the container the mechanics in `shell2/modal.ts` put up — and the
+   about the ladder — they are the container the mechanics in `shell/modal.ts` put up — and the
    front door is the second panel to wear them. A shared rule named after its first consumer is the
    same drift `modal.ts` was extracted to stop, one file over.
    ════════════════════════════════════════════════════════════════════════════════════════════ */
@@ -837,4 +837,59 @@
   clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
+}
+
+/* The phone notice — M8 step 1.12.
+ *
+ * **LAST in the file, and that is the whole rule.** `.shell2 { display: grid }` and the `.shell2`
+ * inside this media block have the same specificity, so the later one wins — and the first draft put
+ * this at the top, where the grid's own rule overrode it and the notice never appeared. It passed a
+ * test that asserted the media rule's CONTENTS and not its effect; the iframe harness in
+ * `test/phoneNotice.browser.test.ts` is what found it, on its first run.
+ *
+ * **The owner's decision is desktop and laptop**, and below 900 px the grid cannot hold two rails, a
+ * stage and a strip: the old shell relaxed its rigid `rem` tracks with two media queries and still
+ * scrolled sideways (`test/narrowLayout.browser.test.ts` measured 656 px of content in a 400 px
+ * viewport). Saying so is more honest than a layout nobody designed.
+ *
+ * `display: none` on whichever half is hidden takes it out of the accessibility tree too, so a
+ * reader on a phone is not offered an app they cannot see — which is why this is a swap rather than
+ * an overlay. */
+.phoneNotice {
+  display: none;
+}
+@media (max-width: 899px) {
+  .shell2 {
+    display: none;
+  }
+  .phoneNotice {
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    gap: 0.9rem;
+    min-height: calc(100vh - var(--cas-nav-h, 0px));
+    margin-top: var(--cas-nav-h, 0px);
+    padding: 1.5rem;
+    text-align: center;
+    color: var(--g-text);
+  }
+  .phoneNotice p {
+    margin: 0;
+    max-width: 24rem;
+    line-height: 1.5;
+  }
+  /* The link WRAPS: it is there to be read and copied, and a URL that runs off the side of a phone
+     is a link the reader cannot have. `anywhere` rather than `break-all` so a break inside a word
+     only happens when there is no other way. */
+  .phoneNotice > .phoneLink {
+    display: block;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    font-size: var(--t-xs);
+    color: var(--g-muted);
+    background: var(--g-panel);
+    border: 1px solid var(--g-border);
+    border-radius: 5px;
+    padding: 0.5rem 0.65rem;
+  }
 }

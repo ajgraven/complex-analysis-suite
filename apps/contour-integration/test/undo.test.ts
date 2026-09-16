@@ -5,7 +5,7 @@
 // Driving it through a real drag would test jsdom's pointer events; driving it through the states
 // the call sites actually commit tests the policy, which is what the module is.
 //
-// So every case below is built from a call site in `src/shell2/stageController.ts` or `app.ts`, and
+// So every case below is built from a call site in `src/shell/stageController.ts` or `app.ts`, and
 // the comment says which one — a test that invents a commit shape can pass while the app's own
 // shapes coalesce into one entry or into none.
 import { describe, expect, it } from "vitest";
@@ -15,8 +15,8 @@ import { circleTemplate } from "../src/engine/contour/templates.js";
 import { translateContour } from "../src/engine/contour/edit.js";
 import { defaultState, type ShellState } from "../src/shell/state.js";
 import type { BranchChoice } from "../src/kernel/branch/model.js";
-import type { Session } from "../src/shell2/session.js";
-import { cameraOnly, changeKey, createUndo } from "../src/shell2/undo.js";
+import type { Session } from "../src/shell/session.js";
+import { cameraOnly, changeKey, createUndo } from "../src/shell/undo.js";
 
 const base = (): ShellState => defaultState(circleTemplate());
 

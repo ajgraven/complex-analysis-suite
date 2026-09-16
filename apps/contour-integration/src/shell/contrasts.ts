@@ -19,9 +19,9 @@
 // out of `CONTRAST_CELLS`, and it exists because `find` returns `| undefined`; and the {@link ladder}
 // memo is a cost rather than a behaviour, since dropping it changes nothing a test can see and
 // asserting it would mean asserting how many times a pure function was called.
-import { CONTRAST_CELLS, contrastTable, type ContrastTable, type ContrastTableCell, type ContrastTableRow } from "../shell/contrastGrid.js";
+import { CONTRAST_CELLS, contrastTable, type ContrastTable, type ContrastTableCell, type ContrastTableRow } from "./contrastGrid.js";
 import { constraintLabel, type ConstraintId } from "../engine/vocabulary.js";
-import type { ShellState } from "../shell/state.js";
+import type { ShellState } from "./state.js";
 import { h, patch, type Child, type Desc } from "./dom.js";
 import { createModal } from "./modal.js";
 import { mathPlain, mathText } from "./math.js";
@@ -223,7 +223,7 @@ export function createContrastsDialog(host: HTMLElement, page: HTMLElement, inpu
   // `muted`, `badge`, `verdict`, `numTable` — is scoped `.shell2 …` in `theme.css`, and the dialog
   // cannot be a DESCENDANT of the shell: `inert` is not defeasible from CSS, so a modal inside the
   // element it makes inert is a modal nobody can reach. Wearing the class rather than living under
-  // it gets the visual system without the containment; `shell2.css` cancels the grid on
+  // it gets the visual system without the containment; `shell.css` cancels the grid on
   // `.shell2.modalBackdrop`.
   const modal = createModal({
     host,

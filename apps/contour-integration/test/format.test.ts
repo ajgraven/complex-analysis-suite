@@ -4,7 +4,7 @@
 // component the estimate cannot distinguish from zero is not a number the app has.
 import { describe, expect, it } from "vitest";
 
-import { fmtApprox, fmtNum } from "../src/shell2/format.js";
+import { fmtApprox, fmtNum } from "../src/shell/format.js";
 
 describe("fmtApprox", () => {
   it("drops a component that is BELOW the error estimate", () => {

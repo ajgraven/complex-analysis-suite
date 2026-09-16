@@ -18,7 +18,7 @@ import { constraintLabel } from "../src/engine/vocabulary.js";
 import { DRILL_STAGES, DRILL_TASKS, runTask, taskById, taskState, type DrillTask } from "../src/shell/drill.js";
 import { PROGRESS_KEY, readProgress } from "../src/shell/drillProgress.js";
 import { encodeShell } from "../src/shell/viewState.js";
-import { mountShell2, type Shell2Handle } from "../src/shell2/app.js";
+import { mountShell2, type Shell2Handle } from "../src/shell/app.js";
 
 /**
  * Mount a fresh app, optionally with a hash already in the address bar — which is how a shared rung

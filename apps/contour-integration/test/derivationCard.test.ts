@@ -17,10 +17,10 @@ import { describe, expect, it } from "vitest";
 import { buildDerivation } from "../src/engine/derivation.js";
 import { circleTemplate } from "../src/engine/contour/templates.js";
 import { compile, defaultState, offeredCorpus, resolveState, type ShellState } from "../src/shell/state.js";
-import { patch } from "../src/shell2/dom.js";
-import { render } from "../src/shell2/render.js";
-import { defaultSession, type Session } from "../src/shell2/session.js";
-import type { ShellActions } from "../src/shell2/cards/card.js";
+import { patch } from "../src/shell/dom.js";
+import { render } from "../src/shell/render.js";
+import { defaultSession, type Session } from "../src/shell/session.js";
+import type { ShellActions } from "../src/shell/cards/card.js";
 
 /** Actions that record what was asked for, so a control can be pressed and the ask inspected. */
 function spyActions(): ShellActions & { calls: string[] } {

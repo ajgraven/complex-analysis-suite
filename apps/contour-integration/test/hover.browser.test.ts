@@ -10,13 +10,12 @@
 // over everything.
 import { afterEach, describe, expect, it } from "vitest";
 
-import { mountShell2 } from "../src/shell2/app.js";
+import { mountShell2 } from "../src/shell/app.js";
 
 import "katex/dist/katex.min.css";
 import "@cas/ui/nav.css";
-import "../src/ui/app.css";
 import "../src/ui/theme.css";
-import "../src/ui/shell2.css";
+import "../src/ui/shell.css";
 
 const mounted: ReturnType<typeof mountShell2>[] = [];
 afterEach(() => {
@@ -185,5 +184,64 @@ describe("the hover link, drawn", () => {
     ink.dispatchEvent(new PointerEvent("pointerleave", { bubbles: true, pointerId: 1 }));
     await settled();
     expect(find(), "the readout outlived the pointer's visit to the stage").toBeNull();
+  });
+});
+
+describe("the two marks the cutover's parity sweep found missing", () => {
+  it("DRAWS the pen's path while it is being drawn", async () => {
+    // **It was not drawn at all.** shell2 put down the crosshair cursor and the snap chip and
+    // nothing else, so every vertex a reader placed was invisible until they committed the whole
+    // path — and `inkTheme.ts` had carried a `penPreview` colour since step 1.2 that nothing drew
+    // with, which is the same gap seen from the palette's side. Three jsdom specs assert the pen's
+    // SESSION and never its ink, and `penInk.browser.test.ts` measures the committed contour, so
+    // nothing could see it.
+    const { root, app } = mount();
+    const ink = root.querySelector<HTMLCanvasElement>("canvas.ink");
+    if (ink === null) throw new Error("no ink canvas");
+    app.actions().toSandbox();
+    await settled();
+    const before = pixels(ink);
+    app.stage().penStart();
+    const box = ink.getBoundingClientRect();
+    for (const [fx, fy] of [[0.3, 0.3], [0.6, 0.35], [0.5, 0.6]] as const) {
+      ink.dispatchEvent(pointerAt("pointerdown", box.left + box.width * fx, box.top + box.height * fy, 1));
+    }
+    await settled();
+    // Read while the pen is still OUT: the draft's ink is the subject, and committing or cancelling
+    // would take it away again.
+    const during = pixels(ink);
+    expect(app.session().pen?.nodes, "the clicks placed no vertices").toHaveLength(3);
+    expect(differing(before, during)).toBeGreaterThan(0);
+  });
+
+  it("DRAWS the cut system's handles, which were hit-testable and invisible", async () => {
+    // Grabbable since step 1.3 and painted by nothing: a reader could take hold of a branch point,
+    // drag it and hear it announced, aiming at a spot on an empty plane.
+    //
+    // **In the SANDBOX**, which is where the handles exist at all: the Branch Cuts card says in as
+    // many words that a record's cuts are the record's, and the keyhole template seeds the cut
+    // system its own shape presupposes (M4.6). The first draft of this test reached for a tier-D
+    // record and found `state.branch.points` empty — a record's cuts do not live in the state.
+    const { root, app } = mount();
+    const ink = root.querySelector<HTMLCanvasElement>("canvas.ink");
+    if (ink === null) throw new Error("no ink canvas");
+    app.actions().toSandbox();
+    app.actions().setTemplate("keyhole");
+    await settled();
+    expect(app.currentState().branch.points.length, "the keyhole seeded no branch points").toBeGreaterThan(0);
+    const full = app.currentState();
+    const plain = pixels(ink);
+
+    // **The discriminator is the EMPHASIS, which only a handle can show.** Two earlier attempts were
+    // not about the handles at all: emptying the whole cut system measures the cut POLYLINES, which
+    // were drawn all along, and an annulus around a branch point is crossed by the cut's own ray
+    // (232 inked pixels there with no handle drawn). What nothing else on this canvas can produce is
+    // the same frame, same state, same cuts — with one handle held. If the marks are not drawn,
+    // holding one changes no pixel.
+    app.session().held = { label: "a branch point", at: full.branch.points[0].at };
+    app.actions().redraw();
+    await settled();
+    const held = pixels(ink);
+    expect(differing(plain, held), "holding a branch handle changes nothing on the canvas").toBeGreaterThan(0);
   });
 });

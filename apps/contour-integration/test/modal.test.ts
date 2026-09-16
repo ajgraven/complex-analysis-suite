@@ -10,7 +10,7 @@
 // stub.
 import { describe, expect, it, vi } from "vitest";
 
-import { createModal, type Modal } from "../src/shell2/modal.js";
+import { createModal, type Modal } from "../src/shell/modal.js";
 
 function harness(body: (dialog: HTMLElement) => void = (d) => d.append(button("Close"))): {
   modal: Modal;

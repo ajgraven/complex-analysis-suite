@@ -15,7 +15,7 @@
 // **The stacks live on the {@link Session}**, not in this closure. `resetTransient` already empties
 // them, which is the M7.4 lesson the whole of `shell2/` is built on: a value the door cannot see is
 // a value the door does not clear. This module owns the POLICY; the session owns the data.
-import type { ShellState } from "../shell/state.js";
+import type { ShellState } from "./state.js";
 import type { Session } from "./session.js";
 
 /**
