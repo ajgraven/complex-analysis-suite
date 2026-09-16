@@ -143,7 +143,28 @@ cannot see. Test (`test/hermanRing.test.ts`): the shipped family at τ = 0, 0.5,
 
 ---
 
-## WP3 — A shell test for `main.ts` (the scaffold every later WP relies on) · effort M · closes U11 (tests), enables S-fixes
+## WP3 — A shell test for `main.ts` (the scaffold every later WP relies on) · effort M · closes U11 (tests), enables S-fixes · **DONE**
+
+> **Landed** (commit `4ea4433`). Gate green: lint, typecheck, 554 files / 5,744 tests, build. Ten
+> tests; negative-control checked against WP1's two untested fixes. Three notes.
+>
+> **The boot split is `src/boot.ts`, not a `VITEST` guard** — `runWithFatalBoundary(init, …)` was the
+> only module-scope statement, so the extraction was three lines, and the app was re-verified in a
+> real browser afterwards.
+>
+> **CD's stage is NOT contour-integration's.** `GLPlot`'s constructor _throws_ without a context
+> instead of degrading, so a null `getContext` aborts `init()` before any control is wired. That is
+> correct product behaviour and was left alone; the test supplies a minimal fake GL **and** 2D
+> context instead. Neither is a renderer and nothing asserts a pixel.
+>
+> **`no-shadow` went in the app's own config**, not the root one, and found two real source
+> shadowings: a σ view-apply button hiding the sidebar's `applyBtn`, and a destructured
+> `boundingRadius` _number_ hiding the module's exported `boundingRadius` _function_ across a whole
+> body. Four test-file cases were renamed as well.
+>
+> **Carried to WP7:** `readFullState` / `applyFullState` — the layer that adds `_z0`, `_notes`,
+> `_profile` and `_sigma` on top of `SHARE_IDS` — are closures inside `init()` and still unreachable
+> from a test. The shell test exercises `readAppState` / `applyAppState` through the real codec.
 
 **Why now:** every remaining shell fix (S2–S7, U2, U4–U7) needs a way to assert what the DOM does, and
 today `main.ts` (6,881 lines) is imported by nothing. Contour-integration proved the pattern:
