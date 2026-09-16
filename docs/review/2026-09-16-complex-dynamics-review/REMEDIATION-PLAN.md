@@ -580,7 +580,76 @@ tests `test/inspectorRows.test.ts` (new), `test/dataExport.test.ts`, `test/julia
 
 ---
 
-## WP9 — Render parity and robustness · effort L · closes R4–R9
+## WP9 — Render parity and robustness · effort L · closes R4–R9 · **DONE**
+
+> **Landed.** Gate green: lint, typecheck, **558 files / 5,832 tests**, build; CD browser suite 6 files /
+> **35 tests**. Eight negative controls, each reverted and confirmed red. **Two of the plan's
+> prescriptions were measured and changed**, and one item turned out to need no code at all.
+>
+> **R4 — the plan's line numbers describe a check that does not exist.** `usePerturbation` and
+> `desiredPrecision` do not consult `_projection` at all; `_projection === 0` gates the preview, the
+> collar and the recolour instead. The defect is real and worse than "the linear path": measured, the
+> **df64 shader does not declare `uProjection`** and the perturbation kernel's `dc` is the plain
+> linear pixel offset, so past the threshold the picture became the linear view while the note still
+> read "Poincaré disk view active", the pointer still inverse-projected and the overlay stayed
+> hidden. Both paths refuse under a projection now — and the advisory that should fire there was
+> `return null`, the one configuration that most needed a word getting none. It carries a "Switch to
+> linear" action.
+>
+> **R5 — and the standard shader was the WRONG one, not merely the different one.** `_monicDegree` is
+> null for anything that is not exactly z^d + c, so `z³ − z + c` emitted `LOG_DEGREE = log 2` while
+> `perturbDegree()` handed the kernel 3. The smooth escape time normalises by the polynomial's
+> DEGREE, so log 3 is correct and toggling perturbation was re-banding the exterior from wrong to
+> right. Measured: `extractPolyPerturbation` reports 3 for `z³ − z + c` and 4 for `z⁴ − z² + c`,
+> while `_monicDegree` is null for both.
+>
+> **R6 — the plan's pointer-events item needs no change, and the gap it leaves is the keyboard.**
+> Measured: `.export-progress` is `position: fixed; inset: 0` with a backdrop and no
+> `pointer-events: none`, so it already blocks the pointer. What it does not block is the keyboard on
+> a focused canvas — and freezing the LOOK is not enough on its own, because every strip re-uploads
+> the live centre, zoom and cap too. So the look is snapshotted at entry (with a `finally`, so a
+> throw cannot leave the app frozen) AND the plot ignores its own input for the duration. The
+> histogram export builds its CDF once, before the first strip, from a bounded 1024² render instead
+> of a synchronous full-size `readPixels` — 268 MB at 8192², before the Cancel button could act. The
+> overlay rule now matches the on-screen one: `drawOverlay` already bailed on a projection through
+> its `projected` flag, but nothing bailed on the SPHERE, so a saved sphere image carried a
+> flat-plane orbit and a scale bar computed from a zoom the picture was not using.
+>
+> **R7.** One line, and the comment beside it was the bug report: "Accumulation resumes on the next
+> content change" — except a palette change IS the last change, so nothing resumed and the view
+> stayed at the recolour's single un-anti-aliased sample. `scheduleRender(false)` already resets the
+> counter; all that was missing was asking for one more frame. It does not cost the fast path:
+> during a drag the next appearance event sets `wantRecolor` again before that frame runs.
+>
+> **R8.** `set zoom` / `set center` / `setCenterDD` refuse non-finite and non-positive input instead
+> of storing it (the view span is `2/zoom`). The export refuses a lost context or an incomplete
+> framebuffer rather than saving a blank PNG. `schwarzGL` had **no context-loss handling at all** and
+> its `render()`'s return value was discarded at the call site, so a lost GPU painted an empty σ pane;
+> it reports and the session degrades to the CPU field, as it already does for a GPU render that
+> throws. A df64 build failure now reports once through a latch, where the only sign was a
+> `console.warn`. And the export ceiling comes from THIS plot's live context as
+> `min(MAX_TEXTURE_SIZE, MAX_RENDERBUFFER_SIZE, MAX_VIEWPORT_DIMS)` — it was probing a throwaway
+> context for one of the three.
+>
+> **R9 — the plan's third item would have been a regression, and the real waste was next to it.**
+> "Drop the synchronous `plot.render()` and await the scheduled frame" removes the half that makes
+> the capture deterministic. The waste is that NOTHING CANCELLED the scheduled frame, so every
+> recorded frame was drawn twice at full resolution. A `renderSeq` counter retires it. The other two
+> items are real and are now octave-scale rather than frame-scale; **`orbitKeyFor` already keyed on
+> the centre** (the plan's other half of that item), so only the cap needed quantising. Numbers,
+> including the coalescing hazard found while writing the retirement, are in this app's
+> [`PERFORMANCE_REVIEW.md`](../../../apps/complex-dynamics/PERFORMANCE_REVIEW.md). The field
+> pre-pass shortcuts (`shaderBuilder.ts:641, 966`) are **not done** — they are a shader change whose
+> only check is pixel parity, and the browser suite's SwiftShader timings are too noisy to show the
+> gain; recorded rather than attempted.
+>
+> **One test finding.** The R7 case passed alone and failed in the full browser suite at 149 s: a
+> fixed count of rAF ticks is not a safe wait when six specs share one SwiftShader context. Bounded
+> polling instead — same assertion, 6 s, and still red when the fix is reverted.
+
+**Files:** `apps/complex-dynamics/src/render/glPlot.ts`, `src/render/plotView.ts`,
+`src/render/schwarzGL.ts`, `src/main.ts`, `PERFORMANCE_REVIEW.md`; tests
+`test/renderParity.test.ts` (new), `test/renderRobustness.browser.test.ts` (new).
 
 - **R4 projections.** `usePerturbation` (`glPlot.ts:1315`) and `desiredPrecision` (`:1007`) return
   the linear path only when `_projection === "linear"`; when a projection is active at deep zoom,

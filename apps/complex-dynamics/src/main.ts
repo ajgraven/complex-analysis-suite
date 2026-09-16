@@ -13,7 +13,7 @@ import { PROJECTIONS, type ProjectionMode } from "./render/projection";
 import { getMaxTextureSize, downloadCanvas, copyCanvasToClipboard, ensurePngName } from "./hiResExport";
 import { PlotView } from "./render/plotView";
 import type { GLPlot, FractType } from "./render/glPlot";
-import { initialRes } from "./render/glPlot";
+import { DF64_THRESHOLD, initialRes } from "./render/glPlot";
 import { ddCenterToString, ddCenterFromString, ddToNumber } from "./render/dd";
 import { inspect, findNucleus, findMisiurewicz, type InspectResult } from "./render/inspect";
 import { matingVerdict } from "./render/mating";
@@ -1256,7 +1256,32 @@ export function init(): void {
   function precisionAdvisor(view: PlotView, scope: "param" | "dyn"): Advisor {
     return () => {
       const plot = view.plot;
-      if (plot.projection !== 0) return null; // a projection forces its own single-precision regime
+      // A projection forces single precision — the df64 and perturbation kernels have no projected
+      // coordinate, so the deep-zoom paths are refused while one is active (glPlot's
+      // `desiredPrecision` / `usePerturbation`). This used to `return null`, which is why the one
+      // configuration that most needs a word got none: the picture snapped to linear past the
+      // threshold and nothing said so. (WP9/R4, review 2026-09-16.)
+      if (plot.projection !== 0) {
+        return precisionMetric(plot.zoom, plot.center) > DF64_THRESHOLD
+          ? {
+              id: "projection-precision",
+              scope,
+              severity: "warn",
+              message:
+                "Projections render in single precision — this zoom is past its limit. Switch to the linear view for deep zoom.",
+              actions: [
+                {
+                  label: "Switch to linear",
+                  primary: true,
+                  run: () => {
+                    byId<HTMLSelectElement>("projection-mode").value = "linear";
+                    applyProjection();
+                  },
+                },
+              ],
+            }
+          : null;
+      }
       // Perturbation deep zoom is glitch-free, but its double-double reference centre has its own
       // ceiling (~1e28); past it the deepest detail degrades silently, so warn (dismissible) rather
       // than leave the user trusting unreliable structure.
@@ -2013,6 +2038,20 @@ export function init(): void {
   let lastConnectivity: string | null = null; // Tier-2 image connectivity string (general f)
   let lastConnectivityRigorous = false; // Tier-1 polynomial verdict set ⇒ skip the image estimate
   let juliaMeasureTimer = 0;
+  // Deep-zoom precision going missing used to leave only a `console.warn`: the picture pixelated
+  // past ~8000× and nothing said why. Reported once per plot. (WP9/R8, review 2026-09-16.)
+  for (const [label, view] of [
+    ["parameter space", parameterView],
+    ["dynamical plane", dynamicalView],
+  ] as const) {
+    view.plot.onDeepZoomUnavailable = (reason) => {
+      showToast(
+        `Deep-zoom precision is unavailable on the ${label} (the high-precision shader would not build) — zooms past ~8000× will pixelate.`,
+        "warn",
+      );
+      console.warn(`[${label}] deep zoom disabled:`, reason);
+    };
+  }
   const juliaMetricsClient = new JuliaMetricsClient(); // Tier-2 masks off the main thread (sync fallback)
   // A worker failure used to be dropped silently, leaving the image-derived rows at "measuring…" for
   // ever. Say so instead, in the rows themselves. (WP6, review 2026-09-16.)
@@ -3412,7 +3451,7 @@ export function init(): void {
       const full = Math.min(schwarzGL.maxSize, Math.round(backing * schwarzAA));
       const renderSize = schwarzDraft ? Math.max(160, Math.round(backing / 4)) : full;
       if (schwarzFieldDirty) {
-        schwarzGL.render(schwarzView, renderSize, {
+        const drew = schwarzGL.render(schwarzView, renderSize, {
           ...schwarzEscape,
           scaleMode: schwarzScaleMode,
           colorMode: schwarzColorMode,
@@ -3430,6 +3469,16 @@ export function init(): void {
           sphereRot: schwarzSphereRot, // F2d camera (ignored unless viewMode === "sphere")
           sphereZoom: schwarzSphereZoom,
         });
+        // The return value used to be discarded, so a lost GPU context (or a σ that had not been
+        // uploaded) painted an empty pane. Degrade to the CPU field, which is what a GPU render
+        // that THROWS already does. (WP9/R8.)
+        if (!drew) {
+          console.warn("schwarzGL render declined; falling back to the CPU field");
+          schwarzSession = { ...schwarzSession, mode: "CPU" };
+          schwarzFieldDirty = true;
+          paintSchwarz();
+          return;
+        }
         schwarzLastRenderSize = renderSize;
       }
       // Downscale a supersampled (or upscale a draft) GL frame into the backing; a 1:1 native frame is crisp.

@@ -263,7 +263,9 @@ export class PlotView {
   private async renderExportCanvas(
     opts: { size: number; overlays: boolean; scaleBar?: boolean } & ExportProgress,
   ): Promise<{ canvas: HTMLCanvasElement; size: number; clamped: boolean; maxTex: number } | null> {
-    const maxTex = getMaxTextureSize();
+    // Ask THIS plot's live context, not a throwaway probe: a second context can report a different
+    // ceiling, and the one that has to honour the size is this one. (WP9/R8.)
+    const maxTex = Math.min(this.plot.maxRenderSize, getMaxTextureSize());
     const { size, clamped } = clampExportSize(opts.size, maxTex);
     const image = await this.plot.renderToImageData(size, {
       onProgress: opts.onProgress,
@@ -276,7 +278,14 @@ export class PlotView {
     const ctx = out.getContext("2d");
     if (!ctx) throw new Error("2D context unavailable for export");
     ctx.putImageData(image, 0, 0);
-    if (opts.overlays) {
+    // The overlays and the scale bar both describe the FLAT plane map. On screen `drawOverlay`
+    // returns early for a projection (its `projected` flag) and this class's own `drawOverlay`
+    // returns early for the sphere — but the export path had neither guard for the sphere, so a
+    // saved sphere image carried a flat-plane orbit, flat-plane rays and a scale bar computed from
+    // a linear zoom the picture is not using. Match the on-screen rule instead. (WP9/R6, review
+    // 2026-09-16.)
+    const flat = !this.plot.sphere && this.plot.projection === 0;
+    if (opts.overlays && !this.plot.sphere) {
       // Draw the overlay on its own canvas (drawOverlay clears first), then
       // composite it over the fractal so the fractal isn't wiped.
       const ov = document.createElement("canvas");
@@ -317,7 +326,7 @@ export class PlotView {
         ctx.drawImage(ov, 0, 0);
       }
     }
-    if (opts.scaleBar) drawScaleBar(ctx, size, this.plot.zoom);
+    if (opts.scaleBar && flat) drawScaleBar(ctx, size, this.plot.zoom);
     return { canvas: out, size, clamped, maxTex };
   }
 
@@ -492,6 +501,17 @@ export class PlotView {
     const el = this.overlay;
     el.tabIndex = 0;
 
+    // Nothing this plot's own input does may reach it while a high-resolution export is running: the
+    // export renders in strips and re-reads the live view for each one, so a pan or a zoom halfway
+    // through produces a PNG that is two pictures with a seam between them. The progress overlay's
+    // backdrop already stops the pointer; it does not stop the keyboard on a focused canvas.
+    // (WP9/R6, review 2026-09-16.)
+    const frozen = (e: Event): boolean => {
+      if (!this.plot.exporting) return false;
+      e.preventDefault();
+      return true;
+    };
+
     const capture = (id: number, on: boolean): void => {
       try {
         if (on) el.setPointerCapture(id);
@@ -502,6 +522,7 @@ export class PlotView {
     };
 
     el.addEventListener("pointerdown", (e) => {
+      if (frozen(e)) return;
       capture(e.pointerId, true);
       const uv = this.uvOf(e);
       this.pointers.set(e.pointerId, uv);
@@ -545,6 +566,7 @@ export class PlotView {
     });
 
     el.addEventListener("pointermove", (e) => {
+      if (this.plot.exporting) return; // see `frozen` above (no preventDefault — a hover is harmless)
       const r = el.getBoundingClientRect(); // one layout read per move; uvOf + hover dist share it
       const uv = this.uvOf(e, r);
       if (this.pointers.has(e.pointerId)) this.pointers.set(e.pointerId, uv);
@@ -716,6 +738,7 @@ export class PlotView {
       "wheel",
       (e) => {
         e.preventDefault();
+        if (this.plot.exporting) return; // see `frozen` above
         if (this.plot.sphere) {
           // Sphere zoom = FOV magnification (a telescope, not a dolly), so it reveals fractal detail
           // per-fragment without ever entering the sphere.
@@ -755,6 +778,7 @@ export class PlotView {
       "-": 189,
     };
     el.addEventListener("keydown", (e) => {
+      if (frozen(e)) return;
       if (this.plot.sphere) {
         // Sphere keyboard: arrows rotate about the screen axes, +/- zoom, Enter/i inspects the centre.
         const step = 0.15;
