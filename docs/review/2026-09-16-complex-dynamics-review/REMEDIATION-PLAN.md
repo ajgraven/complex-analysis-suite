@@ -1,7 +1,7 @@
 # Remediation plan — Complex Dynamics review of 2026-09-16
 
 A sequenced plan to close **every** finding in [`REPORT.md`](REPORT.md) except the suite nav header
-(see _Decisions to record_ at the end). Twelve work packages (WPs), each a self-contained,
+(U5 — withdrawn by ADR-0044, see _Scope_ below). **All work is confined to `apps/complex-dynamics/`.** Twelve work packages (WPs), each a self-contained,
 independently reviewable PR that leaves the gate green. Ordered by value ÷ risk and by dependency.
 Effort: S = under half a day, M = half to one day, L = one to two days. Finding ids (R1, I3, S1, U4 …)
 refer to the report.
@@ -12,6 +12,42 @@ moves without its tests green before and after; honest labelling; small commits,
 pushed. Because the owner's usage is metered, each WP is sized to one session and carries its own
 STATUS line in a `STATUS.md` next to this file (the M8 pattern: read it first, do the step it names,
 update it, push).
+
+## Scope — `apps/complex-dynamics` and nothing else
+
+**Every change lands under `apps/complex-dynamics/`.** No shared package is modified, no sibling app is
+touched, and no repo-level config or doc is edited. Four work packages were re-routed to honour that; each
+keeps its finding closed, by an in-app route:
+
+| was                                                             | now                                                                              | WP   |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------- | ---- |
+| root `eslint.config.js` gains `no-shadow` for this app          | `apps/complex-dynamics/eslint.config.js` gains it (the app has its own config)   | WP3  |
+| `packages/ui/src/computeClient.ts` returns worker errors        | this app's `fromMessage` maps the error to a defined result — see WP6            | WP6  |
+| `scripts/a11y-audit.mjs` audits the Exterior panel's open state | the invariants are asserted in this app's own jsdom shell test, which **blocks** | WP11 |
+| repo-level docs refreshed alongside the app's                   | app-local docs only; the repo-level list is deferred below                       | WP12 |
+
+**Deferred, with the reason** (each is real, none is in this plan):
+
+- **`createComputeClient` drops a worker error** (`packages/ui/src/computeClient.ts:102`) — a package defect
+  with three consumers. WP6 fixes this app's symptom at its own boundary; the package keeps the latent bug,
+  and the other two consumers keep it too. Worth its own small PR later.
+- **The a11y roster only ever audits default page states** (`scripts/a11y-audit.mjs`) — a suite-wide gap the
+  contour-integration drill already worked around per-app. WP11 does the same here.
+- **Repo-level documentation:** root `README.md`'s CD row and test count, `CLAUDE.md`'s CD paragraph,
+  `docs/design/SIGMA-HANDOFF.md`'s stale status header, `docs/refactor/LOG.md`. All named in REPORT §3 and
+  all outside the app.
+- **The suite nav header** — REPORT finding U5 is closed as won't-fix by
+  [ADR-0044](../../DECISIONS.md#adr-0044-withdraw-the-in-app-suite-navigation-header-the-launcher-is-the-unified-menu).
+  **No app loses its header in this work.** The staged removal in
+  [`NAV-WITHDRAWAL-PLAN.md`](NAV-WITHDRAWAL-PLAN.md) is a separate exercise for a separate session and is
+  not started here.
+
+**The one unavoidable edge.** WP6 adds `@cas/rigor` to this app's `package.json`, which rewrites the root
+`pnpm-lock.yaml`. That is consuming an existing package, not modifying one. If you would rather not touch
+the lockfile at all, say so and WP6 ships the `≈` labels as plain strings — the honest-labelling fix still
+lands, it just is not compiler-enforced.
+
+---
 
 **Suggested order:** WP1 → WP2 → WP3 (one-liners and the test scaffold that every later WP needs) →
 WP4 → WP5 → WP6 (the instruments, ordered by how wrong the printed number is) → WP7 → WP8 (state and
@@ -103,8 +139,9 @@ absence, and everything else is ordinary DOM.
   invariants the report found broken: preset change applies (WP1), Enter is scoped (WP1), the
   applied chips match the applied state (WP7), share/restore round-trips every field in `SHARE_IDS`
   plus the sphere ids (WP7), Esc closes one layer (WP8).
-- `eslint.config.js` (root): extend the `no-shadow: "error"` block to `apps/complex-dynamics/**`
-  (currently contour-integration only); fix what it flags (expect a few renames).
+- `apps/complex-dynamics/eslint.config.js`: add `"no-shadow": "error"` to the app's own rule block
+  (contour-integration sets it from the root config; this app has its own, so the rule stays in-app and
+  `pnpm --filter complex-dynamics lint` enforces it). Fix what it flags — expect a few renames.
 - `vite.config.ts`: `test.environment` stays `node`; the new file opts in per-file via the docblock.
 
 **Guard:** the test itself; `pnpm test` count rises by one file. Risk: `init` has side effects at
@@ -195,18 +232,21 @@ no exact-dimension row.
   gate that `mateableLimbs` already encodes so an obstructed pair is refused by name before any
   compute. Test: `1/7 ⊔ 2/7` reports "did not converge (limit N)" not silence; `1/3 ⊔ 2/3` reports
   "obstructed (conjugate limbs)".
-- `packages/ui/src/computeClient.ts:102`: when `result === undefined` call `cb` with an error object
-  (or add an `onError` option) so the Julia-properties rows show "failed: …" instead of "measuring…"
-  forever; `juliaMetrics.worker.ts:327-329` posts the error message. Test in `packages/ui/test`:
-  a worker error reaches the callback. (Package change — `createComputeClient` has three consumers,
-  so add the golden for all three.)
+- **Worker errors, fixed at this app's boundary.** `juliaMetrics.worker.ts` already posts
+  `{ reqId, error }` on a throw, but `juliaMetricsClient.ts:50-53` maps it to `result: r.metrics`, which is
+  `undefined` — and `createComputeClient` drops an undefined result without calling back, so the
+  Julia-properties rows sit at "measuring…" forever. Widen this app's result type to
+  `JuliaImageMetrics | { failed: string }` and have `fromMessage` return the failure as a **defined**
+  result; `main.ts` renders "failed: …". No package change: the fix is the app not throwing information
+  away at its own edge. Test in the existing `test/juliaMetricsClient.test.ts` — a worker that posts an
+  error reaches the callback. (The package-side defect is recorded under _Scope_ as deferred.)
 - Inspector rows (`main.ts:356-419`): every numerically-derived row carries `≈` (multiplier, distance,
   Lyapunov) and only closed-form rows carry `=`; import `@cas/rigor`'s branded labels so a bare `=`
   string is a compile error (the app has `@cas/rigor` available via the workspace; add the dependency).
   Herman panel: "Ring detected (≈)". Glossary "Profiles" entry: Artist's AA is 1 with temporal
   accumulation — say so (`ui/glossary.ts:72`).
 
-**Gate:** as WP1 plus `pnpm --filter @cas/ui test`.
+**Gate:** as WP1. (No package test runs — nothing outside the app changed.)
 
 ---
 
@@ -294,10 +334,11 @@ light, mode}` into an `ExportOptions` object at entry and `setupDraw` reads that
   the scheduled frame (`main.ts:5408, 5426, 5492, 5573, 5597`); `ensureBLA` (`:1436`) rebuilds only
   when the required radius crosses a power of two; `orbitKeyFor` (`:1334`) keys on the reference
   centre and a quantised iteration cap; the field pre-pass (`shaderBuilder.ts:641, 966`) gets the
-  cardioid/period shortcuts. Measure before/after with the existing perf notes in `docs/perf/`.
+  cardioid/period shortcuts. Record the before/after numbers in this app's own
+  `PERFORMANCE_REVIEW.md` (the repo-level `docs/perf/` notes are out of scope).
 
-**Gate:** as WP1 plus both browser suites (`pnpm --filter complex-dynamics test:browser` and
-`packages/gpu`).
+**Gate:** as WP1 plus this app's browser suite (`pnpm --filter complex-dynamics test:browser`).
+`packages/gpu`'s suite is not run — nothing in that package changes.
 
 ---
 
@@ -350,10 +391,13 @@ not baselined dirty).
 
 ## WP11 — Accessibility · effort S · closes U10
 
-- Exterior-map lists (`#exterior-param-list`, `#exterior-dyn-list`): `tabindex="0"` + `role="region"`
-  - `aria-label`; wrap the panel's status/labels in the group's landmark (the `region` findings) —
-    and add the Exterior panel's open state to the a11y roster (`scripts/a11y-audit.mjs`) via a
-    permalink that opens it, the way the drill rung is audited, so non-default states are covered.
+- Exterior-map lists (`#exterior-param-list`, `#exterior-dyn-list`): `tabindex="0"` + `role="region"` +
+  `aria-label`; wrap the panel's status and labels in the group's landmark (the `region` findings).
+  **The non-default-state gap is closed in-app, not in the roster.** `scripts/a11y-audit.mjs` audits each
+  page in its default state only, which is why this finding survived — but that script is out of scope
+  here and the axe job does not block anyway. Instead WP3's shell test asserts the structural invariants
+  directly with the panel **opened**: every scrollable list is focusable, every control is named, one
+  `<main>`, one `<h1>`. That blocks on every push, which the axe job never did.
 - Gradient editor (`ui/gradient.ts:519-528`): a keyboard path — focused stop handle moves with
   arrows, `Insert`/`+` adds a stop at the focused position, `Delete` removes; expose values in
   `aria-valuenow`.
@@ -366,7 +410,10 @@ not baselined dirty).
 - σ capture-phase keyboard handler (`main.ts:4535-4614`): act only when focus is on the σ canvas
   (or body), not on any focusable element.
 
-**Gate:** as WP1 plus `node scripts/a11y-audit.mjs --strict`, then re-baseline.
+**Gate:** as WP1. Run `node scripts/a11y-audit.mjs` locally to confirm this app still reports zero
+findings, but **do not re-record the baseline** — `scripts/a11y-baseline.json` is a repo-level file and
+this app's entry is already `{}`, so a clean run needs no edit. If the run ever shows a _new_ CD finding,
+that is a defect to fix in the app, not a baseline to update.
 
 ---
 
@@ -388,10 +435,13 @@ Written last so it describes the app as it ends up after WP1–11.
 "complex-dynamics (complex-analysis-suite)"`; write `cas:state` alongside `cdjs:state` for one
   release, then drop the old key (a reader that opens any suite figure is the point of the documented
   key); fix the two "Latin-1, ASCII only" comments (`main.ts:2441`, `schwarzState.ts:628`).
-- `FEATURE_RESEARCH.md` §0, `FRONTIER_ROADMAP.md` §4 A2, `PERFORMANCE_REVIEW.md` deep-zoom track,
-  `docs/design/SIGMA-HANDOFF.md` status header, root `README.md` CD row and test count: bring each
-  to the shipped state (one commit per file, each a pure doc change).
-- `CLAUDE.md`: the CD status paragraph gains one line pointing at this review folder.
+- `FEATURE_RESEARCH.md` §0, `FRONTIER_ROADMAP.md` §4 A2, `PERFORMANCE_REVIEW.md` deep-zoom track:
+  bring each to the shipped state — perturbation is no longer z²+c-only, BLA is wired, `src/expr/` and
+  `src/glsl/` live in the packages (one commit per file, each a pure doc change). These three are
+  app-local, so they are in scope.
+- **Out of scope, deferred:** `docs/design/SIGMA-HANDOFF.md`'s stale status header, root `README.md`'s CD
+  row and test count, and `CLAUDE.md`'s CD paragraph. All are repo-level. They are listed here so the
+  next person knows the app's own docs are current and the repo's are not.
 
 **Gate:** `pnpm format:check` and the full gate (docs only, but the `Software` tag change touches
 `hiResExport.test.ts` expectations).
@@ -400,13 +450,14 @@ Written last so it describes the app as it ends up after WP1–11.
 
 ## Decisions to record (outside this plan's scope, but they must be written down)
 
-- **No suite nav header, in this app or any other — RECORDED.**
+- **No suite nav header, in this app or any other — RECORDED, and not acted on here.**
   [ADR-0044](../../DECISIONS.md#adr-0044-withdraw-the-in-app-suite-navigation-header-the-launcher-is-the-unified-menu)
   withdraws the in-app header suite-wide (the launcher stays; only decision 8's "plus a shared nav
   header later" clause goes), closes ADR-0032's U7 as _withdrawn, not done_, and closes ADR-0016
   AI-5 as moot. The removal — five apps, seven pages, plus the `@cas/ui` primitive and the doc sweep
   — is staged in [`NAV-WITHDRAWAL-PLAN.md`](NAV-WITHDRAWAL-PLAN.md) (N1–N6), which runs independently
-  of WP1–WP12. Report finding **U5 is therefore closed as won't-fix**; its other half (CD's hand-off
+  of WP1–WP12 **and is deliberately not started in the same session as this plan** — no app loses its
+  header as part of the Complex Dynamics work. Report finding **U5 is therefore closed as won't-fix**; its other half (CD's hand-off
   controls sitting in unrelated panels) is answered by ADR-0044 §4 — a hand-off belongs in the panel
   that owns the state — and the CD end of it is WP10's import dialog.
 - **Default parameter and sidebar shape** (WP10's three questions).
