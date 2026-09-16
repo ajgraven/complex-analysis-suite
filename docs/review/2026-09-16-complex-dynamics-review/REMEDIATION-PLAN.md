@@ -264,7 +264,34 @@ leaf now _is_ (two refined landings that coincide).
 
 ---
 
-## WP5 — Instruments, tier 3: fixed-point classification and the critical point · effort M · closes I5, I6, I7 (Ruelle, Brjuno)
+## WP5 — Instruments, tier 3: fixed-point classification · effort M · closes I5 + Ruelle · **DONE (I6 carved out)**
+
+> **Landed** (commit `0004dfa`). Gate green: lint, typecheck, 554 files / 5,764 tests, build. Five new
+> assertions, all negative-control checked.
+>
+> **I5 done, and the gap was wider than recorded here.** It is not only the indifferent parameters:
+> an _attracting_ c at |λ| = 0.99 also reported `undetermined`, because the 512-iteration budget is a
+> convergence-**speed** test and that λ needs ≈ 1,375. Fixed points are now solved for as roots of
+> f(z) − z and certified by residual.
+>
+> **The cusp needed a second fix, and this plan's suggested lever was wrong.** It proposed treating a
+> small-denominator rational within float64 reach as parabolic, inside `brjuno.ts`. That breaks
+> Cremer: a near-Cremer θ is **closer** to its rational (1e-12) than the parabolic's own numerical
+> error is (1e-8), so no tolerance on θ separates them. The real fact is structural — a _double root_
+> of f(z) − z is exactly λ = 1 — and Durand–Kerner returns that pair 5.8e-9 apart, which |λ| survives
+> and `arg λ` does not. The multiplier is snapped on the detected collision and the classifier is
+> untouched.
+>
+> **Siegel curves** and the **Ruelle row** are gated as planned (1e-9 indifference, |c| ≤ 0.1). The
+> Siegel test's golden constant turned out to be a 6-decimal rounding that was never an exact Siegel
+> parameter; it is now computed the way the app's own button does.
+>
+> **I6 is NOT done, and again the plan's premise was wrong.** It is not "seed from
+> `findCriticalPoints`": the GPU parameter plane seeds **z₀ = c**, for every family, not the critical
+> point. Moving the CPU instruments alone would widen the CPU/GPU disagreement this review separately
+> records as **S7** (WP8). The two must move together, which makes it a render change with its own
+> blast radius and its own slice. `findCriticalPoints` itself is verified correct on every shipped
+> family (±1 for `z³−3z+c`, −a/2 for `z²+az+c`).
 
 **I5 Siegel / Cremer / parabolic.** For `z²+c` the fixed points are closed-form
 (`yoccozPuzzle.ts:29`, `siegelCurves.ts:353`): add `classifyFixedPointExact(c)` in `inspect.ts`
