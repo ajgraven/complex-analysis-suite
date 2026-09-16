@@ -589,6 +589,58 @@ describe("the accumulator strip, wired", () => {
 // browser.test.ts` is the same claim against `src/shell/`, and goes with it at step 1.12.
 // ──────────────────────────────────────────────────────────────────────────────────────────────
 
+/**
+ * How many distinct colours the GL canvas carries.
+ *
+ * Sampled every 97th pixel — a stride coprime with the width, so it cannot land on one column and
+ * report a gradient as flat. The numbers a real portrait gives are in the thousands, so the floor of
+ * 12 is not a close call; what it separates is a picture from a cleared canvas, which is 1.
+ */
+function distinctGl(gl: HTMLCanvasElement): number {
+  const ctx = gl.getContext("webgl2");
+  if (ctx === null) throw new Error("no WebGL2 — this whole suite is about the half jsdom cannot reach");
+  const px = new Uint8Array(gl.width * gl.height * 4);
+  ctx.readPixels(0, 0, gl.width, gl.height, ctx.RGBA, ctx.UNSIGNED_BYTE, px);
+  const seen = new Set<string>();
+  for (let i = 0; i < px.length; i += 4 * 97) seen.add(`${px[i]},${px[i + 1]},${px[i + 2]}`);
+  return seen.size;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+// The portrait, under a RECORD — M8 step 1.8.
+//
+// **The new shell drew none, for any of the 28, and had not since the stage was built at step 1.3.**
+// `stageView.ts` read `resolution.kind === "plain" ? resolution.ast : null`, so `gallery` and
+// `declared` both fell to `stage.clear()` and every record showed a contour over a flat ground.
+// Nothing caught it: the node gate has no WebGL2, the sandbox path it does exercise is the one that
+// worked, and the single browser assertion pointed at a record's canvas read the pixel's ALPHA,
+// which a cleared canvas satisfies.
+//
+// The corpus is walked rather than one record sampled, and the walk covers both program shapes: A6
+// is an ordinary `run.ast`, while the keyhole, the dogbone and the wedge carry a branch factor and
+// go through `run.declared` — the half the old shell built separately and this one had never built
+// at all.
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+
+describe("the phase portrait, under a record", () => {
+  it("is DRAWN for every record, the branch-factor ones included", async () => {
+    const { root, app } = mount();
+    const gl = root.querySelector<HTMLCanvasElement>("canvas.gl");
+    if (gl === null) throw new Error("no stage");
+    await drawn();
+    // The control is the sandbox, whose portrait was never in doubt: without it, "a record draws
+    // more than 12 colours" would be bought by any canvas that happened not to be cleared.
+    const sandbox = distinctGl(gl);
+    expect(sandbox, "the sandbox's own portrait is missing, so nothing below means anything").toBeGreaterThan(12);
+
+    for (const id of ["semicircle-quartic", "mellin-keyhole", "dogbone-inverse-sqrt", "wedge-fresnel", "series-cot-collision"]) {
+      app.applyState({ ...app.currentState(), mode: "gallery", record: id, fixture: 0 });
+      await drawn();
+      expect(distinctGl(gl), `${id} drew a contour over a cleared canvas`).toBeGreaterThan(12);
+    }
+  });
+});
+
 describe("the drill's mask, on the stage", () => {
   it("takes the CONTOUR off at rung iii, and the phase portrait stays", async () => {
     const { root, app } = mount();
@@ -641,11 +693,13 @@ describe("the drill's mask, on the stage", () => {
 
     // And the portrait is untouched: the INTEGRAND is the question, and hiding it would leave the
     // rung asking which contour closes an integral the reader cannot see.
-    const glCtx = gl.getContext("webgl2");
-    expect(glCtx, "no WebGL2 — this whole suite is about the half jsdom cannot reach").not.toBeNull();
-    const px = new Uint8Array(4);
-    glCtx?.readPixels(Math.floor(gl.width / 4), Math.floor(gl.height / 4), 1, 1, glCtx.RGBA, glCtx.UNSIGNED_BYTE, px);
-    expect(px[3], "the phase portrait went with the contour").toBeGreaterThan(0);
+    //
+    // **This read the pixel's ALPHA and was therefore vacuous**, which is how the missing gallery
+    // portrait survived five steps of browser passes: a cleared canvas is OPAQUE, so `px[3] > 0` is
+    // true of a picture of nothing. Measured at the time: a record's canvas carried 1 distinct
+    // colour, `15,17,21`, against the sandbox's 3,556. Counting colours is the assertion the alpha
+    // was standing in for.
+    expect(distinctGl(gl), "the phase portrait went with the contour").toBeGreaterThan(12);
   });
 });
 

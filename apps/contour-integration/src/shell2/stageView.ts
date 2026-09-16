@@ -19,6 +19,8 @@ import { drawnCuts } from "../engine/branchEdit.js";
 import { effectiveBranch } from "../kernel/branch/model.js";
 import { handlesOf, type Handle } from "../engine/contour/edit.js";
 import { resolveAll } from "../engine/contour/model.js";
+import type { Node } from "@cas/expr";
+import type { DeclaredProduct } from "../kernel/branch/declared.js";
 import type { Resolved } from "../kernel/geom.js";
 import type { PoleReport } from "../kernel/poles.js";
 import { plotToScreen, type View, type Viewport } from "../kernel/camera.js";
@@ -121,6 +123,59 @@ export function createStageView(host: HTMLElement): StageView {
   /** The integrand the GL program is currently built for — by VALUE, not by identity (M5.1). */
   let programKey: string | null = null;
 
+  /**
+   * What the portrait is a picture OF, and the key that decides whether to relink.
+   *
+   * **The new shell drew NO portrait for a record, and none for a declared sandbox either** — this
+   * read `resolution.kind === "plain" ? resolution.ast : null`, so every other kind fell to
+   * `stage.clear()` and all 28 gallery records showed a contour over a flat ground. Measured in
+   * Chromium: the sandbox's canvas carries 3,556 distinct colours and a record's carries **1**,
+   * `15,17,21,255`. It had been so since the stage was built at step 1.3 and survived five steps of
+   * browser passes, because the one assertion aimed at it read the pixel's ALPHA — and a cleared
+   * canvas is opaque, so `px[3] > 0` is true of a picture of nothing.
+   *
+   * The three kinds and what each draws:
+   *
+   *  - `plain` — the typed expression IS the definition, so its principal branch is meant.
+   *  - `declared` — the cofactor and the declared PRODUCT go separately, so the branch half is built
+   *    from what the reader declared rather than from the compiled AST's principal branch. This is
+   *    M5.1c's whole point, and the sandbox has been drawing the wrong picture for it.
+   *  - `gallery` — `run.ast`, or the record's own `run.declared` when it has a branch factor. The
+   *    old shell does exactly this (`shell/app.ts`'s `adopt`); the data was always on `FamilyRun`.
+   *
+   * **The key is by VALUE**, which is M5.1's finding: a guard comparing object identity against a
+   * product rebuilt on every call relinked the GLSL on every frame of a contour drag. A record's
+   * integrand moves with its BINDINGS (not with `state.expr`, which is the sandbox's), so those are
+   * what the key carries; the fixture with them, since it chooses the bindings.
+   */
+  interface StageProgram {
+    readonly ast: Node;
+    readonly declared?: DeclaredProduct;
+    readonly key: string;
+  }
+
+  function programOf(state: ShellState, resolution: StateResolution): StageProgram | null {
+    if (resolution.kind === "plain") return { ast: resolution.ast, key: `p:${state.expr}` };
+    if (resolution.kind === "declared") {
+      return {
+        ast: resolution.cofactor,
+        declared: resolution.declared,
+        // The declaration decides the picture, so it decides the key — see M5.1's shadowed-`branch`
+        // review, where the two came apart and the cut was drawn where the answer was not.
+        key: `d:${state.expr}:${JSON.stringify(state.declaration)}:${state.branch.sheet}`,
+      };
+    }
+    if (resolution.kind === "gallery") {
+      const run = resolution.run;
+      if (run === null) return null;
+      const key = `g:${resolution.family.id}:${state.fixture}:${JSON.stringify(state.bindings)}`;
+      return run.declared === undefined
+        ? { ast: run.ast, key }
+        : { ast: run.declared.cofactor, declared: run.declared.product, key };
+    }
+    return null;
+  }
+
   /** In gallery mode the contour is the RECORD's output, rebuilt on every run (M6.1's finding). */
   const contourOf = (state: ShellState, resolution: StateResolution | undefined): ShellState["contour"] =>
     resolution?.kind === "gallery" ? (resolution.run?.contour ?? state.contour) : state.contour;
@@ -201,17 +256,16 @@ export function createStageView(host: HTMLElement): StageView {
     // the reader is told the expression is broken while looking at a picture of something else.
     const empty = d.resolution.kind === "empty";
     if (stage !== null) {
-      const ast = d.resolution.kind === "plain" ? d.resolution.ast : null;
-      if (empty || ast === null) {
+      const program = programOf(d.state, d.resolution);
+      if (empty || program === null) {
         if (programKey !== null) {
           stage.clear();
           programKey = null;
         }
       } else {
-        const key = d.state.expr;
-        if (key !== programKey) {
-          stage.setIntegrand(ast);
-          programKey = key;
+        if (program.key !== programKey) {
+          stage.setIntegrand(program.ast, program.declared);
+          programKey = program.key;
         }
         stage.render(view, vp, d.state.iso === true ? { iso: ISO_CONTOURS } : {});
       }
