@@ -222,7 +222,26 @@ interface PendingProgram {
  * when single-precision (~24-bit mantissa) would start to pixelate. Below it,
  * single precision renders (faster).
  */
-const DF64_THRESHOLD = 8000;
+export const DF64_THRESHOLD = 8000;
+
+/** Cap on the render size the histogram CDF is built from during an export — see the note at its
+ *  use in {@link GLPlot.renderToImageData}. 1024² is 1.05M samples over 65,536 buckets. */
+const CDF_EXPORT_MAX = 1024;
+
+/**
+ * Granularity of the perturbation reference orbit's iteration cap.
+ *
+ * With auto-iterations on, `targetIterations()` moves with the zoom — at a 400 base and strength 1.5
+ * that is 600 extra iterations per decade — so the orbit key changed on every wheel notch and the
+ * whole double-double reference was recomputed each time. Rounding the cap UP to a multiple of this
+ * costs at most 511 extra iterations per build and turns "every notch" into "about once per 0.85
+ * decades". The orbit at the rounded cap contains the one at the real cap as a prefix, so nothing is
+ * approximated. (WP9/R9, review 2026-09-16.)
+ */
+const ORBIT_ITER_STEP = 512;
+
+const quantiseOrbitIter = (n: number): number =>
+  Math.max(ORBIT_ITER_STEP, Math.ceil(n / ORBIT_ITER_STEP) * ORBIT_ITER_STEP);
 
 /** Split a double into a df64 (hi, lo) pair of IEEE singles for a uniform. */
 function splitDouble(x: number): [number, number] {
@@ -418,10 +437,17 @@ export class GLPlot {
   private blaNumLevels = 0; // 0 ⇒ the kernel single-steps (BLA disabled or table empty)
   private blaWidth = 0;
   private blaEnabled = true;
-  private blaBuiltZoom = 0;
+  /** The |δc| the current BLA table was built to cover (`√2 / zoom`); 0 ⇒ no table. See
+   *  {@link ensureBLA} for why this replaced an exact zoom match. */
+  private blaBuiltMaxC = 0;
   private blaDirty = true;
   /** GPU max texture width — caps the 1×N reference-orbit texture (set in the constructor). */
   private maxTextureSize = 16384;
+
+  /** The largest square this context can render into (texture / renderbuffer / viewport limits). */
+  get maxRenderSize(): number {
+    return this.maxTextureSize;
+  }
   /** Histogram CDF cache: rebuilt only when the distribution or render size changes. */
   private cdfDirty = true;
   private cdfSize = 0;
@@ -489,6 +515,26 @@ export class GLPlot {
   private renderScheduled = false;
   private _draft = false;
   private contextLost = false;
+
+  /** Set once a df64 build has failed on this context, so the report is made ONCE rather than
+   *  per attempt (and never at all, as it was: the only sign was a `console.warn`). */
+  private df64Failed = false;
+
+  /**
+   * Called the first time deep-zoom precision becomes unavailable on this plot. Deep zoom then
+   * renders in single precision and pixelates, which looks like a bug in the maths rather than an
+   * absent shader. (WP9/R8.)
+   */
+  onDeepZoomUnavailable: ((reason: string) => void) | null = null;
+
+  /** Report a df64 build failure once. */
+  private reportDf64Failure(err: unknown): void {
+    const reason = err instanceof Error ? err.message : String(err);
+    console.warn(`[${this.fractType}] df64 shader build failed (deep zoom disabled):`, reason);
+    if (this.df64Failed) return;
+    this.df64Failed = true;
+    this.onDeepZoomUnavailable?.(reason);
+  }
   /** Index into {@link PROGRESSIVE_LADDER} for the next frame; reset to 0 on each change. */
   private _level = 0;
   /** df64 is compiled lazily and asynchronously (it can be huge); these track the in-flight build. */
@@ -558,7 +604,19 @@ export class GLPlot {
     const gl = canvas.getContext("webgl2", { preserveDrawingBuffer: true });
     if (!gl) throw new Error("WebGL2 is not available in this browser");
     this.gl = gl;
-    this.maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE) as number;
+    // The export renders into a framebuffer and sets a viewport at that size, so the ceiling is the
+    // SMALLEST of the three limits, not MAX_TEXTURE_SIZE alone — `hiResExport` used to probe a
+    // throwaway context for one of them and could offer a size this context cannot honour.
+    // (WP9/R8, review 2026-09-16.)
+    const viewportDims = gl.getParameter(gl.MAX_VIEWPORT_DIMS) as Int32Array | number[] | null;
+    this.maxTextureSize = Math.min(
+      ...[
+        gl.getParameter(gl.MAX_TEXTURE_SIZE) as number,
+        gl.getParameter(gl.MAX_RENDERBUFFER_SIZE) as number,
+        viewportDims?.[0] ?? Infinity,
+        viewportDims?.[1] ?? Infinity,
+      ].filter((v) => typeof v === "number" && Number.isFinite(v) && v > 0),
+    );
     this.parallelExt = gl.getExtension("KHR_parallel_shader_compile") as {
       COMPLETION_STATUS_KHR: number;
     } | null;
@@ -784,7 +842,13 @@ export class GLPlot {
         precision,
         this._fZAst,
         this._fCAst,
-        this._monicDegree,
+        // The degree the SMOOTH-ITERATION normalisation divides by, and it has to be the same number
+        // the perturbation kernel uses (`perturbDegree()` → `uPerturbDegree`). `_monicDegree` is null
+        // for anything that is not exactly z^d + c, so `z³ − z + c` got LOG_DEGREE = log 2 here while
+        // the kernel divided by log 3, and toggling perturbation visibly re-banded the exterior. log 3
+        // is also the correct one: the smooth escape time normalises by the polynomial's DEGREE.
+        // (WP9/R5, review 2026-09-16.)
+        this._polyPerturb?.degree ?? this._monicDegree,
         this._interiorBailout,
         this._periodicityBailout,
       ),
@@ -927,7 +991,7 @@ export class GLPlot {
       );
     } catch (err) {
       this.df64Compiling = false;
-      console.warn(`[${this.fractType}] df64 shader build failed (deep zoom disabled):`, err);
+      this.reportDf64Failure(err);
       return;
     }
     const ext = this.parallelExt;
@@ -942,7 +1006,7 @@ export class GLPlot {
         this.scheduleRender(); // upgrade the current view to df64 now that it's ready
       } catch (err) {
         this.disposePending(pending);
-        console.warn(`[${this.fractType}] df64 shader build failed (deep zoom disabled):`, err);
+        this.reportDf64Failure(err);
       }
     };
     const poll = (): void => {
@@ -1003,9 +1067,19 @@ export class GLPlot {
     this.gl.deleteProgram(p.program);
   }
 
-  /** The precision a deep-enough zoom calls for (ignores whether df64 is compiled yet). */
+  /**
+   * The precision a deep-enough zoom calls for (ignores whether df64 is compiled yet).
+   *
+   * A PROJECTION forces single precision, because the df64 shader has no projected coordinate — its
+   * `coordinate` block is the plain linear map and does not declare `uProjection` at all. Without
+   * this the picture silently snapped back to the linear view past the threshold while the note
+   * still read "Poincaré disk view active", the pointer still inverse-projected and the overlay
+   * stayed hidden: three parts of the UI describing a projection that was no longer on screen. The
+   * advisory in `main.ts` now fires here instead of being skipped. (WP9/R4, review 2026-09-16.)
+   */
   private desiredPrecision(): Precision {
     if (this._sphere) return "single"; // the sphere view is a whole-plane overview (f32 only)
+    if (this._projection !== 0) return "single"; // no projected coordinate in the df64 build
     const m = Math.max(1, Math.abs(this._center[0]), Math.abs(this._center[1]));
     return this._zoom * m > DF64_THRESHOLD ? "df64" : "single";
   }
@@ -1057,19 +1131,79 @@ export class GLPlot {
     this.requestFrame();
   }
 
+  /**
+   * Monotonic count of frames actually drawn, so a scheduled frame can tell whether a DIRECT
+   * `render()` already covered it. The animation recorder is why: it sets `plot.center` and
+   * `plot.zoom` (each of which schedules a frame) and then calls `plot.render()` synchronously to
+   * guarantee the canvas holds this instant before `captureStream` samples it — so every recorded
+   * frame was drawn TWICE, once synchronously and once from the rAF nobody cancelled. Keeping the
+   * synchronous render is right (it is what makes the capture deterministic); drawing the same view
+   * again afterwards is not. (WP9/R9, review 2026-09-16.)
+   */
+  private renderSeq = 0;
+
+  /**
+   * The {@link renderSeq} the pending scheduled frame is answering.
+   *
+   * It is re-stamped by EVERY request, not captured once when the rAF is queued: a second
+   * `scheduleRender()` arriving while a frame is already scheduled returns early (that is the
+   * coalescing), so if the pending frame still carried the FIRST request's sequence a direct
+   * `render()` in between would retire it and the second request's change would never be drawn.
+   */
+  private pendingSeq = -1;
+
   private requestFrame(): void {
+    this.pendingSeq = this.renderSeq; // this request wants a frame drawn after the current one
     if (this.renderScheduled) return;
     this.renderScheduled = true;
     requestAnimationFrame(() => {
       this.renderScheduled = false;
+      if (this.renderSeq !== this.pendingSeq) return; // a direct render() already covered it
       this.render();
     });
+  }
+
+  /**
+   * The look an in-flight export is committed to, or null when not exporting.
+   *
+   * `renderToImageData` yields between strips so the UI stays responsive, and every strip re-read
+   * the LIVE fields — so a pan, a wheel, or a palette nudge during a multi-second export changed the
+   * look of the remaining strips, and the saved PNG was two pictures joined at a horizontal seam.
+   * Snapshotting at entry makes the whole image one frame's worth of settings. (WP9/R6, review
+   * 2026-09-16.)
+   */
+  private exportLook: {
+    aa: number;
+    mode: number;
+    light: boolean;
+    outline: boolean;
+    equipotential: boolean;
+    palette: number;
+    gradientOffset: number;
+  } | null = null;
+
+  /** `_draft` as the DRAW path must see it: an export is a settled frame, never a draft. */
+  private get drawDraft(): boolean {
+    return this.exportLook === null && this._draft;
+  }
+
+  /**
+   * True while a high-resolution export is mid-flight.
+   *
+   * Freezing the LOOK is not enough on its own: every strip also re-uploads the live centre, zoom and
+   * iteration cap, so a keyboard pan on a focused canvas — which the progress overlay's backdrop
+   * does NOT block, since it only covers the pointer — would join two different views at a
+   * horizontal seam. `PlotView` reads this and ignores input for the duration. (WP9/R6.)
+   */
+  get exporting(): boolean {
+    return this.exportLook !== null;
   }
 
   /** The colouring mode actually drawn. Histogram (5) falls back to smooth (1) while
    *  drafting, since it needs a full-resolution readback we skip during interaction. */
   private effectiveMode(): number {
-    return this._mode === 5 && this._draft ? 1 : this._mode;
+    if (this.exportLook) return this.exportLook.mode;
+    return this._mode === 5 && this.drawDraft ? 1 : this._mode;
   }
 
   /**
@@ -1138,15 +1272,15 @@ export class GLPlot {
     // texture unit 0 and emit a garbled frame. (REND-4)
     if (mode === 5 && !this.cdfTex) mode = 1;
     gl.uniform1i(u.uMode, mode);
-    gl.uniform1i(u.uPalette, this._palette);
+    gl.uniform1i(u.uPalette, this.exportLook?.palette ?? this._palette);
     gl.uniform1i(u.uTrapType, this._trapType);
     // No spatial AA for the raw pre-pass, while drafting, accumulating, or rendering a collar (all
     // shown only transiently or averaged over frames, so one sample suffices).
     gl.uniform1i(
       u.uAA,
-      effectiveAA(this._aa, {
+      effectiveAA(this.exportLook?.aa ?? this._aa, {
         mode,
-        draft: this._draft,
+        draft: this.drawDraft,
         accumulating: this._accumulating,
         collar: this._collarRender,
       }),
@@ -1163,17 +1297,17 @@ export class GLPlot {
       gl.uniform1i(u.uGradient, 1);
       gl.activeTexture(gl.TEXTURE0); // leave unit 0 active (updateCdf assumes it)
     }
-    gl.uniform1f(u.uGradientOffset, this._gradientOffset);
+    gl.uniform1f(u.uGradientOffset, this.exportLook?.gradientOffset ?? this._gradientOffset);
     gl.uniform2f(u.uJitter, this._jitter[0], this._jitter[1]);
-    const outlineOn = this._outline && mode !== 6 && !this._draft;
+    const outlineOn = (this.exportLook?.outline ?? this._outline) && mode !== 6 && !this.drawDraft;
     gl.uniform1i(u.uOutline, outlineOn ? 1 : 0);
     gl.uniform1f(u.uOutlineWidth, this._outlineWidth);
-    const equiOn = this._equipotential && mode !== 6 && !this._draft;
+    const equiOn = (this.exportLook?.equipotential ?? this._equipotential) && mode !== 6 && !this.drawDraft;
     gl.uniform1i(u.uEquipotential, equiOn ? 1 : 0);
     gl.uniform1f(u.uEquiDensity, this._equiDensity);
     // Relief lighting: off for the raw pre-pass (mode 6) and while drafting (it
     // re-walks the escape loop, so we keep interaction snappy without it).
-    const lightOn = this._light && mode !== 6 && !this._draft;
+    const lightOn = (this.exportLook?.light ?? this._light) && mode !== 6 && !this.drawDraft;
     gl.uniform1i(u.uLight, lightOn ? 1 : 0);
     const lightAz = (this._lightAz * Math.PI) / 180;
     const lightEl = (this._lightEl * Math.PI) / 180;
@@ -1314,6 +1448,7 @@ export class GLPlot {
   /** Whether the perturbation kernel should drive this frame. */
   private usePerturbation(): boolean {
     if (this._sphere) return false; // the sphere is single-precision; the perturbation kernel has no sphere path
+    if (this._projection !== 0) return false; // …and the kernel's dc is the plain linear offset (WP9/R4)
     // Eligible for both planes: parameter (Mandelbrot) and dynamical (Julia) for z^d + c.
     return this._perturbation && this._perturbEligible && this.perturbProgram !== null;
   }
@@ -1335,7 +1470,7 @@ export class GLPlot {
     const p = this._polyPerturb;
     return [
       this.fractType,
-      maxIter,
+      quantiseOrbitIter(maxIter),
       this._centerDD[0][0], this._centerDD[0][1], this._centerDD[1][0], this._centerDD[1][1],
       this._cVal[0], this._cVal[1],
       this.perturbDegree(),
@@ -1372,7 +1507,10 @@ export class GLPlot {
     // Cap the STORED reference here: the shader's rebasing re-references to Z_0 once it runs past the
     // stored orbit (an exact identity — the same path an early-escaping reference already takes), so
     // the full `uN` iterations still render correctly; it just rebases more often past the cap.
-    const refIter = Math.min(maxIter, this.maxTextureSize);
+    // Quantised to match the key: the stored reference is a PREFIX-superset, so computing a few
+    // hundred extra iterations is what lets a zoom ramp reuse one orbit instead of rebuilding per
+    // notch. `uN` is still the real cap, and a longer stored reference only delays rebasing.
+    const refIter = Math.min(quantiseOrbitIter(maxIter), this.maxTextureSize);
     // Parameter plane: Z_0 = 0, add = centre. Dynamical (Julia) plane: Z_0 = centre,
     // add = the fixed parameter c (folded into the reference orbit).
     const param = this.fractType === "param";
@@ -1433,7 +1571,21 @@ export class GLPlot {
       this.blaNumLevels = 0;
       return;
     }
-    if (!this.blaDirty && this._zoom === this.blaBuiltZoom && this.blaNumLevels > 0) return;
+    // **A table built for a LARGER |δc| stays valid for a smaller one.** Each level is accepted only
+    // if its linearisation holds over the whole disc of radius `maxC`, so a table built for a wider
+    // disc is conservative — it takes shorter skips than it could, and never a wrong one. The guard
+    // used to require the zoom to match EXACTLY, so every wheel notch and every frame of a pinch
+    // rebuilt and re-uploaded the whole table. A rebuild now happens only when the table is no
+    // longer VALID (zoomed out, `maxC` grew) or has become needlessly conservative (zoomed in by
+    // more than an octave): a continuous ten-octave zoom-in costs ten rebuilds instead of one per
+    // frame. (WP9/R9, review 2026-09-16.)
+    const wantMaxC = Math.SQRT2 / this._zoom;
+    const covered =
+      this.blaNumLevels > 0 &&
+      this.blaBuiltMaxC > 0 &&
+      wantMaxC <= this.blaBuiltMaxC &&
+      wantMaxC >= this.blaBuiltMaxC / 2;
+    if (!this.blaDirty && covered) return;
     const gl = this.gl;
     const ref: Complex[] = new Array(this.orbitLen);
     for (let i = 0; i < this.orbitLen; i++) ref[i] = [this.orbitXY[2 * i], this.orbitXY[2 * i + 1]];
@@ -1469,7 +1621,7 @@ export class GLPlot {
     this.blaNumLevels = Math.min(packed.numLevels, 20); // the shader's uBLALevelOffsets[] holds 20
     this.blaLevelOffsets.fill(0);
     for (let k = 0; k < this.blaNumLevels; k++) this.blaLevelOffsets[k] = packed.levelOffsets[k];
-    this.blaBuiltZoom = this._zoom;
+    this.blaBuiltMaxC = maxC;
     this.blaDirty = false;
   }
 
@@ -1490,12 +1642,19 @@ export class GLPlot {
     gl.uniform1i(u.uOrbitLen, this.orbitLen);
     gl.uniform1i(u.uJuliaMode, this.fractType === "dyn" ? 1 : 0);
     gl.uniform1i(u.uMode, mode === 1 ? 1 : 0); // escape / smooth; other modes fall back to escape
-    gl.uniform1i(u.uPalette, this._palette);
+    gl.uniform1i(u.uPalette, this.exportLook?.palette ?? this._palette);
     // Route through effectiveAA like the standard path (setupDraw): during temporal accumulation the
     // jittered per-frame sample IS the anti-aliasing, so spatial supersampling would pay aa²× cost per
     // accumulation frame for nothing — the exact fast-first-paint optimization the standard path uses.
-    gl.uniform1i(u.uAA, effectiveAA(this._aa, { mode, draft: this._draft, accumulating: this._accumulating }));
-    gl.uniform1f(u.uGradientOffset, this._gradientOffset);
+    gl.uniform1i(
+      u.uAA,
+      effectiveAA(this.exportLook?.aa ?? this._aa, {
+        mode,
+        draft: this.drawDraft,
+        accumulating: this._accumulating,
+      }),
+    );
+    gl.uniform1f(u.uGradientOffset, this.exportLook?.gradientOffset ?? this._gradientOffset);
     gl.uniform2f(u.uJitter, this._jitter[0], this._jitter[1]);
     // z^d + c degree + its binomial coefficients C(d, j) for the general kernel step (d = 2 is the
     // classic Mandelbrot; the shader keeps a byte-identical hand-written step there).
@@ -1890,6 +2049,7 @@ export class GLPlot {
     const gl = this.gl;
     if (!this.collarTex) this.collarTex = gl.createTexture();
     if (this.collarSize !== size) {
+      gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, this.collarTex);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, size, size, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
@@ -1898,6 +2058,13 @@ export class GLPlot {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       this.collarSize = size;
     }
+    // MUST unbind. This texture becomes the collar FBO's colour attachment two lines later, and
+    // `setupDraw`'s default path binds nothing on unit 0 — so leaving it bound here left the `uCdf`
+    // sampler pointing at the render target, which is a sampler feedback loop. Every collar draw was
+    // rejected with GL_INVALID_OPERATION (1282), `collarValid` never became true, and the whole
+    // idle-overscan feature silently did nothing on every plot, in every session, since it shipped.
+    // The one-shot `collarWarned` guard made it look like a single hiccup. (WP1/R2, review 2026-09-16.)
+    gl.bindTexture(gl.TEXTURE_2D, null);
   }
 
   /**
@@ -1977,8 +2144,13 @@ export class GLPlot {
     gl.bindTexture(gl.TEXTURE_2D, sourceTex);
     gl.uniform1i(pp.uniforms.uScene, 0);
     gl.uniform2f(pp.uniforms.uResolution, size, size);
-    gl.uniform1f(pp.uniforms.uVignette, this._vignette);
-    gl.uniform1f(pp.uniforms.uGamma, this._gamma);
+    // The grade is applied only when post-processing is ON. `drawPost` is also the display path for
+    // the temporal accumulator (renderAccumulate), which runs with `accumulate` on by DEFAULT — so
+    // uploading the stored slider values unconditionally vignetted and gamma-graded the default view
+    // while a plain render and every export stayed ungraded. Identity values (no darkening, gamma 1)
+    // keep this pass a pure blit when post is off. (WP1/R1, review 2026-09-16.)
+    gl.uniform1f(pp.uniforms.uVignette, this._post ? this._vignette : 0);
+    gl.uniform1f(pp.uniforms.uGamma, this._post ? this._gamma : 1);
     gl.uniform1f(pp.uniforms.uAccumScale, scale);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.bindTexture(gl.TEXTURE_2D, null); // unbind so it can be a render target next frame
@@ -2114,6 +2286,7 @@ export class GLPlot {
    */
   render(): void {
     if (this.contextLost) return;
+    this.renderSeq++; // see {@link renderSeq}: retires any frame scheduled before this one
     // "Google Maps" interaction preview: while dragging / zooming a linear single-precision view, warp
     // the last frame instead of re-iterating (instant, zero iteration). Sphere / projection / deep-zoom
     // fall through to the coarse draft re-render below.
@@ -2132,6 +2305,15 @@ export class GLPlot {
       if (this.renderRecolor()) {
         this.wantRecolor = false;
         this.afterRender?.();
+        // A recolour paints ONE sample of the field. With temporal AA on, the anti-aliased frame the
+        // accumulator had built is gone and — because this path returns without scheduling anything —
+        // nothing ever rebuilt it: a palette change left the view permanently aliased until some
+        // other change happened to restart the ladder. `scheduleRender(false)` has already reset
+        // `accumCount`, so one more frame is all it takes. During a drag the next appearance event
+        // sets `wantRecolor` again before that frame runs, so it recolours rather than re-iterating —
+        // the fast path is kept and the accumulation resumes the moment the gesture pauses.
+        // (WP9/R7, review 2026-09-16.)
+        if (this._accumulate) this.requestFrame();
         return;
       }
     }
@@ -2237,15 +2419,53 @@ export class GLPlot {
     size: number,
     opts: { onProgress?: (fraction: number) => void; isCancelled?: () => boolean } = {},
   ): Promise<ImageData | null> {
-    const gl = this.gl;
     if (!this.programs.single && !this.programs.df64) {
       throw new Error("No compiled program to export");
     }
+    // A lost context reads back as a fully transparent image, and nothing between here and the PNG
+    // encoder would have noticed: the export "succeeded" and saved a blank file. Refuse instead —
+    // the UI already handles a rejected export. (WP9/R8, review 2026-09-16.)
+    if (this.contextLost || this.gl.isContextLost()) {
+      throw new Error("The graphics context was lost — try the export again");
+    }
+    // Commit to ONE look for the whole image, before the first strip (WP9/R6).
+    this.exportLook = {
+      aa: this._aa,
+      mode: this._mode,
+      light: this._light,
+      outline: this._outline,
+      equipotential: this._equipotential,
+      palette: this._palette,
+      gradientOffset: this._gradientOffset,
+    };
     if (this._mode === 5) {
-      this.updateCdf(size, size); // build the CDF before binding the export FBO
-      this.cdfDirty = true; // this overwrote the shared CDF at export size — rebuild for the live view
+      // Histogram: the CDF is content-derived, so it must be built ONCE, before the first strip, and
+      // not from a full-size readback — at 8192² that is a synchronous 268 MB `readPixels` before the
+      // progress bar or the Cancel button can do anything. It is a cumulative distribution over
+      // escape counts, not an image, so a bounded render resolves it to well under a count's width:
+      // CDF_EXPORT_MAX² samples against 65,536 buckets. (WP9/R6.)
+      this.updateCdf(
+        Math.min(size, CDF_EXPORT_MAX),
+        Math.min(size, CDF_EXPORT_MAX),
+      );
+      this.cdfDirty = true; // this overwrote the shared CDF — rebuild for the live view afterwards
     }
 
+    try {
+      return await this.renderExportStrips(size, opts);
+    } finally {
+      // Whatever happened — a cancel, a lost context, a throw from `drawFractal` — the live view
+      // must not be left rendering someone else's frozen settings.
+      this.exportLook = null;
+    }
+  }
+
+  /** The strip loop of {@link renderToImageData}, split out so the freeze has a `finally`. */
+  private async renderExportStrips(
+    size: number,
+    opts: { onProgress?: (fraction: number) => void; isCancelled?: () => boolean },
+  ): Promise<ImageData | null> {
+    const gl = this.gl;
     const tex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, size, size, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
@@ -2255,6 +2475,15 @@ export class GLPlot {
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo); // bind first, else the attach targets the default FB
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
     gl.bindTexture(gl.TEXTURE_2D, null); // detach from the unit so it isn't a sampler feedback loop
+    // An incomplete framebuffer draws nothing and `readPixels` returns zeros, so the size that was
+    // one step too large for this driver would have produced a black PNG with no error anywhere.
+    const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+    if (status !== gl.FRAMEBUFFER_COMPLETE) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.deleteFramebuffer(fbo);
+      gl.deleteTexture(tex);
+      throw new Error(`This size is beyond what the graphics driver can render (0x${status.toString(16)})`);
+    }
 
     const rowBytes = size * 4;
     const pixels = new Uint8Array(size * size * 4);
@@ -2417,11 +2646,21 @@ export class GLPlot {
     this._nplot = nplotval;
     this.scheduleRender();
   }
+  /**
+   * Set the magnification. A non-finite or non-positive value is REFUSED rather than stored: the
+   * view span is `2/zoom`, so zero gives an infinite span (a blank plot), a negative one mirrors the
+   * image, and a NaN reaches the shader as a NaN uniform and blanks it. A corrupt share link, a
+   * keyframe built from a bad number, or a `Number("")` anywhere upstream all arrive here, and the
+   * plot had no way back once one did. (WP9/R8, review 2026-09-16.)
+   */
   set zoom(zoomval: number) {
+    if (!Number.isFinite(zoomval) || zoomval <= 0) return;
     this._zoom = zoomval;
     this.scheduleRender();
   }
+  /** Set the view centre; a non-finite coordinate is refused, for the reason above. */
   set center(centerval: Vec2) {
+    if (!Number.isFinite(centerval[0]) || !Number.isFinite(centerval[1])) return;
     this._center = centerval;
     this._centerDD = [dd(centerval[0]), dd(centerval[1])];
     this.scheduleRender();
@@ -2701,8 +2940,10 @@ export class GLPlot {
    *  `center` setter discards, so a deep-zoom permalink reproduces exactly. Syncs the f64
    *  `_center` and re-renders. */
   setCenterDD(x: DD, y: DD): void {
+    const [cx, cy] = [ddToNumber(x), ddToNumber(y)];
+    if (!Number.isFinite(cx) || !Number.isFinite(cy)) return; // as for `set center` (WP9/R8)
     this._centerDD = [x, y];
-    this._center = [ddToNumber(x), ddToNumber(y)];
+    this._center = [cx, cy];
     this.scheduleRender();
   }
 

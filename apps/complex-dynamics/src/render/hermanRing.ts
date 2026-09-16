@@ -75,6 +75,40 @@ function traceOrbit(
 }
 
 /**
+ * Does the orbit's tail close up on a finite cycle?
+ *
+ * **A rotation domain cannot contain a periodic orbit**, so this is a disqualifier rather than a
+ * heuristic. It is the gap that let the detector claim a ring at every parameter: the weighted-Birkhoff
+ * test (`estimateRotation(...).quasiperiodic`) super-converges on a rotation orbit, but it also
+ * super-converges on an orbit that has settled onto a CYCLE — it separates chaotic from non-chaotic,
+ * not rotation from periodic. On the shipped Blaschke family the orbit collapses to a single fixed
+ * point at τ = 0, to a 2-cycle at τ = ½, a 3-cycle at τ = ⅓ and a 7-cycle at τ = 1/√2 (rotation number
+ * 5/7 — an Arnold tongue at an irrational τ), and every one of them was reported as a confirmed ring,
+ * the first with a rotation number of exactly 0.
+ *
+ * Measured as the mean return distance |z_{n+p} − z_n| over the tail, relative to the orbit's radius,
+ * minimised over p ≤ `maxPeriod`. The separation is enormous and needs no tuning: the four periodic
+ * cases above score 0 or 5e-11, while the non-periodic ones score ≥ 1e-3. The one thing this can
+ * wrongly reject is a genuine ring whose rotation number sits within ~1e-7 of a rational of
+ * denominator ≤ 64 — a sliver, and barely Diophantine.
+ */
+function collapsesToCycle(orbit: Complex[], maxPeriod = 64, rel = 1e-7): boolean {
+  const tail = orbit.slice(-500);
+  if (tail.length < maxPeriod * 2) return false;
+  const scale = tail.reduce((acc, p) => acc + Math.hypot(p[0], p[1]), 0) / tail.length;
+  if (!(scale > 0)) return false;
+  for (let p = 1; p <= maxPeriod; p++) {
+    let sum = 0;
+    let count = 0;
+    for (let i = 0; i + p < tail.length; i++, count++) {
+      sum += Math.hypot(tail[i + p][0] - tail[i][0], tail[i + p][1] - tail[i][1]);
+    }
+    if (count > 0 && sum / count / scale < rel) return true;
+  }
+  return false;
+}
+
+/**
  * Detect a Herman ring of `f` around the hole `centre` (the superattracting fixed point the ring
  * surrounds — 0 for the standard Blaschke example e^{2πiτ}·z²(z−4)/(1−4z)). Returns `isRing: false`
  * with null fields when no quasiperiodic annulus-around-a-hole is found (e.g. any degree-2 map).
@@ -119,7 +153,11 @@ export function detectHermanRing(
       const meanR =
         tail.reduce((s, p) => s + Math.hypot(p[0] - centre[0], p[1] - centre[1]), 0) / tail.length;
       // A bounded orbit that didn't fall into the hole is a ring candidate iff it is quasiperiodic.
-      if (meanR >= convergeR) quasi = estimateRotation(orbit, centre, 1, tol).quasiperiodic;
+      // Quasiperiodic AND not merely settled onto a cycle. Both are required: the weighted-Birkhoff
+      // test alone cannot tell a rotation from a periodic orbit (see `collapsesToCycle`).
+      if (meanR >= convergeR && !collapsesToCycle(orbit)) {
+        quasi = estimateRotation(orbit, centre, 1, tol).quasiperiodic;
+      }
     }
     // Only the quasiperiodic-band orbits are consumed below (the mid orbit's rotation/centroid and
     // the ring `curves`); drop the rest so memory stays bounded to the band, not levels × iters.

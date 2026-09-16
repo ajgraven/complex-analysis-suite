@@ -127,6 +127,14 @@ export class SuggestionEngine {
     const b = this.badges[scope];
     b.text.textContent = s.message;
     b.root.dataset.severity = s.severity;
+    // Severity was carried by a BORDER COLOUR and a glyph marked `aria-hidden`, so it reached
+    // neither a colour-blind reader (WCAG 1.4.1 — colour alone) nor a screen reader at all (4.1.2).
+    // The glyph now differs by severity AND carries the word. (WP11/U10, review 2026-09-16.)
+    const icon = b.root.querySelector(".suggestion-icon");
+    if (icon instanceof HTMLElement) {
+      icon.textContent = s.severity === "warn" ? "\u26a0" : "\u2139";
+      icon.setAttribute("aria-label", s.severity === "warn" ? "Warning" : "Tip");
+    }
     b.actions.replaceChildren();
     for (const a of s.actions) {
       const btn = document.createElement("button");

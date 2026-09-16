@@ -30,7 +30,20 @@ export interface SiegelCurves {
   curves: Vec2[][];
 }
 
-const INDIFFERENT_TOL = 0.02;
+/**
+ * How close |λ| must be to 1 for the fixed point to be treated as indifferent.
+ *
+ * It was 0.02, which admits a genuinely ATTRACTING fixed point: measured at |λ| = 0.99 and 0.985 the
+ * app drew nine "invariant curves" around a point that has no Siegel disc at all — what it drew were
+ * orbits spiralling into an attractor, which look like nested loops and are nothing of the kind. The
+ * README promises these are "only shown for a genuine Brjuno rotation number".
+ *
+ * A Siegel disc exists only at |λ| = 1 exactly, so any tolerance is a numerical determination and the
+ * right one is as tight as the intended route allows. That route is the app's own "Siegel c for θ"
+ * button, which computes c = λ/2 − λ²/4 from a typed θ and therefore lands on |λ| = 1 to ~1e-16; a
+ * hand-dragged near-miss is not a Siegel parameter and is now correctly refused.
+ */
+const INDIFFERENT_TOL = 1e-9;
 
 /**
  * Invariant curves of the Siegel disc at parameter `c`, or null if `c` is not a Siegel parameter

@@ -62,7 +62,7 @@
 
     <!-- Application entry: imports the stylesheet, instantiates both plots,
          and wires the controls. -->
-    <script type="module" src="/src/main.ts"></script>
+    <script type="module" src="/src/boot.ts"></script>
 
     <div class="page">
       <header class="app-bar">
@@ -219,7 +219,7 @@
                   aria-live="polite"
                   hidden
                 >
-                  <span class="suggestion-icon" aria-hidden="true">⚠</span>
+                  <span class="suggestion-icon" role="img" aria-label="Warning">⚠</span>
                   <span class="suggestion-text"></span>
                   <span class="suggestion-actions"></span>
                   <button
@@ -327,7 +327,7 @@
                         type="text"
                         id="inpc"
                         placeholder="a+b*i"
-                        value="-.7-.4*i"
+                        value="-.122561+.744862*i"
                         size="14"
                         title="Parameter c as a complex number, e.g. -.7-.4*i"
                       />
@@ -385,7 +385,7 @@ abs(z)>2</textarea
                   aria-live="polite"
                   hidden
                 >
-                  <span class="suggestion-icon" aria-hidden="true">⚠</span>
+                  <span class="suggestion-icon" role="img" aria-label="Warning">⚠</span>
                   <span class="suggestion-text"></span>
                   <span class="suggestion-actions"></span>
                   <button
@@ -1170,7 +1170,12 @@ abs(z)>2</textarea
             </section>
           </main>
         </div>
-        <div class="controls-pane" id="controls-pane">
+        <!-- A LANDMARK. The pane sits outside `<main class="plots">`, so until it named itself its
+               content belonged to no landmark at all — which axe reports as `region`, and which
+               means a screen-reader user has no way to jump to the controls. It surfaced when the
+               tablist went in (a widget role outside a landmark is what axe notices), but the pane
+               has been unlandmarked the whole time. (WP11/U10, review 2026-09-16.) -->
+          <div class="controls-pane" id="controls-pane" role="region" aria-label="Controls">
           <!-- Mobile-only bottom-sheet header (drag grip, title, close); hidden on desktop.
                aria-hidden is on the decorative grip ALONE: it used to wrap the whole handle,
                which hid the focusable ✕ (and its "Close controls" label) from assistive tech
@@ -1188,7 +1193,19 @@ abs(z)>2</textarea
             </button>
           </div>
           <!-- Point inspector: click either plot to report its orbit's dynamics. -->
-          <aside id="inspector" class="inspector" aria-live="polite">
+          <!-- Five-tab sidebar (WP10/U4). The tablist and the panels are BUILT in main.ts from one
+               table (ui/sidebarTabs.ts) and the existing groups are MOVED into them, so the mapping
+               lives in one place and this markup keeps its structure. The strip above them lists
+               every non-default setting that changes the render, so a setting parked on another tab
+               is still visible from this one. -->
+          <div id="active-settings" class="pane-strip" hidden></div>
+          <div id="sidebar-tablist" class="pane-tabs" role="tablist" aria-label="Controls"></div>
+          <div id="sidebar-panels" class="pane-panels"></div>
+          <!-- apply / reset / undo / redo are GLOBAL, so they are pinned here rather than living on
+               one tab, where they would be stranded the moment a reader switched away. main.ts moves
+               the existing .inline-actions into it. -->
+          <div id="pane-actions" class="pane-actions"></div>
+          <aside id="inspector" class="inspector">
             <div class="inspector-head">
               <strong id="inspector-title">Point inspector</strong>
               <button
@@ -1200,6 +1217,7 @@ abs(z)>2</textarea
                 ×
               </button>
             </div>
+            <p class="inspector-status" id="inspector-status" role="status" aria-live="polite"></p>
             <dl class="inspector-body" id="inspector-body"></dl>
             <button
               id="inspector-nucleus"
@@ -1249,7 +1267,7 @@ abs(z)>2</textarea
             >
               Export orbit
             </button>
-            <div class="inspector-siegel">
+            <div class="inspector-siegel" id="inspector-siegel" hidden>
               <label for="siegel-theta">Siegel c for θ =</label>
               <input
                 type="text"
@@ -1266,7 +1284,7 @@ abs(z)>2</textarea
                 Go
               </button>
             </div>
-            <div class="inspector-misiur">
+            <div class="inspector-misiur" id="inspector-misiur" hidden>
               <label for="misiur-pre">Misiurewicz</label>
               <input
                 type="number"
@@ -1301,7 +1319,7 @@ abs(z)>2</textarea
                 ?
               </button>
             </div>
-            <div class="inspector-note">
+            <div class="inspector-note" id="inspector-note" hidden>
               <input
                 type="text"
                 id="note-text"
@@ -1320,7 +1338,7 @@ abs(z)>2</textarea
                 Clear
               </button>
             </div>
-            <p class="inspector-hint">
+            <p class="inspector-hint" id="inspector-hint">
               Click any point on a plot to inspect its orbit — period, multiplier, internal angle,
               and distance to the set.
             </p>
@@ -1339,6 +1357,15 @@ abs(z)>2</textarea
                 >
 z^2+c</textarea
                 >
+              </div>
+              <div class="field" id="newton-field">
+                <label
+                  class="checkbox"
+                  for="newton"
+                  title="Iterate the Newton map z − f/f′ (root-finding); colours by which root each point reaches"
+                >
+                  <input type="checkbox" id="newton" /> Newton's method
+                </label>
               </div>
               <div class="field">
                 <button
@@ -1373,7 +1400,7 @@ z^2+c</textarea
               <div class="field">
                 <label for="fractal_presets">Presets</label>
                 <div class="inline-actions">
-                  <select id="fractal_presets" title="Pick a named fractal, then apply">
+                  <select id="fractal_presets" title="Pick a named fractal — it is applied as soon as you choose it">
                     <optgroup label="Polynomial">
                       <option value="mandelbrot">Mandelbrot set</option>
                       <option value="cubic">cubic (z³+c)</option>
@@ -1401,7 +1428,6 @@ z^2+c</textarea
                       <option value="biomorph">biomorph</option>
                     </optgroup>
                   </select>
-                  <button id="apply_preset" type="button" class="primary">apply</button>
                 </div>
               </div>
               <div class="field">
@@ -1450,26 +1476,9 @@ z^2+c</textarea
                   <option value="lattice">Gaussian lattice</option>
                 </select>
               </div>
-              <details class="control-group">
+              <details class="control-group" id="appearance-group">
                 <summary>Appearance</summary>
                 <div class="control-grid">
-                  <div class="field">
-                    <label for="aa">anti-aliasing</label>
-                    <select id="aa" title="Supersampling — smoother edges, slower to render">
-                      <option value="1">Off</option>
-                      <option value="2">2&times;</option>
-                      <option value="3">3&times;</option>
-                    </select>
-                  </div>
-                  <div class="field">
-                    <label
-                      class="checkbox"
-                      for="accumulate"
-                      title="While the view sits still, average jittered sub-pixel samples for a cleaner, anti-aliased image"
-                    >
-                      <input type="checkbox" id="accumulate" /> refine while idle
-                    </label>
-                  </div>
                   <div class="field">
                     <label for="paletteRotation">rotation</label>
                     <input
@@ -1573,6 +1582,23 @@ z^2+c</textarea
                       /></label>
                     </div>
                   </div>
+                  <div class="field">
+                    <label
+                      class="checkbox"
+                      for="legend-toggle"
+                      title="Show a small colour legend in each plot's corner explaining what the colours mean for the current mode — on by default"
+                    >
+                      <input type="checkbox" id="legend-toggle" checked /> colour legend
+                    </label>
+                    <button
+                      class="gloss-link"
+                      type="button"
+                      data-term="color-legend"
+                      aria-label="What is the colour legend?"
+                    >
+                      ?
+                    </button>
+                  </div>
                 </div>
               </details>
               <details class="control-group" id="overlays-group" open>
@@ -1601,7 +1627,7 @@ z^2+c</textarea
                       for="farey"
                       title="Label the main cardioid's bulbs by internal angle p/q (z²+c only)"
                     >
-                      <input type="checkbox" id="farey" /> Farey bulb labels
+                      <input type="checkbox" id="farey" /> Farey bulb labels <span class="only">(z²+c)</span>
                     </label>
                     <button
                       class="gloss-link"
@@ -1618,7 +1644,7 @@ z^2+c</textarea
                       for="rays"
                       title="Trace the external ray at the entered angle on both planes (z²+c only)"
                     >
-                      <input type="checkbox" id="rays" /> external ray
+                      <input type="checkbox" id="rays" /> external ray <span class="only">(z²+c)</span>
                     </label>
                     <button
                       class="gloss-link"
@@ -1649,7 +1675,7 @@ z^2+c</textarea
                       for="ray-pairs"
                       title="Draw both external rays landing at each visible Farey bulb's root (z²+c only)"
                     >
-                      <input type="checkbox" id="ray-pairs" /> bulb ray pairs
+                      <input type="checkbox" id="ray-pairs" /> bulb ray pairs <span class="only">(z²+c)</span>
                     </label>
                   </div>
                   <div class="field">
@@ -1658,7 +1684,7 @@ z^2+c</textarea
                       for="inverse-julia"
                       title="Paint the Julia set by inverse iteration — random backward orbits z ↦ ±√(z−c) (dynamical plane, z²+c)"
                     >
-                      <input type="checkbox" id="inverse-julia" /> inverse-iteration Julia
+                      <input type="checkbox" id="inverse-julia" /> inverse-iteration Julia <span class="only">(z²+c)</span>
                     </label>
                   </div>
                   <div class="field">
@@ -1667,7 +1693,7 @@ z^2+c</textarea
                       for="siegel-curves"
                       title="Draw the Siegel-disc invariant curves at an irrationally-indifferent parameter (dynamical plane, z²+c)"
                     >
-                      <input type="checkbox" id="siegel-curves" /> Siegel invariant curves
+                      <input type="checkbox" id="siegel-curves" /> Siegel invariant curves <span class="only">(z²+c)</span>
                     </label>
                   </div>
                   <div class="field">
@@ -1702,16 +1728,24 @@ z^2+c</textarea
                   </div>
                 </div>
               </details>
-              <details class="control-group">
+              <details class="control-group" id="precision-group">
                 <summary>Iteration &amp; precision</summary>
                 <div class="control-grid">
                   <div class="field">
+                    <label for="aa">anti-aliasing</label>
+                    <select id="aa" title="Supersampling — smoother edges, slower to render">
+                      <option value="1">Off</option>
+                      <option value="2">2&times;</option>
+                      <option value="3">3&times;</option>
+                    </select>
+                  </div>
+                  <div class="field">
                     <label
                       class="checkbox"
-                      for="newton"
-                      title="Iterate the Newton map z − f/f′ (root-finding); colours by which root each point reaches"
+                      for="accumulate"
+                      title="While the view sits still, average jittered sub-pixel samples for a cleaner, anti-aliased image"
                     >
-                      <input type="checkbox" id="newton" /> Newton's method
+                      <input type="checkbox" id="accumulate" /> refine while idle
                     </label>
                   </div>
                   <div class="field">
@@ -1754,8 +1788,10 @@ z^2+c</textarea
                       <input type="checkbox" id="perturbation" /> perturbation (deep zoom)
                     </label>
                     <p id="perturbation-note" class="control-note" hidden>
-                      Perturbation renders escape / smooth colouring only — relief lighting,
-                      boundary outline, and equipotential overlays use the standard view.
+                      Relief lighting, boundary outline and equipotential contours are unavailable
+                      while perturbation is on — the deep-zoom kernel does not compute them. The
+                      colouring modes it cannot draw are greyed out in the list above, each with its
+                      reason.
                     </p>
                   </div>
                   <div class="field">
@@ -1810,30 +1846,13 @@ z^2+c</textarea
                       ?
                     </button>
                   </div>
-                  <div class="field">
-                    <label
-                      class="checkbox"
-                      for="legend-toggle"
-                      title="Show a small colour legend in each plot's corner explaining what the colours mean for the current mode — on by default"
-                    >
-                      <input type="checkbox" id="legend-toggle" checked /> colour legend
-                    </label>
-                    <button
-                      class="gloss-link"
-                      type="button"
-                      data-term="color-legend"
-                      aria-label="What is the colour legend?"
-                    >
-                      ?
-                    </button>
-                  </div>
                 </div>
               </details>
             </div>
             <div class="inline-actions">
               <button id="apply_all" type="button" class="primary">apply changes</button>
               <span id="dirty-indicator" class="dirty-indicator" hidden
-                >● unapplied edits — press Enter or Apply</span
+                >● unapplied edits — press Enter (Ctrl+Enter in f) or Apply</span
               >
               <button
                 id="reset_all"
@@ -2062,7 +2081,8 @@ z^2+c</textarea
                     </button>
                   </span>
                 </div>
-                <pre class="exterior-coeffs" id="exterior-param-list"></pre>
+                <pre class="exterior-coeffs" id="exterior-param-list" tabindex="0" role="region"
+                  aria-label="Parameter plane exterior-map coefficients"></pre>
               </div>
               <div class="exterior-block">
                 <div class="exterior-block-head">
@@ -2081,7 +2101,8 @@ z^2+c</textarea
                     </button>
                   </span>
                 </div>
-                <pre class="exterior-coeffs" id="exterior-dyn-list"></pre>
+                <pre class="exterior-coeffs" id="exterior-dyn-list" tabindex="0" role="region"
+                  aria-label="Dynamical plane exterior-map coefficients"></pre>
               </div>
             </div>
           </details>
@@ -2597,6 +2618,31 @@ z^2+c</textarea
           <!-- Opened from the app-bar "Help" button. A position:fixed overlay (like the glossary
                modal), so its place in the DOM is immaterial; it stays here next to the controls it
                documents. Mirrors the glossary modal's structure, styling, and open/close behaviour. -->
+          <!-- Paste-an-interchange-link dialog (WP10). It replaces a `window.prompt`, which cannot be
+               styled, cannot say what a valid payload looks like, is blocked outright in some
+               browsers, and drops the paste on a stray Escape with nothing to try again from. -->
+          <div id="import-dialog" class="onboarding glossary-overlay" role="dialog" aria-modal="true"
+            aria-labelledby="import-dialog-title" hidden>
+            <div class="onboarding-card import-card">
+              <div class="glossary-head">
+                <h2 id="import-dialog-title">Import a map</h2>
+                <button type="button" id="import-dialog-close" aria-label="Close import">&times;</button>
+              </div>
+              <p>
+                Paste an <strong>@cas/interchange</strong> deep link or its JSON — for example from the
+                Quadrature&nbsp;Domains app's <em>Export map</em>, which hands over a Schwarz reflection
+                &sigma; or a Laurent map.
+              </p>
+              <label class="import-field" for="import-dialog-text">Link or JSON</label>
+              <textarea id="import-dialog-text" rows="5" spellcheck="false"
+                placeholder="#s=... or {&quot;v&quot;:1,&quot;kind&quot;:&quot;map&quot;,...}"></textarea>
+              <p id="import-dialog-error" class="control-note import-error" hidden></p>
+              <div class="inline-actions">
+                <button type="button" id="import-dialog-load" class="primary">Load</button>
+                <button type="button" id="import-dialog-cancel">Cancel</button>
+              </div>
+            </div>
+          </div>
           <div id="help-ref" class="onboarding glossary-overlay" hidden>
             <div
               class="onboarding-card glossary-card"
@@ -2641,7 +2687,7 @@ z^2+c</textarea
                       <li>
                         The
                         <a
-                          href="https://github.com/ajgraven/ComplexDynamicsJS#methods--references"
+                          href="https://github.com/ajgraven/complex-analysis-suite/blob/master/apps/complex-dynamics/README.md#methods--references"
                           target="_blank"
                           rel="noopener"
                           >Methods &amp; references</a
@@ -2687,8 +2733,16 @@ z^2+c</textarea
                         — handy for shrinking stacked plots so both fit on screen.
                       </li>
                       <li>
-                        Press "enter" or "apply changes" to apply edits; "reset" reverts every
-                        option to the selected preset.
+                        Press <strong>Enter</strong> in any edited field, or
+                        <strong>apply changes</strong>, to apply your edits. The
+                        <code>f(z, c)</code> and escape-test boxes are multi-line, so there Enter
+                        breaks the line and <strong>Ctrl</strong> (or <strong>⌘</strong>) +
+                        <strong>Enter</strong> applies. <strong>reset</strong> reverts every option
+                        to the selected preset.
+                      </li>
+                      <li>
+                        Choosing from <strong>Presets</strong> applies that preset straight away —
+                        there is no separate apply step for it.
                       </li>
                       <li>
                         Pick a colouring mode, palette, and anti-aliasing level with the coloring
@@ -2814,41 +2868,45 @@ z^2+c</textarea
             </div>
           </div>
 
-          <footer>
-            <p>
-              Questions, suggestions, or feature requests:
-              <a href="mailto:andrew@graven.com">andrew@graven.com</a>.
-            </p>
-            <p>Created by Andrew Graven.</p>
+        </div>
+      </div>
+      <!-- The page's contentinfo, moved out of the controls pane (WP11/U10). A `<footer>` inside
+           another sectioning container is NOT the `contentinfo` landmark, so the contact and
+           citation block sat outside every landmark — and it was in the scrolling controls column,
+           where a citation nobody scrolls past is a citation nobody finds. -->
+      <footer>
+        <p>
+          Questions, suggestions, or feature requests:
+          <a href="mailto:andrew@graven.com">andrew@graven.com</a>.
+        </p>
+        <p>Created by Andrew Graven.</p>
 
-            <div class="cite">
-              <h3>How to cite</h3>
-              <p>
-                If you use this tool's results or images in your work or an academic publication,
-                please cite it.
-              </p>
-              <p class="cite-ref">
-                Graven, A. (2026). <em>Complex Dynamics Visualization Tool</em> (Version 1.0.0)
-                [Computer software].
-                <a
-                  href="https://github.com/ajgraven/ComplexDynamicsJS"
-                  target="_blank"
-                  rel="noopener"
-                  >https://github.com/ajgraven/ComplexDynamicsJS</a
-                >
-              </p>
-              <pre class="cite-bibtex" tabindex="0" role="group" aria-label="BibTeX citation"><code id="cite-bibtex">@software{graven2026complexdynamics,
+        <div class="cite">
+          <h3>How to cite</h3>
+          <p>
+            If you use this tool's results or images in your work or an academic publication,
+            please cite it.
+          </p>
+          <p class="cite-ref">
+            Graven, A. (2026). <em>Complex Dynamics Visualization Tool</em> (Version 1.0.0)
+            [Computer software].
+            <a
+              href="https://github.com/ajgraven/complex-analysis-suite"
+              target="_blank"
+              rel="noopener"
+              >https://github.com/ajgraven/complex-analysis-suite</a
+            >
+          </p>
+          <pre class="cite-bibtex" tabindex="0" role="group" aria-label="BibTeX citation"><code id="cite-bibtex">@software{graven2026complexdynamics,
   author  = {Graven, Andrew},
   title   = {Complex Dynamics Visualization Tool},
   year    = {2026},
   version = {1.0.0},
-  url     = {https://github.com/ajgraven/ComplexDynamicsJS}
+  url     = {https://github.com/ajgraven/complex-analysis-suite}
 }</code></pre>
-              <button type="button" id="cite-copy" class="cite-copy">Copy BibTeX</button>
-            </div>
-          </footer>
+          <button type="button" id="cite-copy" class="cite-copy">Copy BibTeX</button>
         </div>
-      </div>
+      </footer>
     </div>
 
     <!-- Mobile-only floating button that opens the controls bottom sheet (CSS-hidden on desktop). -->

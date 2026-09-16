@@ -21,6 +21,7 @@
 import type { Vec2 } from "../arrays";
 import { sqrt } from "@cas/expr/complexJs";
 import { type Angle, dynamicalAnglesOfPoint } from "./angleOfPoint";
+import { quadraticCriticalBounded } from "./critical";
 
 /** Largest puzzle depth offered — q·2ⁿ rays, so depth 6 is already a few hundred rays. */
 export const MAX_PUZZLE_DEPTH = 6;
@@ -71,6 +72,10 @@ export interface PuzzleOpts {
  * {@link dynamicalAnglesOfPoint}, then expands to the depth-n ray angles with {@link puzzleRayAngles}.
  */
 export function yoccozPuzzle(c: Vec2, depth: number, opts: PuzzleOpts = {}): YoccozPuzzle | null {
+  // The puzzle is a graph on a CONNECTED Julia set; outside M there is none. Without this gate the
+  // Cantor parameter c = −2.1 returned a valence-2 puzzle and c = 0.3 + 0.6i a valence-4 one — α has
+  // no such ray count there. (WP4 / I3, review 2026-09-16.)
+  if (!quadraticCriticalBounded(c)) return null;
   const alpha = alphaFixedPoint(c);
   const found = dynamicalAnglesOfPoint(alpha, c, { maxPeriod: opts.maxPeriod ?? 8, maxPreperiod: 0 });
   if (found.angles.length < 2) return null; // α not a repelling ≥2-ray vertex ⇒ no puzzle

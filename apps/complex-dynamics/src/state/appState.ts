@@ -69,6 +69,15 @@ export const SHARE_IDS = [
   "qml-toggle",
   "lamination-detail",
   "projection-mode",
+  // The Riemann-sphere view. It was left out as "not part of the serialized state for the MVP", but
+  // it is the most view-defining toggle in the app: a link shared from the sphere reopened as a flat
+  // plane, so the picture the sender was looking at was the one thing the link did not carry. The
+  // checkboxes alone are not enough — `applyAppState` writes a checkbox and nothing more, so
+  // `main.ts`'s `applySphere()` pushes them into the plots after the projection is set. (WP7/S3,
+  // review 2026-09-16.)
+  "sphere-param",
+  "sphere-dyn",
+  "sphere-light",
 ] as const;
 
 export type AppState = Record<string, string | boolean>;

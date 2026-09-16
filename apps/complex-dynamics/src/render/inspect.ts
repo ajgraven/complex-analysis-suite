@@ -23,6 +23,8 @@
 import type { Complex } from "../complex";
 import type { Node } from "@cas/expr/ast";
 import * as C from "@cas/expr/complexJs";
+import { rootsMonic } from "@cas/core";
+import { polynomialCoeffs } from "./critical";
 import { differentiate } from "@cas/expr/derivative";
 import { makeComplexFn, getComplexFn, getEscapeFn } from "@cas/expr/evaluate";
 import { classifyRotationNumber, type RotationClass } from "./brjuno";
@@ -73,6 +75,8 @@ export interface FatouInfo {
 
 /** ||λ|−1| below this ⇒ indifferent (matches showInspect + juliaProperties' neutral band). */
 const NEUTRAL_TOL = 1e-3;
+/** Fixed points closer than this are one DOUBLE root — see {@link attractingFixedPoint}. */
+const DOUBLE_ROOT_TOL = 1e-5;
 /** |λ| below this ⇒ superattracting (the cycle contains a critical point). */
 const SUPERATTRACTING_TOL = 1e-6;
 
@@ -106,6 +110,18 @@ export function fatouComponentType(
 }
 
 const MAX_DE_ITER = 1024; // cap for the CPU distance-estimate loop
+/**
+ * Bailout for the exterior distance estimate, which is NOT the escape predicate's bailout.
+ *
+ * `escape(z, c)` decides *whether* the point escapes; the formula d ≈ |z|·ln|z| / |z′| then needs
+ * |z| far past that, because at |z| barely over the predicate's radius `ln|z|` is almost zero and
+ * the quotient is noise. Measured against three cases with an analytically known distance: at the
+ * default `abs(z) > 2` the estimate at c = −2.01 (true d = 0.01, the real tip) came out **70×** too
+ * large; carrying the orbit on to |z| > 1e4 fixes it, and everything is fully converged by 1e6 —
+ * the ratios do not move between 1e4 and 1e10, so this is headroom, not a tuned constant. For z²+c
+ * the modulus squares each step, so reaching 1e6 from 2 costs about five extra iterations.
+ */
+const DE_RADIUS = 1e6;
 const SETTLE = 1024; // iterations to land on the attractor before sampling the cycle
 
 const cabs = (z: Complex): number => Math.hypot(z[0], z[1]);
@@ -245,8 +261,23 @@ function derivatives(
 }
 
 /**
- * Exterior distance estimate d ≈ |z|·log|z| / |D|, carrying the running derivative
+ * Exterior distance estimate d ≈ |z|·ln|z| / |D|, carrying the running derivative
  * D = ∂z/∂c (parameter plane) or ∂z/∂z₀ (dynamical plane) alongside the orbit.
+ *
+ * **It is an estimate within a factor of a few, and that is a theorem rather than a defect.** The
+ * Koebe ¼ bound places the true distance in [d/4, 4d]; measured here on cases with an exact answer,
+ * the ratio runs from 0.46 (just outside the cardioid cusp) to 1.99 (at the real tip c = −2), and is
+ * 1.005 on the one case that is analytically exact — the unit disk, K for c = 0. The caller must
+ * label it `≈`; no constant makes it sharp.
+ *
+ * The leading ½ this function used to carry is gone: it made the estimate a systematic 2× UNDER-read
+ * (0.50 on the unit disk, where the formula is exact), and it contradicted the app's own README and
+ * Methods section, both of which document `d ≈ |z|·log|z| / |z′|`. The GPU colouring modes keep their
+ * own ½ — there it only scales a screen-space ratio and changes no reported number.
+ *
+ * Returns null unless the orbit genuinely diverges to {@link DE_RADIUS}: a predicate that fires on
+ * something other than divergence (the magnet family escapes on CONVERGENCE to its fixed point z = 1)
+ * leaves |z| bounded, and the exterior estimate means nothing there.
  */
 function escapeDistance(
   fAst: Node,
@@ -261,18 +292,80 @@ function escapeDistance(
   const esc = getEscapeFn(escapeAst, fAst, a);
   let z: Complex = [z0[0], z0[1]];
   let der: Complex = plane === "param" ? [0, 0] : [1, 0]; // D₀ = 0 (param), z′₀ = 1 (dyn)
+  let escaped = false;
   for (let k = 0; k < MAX_DE_ITER; k++) {
-    if (esc(z, c)) break;
+    if (!escaped && esc(z, c)) escaped = true;
+    // Keep going PAST the predicate until the modulus is large enough for the formula to mean
+    // something. (The old loop stopped at the predicate, which is where ln|z| is smallest.)
+    if (escaped && cabs(z) > DE_RADIUS) break;
     // Advance the derivative at the current iterate, before advancing z.
     const step = C.mul(deriv.fz(z, c), der);
     der = plane === "param" ? C.add(step, deriv.fc(z, c)) : step;
     z = f(z, c);
     if (!Number.isFinite(z[0]) || !Number.isFinite(z[1])) break;
+    if (!Number.isFinite(der[0]) || !Number.isFinite(der[1])) break; // |D| overflowed → no estimate
   }
   const az = cabs(z);
   const ad = cabs(der);
-  if (az <= 1 || ad === 0 || !Number.isFinite(ad)) return null;
-  return (0.5 * az * Math.log(az)) / ad;
+  // Require a genuine divergence, not merely that the predicate fired (see the note above).
+  if (!escaped || az <= DE_RADIUS || ad === 0 || !Number.isFinite(ad)) return null;
+  return (az * Math.log(az)) / ad;
+}
+
+/**
+ * The **indifferent-or-attracting fixed point** of a polynomial `f`, found exactly rather than by
+ * watching an orbit.
+ *
+ * `classifyOrbit` decides a cycle by waiting for the orbit to return within 1e-6 in at most 512
+ * iterations. That is a *convergence-speed* test, not a dynamical one, and it fails exactly where the
+ * interesting parameters are: at |λ| = 0.99 the orbit needs ≈ 1,375 iterations to get that close, and
+ * on the cardioid boundary (|λ| = 1) it never does. Measured before this existed, **every** parameter
+ * on the boundary — the golden-mean Siegel point, the parabolic c = −3/4, the cusp c = 1/4, the 1/3
+ * root — and an attracting c at |λ| = 0.99 all reported `fate: "undetermined"`, `period: 0` and no
+ * multiplier, so the Siegel / Cremer / parabolic verdicts the app documents were unreachable from a
+ * click and `paramClass: "neutral"` was dead code.
+ *
+ * Fixed points are roots of f(z) − z, which for a polynomial is a polynomial: they are solved for and
+ * certified by residual, never iterated toward. Returns the root of smallest |f′| when that is ≤ 1
+ * (within {@link NEUTRAL_TOL}) — an attracting or indifferent fixed point is the attractor, so it is
+ * what the click is asking about — and null otherwise, which includes every c whose attractor is a
+ * genuine higher-period cycle (there α is repelling and this correctly declines to answer).
+ */
+function attractingFixedPoint(
+  fAst: Node,
+  a: Complex,
+  c: Complex,
+  deriv: { fz: (z: Complex, c: Complex) => Complex },
+): { point: Complex; multiplier: Complex } | null {
+  const coeffs = polynomialCoeffs(fAst, a, c);
+  if (!coeffs || coeffs.length < 2) return null; // not a polynomial in z
+  // p(z) = f(z) − z
+  const p = coeffs.map((v): Complex => [v[0], v[1]]);
+  p[1] = [p[1][0] - 1, p[1][1]];
+  const roots = rootsMonic(p);
+  let best: { point: Complex; multiplier: Complex; mag: number } | null = null;
+  for (const r of roots) {
+    const pt: Complex = [r[0], r[1]];
+    const lam = deriv.fz(pt, c);
+    const mag = cabs(lam);
+    if (!Number.isFinite(mag)) continue;
+    if (!best || mag < best.mag) best = { point: pt, multiplier: lam, mag };
+  }
+  if (!best || best.mag > 1 + NEUTRAL_TOL) return null;
+  // A DOUBLE root of f(z) − z is exactly the parabolic case with rotation number 0: two fixed points
+  // colliding means f′ = 1 there. Durand–Kerner converges only linearly at a multiple root, so it
+  // returns the pair about √ε apart — measured at the cardioid cusp c = 1/4, 5.8e-9. |λ| survives
+  // that (1.000000000 to nine places) but ARG does not: the spurious imaginary part put θ at ~1e-8
+  // instead of 0, the continued fraction did not terminate, and the app reported a **Siegel disc** at
+  // the cusp. Snapping the multiplier to exactly 1 states the fact the collision already proves, and
+  // leaves the rotation-number classifier — which cannot tell a near-Cremer irrational from a
+  // rational at float64, and does not have to — untouched. (WP5 / I5, review 2026-09-16.)
+  const collided = roots.some((r) => {
+    const d = Math.hypot(r[0] - best.point[0], r[1] - best.point[1]);
+    return d > 0 && d < DOUBLE_ROOT_TOL;
+  });
+  if (collided) return { point: best.point, multiplier: [1, 0] };
+  return { point: best.point, multiplier: best.multiplier };
 }
 
 /** Classify and measure the orbit at a clicked point. See the module comment for plane semantics. */
@@ -327,6 +420,18 @@ export function inspect(
         if (settled.length === info.period) out.multiplierMag = cycleMultiplierMag(f, settled, c);
       }
     }
+  } else if (info.fate === "undetermined" && deriv) {
+    // The orbit did not settle in the iteration budget. For a polynomial that does not mean "no
+    // attractor" — it usually means a slow one, or an indifferent fixed point that never converges at
+    // all. Solve for it instead of waiting for it. (WP5 / I5, review 2026-09-16.)
+    const fp = attractingFixedPoint(fAst, a, c, deriv);
+    if (fp) {
+      out.fate = "converged";
+      out.period = 1;
+      out.cyclePoints = [fp.point];
+      out.multiplier = fp.multiplier;
+      out.multiplierMag = cabs(fp.multiplier);
+    }
   } else if (info.fate === "escaped" && deriv) {
     out.distance = escapeDistance(fAst, escapeAst, plane, z0, c, a, deriv);
   }
@@ -341,10 +446,16 @@ export function inspect(
  * supported families, so ∂(critPoint)/∂c = 0). The recurrence is the same
  * f_z·D + f_c that the distance estimate uses, generalised to any holomorphic `f`.
  *
- * Returns null for a non-holomorphic `f` (no analytic derivative) or if Newton fails to
- * converge from `c0` (caller should leave `c` unchanged). Seed it with a point already
- * inside the component (the clicked `c`) so it converges to that component's centre and
- * not a lower-period root of g.
+ * Returns null for a non-holomorphic `f` (no analytic derivative), if Newton fails to converge from
+ * `c0`, or — new in WP4 — if it converges to a centre of the **wrong period**.
+ *
+ * That last check is not belt-and-braces. Every period-2 centre is also a root of
+ * g(c) = f⁴(0) − 0, so Newton had no reason to prefer the period-4 one, and the advice to "seed it
+ * inside the component" was never enforced. Measured: from (−0.9, 0.05) asking for period 4 it
+ * returned **c = −1**, which is period 2; from (0.6, 0.6) asking for period 3 it returned **c = 0**,
+ * the period-1 cardioid centre, 0.85 away. Both were snapped to and reported as the nucleus the user
+ * asked for. The guard is exact rather than a distance threshold: at a genuine period-n nucleus the
+ * critical orbit closes at n and at no proper divisor of n.
  */
 export function findNucleus(
   fAst: Node,
@@ -372,9 +483,35 @@ export function findNucleus(
     const delta = C.div(g, der);
     c = [c[0] - delta[0], c[1] - delta[1]];
     if (!Number.isFinite(c[0]) || !Number.isFinite(c[1])) return null;
-    if (cabs(delta) < 1e-13) return c;
+    if (cabs(delta) < 1e-13) return exactCriticalPeriod(f, critPoint, c, period) ? c : null;
   }
   return null; // did not converge within the iteration budget
+}
+
+/**
+ * Is the critical orbit at `c` periodic with EXACTLY `period` — closing at `period` and at no proper
+ * divisor of it? The test a Newton solve for a nucleus must pass to be the nucleus of the component
+ * it was asked for (see {@link findNucleus}).
+ */
+function exactCriticalPeriod(
+  f: (z: Complex, c: Complex) => Complex,
+  critPoint: Complex,
+  c: Complex,
+  period: number,
+  tol = 1e-8,
+): boolean {
+  const orbit: Complex[] = [];
+  let z: Complex = [critPoint[0], critPoint[1]];
+  for (let k = 0; k < period; k++) {
+    z = f(z, c);
+    if (!Number.isFinite(z[0]) || !Number.isFinite(z[1])) return false;
+    orbit.push([z[0], z[1]]);
+  }
+  const closes = (k: number): boolean =>
+    Math.hypot(orbit[k - 1][0] - critPoint[0], orbit[k - 1][1] - critPoint[1]) < tol;
+  if (!closes(period)) return false;
+  for (let d = 1; d < period; d++) if (period % d === 0 && closes(d)) return false;
+  return true;
 }
 
 /**

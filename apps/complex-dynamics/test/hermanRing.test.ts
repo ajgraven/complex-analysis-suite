@@ -39,3 +39,41 @@ describe("detectHermanRing", () => {
     expect(detectHermanRing(bind("z^2"), [0, 0]).isRing).toBe(false);
   });
 });
+
+// ── WP2 / I2 (review 2026-09-16): a periodic orbit disqualifies a ring ────────────────────────
+// The detector used to report `isRing: true` for EVERY parameter of the shipped Blaschke family,
+// and the panel printed "Ring confirmed" beside it. The cause is that the weighted-Birkhoff test
+// separates chaotic from non-chaotic, not rotation from periodic: an orbit that has settled onto a
+// cycle super-converges just as a rotation orbit does. A rotation domain cannot contain a periodic
+// orbit, so `collapsesToCycle` is a disqualifier rather than a heuristic.
+//
+// The four τ below are asserted because their orbits MEASURABLY close up — the tail returns to
+// itself with relative error 0 or ~5e-11 at period 1, 2, 3 and 7 respectively. τ = 1/4, 0.1 and 2/7
+// are deliberately NOT asserted either way: they do not close up within 1500 iterations, so there
+// is no evidence here that they are tongues, and a test should not claim what was not measured.
+describe("detectHermanRing — an orbit that closes up on a cycle is not a ring", () => {
+  const blaschke = (tau: number): ((z: Complex) => Complex) => {
+    const fn = getComplexFn(parse("e^(2*pi*i*c)*z^2*(z-4)/(1-4*z)"), [0, 0]);
+    return (z) => fn(z, [tau, 0]);
+  };
+
+  it.each([
+    ["τ = 0 — a fixed point on the circle (it reported a rotation number of exactly 0)", 0],
+    ["τ = 1/2 — a 2-cycle", 0.5],
+    ["τ = 1/3 — a 3-cycle", 1 / 3],
+    ["τ = 1/√2 — a 7-cycle (rotation number 5/7: an Arnold tongue at an IRRATIONAL τ)", Math.SQRT1_2],
+  ])("rejects %s", (_label, tau) => {
+    const r = detectHermanRing(blaschke(tau as number), [0, 0]);
+    expect(r.isRing).toBe(false);
+    expect(r.rotationNumber).toBeNull();
+    expect(r.modulus).toBeNull();
+  });
+
+  it("still finds the golden-mean ring, unchanged", () => {
+    // The anti-vacuity clause: a detector that rejected everything would pass the four cases above.
+    const r = detectHermanRing(blaschke(0.6151732), [0, 0]);
+    expect(r.isRing).toBe(true);
+    expect(Math.abs((r.rotationNumber as number) - GOLDEN)).toBeLessThan(1e-3);
+    expect(r.modulus as number).toBeGreaterThan(0.3);
+  });
+});

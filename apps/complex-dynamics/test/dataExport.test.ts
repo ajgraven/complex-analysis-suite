@@ -36,10 +36,48 @@ describe("inspectToText", () => {
   it("reports the parameter, fate, period, multiplier, and internal angle", () => {
     const txt = inspectToText(periodic, [-1, 0], "param");
     expect(txt).toContain("Parameter c = ");
-    expect(txt).toContain("Fate: settles into a cycle");
-    expect(txt).toContain("Period: 2");
-    expect(txt).toContain("Internal angle: 1/2");
-    expect(txt).toMatch(/Multiplier: \|lambda\| =/);
+    expect(txt).toContain("Fate: ≈ settles into a cycle");
+    expect(txt).toContain("Period: ≈ 2");
+    expect(txt).toContain("Internal angle: ≈ 1/2");
+    expect(txt).toMatch(/Multiplier λ: ≈ 0\.0001/);
+  });
+
+  // WP6: every line carries the row's rigor level, and the levels come from @cas/rigor's meet over
+  // the row's certificates. The point of the test is the CONTRAST — a counted iteration index is
+  // exact, everything a tolerance found is an estimate — because a report in which every line says
+  // the same thing says nothing.
+  it("carries each row's rigor level, and they are not all the same", () => {
+    const escaped: InspectResult = {
+      fate: "escaped",
+      period: 0,
+      escapeIter: 7,
+      multiplier: null,
+      multiplierMag: null,
+      rotation: null,
+      distance: 1.5e-5,
+      cyclePoints: null,
+    };
+    const txt = inspectToText(escaped, [2, 0], "dyn");
+    expect(txt).toContain("Escape time: = 7 iterations"); // counted, so exact
+    expect(txt).toMatch(/Distance to set: ≈ 0\.000015/); // Koebe estimate
+    expect(txt).not.toContain("Distance to set: = ");
+  });
+
+  // "no escape or cycle within the iteration limit" establishes NOTHING, which the vocabulary has
+  // its own symbol for. Reporting it as an estimate would vouch for a classification nobody made.
+  it("an undetermined fate is '?' (unknown), not '≈' (estimate)", () => {
+    const undetermined: InspectResult = {
+      fate: "undetermined",
+      period: 0,
+      escapeIter: 0,
+      multiplier: null,
+      multiplierMag: null,
+      rotation: null,
+      distance: null,
+      cyclePoints: null,
+    };
+    const txt = inspectToText(undetermined, [0, 0], "dyn");
+    expect(txt).toContain("Fate: ? no escape or cycle within the iteration limit");
   });
 
   it("labels the dynamical plane and keeps full precision of the point", () => {
@@ -55,8 +93,8 @@ describe("inspectToText", () => {
     };
     const txt = inspectToText(escaped, [-0.123456789012345, 2], "dyn");
     expect(txt).toContain("Orbit of z0 = -0.123456789012345");
-    expect(txt).toContain("Escape time: 7 iterations");
-    expect(txt).toContain("Distance to set: 0.000015");
+    expect(txt).toContain("Escape time: = 7 iterations");
+    expect(txt).toContain("Distance to set: ≈ 0.000015");
   });
 });
 

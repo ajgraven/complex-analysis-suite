@@ -270,3 +270,29 @@ export function polynomialConnectivity(
   if (bounded === 0) return "cantor";
   return "disconnected";
 }
+
+/**
+ * Does the critical orbit of z² + c stay bounded — i.e. is `c` in the Mandelbrot set?
+ *
+ * The cheap, exact-where-it-matters half of {@link polynomialConnectivity}, specialised to the
+ * quadratic family so the z²+c-only instruments can gate on it without building an AST. **Escape is
+ * decided** (|z| > 2 is an escape, by the escape-radius theorem); "bounded" rests on the iteration
+ * cap and is therefore an estimate that errs on the side of *claiming membership*, which is the safe
+ * direction here — a slow escaper is drawn, a genuine member is never refused.
+ *
+ * Added for WP4 (review 2026-09-16): the pinched-disk lamination and the Yoccoz puzzle are models of
+ * a CONNECTED Julia set and neither checked. At c = −2.1, where K is a Cantor set and there is no
+ * pinched disk at all, the lamination drew 104 leaves and the puzzle returned a valence-2 graph.
+ */
+export function quadraticCriticalBounded(c: Complex, iters = 512): boolean {
+  let x = 0;
+  let y = 0;
+  for (let k = 0; k < iters; k++) {
+    const nx = x * x - y * y + c[0];
+    y = 2 * x * y + c[1];
+    x = nx;
+    if (x * x + y * y > 4) return false;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+  }
+  return true;
+}

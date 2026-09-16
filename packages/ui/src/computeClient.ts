@@ -19,10 +19,24 @@ export interface ComputeClientOptions<Req, Res> {
   readonly worker?: () => Worker;
   /** Request → postMessage payload; stamp `reqId` so responses can be matched. Required with `worker`. */
   readonly toMessage?: (req: Req, reqId: number) => unknown;
-  /** Worker message → `{ reqId, result }`. Required with `worker`. */
-  readonly fromMessage?: (data: unknown) => { reqId: number; result?: Res };
+  /**
+   * Worker message → `{ reqId, result }`, or `{ reqId, error }` when the worker reports a failure.
+   * Required with `worker`.
+   */
+  readonly fromMessage?: (data: unknown) => { reqId: number; result?: Res; error?: string };
   /** Busy-state hook — called with `true` when a compute is outstanding, `false` when it settles. */
   readonly onBusy?: (busy: boolean) => void;
+  /**
+   * Called when a worker reports a failure for the CURRENT request, i.e. `fromMessage` returned an
+   * `error` and no `result`.
+   *
+   * Without it such a response is dropped and the request's callback never fires, so a caller that
+   * shows "computing…" keeps showing it for ever. That is a real symptom: Complex Dynamics' metrics
+   * worker already posts `{ reqId, error }` on a throw, and the Julia-properties rows sat at
+   * "measuring…" indefinitely with no message. Optional, and omitting it keeps exactly the previous
+   * behaviour — the other consumers pass no handler and are unaffected.
+   */
+  readonly onError?: (message: string) => void;
   /** Defer the synchronous fallback to a macrotask so the busy state can paint first (default true). */
   readonly deferSync?: boolean;
 }
@@ -96,10 +110,13 @@ export function createComputeClient<Req, Res>(
     try {
       worker = opts.worker!();
       worker.onmessage = (e: MessageEvent): void => {
-        const { reqId: rid, result } = opts.fromMessage!(e.data);
+        const { reqId: rid, result, error } = opts.fromMessage!(e.data);
         if (rid !== reqId) return; // superseded response
         inFlight = false;
         if (result !== undefined && cb) cb(result);
+        // A failure response carries no result. Surface it rather than dropping it on the floor: the
+        // request is over either way, and a caller that is not told has no way to stop waiting.
+        else if (result === undefined && error !== undefined) opts.onError?.(error);
         if (pending !== null) {
           const next = pending;
           pending = null;

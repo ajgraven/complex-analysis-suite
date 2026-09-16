@@ -356,6 +356,140 @@ h2 {
 /* The controls now live in a narrow column, but several rows (the export/animate buttons,
    the coefficient blocks) were built for the old full-width layout. Let them shrink and wrap
    to the column instead of overflowing it. Harmless at full width, where everything fits. */
+/* The import dialog (WP10): a paste area with room to say where a payload comes from, in place of
+   a `window.prompt` that had none. */
+.import-card {
+  max-width: 34rem;
+  text-align: left;
+}
+.import-card textarea {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.82rem;
+}
+.import-field {
+  display: block;
+  margin: 0.5rem 0 0.2rem;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.import-error {
+  color: var(--danger, #c0392b);
+}
+
+/* The inspector's one live line. The whole report used to be `aria-live="polite"`, so every
+   recompute read out the entire definition list — period, multiplier, Fatou component, internal
+   angle, limb, distance — over whatever the reader was doing. One sentence instead. */
+.inspector-status {
+  margin: 0 0 0.3rem;
+  font-size: 0.82rem;
+  color: var(--muted, #666);
+}
+.inspector-status:empty {
+  display: none;
+}
+
+/* --- The five-tab sidebar (WP10/U4) ---------------------------------------------------------
+   The tablist and the pinned action footer stick to the top and bottom of the pane; only the
+   panels scroll. That is the whole point of tabbing the pane: the settings that decide WHAT is on
+   screen stop being reachable only by scrolling past the ones that decide how it is coloured. */
+.pane-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  gap: 0.15rem;
+  padding: 0.25rem 0 0;
+  margin-bottom: 0.4rem;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  scrollbar-width: none; /* five short labels; a scrollbar under them is noise */
+}
+.pane-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.pane-tab {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.4rem 0.3rem;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted, #666);
+  font-size: 0.85rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.pane-tab:hover {
+  color: var(--fg);
+}
+.pane-tab.is-active {
+  color: var(--fg);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+/* The focus ring is part of the definition of done here: a roving tabindex means the ring is the
+   only thing telling a keyboard user which tab the arrow keys will move from. */
+.pane-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.pane-panel:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* The active-settings strip. Hidden (and so costing no height) whenever everything that changes the
+   render is at its default, which is the common case. */
+.pane-strip {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.35rem 0.1rem;
+  background: var(--bg);
+  font-size: 0.78rem;
+}
+.pane-strip[hidden] {
+  display: none;
+}
+.pane-strip-title {
+  color: var(--muted, #666);
+  font-weight: 600;
+}
+.pane-strip-item {
+  padding: 0.1rem 0.4rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--fg);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.pane-strip-item:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/* apply / reset / undo / redo, pinned so they are reachable from every tab. */
+.pane-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  padding: 0.5rem 0 0.25rem;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+}
+.pane-actions .inline-actions {
+  margin: 0;
+}
+
 .controls-pane :where(.field, .panel, .panel-group, .downloads, .control-grid, .exterior-block) {
   min-width: 0;
 }
@@ -625,8 +759,13 @@ h2 {
   opacity: 0.9;
 }
 .schwarz-inspect-steps {
-  opacity: 0.6;
-  font-size: 0.66rem;
+  /* Was `opacity: 0.6` at 0.66rem. Measured, that is 4.54:1 against the light background and
+     5.84:1 against the dark one — a WCAG AA pass in both, by 0.04 in the first and by accident in
+     either: the value is a multiplier nobody can read off, so a token change anywhere puts it under
+     without anything saying so. The `--muted` token states it (7.46:1 / 6.80:1) and 0.75rem is a
+     size a reader can actually read. (WP11/U10, review 2026-09-16.) */
+  color: var(--muted, #555);
+  font-size: 0.75rem;
 }
 .schwarz-inspect-clear {
   align-self: flex-start;
@@ -659,8 +798,9 @@ h2 {
   border-radius: var(--radius);
 }
 .schwarz-formula-note {
-  font-size: 0.66rem;
-  opacity: 0.6;
+  /* See `.schwarz-inspect-steps` above for the measurement. */
+  font-size: 0.75rem;
+  color: var(--muted, #555);
 }
 /* σ-singularity list items (F4h): monospace location + a coloured marker glyph. */
 .schwarz-sing-item {
@@ -1558,6 +1698,38 @@ select.invalid {
 .glossary-flash {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
   border-radius: var(--radius);
+}
+
+/* "(z²+c)" and friends: the CONDITION on a control, in the label rather than in a title.
+   A title on a disabled input is not shown by every browser and is unreachable by keyboard, so the
+   one thing a reader needs in order to understand why a checkbox is greyed was the one thing they
+   could not get at. (WP8/U7.) */
+.only {
+  color: var(--muted, #666);
+  font-size: 0.85em;
+}
+
+/* The same rule at panel scale: one line saying what the panel needs and what f currently is. */
+.gate-note {
+  margin: 0 0 0.4rem;
+  font-size: 0.82rem;
+  color: var(--muted, #666);
+}
+
+/* The rigor level of an inspector row (= exact, ≤/≥ bound, ≈ estimate, ? unknown, ⚠ refused).
+   Computed by @cas/rigor from the row's certificates, never typed by hand — see ui/inspectorRows.ts. */
+.rigor-badge {
+  display: inline-block;
+  min-width: 1.1em;
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted, #666);
+  border: 1px solid color-mix(in srgb, var(--muted, #666) 40%, transparent);
+  border-radius: 0.25rem;
+  padding: 0 0.15rem;
+  line-height: 1.25;
+  cursor: help;
 }
 
 /* Inline "?" jump-to-glossary link (inspector rows + overlay labels). */

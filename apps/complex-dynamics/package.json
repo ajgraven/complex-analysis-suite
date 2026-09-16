@@ -35,6 +35,7 @@
     "@cas/expr": "workspace:*",
     "@cas/gpu": "workspace:*",
     "@cas/interchange": "workspace:*",
+    "@cas/rigor": "workspace:*",
     "@cas/schwarz": "workspace:*",
     "@cas/ui": "workspace:*",
     "driver.js": "^1.5.0",

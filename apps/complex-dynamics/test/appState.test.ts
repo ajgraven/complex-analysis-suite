@@ -56,6 +56,10 @@ describe("SHARE_IDS DOM coverage", () => {
         // Persisted UI preferences — deliberately per-device, not per-view. Sharing them would let a
         // link re-open someone else's sidebar and badge settings.
         [["suggestions", "legend-toggle", "bla-toggle", "orbit-preview-toggle"], "persisted pref"],
+        // A transient paste area: the map it carries is applied on Load, and what is applied IS in
+        // the shared state. Carrying the raw text as well would put a second, stale copy of the map
+        // in every link. (WP10's import dialog, which replaced a `window.prompt`.)
+        [["import-dialog-text"], "transient input"],
         // Export settings: properties of the file you are about to write, not of the view.
         [
           [

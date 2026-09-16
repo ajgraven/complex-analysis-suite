@@ -11,7 +11,7 @@
 
 ## 0. What the app already has (so "NEW" below is precise)
 
-Engine: editable `f(z,c)` (AST → GLSL + CSP-safe compiled JS closures; symbolic ∂f/∂z, ∂f/∂c; Newton transform). Precision f32 → df64 → perturbation deep zoom (z²+c, double-double reference orbit + rebasing/glitch-free, ~1e28). Hybrid fast paths for z²+c / zⁿ+c.
+Engine: editable `f(z,c)` (AST → GLSL + CSP-safe compiled JS closures; symbolic ∂f/∂z, ∂f/∂c; Newton transform). Precision f32 → df64 → perturbation deep zoom (**any additive-c polynomial** `P(z)+B·c` — z²+c, the multibrots z^d+c and general polynomials like z³−z+c — with a double-double reference orbit + rebasing/glitch-free, ~1e28), accelerated by a **wired** BLA skip-table. Hybrid fast paths for z²+c / zⁿ+c. Deep zoom and the projection views are mutually exclusive: neither the df64 build nor the perturbation kernel has a projected coordinate, so a projection holds the render at single precision and says so.
 
 Coloring: smooth (normalized iteration), histogram, exterior distance estimation (analytic + screen-space), orbit-trap (cross/point/line/circle/gaussian), domain, stripe average, triangle-inequality average, binary decomposition, period, multiplier-map; relief lighting (analytic + finite-diff normals); post-FX; gradient editor + palette rotation + colourblind palettes; boundary outline; equipotential contours; temporal AA.
 
@@ -21,7 +21,7 @@ UX/infra: places, permalinks, saved views, undo/redo, WebM/GIF export studio (mo
 
 Constraints: pure WebGL2 (no WebGPU); CSP-safe (no eval / new Function); GPU = per-pixel escape-time of one complex variable; heavy combinatorial/topological/iterative geometry runs on CPU (TypeScript, with `dd.ts` double-double + `compileComplex` closures + Durand–Kerner available); small trusted libs OK. Verify in-browser via `window.__views` (screenshots time out on the live canvas). New controls must fit a ~280–360px `.controls-pane` column.
 
-Architecture: `src/render/` (glPlot, plotView, overlay, perturbation, dd, rays, farey, inspect, critical, uniformize, juliaProperties, jacobian, bla); `src/expr/` (ast, parser, evaluate, glsl, derivative, rational); `src/state/`; `src/ui/`.
+Architecture: `src/render/` (glPlot, plotView, overlay, perturbation, perturbationPoly, dd, rays, farey, inspect, critical, juliaProperties, jacobian, bla, the 14 `schwarz*` modules); `src/combinatorics/`; `src/state/`; `src/interchange/`; `src/ui/`. The expression compiler and the GLSL stdlib are **no longer in this app** — they are the shared `@cas/expr` (ast, parser, evaluate, glsl, derivative, rational) and `@cas/gpu` packages, alongside `@cas/core`, `@cas/exact`, `@cas/dynamics`, `@cas/schwarz`, `@cas/interchange`, `@cas/export`, `@cas/rigor` and `@cas/ui`.
 
 ---
 
