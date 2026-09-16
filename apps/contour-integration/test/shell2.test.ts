@@ -1500,6 +1500,83 @@ describe("undo and redo — M8 step 1.11", () => {
     expect(app.currentState().expr, "the app's undo fired under the pen").toBe(edited);
   });
 
+  it("keeps the READER's camera, not the entry's", () => {
+    // A camera move is not an entry, so an entry carries whatever the camera happened to be when it
+    // was pushed — restoring that would teleport the view as a side effect of undoing an edit
+    // somewhere else. The move here happens AFTER the edit, so the entry's camera is the older one
+    // and a `commit(target, ...)` would visibly jump back to it.
+    // **The camera has to move AFTER the push**, which the first draft got wrong: it moved the view
+    // through `applyState`, which clears the stacks, so the entry that survived carried the same
+    // camera the app was already showing and the assertion compared a number with itself.
+    const { app } = mountStage();
+    const entryCamera = app.currentState().view;
+    app.actions().setExpr("1/(z-1)");
+    // A keyboard pan — an `"edit"` commit that changes `view` alone, so it is not an entry and the
+    // one on the stack still carries the camera from before it.
+    for (let k = 0; k < 3; k++) {
+      app.stage().onCanvasKey({ kind: "pan", dx: 1, dy: 0 }, new KeyboardEvent("keydown", { key: "ArrowRight" }));
+    }
+    const camera = app.currentState().view;
+    expect(camera, "the pan moved nothing — the test has no camera to keep").not.toEqual(entryCamera);
+    ctrlZ();
+    expect(app.currentState().expr).toBe("1/z");
+    expect(app.currentState().view, "the undo moved the camera").toEqual(camera);
+  });
+
+  it("clears the transient half of the session, as a link does", () => {
+    // M7.4's rule, and `restore` is its second caller: a state arriving from the stacks must not
+    // bring back a hover pointing at a piece it does not have.
+    const { app, ink } = mountStage();
+    app.actions().setExpr("1/(z-1)");
+    const [x, y] = screenOf(app, [app.currentState().contour.params.R.value, 0]);
+    ink.dispatchEvent(pointer("pointermove", x, y, { buttons: 0 }));
+    expect(app.session().hover.piece, "the pointer is not on the contour").not.toBeNull();
+    app.actions().undo();
+    expect(app.session().hover, "the restored state inherited a hover").toEqual({
+      z: null,
+      piece: null,
+      handle: null,
+    });
+  });
+
+  it("SAYS SO when there is nothing to undo, rather than going silent", () => {
+    // The app's one visible notice channel is the Share card, in the right rail, where a reader who
+    // has just pressed Ctrl+Z is not looking — so the reply belongs in the live region, which is
+    // also the only way a screen-reader user can tell a no-op from a broken key.
+    // **`mountCold`, not `mount`**, because `toSandbox` is an edit: going to the sandbox is
+    // something the reader did, so by the time `mount()` returns there is already one entry and the
+    // first press of Ctrl+Z is an ordinary undo. The cold start's only commit is `"init"`, which
+    // pushes nothing — so this is the one moment the stack is genuinely empty.
+    const { root, app } = mountCold();
+    const status = (): string => root.querySelector('[role="status"]')?.textContent ?? "";
+    ctrlZ();
+    expect(status()).toContain("Nothing to undo");
+    app.actions().setExpr("1/(z-1)");
+    ctrlZ();
+    expect(status()).toContain("Undone");
+    ctrlZ(true);
+    expect(status()).toContain("Redone");
+  });
+
+  it("needs the MODIFIER — a bare `z` is not an undo", () => {
+    // Without the guard, typing `z` anywhere outside a text field would step the reader backwards.
+    const { app } = mountStage();
+    app.actions().setExpr("1/(z-1)");
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "z", bubbles: true, cancelable: true }));
+    expect(app.currentState().expr).toBe("1/(z-1)");
+  });
+
+  it("LETS GO of the document when the shell is destroyed", () => {
+    // The listener is on the document, so a destroyed shell that kept it would go on answering
+    // Ctrl+Z for a page it is no longer part of — and this suite mounts a fresh shell per test.
+    const { app } = mountStage();
+    app.actions().setExpr("1/(z-1)");
+    const before = app.currentState().expr;
+    app.destroy();
+    ctrlZ();
+    expect(app.currentState().expr, "a destroyed shell answered Ctrl+Z").toBe(before);
+  });
+
   it("does not push the state it just restored", () => {
     // `"restore"` is its own commit reason for exactly this: an `"edit"` would push the state the
     // reader has just stepped away from, and the second press of Ctrl+Z would bring it back.
