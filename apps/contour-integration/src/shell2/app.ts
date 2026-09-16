@@ -563,9 +563,13 @@ export function mountShell2(root: Element): Shell2Handle {
    * between the reader and the page they came from. A state the codec REFUSES leaves the URL alone
    * rather than half-writing one — the Share card is where that refusal is read, and overwriting a
    * good link with a broken one would be the worse failure.
+   *
+   * **It does not test `hashReady` itself**, and it did: `syncHash` is the only way here and guards
+   * before it schedules, so the second test could never be false and a mutation sweep could not kill
+   * it. Two readers of *is the address bar ours to write yet?* is the shape this file keeps
+   * removing; the one that matters is the one that decides whether a timer exists at all.
    */
   function writeHash(): void {
-    if (!hashReady) return;
     // The reader has acted, so a sentence about the link they arrived on is no longer about them.
     if (session.linkRefusal !== null) {
       session.linkRefusal = null;
