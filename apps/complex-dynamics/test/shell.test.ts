@@ -948,3 +948,103 @@ describe("WP10 — the rest of the shell pass", () => {
     expect(fab.hidden).toBe(false);
   });
 });
+
+describe("WP11/U10 — accessibility, asserted where the axe roster cannot look", () => {
+  /** Open every `<details>` in the pane: the roster audits each page in its DEFAULT state only,
+   *  which is precisely why the Exterior panel's findings survived four audits. */
+  const openEverything = (): void => {
+    for (const d of document.querySelectorAll<HTMLDetailsElement>("details")) d.open = true;
+  };
+
+  it("every scrollable list is reachable by keyboard and says what it is", async () => {
+    await mount();
+    openEverything();
+    for (const id of ["exterior-param-list", "exterior-dyn-list"]) {
+      const el = byId(id);
+      expect(el.tabIndex, `${id} is focusable`).toBe(0);
+      expect(el.getAttribute("role"), id).toBe("region");
+      expect((el.getAttribute("aria-label") ?? "").length, id).toBeGreaterThan(0);
+    }
+  });
+
+  it("…and with everything open, the structural invariants still hold", async () => {
+    await mount();
+    openEverything();
+    expect(document.querySelectorAll("main")).toHaveLength(1);
+    expect(document.querySelectorAll("h1")).toHaveLength(1);
+    const unnamed: string[] = [];
+    for (const el of document.querySelectorAll<HTMLElement>("input, select, textarea, button")) {
+      if (el instanceof HTMLInputElement && el.type === "hidden") continue;
+      if (el.hidden || el.getAttribute("aria-hidden") === "true") continue;
+      if (el.closest("[hidden]")) continue;
+      const named =
+        (el.getAttribute("aria-label") ?? "").trim().length > 0 ||
+        (el.getAttribute("aria-labelledby") ?? "").trim().length > 0 ||
+        (el.getAttribute("title") ?? "").trim().length > 0 ||
+        (el.textContent ?? "").trim().length > 0 ||
+        (el.id.length > 0 && document.querySelector(`label[for="${el.id}"]`) !== null) ||
+        el.closest("label") !== null;
+      if (!named) unnamed.push(`${el.tagName.toLowerCase()}#${el.id || "(no id)"}`);
+    }
+    expect(unnamed, `unnamed controls: ${unnamed.join(", ")}`).toHaveLength(0);
+  });
+
+  it("every part of the page belongs to a landmark", async () => {
+    await mount();
+    // The axe job does not block; this does. Both facts were found BY the audit after WP10's tab
+    // shell went in, and both are older than it: the controls pane has always sat outside
+    // `<main class="plots">`, and a `<footer>` nested inside another sectioning container is not
+    // the `contentinfo` landmark.
+    const pane = byId("controls-pane");
+    expect(pane.getAttribute("role")).toBe("region");
+    expect((pane.getAttribute("aria-label") ?? "").length).toBeGreaterThan(0);
+    const footers = [...document.querySelectorAll("footer")];
+    expect(footers.length).toBeGreaterThan(0);
+    for (const f of footers) {
+      expect(
+        f.closest("main, aside, section, nav, article, [role='region']"),
+        "a footer inside a sectioning container is not contentinfo",
+      ).toBeNull();
+    }
+  });
+
+  it("the inspector announces ONE sentence, not the whole report", async () => {
+    await mount();
+    // The live region used to be the whole `<aside>`, so every recompute read out six rows.
+    expect(byId("inspector").hasAttribute("aria-live")).toBe(false);
+    const status = byId("inspector-status");
+    expect(status.getAttribute("aria-live")).toBe("polite");
+    expect(status.textContent).toBe("");
+
+    setVal("siegel-theta", "1/5");
+    byId("siegel-go").click();
+    expect(status.textContent ?? "").toMatch(/^Inspected c = /);
+    // …and it is a sentence, not the list: the list has more rows than this has clauses.
+    expect((status.textContent ?? "").split(",").length).toBeLessThan(
+      byId("inspector-body").querySelectorAll("dt").length,
+    );
+  });
+
+  it("a suggestion's severity is not carried by colour alone", async () => {
+    await mount();
+    for (const id of ["param-suggestion", "dyn-suggestion"]) {
+      const icon = byId(id).querySelector(".suggestion-icon");
+      expect(icon, id).not.toBeNull();
+      expect(icon?.getAttribute("aria-hidden"), `${id} icon is not hidden from readers`).not.toBe(
+        "true",
+      );
+      expect((icon?.getAttribute("aria-label") ?? "").length, id).toBeGreaterThan(0);
+    }
+  });
+
+  it("the onboarding card traps Tab and gives focus back, like every other dialog", async () => {
+    localStorage.removeItem("cdjs.onboarded");
+    await mount();
+    const card = byId("onboarding");
+    expect(card.hidden).toBe(false);
+    // `withModalFocus` focuses the initial control and registers an escape layer.
+    expect(document.activeElement).toBe(byId("onboarding_dismiss"));
+    escape();
+    expect(card.hidden).toBe(true);
+  });
+});

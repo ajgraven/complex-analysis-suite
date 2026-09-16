@@ -219,7 +219,7 @@
                   aria-live="polite"
                   hidden
                 >
-                  <span class="suggestion-icon" aria-hidden="true">⚠</span>
+                  <span class="suggestion-icon" role="img" aria-label="Warning">⚠</span>
                   <span class="suggestion-text"></span>
                   <span class="suggestion-actions"></span>
                   <button
@@ -385,7 +385,7 @@ abs(z)>2</textarea
                   aria-live="polite"
                   hidden
                 >
-                  <span class="suggestion-icon" aria-hidden="true">⚠</span>
+                  <span class="suggestion-icon" role="img" aria-label="Warning">⚠</span>
                   <span class="suggestion-text"></span>
                   <span class="suggestion-actions"></span>
                   <button
@@ -1170,7 +1170,12 @@ abs(z)>2</textarea
             </section>
           </main>
         </div>
-        <div class="controls-pane" id="controls-pane">
+        <!-- A LANDMARK. The pane sits outside `<main class="plots">`, so until it named itself its
+               content belonged to no landmark at all — which axe reports as `region`, and which
+               means a screen-reader user has no way to jump to the controls. It surfaced when the
+               tablist went in (a widget role outside a landmark is what axe notices), but the pane
+               has been unlandmarked the whole time. (WP11/U10, review 2026-09-16.) -->
+          <div class="controls-pane" id="controls-pane" role="region" aria-label="Controls">
           <!-- Mobile-only bottom-sheet header (drag grip, title, close); hidden on desktop.
                aria-hidden is on the decorative grip ALONE: it used to wrap the whole handle,
                which hid the focusable ✕ (and its "Close controls" label) from assistive tech
@@ -1200,7 +1205,7 @@ abs(z)>2</textarea
                one tab, where they would be stranded the moment a reader switched away. main.ts moves
                the existing .inline-actions into it. -->
           <div id="pane-actions" class="pane-actions"></div>
-          <aside id="inspector" class="inspector" aria-live="polite">
+          <aside id="inspector" class="inspector">
             <div class="inspector-head">
               <strong id="inspector-title">Point inspector</strong>
               <button
@@ -1212,6 +1217,7 @@ abs(z)>2</textarea
                 ×
               </button>
             </div>
+            <p class="inspector-status" id="inspector-status" role="status" aria-live="polite"></p>
             <dl class="inspector-body" id="inspector-body"></dl>
             <button
               id="inspector-nucleus"
@@ -2075,7 +2081,8 @@ z^2+c</textarea
                     </button>
                   </span>
                 </div>
-                <pre class="exterior-coeffs" id="exterior-param-list"></pre>
+                <pre class="exterior-coeffs" id="exterior-param-list" tabindex="0" role="region"
+                  aria-label="Parameter plane exterior-map coefficients"></pre>
               </div>
               <div class="exterior-block">
                 <div class="exterior-block-head">
@@ -2094,7 +2101,8 @@ z^2+c</textarea
                     </button>
                   </span>
                 </div>
-                <pre class="exterior-coeffs" id="exterior-dyn-list"></pre>
+                <pre class="exterior-coeffs" id="exterior-dyn-list" tabindex="0" role="region"
+                  aria-label="Dynamical plane exterior-map coefficients"></pre>
               </div>
             </div>
           </details>
@@ -2860,41 +2868,45 @@ z^2+c</textarea
             </div>
           </div>
 
-          <footer>
-            <p>
-              Questions, suggestions, or feature requests:
-              <a href="mailto:andrew@graven.com">andrew@graven.com</a>.
-            </p>
-            <p>Created by Andrew Graven.</p>
-
-            <div class="cite">
-              <h3>How to cite</h3>
-              <p>
-                If you use this tool's results or images in your work or an academic publication,
-                please cite it.
-              </p>
-              <p class="cite-ref">
-                Graven, A. (2026). <em>Complex Dynamics Visualization Tool</em> (Version 1.0.0)
-                [Computer software].
-                <a
-                  href="https://github.com/ajgraven/ComplexDynamicsJS"
-                  target="_blank"
-                  rel="noopener"
-                  >https://github.com/ajgraven/ComplexDynamicsJS</a
-                >
-              </p>
-              <pre class="cite-bibtex" tabindex="0" role="group" aria-label="BibTeX citation"><code id="cite-bibtex">@software{graven2026complexdynamics,
-  author  = {Graven, Andrew},
-  title   = {Complex Dynamics Visualization Tool},
-  year    = {2026},
-  version = {1.0.0},
-  url     = {https://github.com/ajgraven/ComplexDynamicsJS}
-}</code></pre>
-              <button type="button" id="cite-copy" class="cite-copy">Copy BibTeX</button>
-            </div>
-          </footer>
         </div>
       </div>
+      <!-- The page's contentinfo, moved out of the controls pane (WP11/U10). A `<footer>` inside
+           another sectioning container is NOT the `contentinfo` landmark, so the contact and
+           citation block sat outside every landmark — and it was in the scrolling controls column,
+           where a citation nobody scrolls past is a citation nobody finds. -->
+      <footer>
+        <p>
+          Questions, suggestions, or feature requests:
+          <a href="mailto:andrew@graven.com">andrew@graven.com</a>.
+        </p>
+        <p>Created by Andrew Graven.</p>
+
+        <div class="cite">
+          <h3>How to cite</h3>
+          <p>
+            If you use this tool's results or images in your work or an academic publication,
+            please cite it.
+          </p>
+          <p class="cite-ref">
+            Graven, A. (2026). <em>Complex Dynamics Visualization Tool</em> (Version 1.0.0)
+            [Computer software].
+            <a
+              href="https://github.com/ajgraven/ComplexDynamicsJS"
+              target="_blank"
+              rel="noopener"
+              >https://github.com/ajgraven/ComplexDynamicsJS</a
+            >
+          </p>
+          <pre class="cite-bibtex" tabindex="0" role="group" aria-label="BibTeX citation"><code id="cite-bibtex">@software{graven2026complexdynamics,
+      = {Graven, Andrew},
+      = {Complex Dynamics Visualization Tool},
+      = {2026},
+      = {1.0.0},
+      = {https://github.com/ajgraven/ComplexDynamicsJS}
+      pre>
+          <button type="button" id="cite-copy" class="cite-copy">Copy BibTeX</button>
+        </div>
+      </footer>
     </div>
 
     <!-- Mobile-only floating button that opens the controls bottom sheet (CSS-hidden on desktop). -->

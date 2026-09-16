@@ -363,9 +363,21 @@ function showInspect(info: InspectResult, point: Vec2, plane: FractType): void {
       ? `Parameter c = ${formatComplexDisplay(pt)}`
       : `Orbit of z\u2080 = ${formatComplexDisplay(pt)}`;
 
+  const rows = buildInspectorRows(info, plane);
+  // ONE live sentence, rather than a live region wrapping the whole report: `aria-live` on the
+  // `<aside>` meant every recompute read out the entire definition list — six rows of period,
+  // multiplier, Fatou component, internal angle, limb and distance — over whatever the reader was
+  // doing. A status line says what was inspected and the two facts that name it. (WP11/U10.)
+  const headline = rows
+    .filter((r) => r.key === "Fate" || r.key === "Period" || r.key === "Fatou component")
+    .map((r) => `${r.key.toLowerCase()} ${r.value}`)
+    .join(", ");
+  byId("inspector-status").textContent =
+    `Inspected ${plane === "param" ? "c" : "z\u2080"} = ${formatComplexDisplay(pt)}: ${headline}.`;
+
   const body = byId("inspector-body");
   body.replaceChildren();
-  for (const { key, value, verdict } of buildInspectorRows(info, plane)) {
+  for (const { key, value, verdict } of rows) {
     const dt = document.createElement("dt");
     dt.textContent = key;
     // The rigor level of the row, from `@cas/rigor`'s meet over its certificates rather than from
@@ -566,12 +578,22 @@ function setupOnboarding(): void {
     // localStorage may be unavailable (private mode); just show the hint.
   }
   if (seen) return;
-  el.hidden = false;
-  let release: (() => void) | null = null;
+  // Through `withModalFocus`, like the glossary and the keyboard reference: it moves focus into the
+  // card, traps Tab inside it, and restores focus to whatever had it on close. It used to only
+  // toggle `hidden` and call `.focus()` on one button, so Tab walked straight out into the ~190
+  // controls behind the backdrop and nothing brought focus back. (WP11/U10, review 2026-09-16.)
+  const modal = withModalFocus(
+    el,
+    byId<HTMLButtonElement>("onboarding_dismiss"),
+    () => {
+      el.hidden = false;
+    },
+    () => {
+      el.hidden = true;
+    },
+  );
   const dismiss = (): void => {
-    el.hidden = true;
-    release?.();
-    release = null;
+    modal.close();
     try {
       localStorage.setItem("cdjs.onboarded", "1");
     } catch {
@@ -598,8 +620,7 @@ function setupOnboarding(): void {
   el.addEventListener("click", (e) => {
     if (e.target === el) dismiss(); // click the backdrop to dismiss
   });
-  release = pushEscapeLayer(dismiss);
-  byId<HTMLButtonElement>("onboarding_dismiss").focus();
+  modal.open(); // …which registers its own escape layer and focuses the dismiss button
 }
 
 /** Desktop layout toggles (≥1200px workspace): stack the two plots and/or hide the controls
@@ -4856,10 +4877,15 @@ export function init(): void {
       // Escape is NOT handled here: σ registers itself with the escape stack on entry, so a modal
       // opened from σ closes alone and σ stays put — without this listener having to ask which is
       // on top. (WP8/S5; the guard it replaces tested for one overlay by class name.)
-      const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) {
-        return; // don't hijack typing / slider nudges
-      }
+      // Act only when focus is on the σ CANVAS or nowhere in particular. The old guard listed three
+      // tag names, which let the shortcuts fire from a focused button, a link or a `<details>`
+      // summary — where Left/Right and Home/End have their own meanings, and where +/-/i are not
+      // this view's to take. Naming what MAY act, rather than a list of what may not, is the half
+      // that does not need extending every time a control type is added. (WP11/U10.)
+      const active = document.activeElement;
+      const onCanvas = active === byId("JCSSchwarz");
+      const nowhere = active === null || active === document.body;
+      if (!onCanvas && !nowhere) return;
       // F2d sphere: the arrows SPIN the ball (about the view up/right axes) and +/- zoom the camera; there is
       // no flat pan/zoom or centre-inspect. Handle it first, then bail before the plane/z switch below.
       if (schwarzViewMode === "sphere") {

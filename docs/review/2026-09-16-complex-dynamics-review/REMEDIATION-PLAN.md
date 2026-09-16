@@ -844,7 +844,57 @@ not baselined dirty).
 
 ---
 
-## WP11 — Accessibility · effort S · closes U10
+## WP11 — Accessibility · effort S · closes U10 · **DONE**
+
+> **Landed.** Gate green: lint, typecheck, **560 files / 5,867 tests**, build; CD browser suite 35
+> tests; **`node scripts/a11y-audit.mjs` reports complex-dynamics CLEAN** and no regressions anywhere.
+> Eight negative controls, each reverted and confirmed red.
+>
+> **The audit found a regression from WP10, and the plan's own rule made it a defect to fix.** The tab
+> shell tripped axe's `region` rule on two nodes — and neither was caused by it. The controls pane has
+> always sat OUTSIDE `<main class="plots">`, so its entire contents belonged to no landmark: a
+> screen-reader user had no way to jump to the controls at all. What changed is that a `role="tablist"`
+> outside a landmark is what axe notices. The pane is a named `region` now. The second node was the
+> `<footer>`: a `<footer>` nested inside another sectioning container is NOT the `contentinfo`
+> landmark, so the contact and citation block was outside every landmark **and** buried at the bottom
+> of a scrolling controls column — a citation nobody scrolls past is a citation nobody finds. It moves
+> to the page level, which is what WP10's own note ("the citation block leaves the pane") asked for.
+> Both facts are now pinned in the BLOCKING shell test, not just the non-blocking axe job.
+>
+> **The contrast claim was measured and is wrong.** `opacity: 0.6` at 0.66 rem on the σ notes gives
+> **4.54:1** against the light background and **5.84:1** against the dark one — a WCAG AA pass in
+> both. It is still changed, for a reason the review did not give: 4.54 passes by **0.04**, and by a
+> multiplier nobody can read off, so any token change puts it under with nothing saying so. The
+> `--muted` token states the value (7.46:1 / 6.80:1), and 0.75 rem is a size a reader can read.
+>
+> **The gradient editor had no keyboard path at all** — the handles were focusable, named `<button>`s
+> with no key handling, so the custom gradient (the whole point of the "Custom…" palette) could only
+> be built with a pointer. Arrows move a stop (1 %, 10 % with Shift), Home/End send it to an end,
+> Insert/+ adds one beside it, Delete/Backspace removes it down to the same two-stop floor the Remove
+> button enforces, and each handle is a `role="slider"` carrying its position as `aria-valuenow`. **The
+> defect underneath it is the one M7.2 found in contour-integration's pen**: `render()` rebuilds the
+> handle row, so without restoring focus the second arrow press would have gone to the body — the
+> keyboard path would have been unusable rather than merely awkward.
+>
+> **Two of the six gradient tests were VACUOUS in the first draft**, and the negative control is what
+> showed it: the fixture already has a stop at each end, so "some stop is at 0" is true before a key
+> is pressed; and "focus is still on a handle" is true when nothing re-rendered. They count stops and
+> require a DIFFERENT element now.
+>
+> The rest as specified: the exterior coefficient lists are focusable named regions (the finding
+> survived four audits because the roster audits each page in its DEFAULT state, so the shell test
+> opens every `<details>` and asserts the invariants there); the inspector's `aria-live` moves from the
+> whole `<aside>` — which read out all six rows on every recompute — to one status sentence; the
+> suggestion severity was carried by a BORDER COLOUR and an `aria-hidden` glyph, so it reached neither
+> a colour-blind reader (1.4.1) nor a screen reader (4.1.2), and the glyph now differs by severity and
+> carries the word; the onboarding card goes through `withModalFocus` like every other dialog; and the
+> σ capture-phase shortcuts name what MAY act (the σ canvas, or nowhere) instead of listing three tag
+> names that may not — which had let `+`/`-`/`i` and the arrows fire from a focused button or a
+> `<details>` summary, where Left/Right and Home/End have their own meanings.
+
+**Files:** `apps/complex-dynamics/index.html`, `src/main.ts`, `src/ui/gradient.ts`,
+`src/ui/suggestions.ts`, `src/styles/main.css`; tests `test/gradientKeyboard.test.ts` (new),
+`test/shell.test.ts`.
 
 - Exterior-map lists (`#exterior-param-list`, `#exterior-dyn-list`): `tabindex="0"` + `role="region"` +
   `aria-label`; wrap the panel's status and labels in the group's landmark (the `region` findings).
