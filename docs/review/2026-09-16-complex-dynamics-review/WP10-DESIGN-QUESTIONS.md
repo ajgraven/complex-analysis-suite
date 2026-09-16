@@ -10,7 +10,11 @@ Everything below was measured against the built app in headless Chromium (SwiftS
 
 ---
 
-## Q1 — What should the app open on?
+> **Decided 2026-09-16.** Q1 = **A**, the Douady rabbit. Q3 = **A**, keep the σ takeover and fix its three
+> defects. Q2 is open — four working mockups are at <https://claude.ai/artifact/7tFh8FBbjweE5PZfbK5fR4>
+> (source kept beside this file as [`sidebar-mockups.html`](sidebar-mockups.html)).
+
+## Q1 — What should the app open on? · **DECIDED: A**
 
 ### What is wrong now
 
@@ -79,7 +83,7 @@ coupling still is not demonstrated. This fixes the lie, not the first impression
 gains one line: "drag the white point outside the black set and watch the right plot shatter." _For:_
 turns the default into the lesson. _Against:_ one more sentence on a card people dismiss.
 
-### Recommendation
+### Decision — **A**, the rabbit
 
 **A (the rabbit), with C's legend fix landing anyway.** The legend must stop claiming an interior that
 is absent regardless of the default, because a user can always drag to a dust — that part is a defect,
@@ -95,7 +99,28 @@ this is a defect — but say if you want a particular convention (`a + bi` vs `a
 
 ---
 
-## Q2 — What shape should the sidebar be?
+## Q2 — What shape should the sidebar be? · **OPEN**
+
+**Mockups:** four working replicas at the app's real 346 px width, carrying the app's real groups and
+control labels, each measuring itself live — <https://claude.ai/artifact/7tFh8FBbjweE5PZfbK5fR4>.
+
+**Building them corrected this section's central claim.** I expected the grouped accordion to take "a
+third to a half" off the column. Measured in the replica it takes **6 %**: all fifteen groups are still in
+the scroll, so reordering changes where things are, not how much there is. **Only hiding shortens the
+column**, and tabs are the only option that hides — they cut it to **32 %** of today. So height is an
+argument for A, not for B, and the recommendation below now rests on hierarchy and on state staying
+visible, which is what it should have rested on from the start.
+
+| option                  | height, replica | vs today | a setting can hide? | cost        |
+| ----------------------- | --------------- | -------- | ------------------- | ----------- |
+| current                 | 1,600 px        | —        | no                  | —           |
+| **A** five tabs         | 507 px          | **32 %** | **yes — a mode**    | L · ~2 days |
+| **B** grouped accordion | 1,510 px        | 94 %     | no                  | M · ~1 day  |
+| **C** filter box        | 1,349 px        | 84 %     | no                  | S · ~½ day  |
+| **D** placement only    | 1,388 px        | 87 %     | no                  | S · ~2 h    |
+
+The replica's controls are tighter than the app's, so its absolute pixels sit below the app's own
+2,091 px. The ratio is what transfers.
 
 ### What is wrong now
 
@@ -174,7 +199,7 @@ changes, WP8) should ship **before** it, and A should carry a persistent "active
 
 ---
 
-## Q3 — Should the σ view stay a full takeover?
+## Q3 — Should the σ view stay a full takeover? · **DECIDED: A**
 
 ### What is wrong now
 
@@ -245,7 +270,7 @@ groups go into the sidebar as a section that appears in σ mode.
   point B is the better buy.
 - _Cost:_ **S–M.**
 
-### Recommendation
+### Decision — **A**, keep the takeover
 
 **A.** It closes all three real defects for a small cost, and the takeover is genuinely defensible once
 you know σ is not coupled to `c`. ADR-0009's "alongside" wording should then be **narrowed by a short
@@ -260,11 +285,11 @@ to do; the width budget allows it, and it is the only option that does.
 
 ## Summary
 
-| #   | question     | recommended                                | cost | the deciding evidence                                                      |
-| --- | ------------ | ------------------------------------------ | ---- | -------------------------------------------------------------------------- |
-| 1   | default view | **A** rabbit, + C's legend fix regardless  | S    | current default escapes at n = 10; 0.0 % interior                          |
-| 2   | sidebar      | **B** grouped accordion, D first           | M    | 2.3–3.0 screens, 15 groups, 1 open; tabs would hide picture-changing state |
-| 3   | σ view       | **A** keep takeover, fix the three defects | S    | three panes give 282 px each at 1280; σ is not coupled to `c`              |
+| #   | question     | recommended                                          | cost | the deciding evidence                                                                               |
+| --- | ------------ | ---------------------------------------------------- | ---- | --------------------------------------------------------------------------------------------------- |
+| 1   | default view | **A** rabbit — **decided**                           | S    | current default escapes at n = 10; 0.0 % interior                                                   |
+| 2   | sidebar      | **B** grouped accordion, D first — **open**          | M    | B buys hierarchy, not height (94 %); only tabs collapse the column (32 %), and only tabs hide state |
+| 3   | σ view       | **A** keep takeover, fix three defects — **decided** | S    | three panes give 282 px each at 1280; σ is not coupled to `c`                                       |
 
 Each recommendation is reversible and none blocks the other eleven work packages. If you pick
 differently on any of them, only WP10 changes — WP1–WP9, WP11 and WP12 are unaffected.
