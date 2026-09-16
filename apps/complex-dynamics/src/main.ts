@@ -6990,8 +6990,26 @@ export function init(): void {
   // highlight and no unapplied-edits hint on the select — so choosing "Herman ring" left the app
   // showing z²+c with nothing on screen saying why, which measured as the most surprising interaction
   // in the app. The button is gone from the markup; the select is the control. (WP1/U1.)
-  byId("fractal_presets").addEventListener("change", (event) => {
-    applyPreset((event.currentTarget as HTMLSelectElement).value as PresetName);
+  // The menu ACTS rather than showing state, and returns to its placeholder after each pick.
+  //
+  // WP1/U1 deleted the Apply button and left a bare `change` listener — but `change` does not fire
+  // when a reader re-picks the option already selected, so after editing `f` by hand, choosing the
+  // preset that was still showing did nothing at all, silently. That is verbatim the complaint U1
+  // exists to close ("choosing one used to leave the app unchanged with nothing on screen saying
+  // why"), in a narrower case, and the select's own tooltip was false there.
+  //
+  // It was never a state display in any case: pick "rabbit", drag c, and the menu still says
+  // "rabbit" while the app shows something else. Returning to the placeholder makes every pick a
+  // change, so every pick applies, and stops the control claiming to describe the current view.
+  // `reset_all` therefore reads the last preset APPLIED rather than the menu. (Review follow-up.)
+  let lastPreset: PresetName | null = null;
+  const presetSelect = byId<HTMLSelectElement>("fractal_presets");
+  presetSelect.addEventListener("change", () => {
+    const name = presetSelect.value;
+    if (name === "") return; // the placeholder
+    lastPreset = name as PresetName;
+    applyPreset(lastPreset);
+    presetSelect.value = ""; // so the SAME preset can be chosen again
   });
   byId("reset_all").addEventListener("click", () => {
     // Reset every option, including coloring + lighting (which presets don't carry).
@@ -7070,7 +7088,9 @@ export function init(): void {
     byId<HTMLInputElement>("sphere-light").checked = true; // HTML default
     applySphere();
     clearKeyframes();
-    applyPreset(byId<HTMLSelectElement>("fractal_presets").value as PresetName);
+    // With the menu on its placeholder, "reset" means the preset last APPLIED, or the app's own
+    // default when none has been — which is what the menu's first option used to supply.
+    applyPreset(lastPreset ?? "mandelbrot");
   });
   byId("print_param_space").addEventListener("click", () => {
     void runExport(
@@ -7326,6 +7346,12 @@ export function init(): void {
   // did not move. (WP7/S6, review 2026-09-16.)
   window.addEventListener("hashchange", () => {
     if (location.hash === lastHashApplied) return; // our own write, or the same link twice
+    // An EMPTY fragment is not a link that failed to parse — it is the absence of one, and the two
+    // need different answers. Pressing Back after applying a permalink clears the hash, and the app
+    // used to warn that the reader's (non-existent) link carried no Complex Dynamics view. Nothing
+    // is applied either way; only the sentence was wrong. (Review follow-up.)
+    const hash = location.hash.replace(/^#/, "");
+    if (hash === "") return;
     if (!loadFromHash()) showToast("That link carries no Complex Dynamics view.", "warn");
   });
   refreshProfileLabel(); // a shared view usually diverges from a named profile → "Custom…"

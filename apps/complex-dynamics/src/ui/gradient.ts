@@ -218,6 +218,7 @@ export function setupGradientEditor(
     const stop = stops[i];
     const step = e.shiftKey ? 0.1 : 0.01;
     let handled = true;
+    let inserted = false;
     switch (e.key) {
       case "ArrowLeft":
       case "ArrowDown":
@@ -243,6 +244,7 @@ export function setupGradientEditor(
         stops.push(added);
         stops.sort((a, b) => a.t - b.t);
         selected = stops.indexOf(added);
+        inserted = true;
         break;
       }
       case "Delete":
@@ -260,7 +262,13 @@ export function setupGradientEditor(
     if (!handled) return;
     e.preventDefault();
     stops.sort((a, b) => a.t - b.t);
-    if (stops.includes(stop)) selected = stops.indexOf(stop);
+    // Re-find the stop the key MOVED, so focus follows it across the sort — but not on the Insert
+    // path, which deliberately selected the stop it just ADDED. `stop` (the focused handle) is still
+    // in the array there, so this used to overwrite that choice: a reader pressed Insert, a new stop
+    // appeared at 25 %, and the colour picker went on editing the old one — so changing the colour
+    // moved the wrong stop. (Delete is unaffected: `stop` is genuinely gone, so the guard is false.)
+    // (Review follow-up.)
+    if (!inserted && stops.includes(stop)) selected = stops.indexOf(stop);
     render(true);
     emit();
   });

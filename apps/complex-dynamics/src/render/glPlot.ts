@@ -2438,30 +2438,35 @@ export class GLPlot {
     if (this.contextLost || this.gl.isContextLost()) {
       throw new Error("The graphics context was lost — try the export again");
     }
-    // Commit to ONE look for the whole image, before the first strip (WP9/R6).
-    this.exportLook = {
-      aa: this._aa,
-      mode: this._mode,
-      light: this._light,
-      outline: this._outline,
-      equipotential: this._equipotential,
-      palette: this._palette,
-      gradientOffset: this._gradientOffset,
-    };
-    if (this._mode === 5) {
-      // Histogram: the CDF is content-derived, so it must be built ONCE, before the first strip, and
-      // not from a full-size readback — at 8192² that is a synchronous 268 MB `readPixels` before the
-      // progress bar or the Cancel button can do anything. It is a cumulative distribution over
-      // escape counts, not an image, so a bounded render resolves it to well under a count's width:
-      // CDF_EXPORT_MAX² samples against 65,536 buckets. (WP9/R6.)
-      this.updateCdf(
-        Math.min(size, CDF_EXPORT_MAX),
-        Math.min(size, CDF_EXPORT_MAX),
-      );
-      this.cdfDirty = true; // this overwrote the shared CDF — rebuild for the live view afterwards
-    }
-
+    // Commit to ONE look for the whole image, before the first strip (WP9/R6). Inside the `try`,
+    // NOT before it: `updateCdf` below allocates a full-size `Uint8Array` and does a `readPixels`,
+    // so an allocation failure or a context lost between the entry check and here threw with
+    // `exportLook` already set and no `finally` to clear it. `get exporting()` then stayed true for
+    // ever, `PlotView.frozen()` refused every pointer and keyboard event on that plot permanently,
+    // and the live view kept rendering someone else's palette. The freeze's own cleanup has to
+    // cover everything that can create the freeze. (Review follow-up.)
     try {
+      this.exportLook = {
+        aa: this._aa,
+        mode: this._mode,
+        light: this._light,
+        outline: this._outline,
+        equipotential: this._equipotential,
+        palette: this._palette,
+        gradientOffset: this._gradientOffset,
+      };
+      if (this._mode === 5) {
+        // Histogram: the CDF is content-derived, so it must be built ONCE, before the first strip,
+        // and not from a full-size readback — at 8192² that is a synchronous 268 MB `readPixels`
+        // before the progress bar or the Cancel button can do anything. It is a cumulative
+        // distribution over escape counts, not an image, so a bounded render resolves it to well
+        // under a count's width: CDF_EXPORT_MAX² samples against 65,536 buckets. (WP9/R6.)
+        this.updateCdf(
+          Math.min(size, CDF_EXPORT_MAX),
+          Math.min(size, CDF_EXPORT_MAX),
+        );
+        this.cdfDirty = true; // this overwrote the shared CDF — rebuild for the live view afterwards
+      }
       return await this.renderExportStrips(size, opts);
     } finally {
       // Whatever happened — a cancel, a lost context, a throw from `drawFractal` — the live view

@@ -657,6 +657,62 @@ describe("WP8/S4 — a mode the app cannot draw says so, and says so when it mov
   });
 });
 
+describe("Review follow-up — three shell defects the review found", () => {
+  it("the SAME preset can be applied again — the menu acts, it does not show state", async () => {
+    await mount();
+    const sel = byId<HTMLSelectElement>("fractal_presets");
+    // Apply one, then diverge from it by hand, then pick THE SAME ONE again.
+    setVal("fractal_presets", "tricorn");
+    fire("fractal_presets", "change");
+    expect(val("inpf")).toContain("conj");
+    expect(sel.value, "the menu returned to its placeholder").toBe("");
+
+    setVal("inpf", "z^2+c");
+    byId("apply_all").click();
+    expect(val("inpf")).toBe("z^2+c");
+
+    setVal("fractal_presets", "tricorn"); // the same one — a `change` the old markup could not fire
+    fire("fractal_presets", "change");
+    expect(val("inpf"), "picking it again applied it again").toContain("conj");
+  });
+
+  it("clearing the fragment is not a link that failed to parse", async () => {
+    await mount();
+    // A foreign link warns — that much is right, and is the anti-vacuity clause here. Set it AFTER
+    // mounting, so it is a link arriving in an open tab rather than one the app already applied.
+    window.location.hash = "#vs=" + btoa(JSON.stringify({ v: 1, app: "qd", state: {} }));
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    expect(document.querySelector(".toast")?.textContent ?? "").toContain("no Complex Dynamics");
+
+    for (const t of document.querySelectorAll(".toast")) t.remove();
+    window.location.hash = ""; // e.g. pressing Back after applying a permalink
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    expect(
+      document.querySelector(".toast"),
+      "an absent link is not an unreadable one",
+    ).toBeNull();
+  });
+
+  it("Insert leaves the colour picker on the stop it just added", async () => {
+    await mount();
+    setVal("palette", "custom");
+    fire("palette", "change");
+    const handles = () => [...document.querySelectorAll<HTMLElement>(".gradient-handle")];
+    const before = handles().length;
+    expect(before, "the custom gradient editor is showing").toBeGreaterThan(1);
+
+    handles()[0].focus();
+    handles()[0].dispatchEvent(new KeyboardEvent("keydown", { key: "Insert", bubbles: true }));
+    const after = handles();
+    expect(after.length, "a stop was added").toBe(before + 1);
+    // The defect: `selected` was set to the new stop and then overwritten back to the focused one,
+    // so the picker edited the OLD stop — change a colour and the wrong handle moved.
+    const sel = after.findIndex((h) => h.classList.contains("selected"));
+    expect(sel, "the new stop is the selected one").toBe(1);
+    expect(document.activeElement, "and focus is on it").toBe(after[1]);
+  });
+});
+
 describe("Review follow-up — the projection picker re-runs the gates it moves", () => {
   // A projection REFUSES both deep-zoom kernels (WP9/R4), so `perturbationActive` flips with this
   // control. `applyProjection` ran neither gate, so the UI kept describing the previous kernel.
