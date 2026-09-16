@@ -13,6 +13,7 @@ import {
   handlesOf,
   nearestHandle,
   onContour,
+  pieceAt,
   radiusDragValue,
   setParam,
   translateContour,
@@ -145,6 +146,31 @@ describe("hit tests", () => {
     expect(onContour(resolved, [1.53, 0], 0.05)).toBe(true);
     expect(onContour(resolved, [0, 0], 0.05)).toBe(false); // the centre is not the contour
     expect(onContour(resolved, [3, 0], 0.05)).toBe(false);
+  });
+
+  it("names WHICH piece, by nearest and not by first — M8 step 1.10", () => {
+    // `onContour` answers *is the pointer on the curve*, which is the grab's question. The hover's
+    // answer is the piece, because it is what lights the rail row and what the readout prints.
+    //
+    // **Every closed contour has pieces meeting at their endpoints**, so near a join two are inside
+    // any workable tolerance at once — and "the first that qualifies" hands the reader whichever
+    // piece the record happened to list first. The indented semicircle's corner at `z = −R` is the
+    // case, and the discriminating point is just off it: measured at `(−7.9, 0.3)` with `R = 8`, the
+    // real axis (piece 0) is **0.3000** away and the big arc (piece 3) is **0.0943**, so a tolerance
+    // of 0.5 admits both and only the nearer one is the piece the reader is pointing at. A
+    // first-wins reader answers 0 here, which is the whole difference.
+    const [, pieces] = withResolved(indentedSemicircleTemplate(8, 0.05));
+    expect(pieces).toHaveLength(4);
+    expect(pieceAt(pieces, [-7.9, 0.3], 0.5), "just off the corner, on the arc").toBe(3);
+    // Exactly ON the corner both are 0 — a tie, and a tie goes to the earlier piece. That is not a
+    // choice between them, which is why it is asserted separately from the case above.
+    expect(pieceAt(pieces, [-8, 0], 0.5)).toBe(0);
+    expect(pieceAt(pieces, [0, 8], 0.5), "the top of the arc").toBe(3);
+
+    const resolved = resolveAll(circleTemplate([0, 0], 1.5));
+    expect(pieceAt(resolved, [1.5, 0], 0.01)).toBe(0);
+    expect(pieceAt(resolved, [0, 0], 0.05), "the centre is not the contour").toBe(-1);
+    expect(pieceAt(resolved, [3, 0], 0.05)).toBe(-1);
   });
 
   it("picks the NEAREST handle, and none past the tolerance", () => {

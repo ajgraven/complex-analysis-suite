@@ -139,12 +139,27 @@ describe("the hover link, drawn", () => {
     if (acc === null) throw new Error("no accumulator canvas");
     const cold = pixels(acc);
     const rows = pieceRows(root);
-    rows[0].dispatchEvent(new PointerEvent("pointerenter", { bubbles: true, pointerId: 1 }));
-    await settled();
-    expect(rows[0].classList.contains("hot"), "the row that was hovered is not the one lit").toBe(true);
+    expect(rows.length, "A6 has two pieces, and the second one is the point").toBe(2);
+
+    const hoverRow = async (k: number): Promise<Uint8ClampedArray> => {
+      for (const row of rows) row.dispatchEvent(new PointerEvent("pointerleave", { bubbles: true, pointerId: 1 }));
+      rows[k].dispatchEvent(new PointerEvent("pointerenter", { bubbles: true, pointerId: 1 }));
+      await settled();
+      expect(rows[k].classList.contains("hot"), "the row that was hovered is not the one lit").toBe(true);
+      return pixels(acc);
+    };
+
+    const first = await hoverRow(0);
     // Measured on A6's real segment: 960 pixels of the trail move when its row is hovered — and
     // it was 0 until this step, because `repaint` drew both rails and the stage and never the strip.
-    expect(differing(cold, pixels(acc)), "the trail did not redraw for the hovered piece").toBeGreaterThan(300);
+    expect(differing(cold, first), "the trail did not redraw for the hovered piece").toBeGreaterThan(300);
+
+    // **And the SECOND row emphasises a different part of the trail.** A hover carries a piece id
+    // and the walk knows piece indices, so something has to translate — and a translation that
+    // always answered 0 would light the first piece whichever row was hovered, with the first
+    // assertion above still green. Measured: 960 pixels differ between the two highlights.
+    const second = await hoverRow(1);
+    expect(differing(first, second), "both rows emphasise the same segments").toBeGreaterThan(300);
   });
 
   it("SHOWS THE READOUT over the stage and not over the strip", async () => {

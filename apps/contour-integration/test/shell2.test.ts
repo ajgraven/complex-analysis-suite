@@ -1285,10 +1285,16 @@ describe("the hover: one id, three surfaces — M8 step 1.10", () => {
   });
 
   it("does NOT clear it mid-gesture, when the drag leaves the canvas under pointer capture", () => {
+    // **The first draft was vacuous and a sweep said so.** It pressed without moving first, so the
+    // hover was still `NO_HOVER` and "unchanged" and "cleared" were the same object — the mutant
+    // that removes the gesture guard passed. The move is what gives the assertion something to lose.
     const { app, ink } = mountStage();
     const [x, y] = onCircle(app, 0.4);
+    ink.dispatchEvent(pointer("pointermove", x, y, { buttons: 0 }));
     ink.dispatchEvent(pointer("pointerdown", x, y));
     const held = app.session().hover;
+    expect(held.piece, "the pointer is not on the contour — the test has nothing to hold").not.toBeNull();
+    expect(app.session().gesture, "no gesture started, so there is nothing to protect").not.toBe("none");
     ink.dispatchEvent(pointer("pointerleave", -50, -50));
     expect(app.session().hover).toEqual(held);
   });
@@ -1315,6 +1321,28 @@ describe("the hover: one id, three surfaces — M8 step 1.10", () => {
     ink.dispatchEvent(pointer("pointerleave", x, y, { buttons: 0 }));
     await drawn();
     expect(find()).toBeNull();
+  });
+
+  it("names the piece of the contour ON SCREEN, not of the parked sandbox curve", async () => {
+    // M6.1's trap, in the readout: under a record the drawn contour is the RECORD's output while
+    // `state.contour` is still the reader's parked circle. A readout reading the state would hover
+    // A6's semicircle and print "the circle |z - a| = R" — a name for a curve that is not on screen.
+    const { root, app } = mountCold();
+    for (const [prop, value] of [["clientWidth", 900], ["clientHeight", 600]] as const) {
+      Object.defineProperty(q(root, ".stage2"), prop, { configurable: true, get: () => value });
+    }
+    const canvas = q<HTMLCanvasElement>(root, "canvas.ink");
+    stubPointer(canvas);
+    // A6's real segment runs along the real axis through the origin.
+    const [x, y] = screenOf(app, [0.5, 0]);
+    canvas.dispatchEvent(pointer("pointermove", x, y, { buttons: 0 }));
+    await drawn();
+    const text = root.querySelector('[data-testid="readout"]')?.textContent ?? "";
+    expect(text, "no readout at all").not.toBe("");
+    const parked = app.currentState().contour.pieces[0].name;
+    expect(parked).toContain("circle");
+    expect(text, "the readout named the PARKED contour's piece").not.toContain("circle");
+    expect(text).toContain("segment");
   });
 
   it("gives the readout NO number at a pole, rather than `Infinity`", async () => {
