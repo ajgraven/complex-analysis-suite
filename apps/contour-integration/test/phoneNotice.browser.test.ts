@@ -94,6 +94,43 @@ describe("the phone notice", () => {
     expect(phone.doc.querySelector(".phoneNotice a")).toBeNull();
   });
 
+  it("styles the DOCUMENT, which `app.css` used to and nothing did after it went", () => {
+    // **The regression this step nearly shipped.** Every rule in `theme.css` is scoped under
+    // `.shell2`, which was right while two shells shared a page — and left `body` on the browser's
+    // serif the moment `app.css` was deleted, so the notice, which is outside the grid by
+    // construction, was drawn in it. Asserted on the frame's own `body` rather than on an element,
+    // because what was missing was the document's own typography.
+    const body = phone.win.getComputedStyle(phone.doc.body);
+    expect(body.fontFamily, "the document has no font of its own").toContain("Inter");
+    expect(body.margin).toBe("0px");
+    // The notice inherits it rather than declaring one, which is what makes the fix a document rule
+    // and not a patch on this one element.
+    const p = phone.doc.querySelector(".phoneNotice p");
+    if (p === null) throw new Error("no notice paragraph");
+    expect(phone.win.getComputedStyle(p).fontFamily).toBe(body.fontFamily);
+  });
+
+  it("KEEPS the link current, not only correct at boot", () => {
+    // Two writers: one at construction, one in `writeHash`. Dropping the second leaves the notice
+    // showing the address the reader arrived on — which on a phone is the one thing it is for, and
+    // is wrong the moment anything moves. Driven on the WIDE frame, because the media query decides
+    // what is displayed and not what is written.
+    const link = (): string => wide.doc.querySelector(".phoneLink")?.textContent ?? "";
+    const before = link();
+    const record = wide.doc.querySelector<HTMLButtonElement>('[data-testid="record"]');
+    expect(record, "no record button to move the state with").not.toBeNull();
+    const sandbox = wide.doc.querySelector<HTMLButtonElement>('[data-testid="sandbox"]');
+    sandbox?.click();
+    return new Promise<void>((res) => {
+      // `syncHash` coalesces on a 250 ms timer (M6.2's first finding), so the wait is the app's own.
+      wide.win.setTimeout(() => {
+        expect(link(), "the notice's link did not follow the state").not.toBe(before);
+        expect(link()).toBe(wide.win.location.href);
+        res();
+      }, 500);
+    });
+  });
+
   it("puts NO second `<h1>` in the document", () => {
     // `display: none` takes the hidden half out of the accessibility tree, so only one heading is
     // ever exposed — but `test/shell2.test.ts` asserts the outline structurally over the DOM, and a

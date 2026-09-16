@@ -11,6 +11,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import { mountShell2 } from "../src/shell/app.js";
+import { plotToScreen } from "../src/kernel/camera.js";
 
 import "katex/dist/katex.min.css";
 import "@cas/ui/nav.css";
@@ -212,6 +213,104 @@ describe("the two marks the cutover's parity sweep found missing", () => {
     const during = pixels(ink);
     expect(app.session().pen?.nodes, "the clicks placed no vertices").toHaveLength(3);
     expect(differing(before, during)).toBeGreaterThan(0);
+
+    // The draft's DASHES are asserted in the next test, which has one straight segment whose two
+    // ends it knows exactly — three snapped clicks do not give a geometry a walk can follow without
+    // the test carrying a second copy of the pen.
+  });
+
+  it("draws a TWO-vertex path, which is one segment and the commonest thing a reader starts with", async () => {
+    // A guard of `nodes.length >= 3` would leave the first segment invisible — the moment a reader
+    // most needs to see that the pen is doing anything.
+    //
+    // **Which moment that is took measuring.** Two clicks do NOT reach it: `penClick` sets the
+    // pending end to the vertex it just placed, so two placed vertices are THREE nodes and a
+    // `>= 3` guard draws the segment anyway. The state the guard actually decides is the one
+    // between the first click and the second — one placed vertex and the rubber band to the
+    // cursor — and that is also the first thing the pen ever shows.
+    const { root, app } = mount();
+    const ink = root.querySelector<HTMLCanvasElement>("canvas.ink");
+    if (ink === null) throw new Error("no ink canvas");
+    app.actions().toSandbox();
+    await settled();
+    const before = pixels(ink);
+    app.stage().penStart();
+    const box = ink.getBoundingClientRect();
+    // **In a CORNER**, which took three attempts to get right: the committed circle fills most of
+    // this canvas, so a window on a segment across the middle is a window on the circle — and the
+    // pointer events move `session.hover`, which re-strokes a hovered piece at 4 px against 2.5, so
+    // the window gained pixels with the draft not drawn at all. Up here the control reads 0.
+    ink.dispatchEvent(pointerAt("pointerdown", box.left + box.width * 0.1, box.top + box.height * 0.12, 1));
+    ink.dispatchEvent(pointerAt("pointermove", box.left + box.width * 0.3, box.top + box.height * 0.14, 0));
+    await settled();
+    const draft = app.session().pen;
+    if (draft === null || draft === undefined) throw new Error("the pen is not out");
+    expect(draft.nodes).toHaveLength(1);
+    const pending = draft.at;
+    if (pending === null) throw new Error("the pen has no pending end");
+
+    // **At the segment's OWN midpoint**, read off the placed vertex and the pending end rather than
+    // off the event positions: the pen snaps, so where the reader pressed and where the vertex
+    // landed are two different points.
+    //
+    // The first draft asked only that SOME pixel had changed, and a sweep showed it passing with the
+    // draft not drawn at all — the pointer events move `session.hover`, which re-emphasises a piece
+    // of the committed contour, so the canvas differs whatever the pen did.
+    const dpr = ink.width / (box.width || ink.width);
+    const vp = { width: ink.width / dpr, height: ink.height / dpr };
+    const mid: [number, number] = [
+      (draft.nodes[0].at[0] + pending[0]) / 2,
+      (draft.nodes[0].at[1] + pending[1]) / 2,
+    ];
+    const [mx, my] = plotToScreen(mid[0], mid[1], app.currentState().view, vp);
+    // A 3 px window, because the stroke is 4.5 px of halo about a line through this point and the
+    // device ratio rounds. **Counted BEFORE and after**, because the committed contour runs near
+    // here too — measured, a window across the middle is already 34 pixels inked with no pen out at
+    // all, so an absolute count is a count of the circle.
+    const window = (px: Uint8ClampedArray): number => {
+      let n = 0;
+      for (let dx = -3; dx <= 3; dx++) {
+        for (let dy = -3; dy <= 3; dy++) {
+          const i = (Math.round((my + dy) * dpr) * ink.width + Math.round((mx + dx) * dpr)) * 4;
+          if (px[i + 3] > 8) n++;
+        }
+      }
+      return n;
+    };
+    const after = pixels(ink);
+    expect(window(before), "the control window is not clear — it measures the contour").toBe(0);
+    expect(window(after), "the one-segment draft is not drawn").toBeGreaterThan(5);
+
+    // **And it is DASHED**, which took a third instrument. A path in progress is dashed because it
+    // is not a contour — no roles, no value, no verdict — and drawing it like a finished piece would
+    // claim otherwise. Two earlier attempts could not see it. INK: the draft lays down 1,831 pixels
+    // dashed and 1,907 solid, a 4% difference, because most of that ink is the halo's WIDTH rather
+    // than its length. RUNS OF INK along the segment: one run whichever way it was stroked, and the
+    // reason is in `drawPenPath` — the halo is stroked with the same `[6, 4]` dash and `lineCap`
+    // `"round"`, so each 4 px gap is closed by two 2.25 px caps and the halo is continuous.
+    //
+    // What the gaps do leave is the CORE colour: `penPreview` on a dash, halo alone between. So the
+    // walk compares the centreline against a point 1.6 px off it — inside the 4.5 px halo, outside
+    // the 1.8 px core — and counts the runs where the two differ. Measured: 13 over 119 px, which
+    // is the dash period of 10, against 1 with `setLineDash` removed.
+    const [ax, ay] = plotToScreen(draft.nodes[0].at[0], draft.nodes[0].at[1], app.currentState().view, vp);
+    const [bx, by] = plotToScreen(pending[0], pending[1], app.currentState().view, vp);
+    const len = Math.hypot(bx - ax, by - ay);
+    const [ux, uy] = [(bx - ax) / len, (by - ay) / len];
+    const rgb = (x: number, y: number): readonly number[] => {
+      const i = (Math.round(y * dpr) * ink.width + Math.round(x * dpr)) * 4;
+      return [after[i], after[i + 1], after[i + 2]];
+    };
+    let runs = 0;
+    let on = false;
+    for (let d = 6; d <= len - 6; d += 0.5) {
+      const [cx, cy] = [ax + ux * d, ay + uy * d];
+      const [c, h] = [rgb(cx, cy), rgb(cx - uy * 1.6, cy + ux * 1.6)];
+      const core = Math.max(...c.map((v, k) => Math.abs(v - h[k]))) > 24;
+      if (core && !on) runs++;
+      on = core;
+    }
+    expect(runs, "the draft is drawn as one unbroken line — it is not dashed").toBeGreaterThanOrEqual(5);
   });
 
   it("DRAWS the cut system's handles, which were hit-testable and invisible", async () => {
@@ -243,5 +342,35 @@ describe("the two marks the cutover's parity sweep found missing", () => {
     await settled();
     const held = pixels(ink);
     expect(differing(plain, held), "holding a branch handle changes nothing on the canvas").toBeGreaterThan(0);
+
+    // **And that it is a SQUARE**, which the assertion above cannot see: a diamond emphasises just
+    // as visibly. The mark's whole job is to be told apart from the diamond a cut VERTEX carries and
+    // from the four round things on this canvas, so the shape is the content, not a decoration.
+    //
+    // **The instrument is the CORNER, and it measures a CHANGE rather than ink.** "Was clear, now
+    // inked" is not available here — the keyhole's inner circle and its two lips meet at the origin,
+    // so the 25 px about the branch point are already ink in both frames, measured. What the two
+    // frames do not share is the mark itself: holding it takes `r` from 5 to 7, so a square's halo
+    // sweeps the diagonal at (±8, ±8) and a diamond's does not come within 6 px of it (its halo
+    // stops at |dx| + |dy| ≈ 9.8). Measured on the keyhole: 4 corners of 4 change when the mark is
+    // held, and 0 with `square` forced false.
+    const box = ink.getBoundingClientRect();
+    const dpr = ink.width / (box.width || ink.width);
+    const vp = { width: ink.width / dpr, height: ink.height / dpr };
+    const [hx, hy] = plotToScreen(full.branch.points[0].at[0], full.branch.points[0].at[1], full.view, vp);
+    const changedAt = (x: number, y: number): boolean => {
+      const i = (Math.round(y * dpr) * ink.width + Math.round(x * dpr)) * 4;
+      return (
+        plain[i] !== held[i] ||
+        plain[i + 1] !== held[i + 1] ||
+        plain[i + 2] !== held[i + 2] ||
+        plain[i + 3] !== held[i + 3]
+      );
+    };
+    let corners = 0;
+    for (const [sx, sy] of [[1, 1], [1, -1], [-1, 1], [-1, -1]] as const) {
+      if (changedAt(hx + 8 * sx, hy + 8 * sy)) corners++;
+    }
+    expect(corners, "the held mark has no corners — it is not a square").toBeGreaterThanOrEqual(3);
   });
 });
