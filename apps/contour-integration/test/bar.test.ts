@@ -29,6 +29,7 @@ import { bar } from "../src/shell2/bar.js";
 import type { ShellActions } from "../src/shell2/cards/card.js";
 import { patch } from "../src/shell2/dom.js";
 import { defaultSession } from "../src/shell2/session.js";
+import { STAGE_MODE_LABELS, STAGE_MODES } from "../src/ui/stage/mode.js";
 
 /** Actions that record what was asked for, so a control can be pressed and the ask inspected. */
 function spyActions(): ShellActions & { calls: string[] } {
@@ -49,6 +50,7 @@ function spyActions(): ShellActions & { calls: string[] } {
     penCommit: (closed) => calls.push(`pen:commit:${closed}`),
     setBranch: (b) => calls.push(`branch:${b.points.length}:${b.cuts.length}:${b.shadow === true}:${b.sheet}`),
     setIso: (on) => calls.push(`iso:${on}`),
+    setStageMode: (m) => calls.push(`stageMode:${m}`),
     declare: (id) => calls.push(`declare:${id}`),
     undeclare: () => calls.push("undeclare"),
     setDeclaration: (d, cut) =>
@@ -103,6 +105,10 @@ const buttonsOf = (host: HTMLElement): HTMLButtonElement[] => [...host.querySele
 
 const segments = (host: HTMLElement): HTMLButtonElement[] => [
   ...host.querySelectorAll<HTMLButtonElement>('[data-testid="mode"] button'),
+];
+
+const stageSegments = (host: HTMLElement): HTMLButtonElement[] => [
+  ...host.querySelectorAll<HTMLButtonElement>('[data-testid="stageMode"] button'),
 ];
 
 /** What a reader actually SEES: KaTeX's MathML sibling carries the raw LaTeX, so it is stripped. */
@@ -275,10 +281,12 @@ describe("what a press asks for", () => {
   it("asks the MATCHING action exactly once, for every control in the bar", () => {
     // The whole array with `toEqual`, not `toContain`: `toContain` passes when a press also fires a
     // second action, and "Copy link wired to `copyFigure`" survives any test that only checks that
-    // something happened. Nine controls, nine asks, in the order a reader tabs through them.
+    // something happened. Thirteen controls, thirteen asks, in the order a reader tabs through them
+    // — which is also the assertion that the stage-mode segments went in beside the Sandbox button
+    // rather than into the tool cluster, since the order here is DOM order.
     const { host, actions } = barOf(gallery("circle-linear-cos"));
     const buttons = buttonsOf(host);
-    expect(buttons, "a control has appeared or vanished").toHaveLength(9);
+    expect(buttons, "a control has appeared or vanished").toHaveLength(13);
     for (const b of buttons) b.click();
     expect(actions.calls).toEqual([
       "mode:explore",
@@ -286,6 +294,10 @@ describe("what a press asks for", () => {
       "mode:drill",
       "frontDoor",
       "toSandbox",
+      "stageMode:quiet",
+      "stageMode:full",
+      "stageMode:iso",
+      "stageMode:textbook",
       "contrasts:true",
       "fit",
       "copyLink",
@@ -353,8 +365,59 @@ describe("the bar's shape", () => {
     expect(RECORD_IDS.length, "the gallery is complete at 28 records (M5.8)").toBeGreaterThanOrEqual(28);
     for (const id of RECORD_IDS) {
       const { host } = barOf(gallery(id));
-      expect(buttonsOf(host), `${id}: the bar lost a control`).toHaveLength(9);
+      // Nine until M8 step 1.9, thirteen with the stage-mode control's four segments.
+      expect(buttonsOf(host), `${id}: the bar lost a control`).toHaveLength(13);
       expect(host.querySelector('[data-testid="record"] .katex'), `${id}: no typeset target`).not.toBeNull();
+    }
+  });
+});
+
+describe("the bar's stage-mode control — M8 step 1.9", () => {
+  it("offers every mode the codec knows, in the module's own order", () => {
+    // Read from `STAGE_MODES` rather than spelled out here, because the list is the thing that must
+    // not fork: a mode present in the bar and absent from `viewState.ts` is a control whose state
+    // cannot be shared, and a mode in the codec and not in the bar is a link that opens into a
+    // picture the reader cannot get back out of.
+    const { host } = barOf(sandbox());
+    expect(stageSegments(host).map((b) => b.textContent)).toEqual(
+      STAGE_MODES.map((m) => STAGE_MODE_LABELS[m].label),
+    );
+  });
+
+  it("carries `aria-pressed` on EVERY segment, with exactly one taken", () => {
+    // The same trap as the mode control's, for the same reason: `dom.ts` maps a boolean prop to
+    // attribute PRESENCE, so a `false` would remove the attribute and announce three plain buttons
+    // beside one toggle where the truth is one control with four positions.
+    for (const mode of STAGE_MODES) {
+      const { host } = barOf(sandbox({ stageMode: mode }));
+      const segs = stageSegments(host);
+      for (const b of segs) {
+        expect(b.getAttribute("aria-pressed"), `${b.textContent} carries no aria-pressed`).toMatch(/^(true|false)$/);
+      }
+      const pressed = segs.filter((b) => b.getAttribute("aria-pressed") === "true");
+      expect(pressed.map((b) => b.textContent)).toEqual([STAGE_MODE_LABELS[mode].label]);
+    }
+  });
+
+  it("asks for the mode it names, and for no other", () => {
+    for (const mode of STAGE_MODES) {
+      const { host, actions } = barOf(sandbox());
+      const seg = stageSegments(host).find((b) => b.textContent === STAGE_MODE_LABELS[mode].label);
+      seg?.click();
+      expect(actions.calls).toEqual([`stageMode:${mode}`]);
+    }
+  });
+
+  it("names each position by what it DOES, not only by its label", () => {
+    // `title` is not an accessible name, so the name carries both halves — the mode control's own
+    // idiom, and the reason a screen-reader user hears "the phase portrait muted, so the contour is
+    // the subject" rather than the single word "Quiet".
+    const { host } = barOf(sandbox());
+    for (const [i, mode] of STAGE_MODES.entries()) {
+      const seg = stageSegments(host)[i];
+      expect(seg.getAttribute("aria-label")).toBe(
+        `${STAGE_MODE_LABELS[mode].label} — ${STAGE_MODE_LABELS[mode].hint}`,
+      );
     }
   });
 });

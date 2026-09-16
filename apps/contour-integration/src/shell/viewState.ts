@@ -37,6 +37,7 @@ import type { Bindings } from "../families/schema.js";
 import { effectiveBranch, type BranchChoice, type BranchPoint, type CutArc } from "../kernel/branch/model.js";
 import type { Cx } from "../kernel/geom.js";
 import type { ContrastMode } from "../ui/accumulator.js";
+import { isStageMode, type StageMode } from "../ui/stage/mode.js";
 import { defaultState, offeredCorpus, type ContourSource, type DrillState, type ShellState } from "./state.js";
 import { DRILL_STAGES, taskById } from "./drill.js";
 import { TEMPLATES, type TemplateId } from "./templates.js";
@@ -162,6 +163,13 @@ interface Wire {
   readonly k?: ContrastMode;
   readonly s?: number;
   readonly i?: boolean;
+  /**
+   * `stageMode` — what the stage draws behind the contour (M8 step 1.9).
+   *
+   * A value with a default rather than a flag, so it goes through `put` and `quiet` costs no bytes.
+   * Filed with the view for the reason `k` and `i` are: it decides what is SHOWN and never a number.
+   */
+  readonly sm?: StageMode;
   /**
    * `drill` — `[task id, rung]`, the faded drill's open rung.
    *
@@ -424,6 +432,7 @@ export function encodeShell(state: ShellState): EncodeResult {
   put("k", state.contrast, d.contrast);
   put("s", state.scrub, d.scrub);
   put("i", state.iso ?? undefined, undefined);
+  put("sm", state.stageMode, d.stageMode);
   if (state.drill !== null) wire.dr = [state.drill.task, state.drill.stage] as const;
   // Optional, and absent when false — a worked example is a thing to share, and the default costs
   // no bytes. `put` is not used because the wire field is a flag rather than a value with a default.
@@ -677,6 +686,13 @@ export function decodeShell(hashOrLink: string): DecodeResult | null {
     if (typeof w.i !== "boolean") return { ok: false, reason: "the modulus-contour flag in this link is not a boolean" };
     iso = w.i;
   }
+  let stageMode = base.stageMode;
+  if (w.sm !== undefined) {
+    if (!isStageMode(w.sm)) {
+      return { ok: false, reason: `this link names the stage mode '${String(w.sm)}', which this build does not have` };
+    }
+    stageMode = w.sm;
+  }
   let drill = base.drill;
   if (w.dr !== undefined) {
     const d = w.dr;
@@ -712,6 +728,7 @@ export function decodeShell(hashOrLink: string): DecodeResult | null {
       contrast,
       scrub,
       iso,
+      stageMode,
       drill,
       // `=== 1` rather than truthiness: the wire is `1` or absent, and a link carrying anything else
       // there is a link this codec did not mint. `envelope` has already refused a foreign app, so

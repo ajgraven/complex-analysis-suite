@@ -9,6 +9,7 @@
 // **The card builds its own `<section>`**, heading included, so the rail is a `map` rather than a
 // list of special cases — and the page's heading outline (one of the four structural invariants
 // `test/shell2.test.ts` asserts) holds by construction rather than by each card remembering.
+import type { StageMode } from "../../ui/stage/mode.js";
 import { cardTitle, type CardId } from "../../engine/vocabulary.js";
 import type { BranchChoice } from "../../kernel/branch/model.js";
 import type { PoleReport } from "../../kernel/poles.js";
@@ -60,6 +61,14 @@ export interface ShellActions {
   readonly setBranch: (next: BranchChoice) => void;
   /** The modulus-contour overlay. `null` in the state means "whatever the determination implies". */
   readonly setIso: (on: boolean) => void;
+  /**
+   * Which portrait the stage draws — `ui/stage/mode.ts`.
+   *
+   * A VIEW action: it cannot reach a number, and `resolveState` does not read the field. It is an
+   * action rather than a session write because the mode is in the state and therefore in a link —
+   * what the reader is LOOKING at is part of what a permalink shares.
+   */
+  readonly setStageMode: (mode: StageMode) => void;
   /** Declare a factor on a branch point: the box then holds `R(z)`. */
   readonly declare: (pointId: string) => void;
   /** Put the whole integrand back in the box — the expression that was TYPED, not the cofactor. */

@@ -48,6 +48,7 @@ import { findPoles, type PoleReport } from "../kernel/poles.js";
 import { asSummationKernel } from "../kernel/summationKernel.js";
 import { DEFAULT_VIEW, type View } from "../kernel/camera.js";
 import type { ContrastMode } from "../ui/accumulator.js";
+import { DEFAULT_STAGE_MODE, type StageMode } from "../ui/stage/mode.js";
 import { Frac } from "@cas/exact";
 import { TEMPLATES, type TemplateId } from "./templates.js";
 
@@ -125,6 +126,20 @@ export interface ShellState {
   readonly scrub: number;
   /** Modulus contours: `null` follows the context, a boolean is the reader's own choice. */
   readonly iso: boolean | null;
+  /**
+   * What the stage draws behind the contour — M8 step 1.9.
+   *
+   * **A VIEW field**, and provably one: {@link resolveState} does not read it, so no position of the
+   * control can move a number. It is in the codec anyway, because what the reader is LOOKING at is
+   * part of what a permalink shares — a textbook plate and a full-chroma portrait are two different
+   * pictures of the same argument, and the one the sharer chose is the one that should open.
+   *
+   * Unlike {@link iso} beside it — a tri-state `boolean | null` whose `null` means "follow the
+   * context" — this is a plain enum with a REAL default. There are four positions and "follow the
+   * context" is not one of them: `quiet` is a choice the app makes and states
+   * (`ui/stage/mode.ts`), not an absence to be filled in later by whatever is on screen.
+   */
+  readonly stageMode: StageMode;
 
   // ── the teaching layer — what is MASKED, never a number ────────────────────────────────────
   /**
@@ -201,6 +216,7 @@ export function defaultState(contour: Contour): ShellState {
     contrast: "none",
     scrub: 1,
     iso: null,
+    stageMode: DEFAULT_STAGE_MODE,
     drill: null,
     workedExample: false,
     sandboxContour: contour,

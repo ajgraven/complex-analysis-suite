@@ -102,6 +102,7 @@ import {
 } from "./state.js";
 import { GLStage } from "../ui/stage/glStage.js";
 import { DARK_INK } from "../ui/inkTheme.js";
+import { DEFAULT_STAGE_MODE } from "../ui/stage/mode.js";
 import { drawContour, PIECE_COLOURS } from "../ui/stage/ink.js";
 import { CONTRAST_LABELS, drawAccumulator, type ContrastMode } from "../ui/accumulator.js";
 import { CONTRAST_CELLS, contrastTable } from "./contrastGrid.js";
@@ -1873,10 +1874,11 @@ export function mountApp(root: Element): ShellHandle {
       // The box, verbatim — under a declaration this is the COFACTOR `R(z)` and not the integrand.
       expr: input.value,
       declaration,
-      // The OLD shell has no worked-example mode; it reports the field's default so that a state
-      // projected here and applied to shell2 is a state shell2 understands. It goes away at 1.12
-      // with the rest of this file.
+      // The OLD shell has no worked-example mode and no stage-mode control; each reports its
+      // field's default so that a state projected here and applied to shell2 is a state shell2
+      // understands. Both go away at 1.12 with the rest of this file.
       workedExample: false,
+      stageMode: DEFAULT_STAGE_MODE,
       beforeDeclaration: beforeDeclarationSrc,
       branch,
       contour,

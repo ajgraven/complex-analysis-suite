@@ -24,7 +24,8 @@ import type { DeclaredProduct } from "../kernel/branch/declared.js";
 import type { Resolved } from "../kernel/geom.js";
 import type { PoleReport } from "../kernel/poles.js";
 import { plotToScreen, type View, type Viewport } from "../kernel/camera.js";
-import { DARK_INK, type InkTheme } from "../ui/inkTheme.js";
+import { DARK_INK, LIGHT_INK, type InkTheme } from "../ui/inkTheme.js";
+import { drawPoleGlyph, drawTextbookPlate } from "../ui/stage/ink.js";
 import { drillMask } from "./drillPanel.js";
 import { drawContour } from "../ui/stage/ink.js";
 import { GLStage } from "../ui/stage/glStage.js";
@@ -206,6 +207,20 @@ export function createStageView(host: HTMLElement): StageView {
       const [x, y] = plotToScreen(pole.at[0], pole.at[1], view, vp);
       if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
       const hot = d.session.hover.piece === `pole:${pole.at[0]},${pole.at[1]}`;
+      // **⊗ on the textbook plate, a ring everywhere else.** Not decoration: on a plate with no
+      // portrait behind it the singularities are the only thing marking where the function is not
+      // defined, and a bare ring there is indistinguishable from a grabbable handle — which
+      // `drawContour` also draws as a ring, on the same canvas. Over a portrait the pole is already
+      // the white anchor the shader paints, so the ring is an annotation on something visible.
+      if (d.state.stageMode === "textbook") {
+        drawPoleGlyph(ctx, x, y, {
+          theme: t,
+          r: POLE_R,
+          hot,
+          label: pole.order > 1 ? `order ${pole.order}` : undefined,
+        });
+        continue;
+      }
       ctx.beginPath();
       ctx.arc(x, y, POLE_R, 0, Math.PI * 2);
       ctx.strokeStyle = t.haloStrong;
@@ -241,10 +256,29 @@ export function createStageView(host: HTMLElement): StageView {
     ctx.stroke();
   }
 
+  /**
+   * The ink layer's palette, which the STAGE MODE can override.
+   *
+   * **`textbook` is light in both app themes**, because it is imitating a printed figure and a
+   * printed figure is on paper — so the strokes have to be the ones `inkTheme.ts` darkened for a
+   * light ground (measured there: the dark hues sit at 1.61:1 to 2.27:1 against `#f7f8fa` where the
+   * light ones give 5.11:1 to 7.22:1). An explicit `d.theme` still wins, so a caller that has
+   * already chosen a palette — the figure export — is not overruled by the mode.
+   */
+  const inkTheme = (d: StageDraw): InkTheme =>
+    d.theme ?? (d.state.stageMode === "textbook" ? LIGHT_INK : DARK_INK);
+
+  /** `#rrggbb` as three floats in [0, 1], for a GL clear, which cannot read a CSS colour. */
+  function paperRgb(hex: string): [number, number, number] {
+    const n = Number.parseInt(hex.replace("#", ""), 16);
+    return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+  }
+
   function drawNow(d: StageDraw): void {
     const vp = viewport();
-    const t = d.theme ?? DARK_INK;
+    const t = inkTheme(d);
     const view = d.state.view;
+    const textbook = d.state.stageMode === "textbook";
 
     // **The overlay first, and unconditionally.** It is DOM, and the two returns below are both
     // about CANVAS — an absent 2D context, and an empty resolution. Drawing it at the end made a
@@ -257,7 +291,17 @@ export function createStageView(host: HTMLElement): StageView {
     const empty = d.resolution.kind === "empty";
     if (stage !== null) {
       const program = programOf(d.state, d.resolution);
-      if (empty || program === null) {
+      if (textbook) {
+        // **No portrait at all, and no program run to produce one.** The plate's backdrop is paper,
+        // which is a clear; running the fragment program under `uMode == 3` would paint the same
+        // pixels at the cost of evaluating the integrand once per pixel to throw the answer away.
+        // The buffer is still SIZED, because a clear of a stale buffer is a plate of the wrong shape.
+        stage.resize(vp);
+        stage.clearTo(paperRgb(t.paper));
+        // The key is kept: the program built for this integrand is still the right one, so leaving
+        // textbook mode redraws without a relink. It is cleared only when the integrand goes away.
+        if (empty || program === null) programKey = null;
+      } else if (empty || program === null) {
         if (programKey !== null) {
           stage.clear();
           programKey = null;
@@ -267,7 +311,13 @@ export function createStageView(host: HTMLElement): StageView {
           stage.setIntegrand(program.ast, program.declared);
           programKey = program.key;
         }
-        stage.render(view, vp, d.state.iso === true ? { iso: ISO_CONTOURS } : {});
+        stage.render(view, vp, {
+          mode: d.state.stageMode,
+          // The reader's modulus-contour toggle is INDEPENDENT of the mode (plan §1.9), so it rides
+          // alongside rather than being folded into it: `iso` the mode draws phase isolines every
+          // 30°, `iso` the toggle draws |f| contours, and a reader may want either, both or neither.
+          ...(d.state.iso === true ? { iso: ISO_CONTOURS } : {}),
+        });
       }
     }
 
@@ -302,8 +352,29 @@ export function createStageView(host: HTMLElement): StageView {
         emphasis: d.session.gesture === "handle" && hoveredHandle === i ? "grabbed" : hoveredHandle === i ? "hover" : "none",
       })),
       cuts: hidden ? [] : drawnCuts(effectiveBranch(d.state.branch), view, vp),
+      // Hatching is the app's mark for a cut; the plate takes the printed figure's dashes instead.
+      // `ink.ts`'s own note on `dashCuts` records that this collides with two other meanings of a
+      // dash and why it is survivable here.
+      dashCuts: textbook,
     });
     drawPoles(ctx, d, view, vp, t);
+
+    // **The textbook plate's furniture goes UNDER everything, and is drawn LAST.** `drawContour`
+    // opens with `clearRect` — which M7.3 made a rule rather than an accident, because masking by
+    // skipping the call left the previous frame's contour standing — so the grid and the axes
+    // cannot be laid down before it. `destination-over` is what resolves that without a second
+    // clearing convention: the plate is composited beneath the pixels already on the canvas, so the
+    // contour, its arrowheads, the cuts and the pole glyphs all keep their halos and nothing a
+    // 1 px rule crosses is redrawn over.
+    //
+    // Only in this mode: in the three portrait modes the plane IS the portrait and the grid is the
+    // shader's `uGridStrength`, drawn in lightness so it can never read as phase.
+    if (textbook) {
+      ctx.save();
+      ctx.globalCompositeOperation = "destination-over";
+      drawTextbookPlate(ctx, view, vp, { theme: t, grid: true });
+      ctx.restore();
+    }
   }
 
   let pending = 0;

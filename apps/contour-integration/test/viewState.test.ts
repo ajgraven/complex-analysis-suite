@@ -63,6 +63,12 @@ function verdict(s: ShellState): string {
   return out.join("\n");
 }
 
+/** The wire object inside a hash — for the claims that are about a key being ABSENT. */
+function payloadOf(hash: string): Record<string, unknown> {
+  const env = JSON.parse(atob(hash.slice(4).replace(/-/g, "+").replace(/_/g, "/"))) as Record<string, unknown>;
+  return env.state as Record<string, unknown>;
+}
+
 /** Encode, decode into a FRESH state, and hand back both the decoded state and its hash. */
 function roundTrip(s: ShellState): { state: ShellState; hash: string } {
   const enc = encodeShell(s);
@@ -274,6 +280,38 @@ describe("the gate: the sandbox, with a declared branch", () => {
     expect(back.iso).toBe(true);
     expect(verdict(back)).toBe(verdict(s));
   });
+
+  it("carries the STAGE MODE, which decides the picture and no number — M8 step 1.9", () => {
+    // A view field like the three above, and carried for the same reason: a textbook plate and a
+    // full-chroma portrait are two pictures of one argument, and the one the sharer chose is the
+    // one that should open.
+    for (const mode of ["full", "iso", "textbook"] as const) {
+      const s: ShellState = { ...base(), stageMode: mode };
+      const back = roundTrip(s).state;
+      expect(back.stageMode, mode).toBe(mode);
+      expect(verdict(back), mode).toBe(verdict(s));
+    }
+  });
+
+  it("the DEFAULT stage mode costs no bytes, and an old link decodes to it", () => {
+    // `put`'s whole point: `quiet` is absent from the wire, so every link minted before step 1.9 is
+    // already a link that names it. Asserted on the PAYLOAD rather than on the hash length, because
+    // two hashes of equal length can differ, and because an absent key is the claim.
+    const quiet = encodeShell({ ...base(), stageMode: "quiet" });
+    expect(quiet.ok).toBe(true);
+    if (!quiet.ok) return;
+    expect(Object.prototype.hasOwnProperty.call(payloadOf(quiet.hash), "sm")).toBe(false);
+    // And it is the key's absence and not a codec that never writes it: a non-default does appear.
+    const loud = encodeShell({ ...base(), stageMode: "textbook" });
+    expect(loud.ok).toBe(true);
+    if (loud.ok) expect(payloadOf(loud.hash).sm).toBe("textbook");
+
+    // The other half — a link with no `sm` at all opens quiet rather than on whatever is on screen.
+    const back = decodeShell(quiet.hash);
+    expect(back).not.toBeNull();
+    if (back === null || !back.ok) throw new Error("expected a decode");
+    expect(back.state.stageMode).toBe("quiet");
+  });
 });
 
 describe("a link that cannot be honoured refuses BY NAME", () => {
@@ -358,6 +396,7 @@ describe("a link that cannot be honoured refuses BY NAME", () => {
     expect(refusal(withState({ s: 2 }))).toContain("[0, 1]");
     expect(refusal(withState({ k: "rainbow" }))).toContain("rainbow");
     expect(refusal(withState({ i: "yes" }))).toContain("boolean");
+    expect(refusal(withState({ sm: "neon" }))).toContain("neon");
     expect(refusal(withState({ bi: { a: null } }))).toContain("'a'");
   });
 

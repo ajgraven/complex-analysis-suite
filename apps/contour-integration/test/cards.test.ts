@@ -50,6 +50,7 @@ function spyActions(): ShellActions & { calls: string[] } {
     penCommit: (closed) => calls.push(`pen:commit:${closed}`),
     setBranch: (b) => calls.push(`branch:${b.points.length}:${b.cuts.length}:${b.shadow === true}:${b.sheet}`),
     setIso: (on) => calls.push(`iso:${on}`),
+    setStageMode: (m) => calls.push(`stageMode:${m}`),
     declare: (id) => calls.push(`declare:${id}`),
     undeclare: () => calls.push("undeclare"),
     setDeclaration: (d, cut) => calls.push(`decl:${d.sign}:${d.logPower}:${d.window[0].n}/${d.window[0].d}:${cut === undefined ? "nocut" : "cut"}`),

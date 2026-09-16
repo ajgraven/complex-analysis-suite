@@ -266,6 +266,7 @@ export function mountShell2(root: Element): Shell2Handle {
     // ── the branch cuts ───────────────────────────────────────────────────────────────────
     setBranch: (next) => commit({ ...state, branch: next }, "edit"),
     setIso: (on) => commit({ ...state, iso: on }, "edit"),
+    setStageMode: (mode) => commit({ ...state, stageMode: mode }, "edit"),
     declare: (pointId) =>
       commit(
         {

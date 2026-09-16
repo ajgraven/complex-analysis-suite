@@ -69,7 +69,11 @@
   height: calc(100vh - var(--cas-nav-h, 0px));
   min-height: 0;
   grid-template-columns: var(--rail-left) minmax(0, 1fr) var(--rail-right);
-  grid-template-rows: var(--bar2) minmax(0, 1fr) var(--strip2);
+  /* The bar's row is a MINIMUM rather than a fixed height — M8 step 1.9. See the note beside
+     `.bar2`'s wrapping rule: at 1024 px the bar's controls no longer fit on one line, and a fixed
+     row is what made the old `nowrap` decision the right one. With the row free to grow, a wrapped
+     second line is visible instead of spilling under the stage. */
+  grid-template-rows: minmax(var(--bar2), auto) minmax(0, 1fr) var(--strip2);
   grid-template-areas:
     "bar bar bar"
     "left stage right"
@@ -119,13 +123,29 @@
  * (record, fixture) pairs did not fit. At 1280 and 1440 none did. And the failure was SILENT — the
  * tool cluster inherits `.btnRow`'s `flex-wrap: wrap`, which is right in a rail card and wrong in a
  * bar whose grid row is a fixed 3.25rem: the second line spilled about 5 px under the stage instead
- * of announcing itself.
+ * of announcing itself. So the bar did not wrap, and the one elastic thing in it was the record
+ * button — the only control whose width is content the app cannot choose.
  *
- * So the bar does not wrap, and the one elastic thing in it is the record button — the only control
- * whose width is content the app cannot choose. It truncates with an ellipsis; its accessible name
- * carries the target in full, so nothing is lost to a reader who cannot see the end of it. */
+ * **Step 1.9's stage-mode control took that arrangement past what one line can hold**, and the
+ * numbers say so rather than a preference: measured at 1024 px the fixed parts are now brand 146 +
+ * modes 223 + Sandbox 71 + stage modes 226 + tools 329 + five gaps 64 + padding 27 = 1086, so the
+ * bar overflows by 62 px with the record button squeezed to NOTHING, and the page grew a horizontal
+ * scrollbar (`scrollWidth` 1093 against a 1024 client). Ellipsis on the elastic child cannot fix a
+ * line whose inelastic children already exceed it.
+ *
+ * The objection to wrapping was never the second line, it was that the second line was INVISIBLE —
+ * and that was a property of the fixed grid row, which is now `minmax(var(--bar2), auto)`. So the
+ * bar wraps, the row grows to hold it, and the stage is laid out below whatever height the bar
+ * actually took. The record button stays the elastic one, because truncating a formula is still
+ * better than wrapping at 1152 where everything does fit. */
 .shell2 > .bar2 {
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
+  row-gap: 0.4rem;
+  /* Vertical padding so a wrapped bar is not flush against its own hairline, and a min-height so
+     the one-line case is exactly the 3.25rem it has always been. */
+  padding-block: 0.3rem;
+  min-height: var(--bar2);
+  align-content: center;
 }
 .shell2 > .bar2 > .barBtn {
   flex-wrap: nowrap;

@@ -21,6 +21,7 @@
 import { targetText } from "../families/describe.js";
 import { targetLatex } from "../families/latex.js";
 import { shellMode, type ShellMode } from "../shell/state.js";
+import { STAGE_MODE_LABELS, STAGE_MODES } from "../ui/stage/mode.js";
 import type { CardContext } from "./cards/card.js";
 import { h, type Desc } from "./dom.js";
 import { math } from "./math.js";
@@ -74,6 +75,49 @@ function modeControl(ctx: CardContext): Desc {
         m.label,
       ),
     ),
+  );
+}
+
+/**
+ * The stage-mode control — M8 step 1.9.
+ *
+ * A second segmented group, and the shape is deliberately the SAME as the mode control's: three
+ * positions there, four here, `aria-pressed` written as a string for the same reason (`dom.ts` maps
+ * a boolean prop to attribute PRESENCE, so `false` would remove it and turn an unpressed segment
+ * into a plain button — one toggle and three ordinary buttons where the truth is one control with
+ * four positions, exactly one taken).
+ *
+ * **It is in the bar and not in a card**, unlike the modulus-contour toggle it sits beside in
+ * spirit, because it is a property of the whole stage rather than of the branch cuts: a reader who
+ * wants the portrait out of the way wants it out of the way whatever card they are reading. The two
+ * are independent by construction — `iso` the mode draws phase isolines every 30°, `iso` the toggle
+ * draws |f| contours, and the shader takes both.
+ */
+function stageModeControl(ctx: CardContext): Desc {
+  const current = ctx.state.stageMode;
+  return h(
+    "div",
+    {
+      key: "stageModes",
+      class: "segmented",
+      role: "group",
+      "aria-label": "what the stage draws behind the contour",
+      "data-testid": "stageMode",
+    },
+    ...STAGE_MODES.map((m) => {
+      const { label, hint } = STAGE_MODE_LABELS[m];
+      return h(
+        "button",
+        {
+          key: m,
+          "aria-pressed": current === m ? "true" : "false",
+          "aria-label": `${label} — ${hint}`,
+          title: hint,
+          onClick: () => ctx.actions.setStageMode(m),
+        },
+        label,
+      );
+    }),
   );
 }
 
@@ -132,7 +176,7 @@ function recordButton(ctx: CardContext): Desc {
 /**
  * The whole bar, as descriptions. `render.ts` patches these into `<header class="bar2">`.
  *
- * **Four children and exactly ONE of them carries `.barBtn`.** `shell2.css` gives that class
+ * **Five children and exactly ONE of them carries `.barBtn`.** `shell2.css` gives that class
  * `margin-left: auto`, and a flex line distributes free space EQUALLY among every auto margin on it
  * — so four `.barBtn` buttons would not sit together at the right end, they would be strewn evenly
  * across the bar with the gaps growing as the window does. The tools go in one wrapper, the wrapper
@@ -173,6 +217,7 @@ export function bar(ctx: CardContext): readonly Desc[] {
       },
       "Sandbox",
     ),
+    stageModeControl(ctx),
     h(
       "div",
       { key: "tools", class: "barBtn btnRow" },
