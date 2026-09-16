@@ -400,16 +400,15 @@ Written last so it describes the app as it ends up after WP1–11.
 
 ## Decisions to record (outside this plan's scope, but they must be written down)
 
-- **No suite nav header, in this app or any other.** This is the owner's decision as of this review.
-  It contradicts the current tree: `mountNavHeader` is live in 2D Electrostatics, Hele-Shaw Flow and
-  Potential Theory (ADR-0036 Stage 3) and in four more apps, and CLAUDE.md lists "U7 — wire the nav
-  header's hand-off picker" as open and a "suite-wide rollout" as a follow-on. Record it as a new
-  ADR superseding the nav-header half of ADR-0032 and ADR-0036 Stage 3 (locked decision 8 keeps the
-  launcher page; only the in-app header is withdrawn), strike U7 from CLAUDE.md, and schedule the
-  removal from the seven current adopters as its own small PR. The hand-off UX that U7 was going to
-  carry (a "send to…" picker) then needs another home — WP10's import dialog and the existing
-  "Riemann Map ↗" button are the CD ends of it, and the ADR should say where the other apps put
-  theirs.
+- **No suite nav header, in this app or any other — RECORDED.**
+  [ADR-0044](../../DECISIONS.md#adr-0044-withdraw-the-in-app-suite-navigation-header-the-launcher-is-the-unified-menu)
+  withdraws the in-app header suite-wide (the launcher stays; only decision 8's "plus a shared nav
+  header later" clause goes), closes ADR-0032's U7 as _withdrawn, not done_, and closes ADR-0016
+  AI-5 as moot. The removal — five apps, seven pages, plus the `@cas/ui` primitive and the doc sweep
+  — is staged in [`NAV-WITHDRAWAL-PLAN.md`](NAV-WITHDRAWAL-PLAN.md) (N1–N6), which runs independently
+  of WP1–WP12. Report finding **U5 is therefore closed as won't-fix**; its other half (CD's hand-off
+  controls sitting in unrelated panels) is answered by ADR-0044 §4 — a hand-off belongs in the panel
+  that owns the state — and the CD end of it is WP10's import dialog.
 - **Default parameter and sidebar shape** (WP10's three questions).
 - **Whether `#apply_preset` survives** (WP1, U1) — recommended: no.
 

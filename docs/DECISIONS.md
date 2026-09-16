@@ -7,45 +7,46 @@ the "why" survives for future-you.
 
 Format follows Michael Nygard's ADR convention.
 
-| #                                                                                   | Decision                                                              | Status   |
-| ----------------------------------------------------------------------------------- | --------------------------------------------------------------------- | -------- |
-| [0001](#adr-0001-monorepo-over-multi-repo)                                          | Monorepo over multi-repo                                              | Accepted |
-| [0002](#adr-0002-typescript-as-the-common-language)                                 | TypeScript as the common language                                     | Accepted |
-| [0003](#adr-0003-give-quadrature-domains-a-build-step-vite)                         | Give Quadrature Domains a build step (Vite)                           | Accepted |
-| [0004](#adr-0004-package-manager-pnpm-workspaces)                                   | Package manager: pnpm workspaces                                      | Accepted |
-| [0005](#adr-0005-expr--interchange-as-the-map-representation-keystone)              | `expr` + `interchange` as the map-representation keystone             | Accepted |
-| [0006](#adr-0006-convention-neutral-core-packages)                                  | Convention-neutral core packages                                      | Accepted |
-| [0007](#adr-0007-incremental-extraction-driven-by-real-need)                        | Incremental extraction driven by real need                            | Accepted |
-| [0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate)                       | Extract `@cas/exact`; keep QD's `sym-core` separate                   | Accepted |
-| [0009](#adr-0009-schwarz-reflection-is-a-first-class-peer-view-in-complex-dynamics) | Schwarz reflection (σ) is a first-class peer view in Complex Dynamics | Accepted |
-| [0010](#adr-0010-complex-function-plotting-tool-as-a-separate-app)                  | Complex Function Plotting Tool as a separate app                      | Accepted |
-| [0011](#adr-0011-casexpr-named-parameters)                                          | `@cas/expr` named parameters                                          | Accepted |
-| [0012](#adr-0012-the-shared-3d-slice--extract-the-mat4--quaternion-core-keep-the-app-specific-3d-local) | The shared 3D slice — extract the `mat4` + quaternion core            | Accepted |
-| [0013](#adr-0013-the-riemann-map-tool-is-a-new-app-not-a-mode-in-an-existing-one)  | The Riemann-map tool is a new app (not a mode in an existing tool)    | Accepted |
-| [0014](#adr-0014-extract-casdynamics-on-the-second-consumer-rule-riemann-map)       | Extract `@cas/dynamics` (Böttcher exterior maps); Riemann Map is the second consumer | Accepted |
-| [0015](#adr-0015-extract-cascorepoly--format-float-only-exact-stays-in-casexact)   | Extract `@cas/core/poly` + `format`; float-only, exact stays in `@cas/exact` | Accepted |
-| [0016](#adr-0016-extract-casexport--shared-png-text-metadata--shared-glsl-snippets) | Extract `@cas/export` — shared PNG `tEXt` metadata (+ shared GLSL snippets) | Accepted |
-| [0017](#adr-0017-the-complex-dynamics--riemann-map-hand-off-riemann-map-becomes-a-pure-2d-conformal-consumer) | CD → Riemann-Map hand-off; Riemann Map becomes a pure-2D conformal consumer | Accepted |
-| [0018](#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore) | Extract `@cas/conformal` ahead of demand; lift `lstsq` into `@cas/core` | Accepted |
-| [0019](#adr-0019-argument-principle-as-a-separate-app) | Argument Principle as a separate app | Accepted |
-| [0020](#adr-0020-schwarz-christoffel-engine-lightning-seeded-disk-canonical-two-mode) | Schwarz-Christoffel engine: lightning-seeded, disk-canonical, two-mode | Accepted |
-| [0021](#adr-0021-argument-principle-pedagogy-arc--generalize-to-f--w-and-the-pin-interaction-model) | Argument Principle pedagogy arc — generalize to f = w₀, and the pin interaction model | Accepted |
-| [0022](#adr-0022-explicit-contour-input-modes-touch-first) | Explicit contour input modes (touch-first) | Accepted |
-| [0023](#adr-0023-accessible-marks-validated-palette-shape-encoding-and-a-non-rainbow-ramp) | Accessible marks — validated palette, shape encoding, and a non-rainbow ramp | Accepted |
-| [0024](#adr-0024-faber-transform-app--casfaber--polygonal-k-via-the-exterior-sc-engine) | Faber Transform app + `@cas/faber` + polygonal K via the exterior SC engine | Accepted |
-| [0025](#adr-0025-defer-the-winding--singularity-primitive-extraction-second-consumer-noted) | Defer the winding / singularity primitive extraction (renumbered from a duplicate 0020) | Accepted |
-| [0026](#adr-0026-defer-consolidating-qds-schwarz-engine-with-casschwarz-classical-subset-duplication) | Defer consolidating QD's Schwarz engine with `@cas/schwarz` (classical-subset duplication) | Accepted |
-| [0027](#adr-0027-extract-mapspectoexpr-into-casinterchange) | Extract the `MapSpec` → `@cas/expr` converter into `@cas/interchange` | Accepted |
-| [0028](#adr-0028-riemann-surface-mode-in-the-plotter--parametrize-by-w-branch-machinery-in-app) | Riemann-surface mode in the plotter — parametrize-by-w, branch machinery in-app | Accepted |
-| [0029](#adr-0029-algebraic-curve-riemann-surfaces-m2a-single-radical-npp-proximity-gluing) | Algebraic-curve Riemann surfaces (M2a single-radical, NPP proximity gluing) | Accepted |
-| [0030](#adr-0030-riemann-surface-exploration-tools-m3--hover-pick-linked-base-plane-monodromy) | Riemann-surface exploration tools (M3 — hover-pick, linked base-plane, monodromy) | Accepted |
+| #                                                                                                             | Decision                                                                                                       | Status   |
+| ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | -------- |
+| [0001](#adr-0001-monorepo-over-multi-repo)                                                                    | Monorepo over multi-repo                                                                                       | Accepted |
+| [0002](#adr-0002-typescript-as-the-common-language)                                                           | TypeScript as the common language                                                                              | Accepted |
+| [0003](#adr-0003-give-quadrature-domains-a-build-step-vite)                                                   | Give Quadrature Domains a build step (Vite)                                                                    | Accepted |
+| [0004](#adr-0004-package-manager-pnpm-workspaces)                                                             | Package manager: pnpm workspaces                                                                               | Accepted |
+| [0005](#adr-0005-expr--interchange-as-the-map-representation-keystone)                                        | `expr` + `interchange` as the map-representation keystone                                                      | Accepted |
+| [0006](#adr-0006-convention-neutral-core-packages)                                                            | Convention-neutral core packages                                                                               | Accepted |
+| [0007](#adr-0007-incremental-extraction-driven-by-real-need)                                                  | Incremental extraction driven by real need                                                                     | Accepted |
+| [0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate)                                                 | Extract `@cas/exact`; keep QD's `sym-core` separate                                                            | Accepted |
+| [0009](#adr-0009-schwarz-reflection-is-a-first-class-peer-view-in-complex-dynamics)                           | Schwarz reflection (σ) is a first-class peer view in Complex Dynamics                                          | Accepted |
+| [0010](#adr-0010-complex-function-plotting-tool-as-a-separate-app)                                            | Complex Function Plotting Tool as a separate app                                                               | Accepted |
+| [0011](#adr-0011-casexpr-named-parameters)                                                                    | `@cas/expr` named parameters                                                                                   | Accepted |
+| [0012](#adr-0012-the-shared-3d-slice--extract-the-mat4--quaternion-core-keep-the-app-specific-3d-local)       | The shared 3D slice — extract the `mat4` + quaternion core                                                     | Accepted |
+| [0013](#adr-0013-the-riemann-map-tool-is-a-new-app-not-a-mode-in-an-existing-one)                             | The Riemann-map tool is a new app (not a mode in an existing tool)                                             | Accepted |
+| [0014](#adr-0014-extract-casdynamics-on-the-second-consumer-rule-riemann-map)                                 | Extract `@cas/dynamics` (Böttcher exterior maps); Riemann Map is the second consumer                           | Accepted |
+| [0015](#adr-0015-extract-cascorepoly--format-float-only-exact-stays-in-casexact)                              | Extract `@cas/core/poly` + `format`; float-only, exact stays in `@cas/exact`                                   | Accepted |
+| [0016](#adr-0016-extract-casexport--shared-png-text-metadata--shared-glsl-snippets)                           | Extract `@cas/export` — shared PNG `tEXt` metadata (+ shared GLSL snippets)                                    | Accepted |
+| [0017](#adr-0017-the-complex-dynamics--riemann-map-hand-off-riemann-map-becomes-a-pure-2d-conformal-consumer) | CD → Riemann-Map hand-off; Riemann Map becomes a pure-2D conformal consumer                                    | Accepted |
+| [0018](#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore)                                | Extract `@cas/conformal` ahead of demand; lift `lstsq` into `@cas/core`                                        | Accepted |
+| [0019](#adr-0019-argument-principle-as-a-separate-app)                                                        | Argument Principle as a separate app                                                                           | Accepted |
+| [0020](#adr-0020-schwarz-christoffel-engine-lightning-seeded-disk-canonical-two-mode)                         | Schwarz-Christoffel engine: lightning-seeded, disk-canonical, two-mode                                         | Accepted |
+| [0021](#adr-0021-argument-principle-pedagogy-arc--generalize-to-f--w-and-the-pin-interaction-model)           | Argument Principle pedagogy arc — generalize to f = w₀, and the pin interaction model                          | Accepted |
+| [0022](#adr-0022-explicit-contour-input-modes-touch-first)                                                    | Explicit contour input modes (touch-first)                                                                     | Accepted |
+| [0023](#adr-0023-accessible-marks-validated-palette-shape-encoding-and-a-non-rainbow-ramp)                    | Accessible marks — validated palette, shape encoding, and a non-rainbow ramp                                   | Accepted |
+| [0024](#adr-0024-faber-transform-app--casfaber--polygonal-k-via-the-exterior-sc-engine)                       | Faber Transform app + `@cas/faber` + polygonal K via the exterior SC engine                                    | Accepted |
+| [0025](#adr-0025-defer-the-winding--singularity-primitive-extraction-second-consumer-noted)                   | Defer the winding / singularity primitive extraction (renumbered from a duplicate 0020)                        | Accepted |
+| [0026](#adr-0026-defer-consolidating-qds-schwarz-engine-with-casschwarz-classical-subset-duplication)         | Defer consolidating QD's Schwarz engine with `@cas/schwarz` (classical-subset duplication)                     | Accepted |
+| [0027](#adr-0027-extract-mapspectoexpr-into-casinterchange)                                                   | Extract the `MapSpec` → `@cas/expr` converter into `@cas/interchange`                                          | Accepted |
+| [0028](#adr-0028-riemann-surface-mode-in-the-plotter--parametrize-by-w-branch-machinery-in-app)               | Riemann-surface mode in the plotter — parametrize-by-w, branch machinery in-app                                | Accepted |
+| [0029](#adr-0029-algebraic-curve-riemann-surfaces-m2a-single-radical-npp-proximity-gluing)                    | Algebraic-curve Riemann surfaces (M2a single-radical, NPP proximity gluing)                                    | Accepted |
+| [0030](#adr-0030-riemann-surface-exploration-tools-m3--hover-pick-linked-base-plane-monodromy)                | Riemann-surface exploration tools (M3 — hover-pick, linked base-plane, monodromy)                              | Accepted |
 | [0031](#adr-0031-implicit-fwz0-algebraic-riemann-surfaces-m2c--the-plotters-first-cascore--casexact-consumer) | Implicit `F(w,z)=0` algebraic Riemann surfaces (M2c) — the plotter's first `@cas/core` + `@cas/exact` consumer | Accepted |
-| [0032](#adr-0032-extract-casui-ahead-of-adoption-port-cds-product-shell) | Extract `@cas/ui` ahead of adoption; port CD's product shell | Accepted |
-| [0033](#adr-0033-monodromy-group-and-fundamental-group-tools-generator-loops-permutation-diagram-genus) | Monodromy-group and fundamental-group tools (generator loops, permutation diagram, genus) | Accepted |
-| [0034](#adr-0034-the-eighth-app--apps2d-electrostatics-the-complex-potential-as-fields-and-flow) | The eighth app — `apps/2d-electrostatics` (the complex potential, as fields and flow) | Accepted |
-| [0035](#adr-0035-the-conformal-casinterchange-form-polygon-schwarzchristoffel-maps-interchange-140) | The `conformal` `@cas/interchange` form (polygon Schwarz–Christoffel maps, interchange 1.4.0) | Accepted |
-| [0040](#adr-0040-casrigor-extraction-by-reimplementation) | `@cas/rigor`: extraction by *reimplementation* | Accepted |
-| [0036](#adr-0036-split-2d-electrostatics-into-three-apps-extract-casflow) | Split `2d-electrostatics` into three apps; extract `@cas/flow` | Accepted |
+| [0032](#adr-0032-extract-casui-ahead-of-adoption-port-cds-product-shell)                                      | Extract `@cas/ui` ahead of adoption; port CD's product shell                                                   | Accepted |
+| [0033](#adr-0033-monodromy-group-and-fundamental-group-tools-generator-loops-permutation-diagram-genus)       | Monodromy-group and fundamental-group tools (generator loops, permutation diagram, genus)                      | Accepted |
+| [0034](#adr-0034-the-eighth-app--apps2d-electrostatics-the-complex-potential-as-fields-and-flow)              | The eighth app — `apps/2d-electrostatics` (the complex potential, as fields and flow)                          | Accepted |
+| [0035](#adr-0035-the-conformal-casinterchange-form-polygon-schwarzchristoffel-maps-interchange-140)           | The `conformal` `@cas/interchange` form (polygon Schwarz–Christoffel maps, interchange 1.4.0)                  | Accepted |
+| [0040](#adr-0040-casrigor-extraction-by-reimplementation)                                                     | `@cas/rigor`: extraction by _reimplementation_                                                                 | Accepted |
+| [0036](#adr-0036-split-2d-electrostatics-into-three-apps-extract-casflow)                                     | Split `2d-electrostatics` into three apps; extract `@cas/flow`                                                 | Accepted |
+| [0044](#adr-0044-withdraw-the-in-app-suite-navigation-header-the-launcher-is-the-unified-menu)                | Withdraw the in-app suite navigation header (the launcher is the unified menu)                                 | Accepted |
 
 > **Status legend:** Proposed → Accepted (once you sign off) → Superseded/Deprecated.
 > All thirty-six are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
@@ -58,25 +59,25 @@ Format follows Michael Nygard's ADR convention.
 > a product/topology decision made when the tool was requested. **0011 is a fourth follow-on** — the
 > `@cas/expr` named-parameter generalization that [ADR-0010](#adr-0010-complex-function-plotting-tool-as-a-separate-app)
 > itself anticipated (its first follow-on), the one non-trivial shared-package change in the plotter plan.
-> **0012 is a fifth follow-on** — an *extraction* (the plotter's `mat4` + quaternion 3D core becomes a shared
+> **0012 is a fifth follow-on** — an _extraction_ (the plotter's `mat4` + quaternion 3D core becomes a shared
 > subpath, the [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) rule again). **0013 is a sixth
-> follow-on** — a topology decision from the fifth app's own build: the Riemann-map studio is a *new app*, not a
-> mode (the mirror image of 0009's call). **0014 is a seventh follow-on** — another *extraction*: the Riemann-map
+> follow-on** — a topology decision from the fifth app's own build: the Riemann-map studio is a _new app_, not a
+> mode (the mirror image of 0009's call). **0014 is a seventh follow-on** — another _extraction_: the Riemann-map
 > tool is the second consumer of Complex Dynamics' inverse-Böttcher machinery, so it moves into a new
-> `@cas/dynamics` package (ADR-0007 once more). **0015 is an eighth follow-on** — one more *extraction*:
+> `@cas/dynamics` package (ADR-0007 once more). **0015 is an eighth follow-on** — one more _extraction_:
 > the shared dense-polynomial kernel and label formatting move into `@cas/core/poly` + `format` (float-only;
 > exact stays in `@cas/exact`), the ADR-0007 rule again, with `@cas/schwarz` and the Quadrature app as the
-> two consumers. **0016 is a ninth follow-on** — one more *extraction*: the PNG `tEXt` reproducibility-metadata
+> two consumers. **0016 is a ninth follow-on** — one more _extraction_: the PNG `tEXt` reproducibility-metadata
 > code (three byte-equivalent copies) becomes `@cas/export`, plus three shared GLSL snippets fold into
-> `@cas/gpu/glsl` — the ADR-0007 rule once more. **0017 is a tenth follow-on** — a *product/topology* decision
+> `@cas/gpu/glsl` — the ADR-0007 rule once more. **0017 is a tenth follow-on** — a _product/topology_ decision
 > (like 0009/0010/0013): Complex Dynamics hands a filled Julia set's Böttcher map to the Riemann-map studio
 > over `@cas/interchange`, and Riemann Map sheds its whole dynamics + GPU stack to become a pure-2D conformal
 > consumer — it **supersedes ADR-0014's premise** that RM is a live `@cas/dynamics` consumer and **narrows
-> ADR-0013**. **0018 is an eleventh follow-on** — an *extraction*, but the first that deliberately **breaks** the
+> ADR-0013**. **0018 is an eleventh follow-on** — an _extraction_, but the first that deliberately **breaks** the
 > ADR-0007 second-consumer rule: `@cas/conformal` (the lightning + forward-map conformal builder) is carved out
-> of the Riemann-map app *ahead* of its second consumer (Schwarz–Christoffel, roadmap step E), and the
+> of the Riemann-map app _ahead_ of its second consumer (Schwarz–Christoffel, roadmap step E), and the
 > `lstsqHouseholder` primitive beneath it is lifted into `@cas/core`; the near-twin least-squares solver in
-> Quadrature Domains is recorded as the *deferred* consumer (the two have diverged on rank-deficiency policy),
+> Quadrature Domains is recorded as the _deferred_ consumer (the two have diverged on rank-deficiency policy),
 > not force-merged. Supersede rather than rewrite if any change later.
 >
 > **✅ Executed.** The seven up-front decisions were carried out — the
@@ -832,6 +833,7 @@ one QD already validated for σ, so it is low-risk in design even though it is r
        branch-aware continuation, df64 σ, PQD GPU) deferred.
 
 **ALL FOUR ACTION ITEMS COMPLETE (2026-08-08).** σ is a first-class peer view with its own pane + controls
+
 - persistent lifecycle (item 1), full generic-parity coloring/inspection/legend/nav (item 3), and
   serializable state across share links / saved views / PNG metadata (item 2); the design doc records the
   peer view as the realized target shape (item 4). Deferred beyond this ADR: S5 (SIGMA-HANDOFF.md) — more
@@ -850,7 +852,7 @@ addendum records three standing decisions so F's increments do not each re-litig
 1. **The `(≈)` honesty rule is absolute.** σ is a numerical reconstruction (φ⁻¹ by Newton / Durand–Kerner),
    so every F artifact — each view, curve, cycle, dimension, limit set — is `(≈)`-labeled and never reads as
    certified (RISKS §3–4). This is the guardrail, not a nicety.
-2. **σ's instruments are σ-native, and the z²+c boundary from item 4 above still holds.** F adds σ's *own*
+2. **σ's instruments are σ-native, and the z²+c boundary from item 4 above still holds.** F adds σ's _own_
    depth (reflection tiling, σ level curves, σ-orbit families); it does **not** import the map-specific
    instruments (external rays / Böttcher / matings / Yoccoz / laminations), which remain out of scope for σ.
 3. **Extraction is opportunistic and math-first (ADR-0007).** Pure σ kernels F needs (σ⁻¹, preimage tree,
@@ -1150,16 +1152,17 @@ trades a little living duplication for zero mid-phase churn across three shippin
 
 ## ADR-0013: The Riemann-map tool is a new app, not a mode in an existing one
 
-**Status:** Accepted — narrowed in part by ADR-0017 (RM went pure-2D)  **Date:** 2026-08  **Deciders:** Andrew
+**Status:** Accepted — narrowed in part by ADR-0017 (RM went pure-2D) **Date:** 2026-08 **Deciders:** Andrew
 
-*A follow-on of the kind [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need)
+_A follow-on of the kind [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need)
 anticipated — a topology decision, occasioned by the first substantive build of a **new** tool
 (the research-grade Riemann-map / conformal-mapping studio). It is the mirror image of
 [ADR-0009](#adr-0009-schwarz-reflection-is-a-first-class-peer-view-in-complex-dynamics): 0009 kept a
 conformal-map feature *inside* Complex Dynamics; this one puts a broader conformal-map tool in its
-*own* app. The two are consistent, for the reason spelled out below.*
+*own* app. The two are consistent, for the reason spelled out below._
 
 ### Context
+
 The suite already touches Riemann maps in two places. Complex Dynamics builds a Riemann map φ
 (presets + a custom unbounded-Laurent form) and reflects it into the σ **peer view**
 ([ADR-0009](#adr-0009-schwarz-reflection-is-a-first-class-peer-view-in-complex-dynamics)); Quadrature
@@ -1167,18 +1170,19 @@ Domains carries closed-form parametric conformal maps (Faber / inverse-problem d
 Schwarz machinery. So a fair question is whether a new Riemann-map tool should be **(A)** a new app,
 **(B)** a peer view inside Complex Dynamics (as σ is), or **(C)** a mode inside Quadrature Domains.
 
-The deciding fact is *scope*. The new tool's headline is a broad, **new** capability neither existing
+The deciding fact is _scope_. The new tool's headline is a broad, **new** capability neither existing
 app has: multiple **numerical construction engines** — lightning/rational (AAA + Vandermonde–Arnoldi),
 Schwarz–Christoffel, the zipper/geodesic algorithm, kernel / integral-equation methods, and Böttcher
 uniformization — plus a large visualization, conformal-invariant, and publication-export surface. None
 of that numerical-construction machinery exists anywhere in the suite yet: there is (as the research
 phase confirmed) essentially **no research-grade JS/TS conformal-mapping code** to reuse. CD's φ is a
-narrow *recipe* (a Laurent form it reflects into σ), not a general constructor; QD's maps are
-closed-form solutions of the *inverse quadrature-domain* problem, not a boundary→map solver. The new
+narrow _recipe_ (a Laurent form it reflects into σ), not a general constructor; QD's maps are
+closed-form solutions of the _inverse quadrature-domain_ problem, not a boundary→map solver. The new
 tool is a from-scratch construction studio that happens to render and analyze conformal maps — not a
 reflection of a map an existing app already owns.
 
 ### Decision
+
 Build it as a **separate app, `apps/riemann-map`**, a peer to the three existing apps, on the shared
 `@cas/*` packages, listed on the launcher — consistent with
 [CLAUDE.md decision #8](../CLAUDE.md) (separate apps + a unified menu; **no** unified single-page
@@ -1189,11 +1193,12 @@ It is **not** a mode inside CD or QD.
 ### Options Considered
 
 #### Option A: A new standalone app `apps/riemann-map` (this ADR)
-| Dimension | Assessment |
-|---|---|
-| Fit with scope | High — room for many construction engines + analysis + export without bloating a host app |
-| Reuse | High — pulls the `@cas/*` stack *downward*; adds only genuinely new numerics |
-| Suite shape | Matches decision #8 (separate apps + launcher); the north-star "each new tool builds fewer primitives from scratch" |
+
+| Dimension      | Assessment                                                                                                          |
+| -------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Fit with scope | High — room for many construction engines + analysis + export without bloating a host app                           |
+| Reuse          | High — pulls the `@cas/*` stack _downward_; adds only genuinely new numerics                                        |
+| Suite shape    | Matches decision #8 (separate apps + launcher); the north-star "each new tool builds fewer primitives from scratch" |
 
 **Pros:** the broad new surface has a natural home; independent build/deploy; the CD/QD hand-off stays
 a clean **data contract** (interchange), not a code coupling; keeps each app simple and shippable.
@@ -1201,29 +1206,32 @@ a clean **data contract** (interchange), not a code coupling; keeps each app sim
 so the boundary between them must be kept honest.
 
 #### Option B: A peer view inside Complex Dynamics (like σ, ADR-0009)
+
 **Pros:** reuses CD's engine/coloring/interaction directly; σ already validated the peer-view shape.
-**Cons — and why rejected:** σ earned its place *inside* CD precisely because it **shares CD's
+**Cons — and why rejected:** σ earned its place _inside_ CD precisely because it **shares CD's
 foundation** — it is a thin reflection of a φ CD already builds, with the map-specific instruments
 (rays, Böttcher, matings) explicitly out of scope (ADR-0009). The Riemann-map tool is the opposite: its
 value is a large body of **new construction/analysis/export** machinery that CD's `f(z,c)` escape-time
 pipeline does not provide and that would swell CD's already ~5k-line `main.ts`. A view is the right
-shape for something that *reuses* a host app's engine; an app is the right shape for something that
-*brings its own*.
+shape for something that _reuses_ a host app's engine; an app is the right shape for something that
+_brings its own_.
 
 #### Option C: A mode inside Quadrature Domains
+
 **Pros:** QD is the suite's closest existing conformal-map surface (Faber, Schwarz function).
-**Cons:** QD's maps are closed-form solutions of the inverse *quadrature-domain* problem in a
+**Cons:** QD's maps are closed-form solutions of the inverse _quadrature-domain_ problem in a
 gradually-typed JS codebase; grafting a general numerical boundary→map studio (in strict TS, on the
 shared packages) onto it couples two very different tools and inherits QD's conventions
 ([ADR-0006](#adr-0006-convention-neutral-core-packages) territory). Rejected for the same
 scope/foundation reason as B.
 
 ### Trade-off Analysis
+
 This is **not** in tension with [ADR-0009](#adr-0009-schwarz-reflection-is-a-first-class-peer-view-in-complex-dynamics);
 it applies the same test and gets the opposite answer because the input is opposite. ADR-0009's own
 rule: a feature that **shares** a host app's engine, coloring, interaction, and import path belongs
-*inside* that app as a view; one that would **re-duplicate** primitives or bring a large independent
-surface belongs in its own app (that ADR rejected a *separate* σ app for exactly that reuse reason).
+_inside_ that app as a view; one that would **re-duplicate** primitives or bring a large independent
+surface belongs in its own app (that ADR rejected a _separate_ σ app for exactly that reuse reason).
 σ shares CD's foundation, so it is a view; the Riemann-map studio brings its own construction engines
 and reuses only the **packages** (downward), so it is an app. Decision #8 is the standing suite
 topology, and a genuinely new tool of this breadth is precisely what it is for. The honest cost —
@@ -1231,6 +1239,7 @@ a fourth app, and "conformal map" living in two apps — is bounded by keeping C
 recipe) and letting the new app own general construction, with the interchange hand-off as the seam.
 
 ### Consequences
+
 - **Easier:** giving the tool's broad engine/analysis/export surface a home without bloating CD;
   reusing `@cas/*` downward (north-star); independent deploy; a clean CD↔riemann-map (and QD)
   hand-off as a versioned **data contract** rather than a cross-app import (which the dependency rule
@@ -1247,6 +1256,7 @@ recipe) and letting the new app own general construction, with the interchange h
   extract the shared piece into a package (ADR-0007), rather than merging the apps.
 
 ### Action Items
+
 1. [x] Scaffold `apps/riemann-map` on the shared packages — P0 Genesis: the empty, tested, deployable
        shell (Vite/TS, the single serializable view-state over `@cas/interchange`, node parity-seed
        tests, launcher "Coming soon" card; local `lint`/`typecheck`/`test`/`build` gate green).
@@ -1259,16 +1269,17 @@ recipe) and letting the new app own general construction, with the interchange h
 
 ## ADR-0014: Extract `@cas/dynamics` on the second-consumer rule (Riemann Map)
 
-**Status:** Accepted — RM-consumer premise superseded by ADR-0017 (RM shed `@cas/dynamics`)  **Date:** 2026-08  **Deciders:** Andrew
+**Status:** Accepted — RM-consumer premise superseded by ADR-0017 (RM shed `@cas/dynamics`) **Date:** 2026-08 **Deciders:** Andrew
 
-*An *extraction* follow-on in the mould of [ADR-0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate),
+_An *extraction* follow-on in the mould of [ADR-0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate),
 and the genesis of the long-planned `@cas/dynamics` domain package
 ([ARCHITECTURE §3](ARCHITECTURE.md#3-what-each-package-owns), previously "never built"). It is
 [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) working exactly as designed: a package
 comes into being the moment a **second consumer** needs it — here, the Riemann-map app's P2 (Böttcher /
-dynamics Riemann maps).*
+dynamics Riemann maps)._
 
 ### Context
+
 Complex Dynamics' `src/render/uniformize.ts` is the suite's inverse-Böttcher engine: the Laurent
 coefficients ψ(w) = γ₁·w + Σ b_k w^{-k} that uniformize the **complement of a filled Julia set** for the
 z^d + c / general-polynomial / rational families (and the exterior map of the multibrot connectedness
@@ -1277,23 +1288,25 @@ locus), plus the capacity γ₁ (leading coefficient), a connectivity test, and 
 The Riemann-map app's P2 needs exactly this — capacity, the exterior-map coefficients, the boundary
 overlay, and the Complex-Dynamics ↔ Riemann-map hand-off (emit a Julia exterior as an interchange
 `LaurentMap`). That is a **second consumer**. The [dependency rule](ARCHITECTURE.md#4-the-dependency-rule)
-forbids an app importing another app, so reuse means *extract to a package* — and `uniformize.ts` is
+forbids an app importing another app, so reuse means _extract to a package_ — and `uniformize.ts` is
 already package-shaped: **pure** (depends only on `@cas/core` + `@cas/expr`, no DOM/GL/CD-internal
 coupling), and already covered by 31 unit tests.
 
 ### Decision
+
 Extract `uniformize.ts` and its two test files into a new **`@cas/dynamics`** package (its genesis),
 consumed by Complex Dynamics (behavior unchanged) and Riemann Map. Moved with `git mv` (history
 preserved, per the provenance guardrail); the **only** code change is the type import
 `../complex` → `@cas/expr` (the identical `[re, im]` tuple). **Scope it minimally:** only the
 exterior-Böttcher machinery moves now. **External-ray tracing (`rays.ts`) stays in Complex Dynamics**
 until the Riemann-map app actually draws external rays (P2c) — at which point it is the second consumer
-of *that* module and the extraction is recorded as a follow-on. Escape-time, cycle classification, and
+of _that_ module and the extraction is recorded as a follow-on. Escape-time, cycle classification, and
 the Tricorn model space likewise stay app-local until a second consumer forces them.
 
 ### Options Considered
 
 #### Option A: Extract `@cas/dynamics` (this ADR)
+
 **Pros:** the code is already pure, tested, and downward-only, so the move is mechanical and
 behavior-preserving; a fix lands once for both apps; unlocks capacity / coefficients / boundary / the
 interchange hand-off in Riemann Map; realizes the planned domain package on real evidence rather than
@@ -1301,23 +1314,27 @@ up-front speculation. **Cons:** "the Böttcher engine" now lives outside the app
 of CD follows one import); a sixth `@cas/*` package.
 
 #### Option B: Reimplement the inverse-Böttcher series in the Riemann-map app
+
 **Pros:** no change to Complex Dynamics. **Cons:** duplicates ~370 lines of the most delicate,
 correctness-critical math in the suite (a triangular series recursion whose every capacity/coefficient
 claim depends on it); a bug would be fixed once and survive once — precisely the drift the monorepo
 exists to prevent. Rejected against the north star.
 
 #### Option C: Import Complex Dynamics from the Riemann-map app
+
 **Pros:** none beyond "no new package". **Cons:** violates the one graph rule the architecture actively
 enforces (no app imports another app — ESLint + dependency-cruiser). Rejected on principle.
 
 ### Trade-off Analysis
+
 This is the cheapest possible extraction (a pure, already-tested module with one type-import edit) against
-the highest-value seam (the exterior Riemann map is *the* object both apps share). The only real cost —
+the highest-value seam (the exterior Riemann map is _the_ object both apps share). The only real cost —
 a sixth package and a moved file — is exactly the cost ADR-0007 accepts in exchange for single-sourcing
 shared mathematics. Keeping `rays.ts` and the rest of the dynamics surface app-local for now honors the
 same rule symmetrically: don't extract what has only one consumer yet.
 
 ### Consequences
+
 - **Easier:** Riemann Map builds capacity / coefficient / boundary readouts and the CD hand-off on a
   shared, tested kernel; a Böttcher-math fix lands once; the domain package finally exists to grow into.
 - **Harder:** the inverse-Böttcher engine is one hop from Complex Dynamics now (mitigated: `@cas/dynamics`
@@ -1329,6 +1346,7 @@ same rule symmetrically: don't extract what has only one consumer yet.
   cycle/multiplier classification, the Tricorn model space) is needed — grow `@cas/dynamics` accordingly.
 
 ### Action Items
+
 1. [x] `git mv` `uniformize.ts` + its two tests into `packages/dynamics`; retarget the `../complex`
        type import to `@cas/expr`. Verified: `@cas/dynamics` typecheck + 31 tests + lint green.
 2. [x] Rewire Complex Dynamics (`main.ts`, `render/juliaProperties.ts`, `render/overlay.ts`) to
@@ -1346,12 +1364,13 @@ same rule symmetrically: don't extract what has only one consumer yet.
 
 ## ADR-0015: Extract `@cas/core/poly` + `format`; float-only, exact stays in `@cas/exact`
 
-**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+**Status:** Accepted **Date:** 2026-08 **Deciders:** Andrew
 
-*A follow-on extraction ADR, as [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) asks for
-notable ones — the latest, after [ADR-0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate), [ADR-0012](#adr-0012-the-shared-3d-slice--extract-the-mat4--quaternion-core-keep-the-app-specific-3d-local), and [ADR-0014](#adr-0014-extract-casdynamics-on-the-second-consumer-rule-riemann-map).*
+_A follow-on extraction ADR, as [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) asks for
+notable ones — the latest, after [ADR-0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate), [ADR-0012](#adr-0012-the-shared-3d-slice--extract-the-mat4--quaternion-core-keep-the-app-specific-3d-local), and [ADR-0014](#adr-0014-extract-casdynamics-on-the-second-consumer-rule-riemann-map)._
 
 ### Context
+
 The Quadrature app's `app/core/poly-helpers.mjs` bundles two unrelated things (its own header admits the
 second only co-locates for load-order): **`QD.Poly`**, dense polynomial arithmetic over complex coefficients
 (ascending-power `Complex[]`: zero/one/variable/trim/add/neg/mul/scale/pow/linearPower), and **`QD.Format`**,
@@ -1366,6 +1385,7 @@ likewise drifted into `@cas/schwarz` (`singularities.ts`) and Complex Dynamics (
 Both primitives clear the second-consumer bar many times over.
 
 ### Decision
+
 **Extract to `@cas/core`**: `poly.ts` — `makePoly<C>(alg: ComplexAlgebra<C>)`, written once against the
 representation-genericity keystone (so QD's `objAlgebra {re,im}` and CD/schwarz's `tupleAlgebra [re,im]`
 share one implementation, exactly as `durand-kerner.ts` / `series.ts` are) — plus `eval` (Horner) and
@@ -1388,17 +1408,19 @@ matingEngine/critical/perturbation and correspondence sites) peel onto `poly` on
 as ADR-0008 grew `@cas/exact` — **not** in a speculative big-bang.
 
 ### Options Considered
-- **A — float `@cas/core/poly` + `format`, incremental (this ADR).** *Pros:* generic over the existing
+
+- **A — float `@cas/core/poly` + `format`, incremental (this ADR).** _Pros:_ generic over the existing
   keystone; kills the most-duplicated numeric primitive in the suite; each consumer converts test-guarded and
-  shippable alone. *Cons:* a temporarily heterogeneous set of consumers (some on `poly`, some still rolling
+  shippable alone. _Cons:_ a temporarily heterogeneous set of consumers (some on `poly`, some still rolling
   their own) until the later phases land.
-- **B — a ring-generic poly to absorb the exact consumers too.** *Rejected:* speculative abstraction over a
+- **B — a ring-generic poly to absorb the exact consumers too.** _Rejected:_ speculative abstraction over a
   general ring for a job the float and exact sides don't share; trades a real guarantee (the exactness engine
   is correctness-critical) for a tidier diagram — the same reasoning that rejected merging `sym-core` in
   ADR-0008.
-- **C — leave the copies.** *Rejected:* it is precisely the drift the monorepo exists to end.
+- **C — leave the copies.** _Rejected:_ it is precisely the drift the monorepo exists to end.
 
 ### Consequences
+
 - **Easier:** one dense-poly kernel behind the shared solver; a bug fixed once; new σ / correspondence math
   reaches for `@cas/core/poly` instead of re-rolling a Horner loop.
 - **Harder:** the mixed-state interval while consumers convert; two poly worlds (float in `@cas/core`, exact
@@ -1406,12 +1428,13 @@ as ADR-0008 grew `@cas/exact` — **not** in a speculative big-bang.
 - **Revisit:** if a genuine need ever arises for one polynomial type over both fields (none does today).
 
 ### Action Items
+
 1. [x] `poly.ts` + `format.ts` in `@cas/core` with a golden corpus; QD shim (bit-identical); `@cas/schwarz`
-   converted as the proving consumer (**P1**).
+       converted as the proving consumer (**P1**).
 2. [ ] Peel `@cas/expr/rational` and the CD / correspondences float consumers onto `poly`, one test-guarded
-   PR each (**P2–P3**, need-driven).
+       PR each (**P2–P3**, need-driven).
 3. [ ] `uniformize.ts`'s truncated `Series` is a cousin of `@cas/core/series.ts` — a related but separate
-   consolidation, scoped on its own.
+       consolidation, scoped on its own.
 
 ---
 
@@ -1420,6 +1443,7 @@ as ADR-0008 grew `@cas/exact` — **not** in a speculative big-bang.
 **Status:** Accepted
 
 ### Context
+
 Three apps — Complex Dynamics, the Complex-Function Plotter, and the Riemann-map studio — each carried
 their own copy of the "a figure carries its own recipe" mechanism: after a canvas is encoded to PNG, splice
 a `tEXt` chunk (the permalink / parameters) in front of `IEND` with a correct CRC-32, without touching a
@@ -1432,6 +1456,7 @@ vertex program (**7** copies), the HSV→RGB helper (**2**), and the fragment-co
 map (**4**).
 
 ### Decision
+
 **Extract `@cas/export`** (an eighth `@cas/*` package): PNG `tEXt` metadata as a canonical Record API —
 `crc32`, `pngChunk`, `injectPngText(png, entries)`, `readPngText(png)`, `PNG_SIGNATURE`. CD's version is
 promoted as canonical (keyword truncation to 79 bytes, `?`-coercion for non-Latin-1); RM is migrated onto
@@ -1447,16 +1472,18 @@ the `cvec`/`vec_` aliases it uses). Centralising the viewport map is load-bearin
 ("which pixel is which complex number") the plane renderers must agree on.
 
 ### Options Considered
-- **A — extract `@cas/export` + fold the GLSL snippets into `@cas/gpu` (this ADR).** *Pros:* one PNG-metadata
-  kernel; one fullscreen-vertex/viewport-map source of truth; each is pure and node/GPU-tested. *Cons:* an
+
+- **A — extract `@cas/export` + fold the GLSL snippets into `@cas/gpu` (this ADR).** _Pros:_ one PNG-metadata
+  kernel; one fullscreen-vertex/viewport-map source of truth; each is pure and node/GPU-tested. _Cons:_ an
   eighth package for a small surface.
 - **B — the never-built `@cas/ui` bundle** ([ARCHITECTURE §3](ARCHITECTURE.md)) that would have carried PNG
-  metadata *and* the KaTeX/inspector/theming helpers. *Rejected:* only the PNG-metadata and GLSL halves have
+  metadata _and_ the KaTeX/inspector/theming helpers. _Rejected:_ only the PNG-metadata and GLSL halves have
   proven (multi-consumer) demand; the UI helpers still do not. Extract the part with consumers, not the bundle.
-- **C — leave the copies.** *Rejected:* three drifting copies of a CRC-bearing byte format is exactly the
+- **C — leave the copies.** _Rejected:_ three drifting copies of a CRC-bearing byte format is exactly the
   drift the monorepo exists to end.
 
 ### Consequences
+
 - **Easier:** a PNG-metadata bug fixed once; a new export reaches for `@cas/export`; the fullscreen vertex and
   the pixel→plane convention live in one place. `@cas/export` is also the natural home for the medium-term
   high-res / SVG export goal.
@@ -1464,39 +1491,41 @@ the `cvec`/`vec_` aliases it uses). Centralising the viewport map is load-bearin
   note is now only half-true — its PNG-metadata half shipped here.
 
 ### Action Items
+
 1. [x] `@cas/export` with `png.ts` + golden test; census / workspace / dep wiring; CD / CFP / RM migrated.
 2. [x] `FULLSCREEN_VERTEX_GLSL` / `HSV2RGB_GLSL` / `PLANE_FROM_FRAG_GLSL` added to `@cas/gpu/glsl`; all 7 / 2 / 4
-   consumers migrated; a real-WebGL2 compile of the assembled shaders confirms the extraction.
+       consumers migrated; a real-WebGL2 compile of the assembled shaders confirms the extraction.
 3. [x] **`iTXt` for text above Latin-1** (added during Contour Integration's M6.3). `tEXt` is Latin-1
-   only and the coercion to `?` was *documented rather than fixed*, which made it read as deliberate.
-   It was destroying real content in every consumer: each one's `Software` string carries an em-dash,
-   and Contour Integration stamps a figure's own verdict, where `= 2π√3/3` was being stored as
-   `= 2??3/3` — the mathematics gone from the one field whose job is to say what the figure claims.
-   `injectPngText` now chooses per entry (`tEXt` when lossless, so existing ASCII payloads are
-   byte-identical; `iTXt` otherwise) and `readPngText` reads both. UTF-8 is hand-rolled, because the
-   package compiles against `lib: ES2022` with no DOM and no Node types — deliberately, so it "can
-   run anywhere" — and it already hand-rolls CRC-32 and Latin-1.
+       only and the coercion to `?` was _documented rather than fixed_, which made it read as deliberate.
+       It was destroying real content in every consumer: each one's `Software` string carries an em-dash,
+       and Contour Integration stamps a figure's own verdict, where `= 2π√3/3` was being stored as
+       `= 2??3/3` — the mathematics gone from the one field whose job is to say what the figure claims.
+       `injectPngText` now chooses per entry (`tEXt` when lossless, so existing ASCII payloads are
+       byte-identical; `iTXt` otherwise) and `readPngText` reads both. UTF-8 is hand-rolled, because the
+       package compiles against `lib: ES2022` with no DOM and no Node types — deliberately, so it "can
+       run anywhere" — and it already hand-rolls CRC-32 and Latin-1.
 4. [ ] **The permalink KEY is not unified across consumers.** This package's README specifies
-   `Software` + `cas:state`; two apps follow it (Riemann Map, Contour Integration) and four each
-   minted their own prefix before the package existed — `ap:url`, `2de:url`, `2dh:url`,
-   `cdjs:state`. A reader wanting to open any figure in the suite therefore has four special cases.
-   Deliberately not fixed from inside one app; it wants a suite-wide slice.
+       `Software` + `cas:state`; two apps follow it (Riemann Map, Contour Integration) and four each
+       minted their own prefix before the package existed — `ap:url`, `2de:url`, `2dh:url`,
+       `cdjs:state`. A reader wanting to open any figure in the suite therefore has four special cases.
+       Deliberately not fixed from inside one app; it wants a suite-wide slice.
 5. [ ] **`mountNavHeader`'s reading order depends on CALL ORDER, silently** — found in the same pass,
-   and belonging to ADR-0032. It ends with `container.appendChild(nav)`, so the nav reads wherever the
-   call happens to fall while `.cas-nav` is `position: fixed` and always draws at the top. Contour
-   Integration mounted it *after* filling its shell, so the nav was the last child: it looked first
-   and read last, after the entire rail. **Checked, and every other adopter is correct** — 2D
-   Electrostatics (both pages), Hele-Shaw (both), Potential Theory and 2D Hydrodynamics each call it
-   immediately before `app.append(bar, stage)`, so their nav is the first child. So this is not four
-   broken apps; it is one function whose contract is positional and unstated. `mountNavHeader` should
-   `prepend` (or say in its own doc that the caller must call it first), so the guarantee does not
-   rest on six call sites remembering.
+       and belonging to ADR-0032. It ends with `container.appendChild(nav)`, so the nav reads wherever the
+       call happens to fall while `.cas-nav` is `position: fixed` and always draws at the top. Contour
+       Integration mounted it _after_ filling its shell, so the nav was the last child: it looked first
+       and read last, after the entire rail. **Checked, and every other adopter is correct** — 2D
+       Electrostatics (both pages), Hele-Shaw (both), Potential Theory and 2D Hydrodynamics each call it
+       immediately before `app.append(bar, stage)`, so their nav is the first child. So this is not four
+       broken apps; it is one function whose contract is positional and unstated. `mountNavHeader` should
+       `prepend` (or say in its own doc that the caller must call it first), so the guarantee does not
+       rest on six call sites remembering.
 
 ## ADR-0017: The Complex-Dynamics → Riemann-Map hand-off; Riemann Map becomes a pure-2D conformal consumer
 
 **Status:** Accepted — **supersedes the RM-consumer premise of [ADR-0014](#adr-0014-extract-casdynamics-on-the-second-consumer-rule-riemann-map), narrows [ADR-0013](#adr-0013-the-riemann-map-tool-is-a-new-app-not-a-mode-in-an-existing-one)**
 
 ### Context
+
 [ADR-0013](#adr-0013-the-riemann-map-tool-is-a-new-app-not-a-mode-in-an-existing-one) gave the Riemann-map
 studio its own identity; [ADR-0014](#adr-0014-extract-casdynamics-on-the-second-consumer-rule-riemann-map)
 made it the second consumer of Complex Dynamics' inverse-Böttcher machinery (`@cas/dynamics`) so it could
@@ -1507,12 +1536,13 @@ Complex-Function Plotter's job. Crucially, the exterior Böttcher map ψ(w) = γ
 interchange `LaurentMap` shape, so it can be handed between tools with **no schema change**.
 
 ### Decision
+
 Make **one tool own dynamics**. Complex Dynamics gains its first interchange **producer** (`exportMap.ts`, the
 app's first `encodeLink` use): a "Riemann Map ↗" action exports the current Julia set's Böttcher map as a
 `kind:"map"` `LaurentMap` deep link. Riemann Map gains a **consumer** (`importMap.ts`) and an "import"
 disk-image source that renders the received ψ as an ext(𝔻) → ext(·) pushforward. RM then **sheds its whole
 dynamics + GPU stack**: the escape-time Julia render mode, the dynamics analysis panel, external rays, the
-Green's function, its own local Böttcher computation and interchange *producer*, the generic domain-coloring
+Green's function, its own local Böttcher computation and interchange _producer_, the generic domain-coloring
 render modes, and the entire WebGL fragment pipeline. RM is now **pure-2D** and consumes only `@cas/core`,
 `@cas/export`, `@cas/expr`, and `@cas/interchange`. A cross-app golden `CD_TO_RM_BOTTCHER_LINK` (in
 `@cas/interchange`) pins the producer and consumer to the same bytes. Honest labeling is preserved: the
@@ -1520,57 +1550,61 @@ capacity γ₁ is exact, the tail bₖ are `≈` truncated-series estimates, car
 
 This **supersedes** ADR-0014's premise that RM is a live `@cas/dynamics` consumer (RM dropped the dependency;
 `@cas/dynamics` is now a single-consumer package — Complex Dynamics — which per
-[ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) does not *force* a re-merge, but is recorded
-here), and **narrows** ADR-0013: RM no longer owns dynamics or domain-coloring — it owns *images of regions
-under conformal maps, and the construction of those maps*.
+[ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) does not _force_ a re-merge, but is recorded
+here), and **narrows** ADR-0013: RM no longer owns dynamics or domain-coloring — it owns _images of regions
+under conformal maps, and the construction of those maps_.
 
 ### Options Considered
-- **A — hand-off + full cut (this ADR).** *Pros:* one owner for dynamics; RM's identity sharpens to the
+
+- **A — hand-off + full cut (this ADR).** _Pros:_ one owner for dynamics; RM's identity sharpens to the
   conformal tool; RM drops `@cas/dynamics`, `@cas/schwarz`, and `@cas/gpu`; no schema change (the format
-  already carried the map). *Cons:* a researcher can no longer compute a Julia set's Böttcher map *inside* RM
+  already carried the map). _Cons:_ a researcher can no longer compute a Julia set's Böttcher map _inside_ RM
   — they round-trip through Complex Dynamics (typing a plain exterior map still works via the expression source).
-- **B — keep RM computing dynamics locally alongside the import.** *Rejected:* duplicates Complex Dynamics,
+- **B — keep RM computing dynamics locally alongside the import.** _Rejected:_ duplicates Complex Dynamics,
   blurs the two tools' identity, and keeps `@cas/dynamics` in RM for a job another tool already does.
-- **C — keep the generic domain-coloring modes (retain the GPU pipeline).** *Rejected:* phase / distortion /
+- **C — keep the generic domain-coloring modes (retain the GPU pipeline).** _Rejected:_ phase / distortion /
   checker portraits are the Complex-Function Plotter's domain (independent code, a clean product cut, not a
-  dedup), and those modes are the *only* consumer of RM's fragment shader — keeping them orphans nothing, but
+  dedup), and those modes are the _only_ consumer of RM's fragment shader — keeping them orphans nothing, but
   removing them orphans the whole GPU stack, so it goes too. The domain-coloring shader is not reusable for a
   future conformal-image GPU render (that would be a different shader).
 
 ### Consequences
+
 - **Easier:** RM is a lean, pure-2D studio (source region + its conformal image in linked canvas panes); no
   WebGL, so the "WebGL2 unavailable" failure mode is gone; the suite has a worked example of the interchange
-  keystone carrying a map *between* two tools in the CD → RM direction (the mirror of QD → CD).
+  keystone carrying a map _between_ two tools in the CD → RM direction (the mirror of QD → CD).
 - **Harder:** `@cas/dynamics` is now single-consumer (a weaker extraction rationale, recorded not reversed);
-  the exterior-map *authoring* that used to live in RM now requires Complex Dynamics.
+  the exterior-map _authoring_ that used to live in RM now requires Complex Dynamics.
 - **Revisit:** if a second `@cas/dynamics` consumer never re-materialises and the package becomes maintenance
   drag, ADR-0007's symmetric "don't split without two" would invite folding it back into Complex Dynamics —
   not done now (it is small, correct, and green).
 
 ### Action Items
+
 1. [x] **B1** — CD producer (`exportMap.ts` + "Riemann Map ↗" deep-link button); cross-app golden.
 2. [x] **B2** — RM consumer (`importMap.ts`) + the "import" disk-image source (deep-link on boot + paste).
 3. [x] **B4** — RM sheds the Julia render mode, dynamics analysis, rays, local Böttcher + its producer; drops
-   `@cas/dynamics` and the dead `@cas/schwarz`.
+       `@cas/dynamics` and the dead `@cas/schwarz`.
 4. [x] **C** — RM drops the generic domain-coloring modes and the whole GPU fragment pipeline; drops `@cas/gpu`;
-   renders pure-2D.
+       renders pure-2D.
 
 ## ADR-0018: Extract `@cas/conformal` ahead of demand; lift `lstsq` into `@cas/core`
 
-**Status:** Accepted — a **deliberate exception** to [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) (extract *ahead* of a proven second consumer); the lifted primitive lands in [ADR-0006](#adr-0006-convention-neutral-core)-neutral `@cas/core`
+**Status:** Accepted — a **deliberate exception** to [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) (extract _ahead_ of a proven second consumer); the lifted primitive lands in [ADR-0006](#adr-0006-convention-neutral-core)-neutral `@cas/core`
 
 ### Context
+
 Roadmap step D. The Riemann-map studio's numerical region map 𝔻 → Ω is produced by a self-contained conformal-map
 **builder** that lived in `apps/riemann-map/src/solve/`: the Vandermonde–Arnoldi stable polynomial basis
 (Brubeck–Nakatsukasa–Trefethen 2021), the lightning Riemann-map solver f: Ω → 𝔻 (Gopal–Trefethen 2019) with
 corner-clustered poles, the forward map g: 𝔻 → Ω, and beneath all three a real Householder-QR least-squares
-solver `lstsqHouseholder`. The roadmap's **next** step (E) is Schwarz–Christoffel — a *new* conformal engine that
+solver `lstsqHouseholder`. The roadmap's **next** step (E) is Schwarz–Christoffel — a _new_ conformal engine that
 will want the same basis + least-squares substrate and the same `corners?` hook. Two placement questions follow:
 where should the **builder** live, and where should the **least-squares primitive** live.
 
 Every prior `@cas/*` package waited for a proven **second consumer** before extraction
-([ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need)). Here there is none yet for the *builder* — RM
-is its only consumer today. For the *least-squares* primitive an investigation found a genuine near-twin in
+([ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need)). Here there is none yet for the _builder_ — RM
+is its only consumer today. For the _least-squares_ primitive an investigation found a genuine near-twin in
 **Quadrature Domains** (`app/solvers/solver.mjs`: `houseQR` / `solveLeastSquares` / `leastSquaresWithCond`), used
 load-bearingly in QD's near-cusp Newton solver — but the two have **diverged**: RM zero-fills a rank-deficient
 column (tol `1e-300`, never throws) while QD **throws** `"singular"` (tol `1e-13`) and is genuinely richer
@@ -1579,10 +1613,11 @@ path depends on). They are **not drop-in interchangeable** — which refutes the
 (the "QD's is richer" half is true; the "≡" is false).
 
 ### Decision
+
 Two moves, both recorded here:
 
 1. **Extract `@cas/conformal` ahead of demand.** The builder (Vandermonde–Arnoldi + lightning + forward map)
-   becomes the **ninth** `@cas/*` package now, *before* a second consumer exists — a deliberate exception to
+   becomes the **ninth** `@cas/*` package now, _before_ a second consumer exists — a deliberate exception to
    ADR-0007. Rationale: step E (Schwarz–Christoffel) is a genuinely new engine, and it is cheaper and cleaner to
    give it a package to be **born into** than to build it inside the app and re-seam afterward (the
    build-then-migrate waste [VISION §5](VISION.md#5-the-strategic-thesis) rejects). The exception is safe because
@@ -1592,7 +1627,7 @@ Two moves, both recorded here:
 
 2. **Lift `lstsqHouseholder` into `@cas/core`** (not into `@cas/conformal`). Real Householder-QR least squares is
    foundational, general-purpose linear algebra — nothing conformal-specific about it — and QD independently
-   implementing the same routine *proves* it is a shared primitive. `@cas/core` (ADR-0006-neutral, and already
+   implementing the same routine _proves_ it is a shared primitive. `@cas/core` (ADR-0006-neutral, and already
    `dist`-built so QD's headless `node` suite could import it) is the right home. **But do not rewire QD's solver
    in this step.** QD's variant has diverged (rank policy) and is cusp-critical; forcing it onto RM's zero-fill
    contract would regress it, and merging the two properly is its own risk-bearing consolidation ("ask before
@@ -1603,19 +1638,21 @@ Two moves, both recorded here:
    mature numerics in place.
 
 ### Options Considered
-- **A — extract `@cas/conformal` + lift lstsq→core, defer QD (this ADR).** *Pros:* gives step E a home to build
-  into; `@cas/core` gains the honest foundational primitive; touches **no** mature app math. *Cons:* two
+
+- **A — extract `@cas/conformal` + lift lstsq→core, defer QD (this ADR).** _Pros:_ gives step E a home to build
+  into; `@cas/core` gains the honest foundational primitive; touches **no** mature app math. _Cons:_ two
   extract-aheads in one step (softens ADR-0007 twice — recorded, not hidden).
-- **B — keep the builder in RM; extract only when Schwarz–Christoffel lands.** *Rejected:* builds a new engine
+- **B — keep the builder in RM; extract only when Schwarz–Christoffel lands.** _Rejected:_ builds a new engine
   inside an app and then re-seams it — the exact build-then-migrate waste VISION §5 rejects, and the seam is
   already clean today.
-- **C — lift a *superset* LSQ (QD's `houseQR` + a selectable rank policy) into core and rewire BOTH RM and QD
-  now.** *Rejected for this step:* a large, risky rewrite of QD's most numerically sensitive (near-cusp) code.
+- **C — lift a _superset_ LSQ (QD's `houseQR` + a selectable rank policy) into core and rewire BOTH RM and QD
+  now.** _Rejected for this step:_ a large, risky rewrite of QD's most numerically sensitive (near-cusp) code.
   It remains available as a future opt-in consolidation (Action Item 5).
-- **D — keep `lstsq` inside `@cas/conformal`, not core.** *Rejected:* least squares is not conformal-specific;
+- **D — keep `lstsq` inside `@cas/conformal`, not core.** _Rejected:_ least squares is not conformal-specific;
   hiding a general primitive inside a domain package is the wrong seam, and QD's twin shows the primitive recurs.
 
 ### Consequences
+
 - **Easier:** Schwarz–Christoffel (step E) has a package + a `corners?` hook to build into; `@cas/core` now owns
   the suite's least-squares primitive; Riemann Map shrinks (its whole `solve/` directory is gone — four fewer app
   files — and it gains one more `@cas/*` dependency instead).
@@ -1630,53 +1667,54 @@ Two moves, both recorded here:
   rank-deficiency policy) the core primitive gets its honest second consumer.
 
 ### Action Items
+
 1. [x] Add `lstsqHouseholder` to `@cas/core` (moved from RM; plus rank-deficient-column and underdetermined-throw coverage).
 2. [x] Create `@cas/conformal` (Vandermonde–Arnoldi + lightning + forward map) on `@cas/core`; source-exports model.
 3. [x] Rewire Riemann Map onto `@cas/conformal`; delete `apps/riemann-map/src/solve/`; keep RM's forward-map
-   integration test over its domain-preset library.
+       integration test over its domain-preset library.
 4. [x] Register the package in `vitest.workspace.ts` + the test-census `PROJECTS` (a `conformal` bucket).
 5. [ ] **Deferred:** consolidate QD's `solver.mjs` least squares onto `@cas/core` — needs a selectable
-   rank-deficiency policy to reconcile the `1e-300`/`1e-13` + zero-fill/throw divergence, and to preserve QD's
-   `condEst`/refinement. QD is the anticipated second consumer.
+       rank-deficiency policy to reconcile the `1e-300`/`1e-13` + zero-fill/throw divergence, and to preserve QD's
+       `condEst`/refinement. QD is the anticipated second consumer.
 6. [x] **Done:** build Schwarz–Christoffel (roadmap step E) into `@cas/conformal` — the builder's second consumer
-   (its method-choice record is [ADR-0020](#adr-0020-schwarz-christoffel-engine-lightning-seeded-disk-canonical-two-mode)).
+       (its method-choice record is [ADR-0020](#adr-0020-schwarz-christoffel-engine-lightning-seeded-disk-canonical-two-mode)).
 
 ---
 
 ## ADR-0019: Argument Principle as a separate app
 
-**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+**Status:** Accepted **Date:** 2026-08 **Deciders:** Andrew
 
-*The sixth app joins the suite, and the direct sequel to [ADR-0010](#adr-0010-complex-function-plotting-tool-as-a-separate-app)
+_The sixth app joins the suite, and the direct sequel to [ADR-0010](#adr-0010-complex-function-plotting-tool-as-a-separate-app)
 (plotter) and [ADR-0013](#adr-0013-the-riemann-map-tool-is-a-new-app-not-a-mode-in-an-existing-one) (Riemann map).
 It is the event [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) and the north star are measured
 against — "does each new tool build fewer primitives than the last?" — and it is the tool
 [VISION §6/§7](VISION.md#6-what-success-looks-like) named in advance (the "argument-principle applet," folded in
 opportunistically once the packages it reuses exist). The full runbook lives in
-[`design/argument-principle-plan.md`](design/argument-principle-plan.md).*
+[`design/argument-principle-plan.md`](design/argument-principle-plan.md)._
 
 ### Context
 
 A sixth tool is requested: an **educational visualizer for the argument principle** — the theorem that the
 **winding number** of `f(γ)` about the origin equals the number of **zeros minus poles** of `f` enclosed by `γ`.
 Its headline is a **dual `z`-plane / `w`-plane view** with a draggable/drawable contour and a live
-`N − P = winding` readout that makes the equality visible. This is a *pedagogical* product: its value is the
+`N − P = winding` readout that makes the equality visible. This is a _pedagogical_ product: its value is the
 interaction (a contour the user moves and draws, a point that can traverse `γ ↔ f(γ)`) and the honest
 demonstration of a theorem, not a new rendering paradigm.
 
 The awkward fact to confront head-on: **the plotter already contains an "argument principle" instrument.**
 `apps/complex-function-plotter/src/analysis/singularities.ts` (ADR-0010, Phase 2) locates and counts zeros/poles
 by grid search → Newton refine (symbolic `f'`) → winding classification. So the fair question is whether the new
-tool should be **(A)** a new app, **(B)** an expanded mode/view *inside* the plotter (reusing that instrument), or
+tool should be **(A)** a new app, **(B)** an expanded mode/view _inside_ the plotter (reusing that instrument), or
 **(C)** a peer view inside Complex Dynamics.
 
 The deciding fact is the same one ADR-0009/0010/0013 turned on: **what does the feature share, and what does it
-bring?** The new tool shares only *packages* (`@cas/expr` for `f`/`f'`, `@cas/core` Durand–Kerner for exact
-roots, `@cas/interchange`, `@cas/export`), pulled *downward*. It brings a distinct product surface the plotter
+bring?** The new tool shares only _packages_ (`@cas/expr` for `f`/`f'`, `@cas/core` Durand–Kerner for exact
+roots, `@cas/interchange`, `@cas/export`), pulled _downward_. It brings a distinct product surface the plotter
 does not have — a dual-plane contour-interaction UI whose meaning is winding, not phase color. The plotter's
 instrument is a **single quantitative readout on a domain-colored field**; this tool is a **dedicated dual-view
 theorem explorer**. They overlap in exactly one primitive (the winding classifier), which is an
-[ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) *extraction* question, not a reason to merge two
+[ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) _extraction_ question, not a reason to merge two
 products.
 
 ### Decision
@@ -1694,6 +1732,7 @@ phase-gated plan.
 ### Options Considered
 
 #### Option A: A new standalone app `apps/argument-principle` (this ADR)
+
 **Pros:** matches the suite topology (decision #8); a thin app over shared packages; the dual-plane
 contour-interaction surface is genuinely its own product with its own controls and lifecycle; publishes
 independently; the one shared primitive (winding) becomes a clean extraction (ADR-0025) rather than copied code.
@@ -1701,17 +1740,19 @@ independently; the one shared primitive (winding) becomes a clean extraction (AD
 boundary must be kept honest; some UI scaffolding re-created per app (no `@cas/ui` — never extracted, ADR-0007).
 
 #### Option B: An expanded mode/view inside the Complex Function Plotter
+
 **Pros:** reuses the plotter's existing `singularities.ts` instrument, coloring, and input directly.
 **Cons — and why rejected:** the plotter's headline is **domain coloring** of a single `w = f(z)`; its
 argument-principle instrument is one small readout on that field. This tool's headline is a **dual `z`/`w`
 contour explorer** — a different paradigm (two linked planes, a user-manipulated contour, an animated traversal),
-with a *teaching* purpose rather than a *research-plot* one. Grafting it into the plotter would bloat the
+with a _teaching_ purpose rather than a _research-plot_ one. Grafting it into the plotter would bloat the
 plotter's `main.ts`, couple two products with different audiences and interactions, and blur the plotter's clear
 "domain-coloring studio" identity. σ earned a peer view in CD because it **shares CD's escape-time engine**
-(ADR-0009); this tool shares *packages*, not the plotter's pipeline. Rejected — the same reasoning that made the
+(ADR-0009); this tool shares _packages_, not the plotter's pipeline. Rejected — the same reasoning that made the
 plotter and Riemann map their own apps rather than CD modes.
 
 #### Option C: A peer view inside Complex Dynamics
+
 **Pros:** CD has mature 2D/GPU rendering and instruments.
 **Cons:** CD's paradigm is escape-time iteration of `f(z, c)`; the argument principle is a static
 single-evaluation instrument with no dynamics. No shared engine, a swelled `main.ts`, coupled audiences.
@@ -1720,7 +1761,7 @@ Rejected for the same share-vs-bring reason as B.
 ### Trade-off Analysis
 
 This applies the ADR-0009/0010/0013 test and gets the same answer they did: a feature that would **share** a host
-app's engine belongs *inside* it as a view; one that **brings its own** product surface and reuses only the
+app's engine belongs _inside_ it as a view; one that **brings its own** product surface and reuses only the
 **packages** (downward) belongs in its own app. The new tool reimplements **none** of the shared foundation — it
 composes `@cas/expr` (`parse` / `makeComplexFn` / `differentiate` / `fToRational`), `@cas/core`
 (`makeDurandKerner`), `@cas/interchange`, and `@cas/export` — so it is a **direct, favorable test of the north
@@ -1744,7 +1785,7 @@ slated for extraction on the second-consumer rule (ADR-0025), not duplication.
   `singularities.ts` is the first consumer; this app the second), with the plotter refactored to consume it.
   Recorded when it lands (plan Phase 4).
 - **Watch for:** the app drifting into the plotter's domain-coloring territory (that belongs to the plotter — keep
-  this tool's backgrounds plain/grid, a phase tint at most); and the winding classifier being *copied* rather than
+  this tool's backgrounds plain/grid, a phase tint at most); and the winding classifier being _copied_ rather than
   extracted once both apps carry it.
 - **Revisit if:** this app and the plotter's instrument converge enough that one should consume the other — then
   extract the shared piece into a package (ADR-0007 / ADR-0025), rather than merging the apps.
@@ -1771,21 +1812,22 @@ slated for extraction on the second-consumer rule (ADR-0025), not duplication.
 
 ## ADR-0025: Defer the winding / singularity primitive extraction (second consumer noted)
 
-**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+**Status:** Accepted **Date:** 2026-08 **Deciders:** Andrew
 
 > **Renumbering note:** this ADR was originally recorded as a second `ADR-0020`, duplicating the
 > Schwarz–Christoffel engine ADR-0020 below. Renumbered to **0025** (the next free number) so every ADR
 > ID is unique. It is kept here beside its parent [ADR-0019](#adr-0019-argument-principle-as-a-separate-app)
 > — both are Argument-Principle decisions — so the number, not the file position, is authoritative.
 
-*An [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) **deferral**, in the mould of
+_An [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) **deferral**, in the mould of
 [ADR-0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate) (keep QD's `sym-core` separate) and
 [ADR-0018](#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore) Action Item 5 (defer QD's
 least-squares consolidation): the suite's pattern of **not** force-merging diverged, mature code. Anticipated
 by [ADR-0019](#adr-0019-argument-principle-as-a-separate-app) (its follow-on ADR) and the
-[argument-principle plan §4](design/argument-principle-plan.md).*
+[argument-principle plan §4](design/argument-principle-plan.md)._
 
 ### Context
+
 The Complex-Function-Plotter's `src/analysis/singularities.ts` (ADR-0010, Phase 2) was the suite's first
 zero/pole finder — grid-sample `|f|`, Newton-refine with the symbolic `f′`, classify by the winding of
 `arg f` around a small circle. Building the Argument-Principle tool produced a **second** consumer of that
@@ -1793,49 +1835,53 @@ machinery (`apps/argument-principle/src/singularities.ts` + `winding.ts`). ADR-0
 shared package the moment a second consumer needs it — so the extraction was evaluated here. The finding is
 that the two have **diverged**, in two ways:
 
-1. **The finder is not the same finder.** The Argument-Principle version is a *superset*: it added an **exact
+1. **The finder is not the same finder.** The Argument-Principle version is a _superset_: it added an **exact
    rational path** (`@cas/expr` `fToRational` → `@cas/core` Durand–Kerner on numerator/denominator, labelled
    `=`), **critical points** (`f′` roots), and an **AST + Region** interface returning
    `{zeros, poles, critical, differentiable, exact}`. The plotter's takes compiled `(f, f′)` closures + a
    `ViewBox` + aspect, is **grid-only**, and returns `{zeros, poles, differentiable}`.
 2. **The winding accumulator looks shared but its semantics diverged.** The plotter's inline `winding()`
-   returns **0** when a sample lands on a singularity (`|w| = 0`) — a deliberate robustness choice *for its
-   classifier*. The Argument-Principle `windingNumber()` accumulates unconditionally and exposes
+   returns **0** when a sample lands on a singularity (`|w| = 0`) — a deliberate robustness choice _for its
+   classifier_. The Argument-Principle `windingNumber()` accumulates unconditionally and exposes
    trustworthiness **separately** (`windingReliable`), because it must report the true winding of a
    user-drawn contour, not silently zero it. Forcing the plotter onto the AP primitive would change its
    classifier's behavior at singular samples.
 
 ### Decision
+
 **Defer the extraction.** Record the second consumer; keep both finders **app-local**. Do not extract a
 shared finder or a shared winding primitive in this step.
 
 ### Options Considered
-- **A — Defer (this ADR).** *Pros:* no risk to the mature, shipped plotter; the Argument-Principle publish
-  stays a clean, isolated change; honest under ADR-0007 (extract on *real, low-risk* need). *Cons:* the
+
+- **A — Defer (this ADR).** _Pros:_ no risk to the mature, shipped plotter; the Argument-Principle publish
+  stays a clean, isolated change; honest under ADR-0007 (extract on _real, low-risk_ need). _Cons:_ the
   winding-accumulator logic now exists in two apps — a known, bounded duplication (recorded, watched).
-- **B — Extract a lowest-common `windingNumber(points)` primitive and rewire the plotter.** *Rejected now:*
+- **B — Extract a lowest-common `windingNumber(points)` primitive and rewire the plotter.** _Rejected now:_
   the two winding uses have **different singular-sample semantics** (§Context.2); reconciling them means
   giving the plotter's tuned classifier a new dependency and a behavior change, for a ~30-line dedup — risk
-  outweighs reward. It becomes attractive if a *third* consumer appears or the semantics are unified behind a
+  outweighs reward. It becomes attractive if a _third_ consumer appears or the semantics are unified behind a
   `windingNumber(points, { onSingular })` policy argument.
-- **C — Extract the superset finder to a package.** *Rejected:* it would burden the plotter with the
+- **C — Extract the superset finder to a package.** _Rejected:_ it would burden the plotter with the
   rational-exact / critical-point machinery it does not use, and is the premature-abstraction ADR-0007 guards
-  against. (Symmetric rule: "two engines are not *merged* without one either.")
+  against. (Symmetric rule: "two engines are not _merged_ without one either.")
 
 ### Consequences
+
 - **Easier:** the publish is decoupled from a risk-bearing refactor of a shipped app; each finder stays tuned
   to its own tool (the plotter's escape-time-adjacent instrument; the AP tool's exact-when-rational counter).
 - **Harder / owed:** the winding accumulator is duplicated across the plotter and the Argument-Principle tool
   — a bounded, recorded cost. If either changes materially, keep them in sync by hand until extraction.
-- **Convention-safety note (ADR-0006):** a future extracted `windingNumber` *is* convention-neutral (an
-  integer count from a point list, no `π`/`2πi`), so the deferral is about *interface divergence and consumer
-  risk*, not about conventions — the primitive would be safe to share once the semantics are unified.
+- **Convention-safety note (ADR-0006):** a future extracted `windingNumber` _is_ convention-neutral (an
+  integer count from a point list, no `π`/`2πi`), so the deferral is about _interface divergence and consumer
+  risk_, not about conventions — the primitive would be safe to share once the semantics are unified.
 - **Revisit if:** a **third** consumer needs winding / zero-pole location, **or** the plotter and AP finders
   are deliberately unified behind a single interface (a `windingNumber(points, { onSingular })` with a
   selectable singular-sample policy; a finder that offers both the grid and rational paths) — at which point
   extract, with **both** apps' test suites green before and after (the standing test-guard rule).
 
 ### Action Items
+
 1. [x] Record the second consumer and the deferral (this ADR).
 2. [ ] **Deferred:** extract a `windingNumber(points, { onSingular })` primitive (with a selectable
        singular-sample policy) into `@cas/core` when a third consumer appears or the plotter/AP finders are
@@ -1847,21 +1893,23 @@ shared finder or a shared winding primitive in this step.
 
 ## ADR-0020: Schwarz-Christoffel engine: lightning-seeded, disk-canonical, two-mode
 
-**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+**Status:** Accepted **Date:** 2026-08 **Deciders:** Andrew
 
-*The method-choice record for the Schwarz–Christoffel (SC) engine (roadmap step E), built into
+_The method-choice record for the Schwarz–Christoffel (SC) engine (roadmap step E), built into
 [`@cas/conformal`](../packages/conformal) — the **second consumer** that retro-justifies the
 ahead-of-demand extraction of [ADR-0018](#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore).
 Grounded in a four-thread literature + implementation survey; the full runbook and ground-truth corpus are in
-[`design/schwarz-christoffel-plan.md`](design/schwarz-christoffel-plan.md) and its research-notes companion.*
+[`design/schwarz-christoffel-plan.md`](design/schwarz-christoffel-plan.md) and its research-notes companion._
 
 ### Context
+
 The suite already maps polygons numerically (the lightning engine in `@cas/conformal`). So SC's value is not a
-better *map* but the exact analytic *record* — prevertices, exact corner exponents, accessory constants — plus
+better _map_ but the exact analytic _record_ — prevertices, exact corner exponents, accessory constants — plus
 robustness. Four sub-decisions follow: the canonical domain, the numerical method, the two-mode structure, and
 where the one new primitive lives.
 
 ### Decision
+
 1. **Lightning-seeded SC, disk-canonical.** Map from the unit disk 𝔻 (matches `@cas/conformal`'s existing
    `f: Ω→𝔻` / `g: 𝔻→Ω` API and the cleanest golden cases). For `|t| ≤ 1` every factor `(1 − t/wₖ)` stays in the
    right half-plane, so the disk needs none of the half-plane's branch bookkeeping.
@@ -1877,24 +1925,27 @@ where the one new primitive lives.
    serialization are deferred.
 
 ### Options Considered
+
 - **A (chosen) — lightning-seeded SC reusing the substrate.** Reuses the built lightning fit + Arnoldi + `lstsq`;
   adds only Gauss–Jacobi. Fast mode is genuinely instant; precise is machine-precision.
-- **B — one SC engine at two tolerances (loose vs tight).** *Rejected:* spends effort making a nonlinear solve
+- **B — one SC engine at two tolerances (loose vs tight).** _Rejected:_ spends effort making a nonlinear solve
   do the linear lightning solve's job; heavier per-frame; a worse fit for a real-time fast mode.
-- **C — skip SC, rely on lightning + AAA-LS.** *Rejected:* forfeits the exact analytic record and the meaningful
+- **C — skip SC, rely on lightning + AAA-LS.** _Rejected:_ forfeits the exact analytic record and the meaningful
   prevertices — the whole reason to build SC.
 
 ### Consequences
+
 - **Delivered:** SC retro-justifies ADR-0018 (its promised second consumer); `@cas/conformal` gains its second
   engine; the public `fitSchwarzChristoffel` exposes prevertices, `C`, `A`, the quadrilateral conformal modulus,
   and an honest `residual`. Precise mode is the robust all-polygon workhorse (machine precision).
-- **Known limitation (honest, not hidden):** the polygon *lightning* fit (fast mode) is reliable for convex/mild
+- **Known limitation (honest, not hidden):** the polygon _lightning_ fit (fast mode) is reliable for convex/mild
   corners but fails on strongly **reentrant** corners — fast mode sets `degraded:true` there, and precise mode is
   the path for reentrant polygons. Proper Gopal–Trefethen reentrant pole handling is deferred tuning.
 - **Revisit:** when the deferred roadmap lands (inverse map → CRDT → variants → interchange), and if a second
   consumer of Gauss–Jacobi appears (then it earns a place in `@cas/core`, per ADR-0007).
 
 ### Action Items
+
 1. [x] Gauss–Jacobi quadrature primitive (Golub–Welsch) + the compound rule (Phase 0).
 2. [x] Forward SC map for given prevertices (Phase 1); golden n-gon / square validation.
 3. [x] The parameter-problem solver (Phase 2); triangle / pentagon / L-shape to ≥10 digits.
@@ -1904,31 +1955,33 @@ where the one new primitive lives.
        `apps/riemann-map/src/main.ts` uses `fitSchwarzChristoffel` for domains with `corners`; the region
        picker offers the polygon presets; the info panel reports the SC method + residual).
 7. [~] **Partly done:** the **exterior** SC variant (𝔻* → Ω, bounded simple polygon) shipped for the Faber
-       Transform app — `exteriorSchwarzChristoffel.ts` + `exteriorScParameterProblem.ts` (see
-       [ADR-0024](#adr-0024-faber-transform-app--casfaber--polygonal-k-via-the-exterior-sc-engine)). Still
-       **deferred:** CRDT (crowding), unbounded/circular-arc variants, `@cas/interchange` serialization, and a
-       robust reentrant lightning fast-mode.
+   Transform app — `exteriorSchwarzChristoffel.ts` + `exteriorScParameterProblem.ts` (see
+   [ADR-0024](#adr-0024-faber-transform-app--casfaber--polygonal-k-via-the-exterior-sc-engine)). Still
+   **deferred:** CRDT (crowding), unbounded/circular-arc variants, `@cas/interchange` serialization, and a
+   robust reentrant lightning fast-mode.
 
 ---
 
 ## ADR-0021: Argument Principle pedagogy arc — generalize to f = w₀, and the pin interaction model
 
-**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+**Status:** Accepted **Date:** 2026-08 **Deciders:** Andrew
 
-*A within-app product decision for `apps/argument-principle`, layered on the shipped tool
+_A within-app product decision for `apps/argument-principle`, layered on the shipped tool
 ([ADR-0019](#adr-0019-argument-principle-as-a-separate-app)) after its pedagogy enhancement arc
 ([plan §11](design/argument-principle-plan.md#11-pedagogy-enhancement-arc-a--b--c--d8--f13-shipped)). It records
 two decisions that change what the tool teaches and how it is operated; it changes **no** shared package and
-**no** interchange schema.*
+**no** interchange schema._
 
 ### Context
+
 The shipped tool demonstrated the classic argument principle: winding of `f(γ)` about `0` = zeros − poles
-enclosed. A second construction arc added surfaces that teach the *mechanism* (an argument strip-chart, a
-swept wedge, the `∮ f′/f` integral, per-root decomposition), interaction that teaches the *discreteness* of
-the count (hover tooltips, boundary-crossing pulses, click-to-isolate), and one genuine *generalization*.
+enclosed. A second construction arc added surfaces that teach the _mechanism_ (an argument strip-chart, a
+swept wedge, the `∮ f′/f` integral, per-root decomposition), interaction that teaches the _discreteness_ of
+the count (hover tooltips, boundary-crossing pulses, click-to-isolate), and one genuine _generalization_.
 Two of these needed a recorded decision.
 
 ### Decision
+
 1. **Generalize the counted quantity from "zeros of f" to "solutions of f(z) = w₀."** A draggable **target
    w₀** in the image plane makes the winding of `f(γ)` measured about `w₀`, counting **preimages of w₀**
    inside γ (poles and critical points are target-independent). `w₀ = 0` is the classic zero-counting case,
@@ -1943,14 +1996,15 @@ Two of these needed a recorded decision.
    the tension between "the circle follows the cursor" (the reference applet's default) and "hold a
    configuration to study it."
    > **Superseded in part by [ADR-0022](#adr-0022-explicit-contour-input-modes-touch-first).** The
-   > *cursor-follow* premise here is gone: there is no follow to suspend, and isolating a root is now a
+   > _cursor-follow_ premise here is gone: there is no follow to suspend, and isolating a root is now a
    > **tap in the explicit "Isolate" tool**, not a click on the default-follow circle. What survives: the
    > **"Release γ"** relabel and the release-on-empty-space / release-on-new-`f` behavior.
 
 ### Options Considered
-- **Target generalization — A (chosen):** a draggable w₀ that generalizes the count. *Pros:* a real
+
+- **Target generalization — A (chosen):** a draggable w₀ that generalizes the count. _Pros:_ a real
   conceptual payoff (`f = w₀`, level sets, open-mapping) for a small delta; `w₀ = 0` is a strict special case
-  so nothing regresses. *Cons:* the readouts must relabel ("solutions" vs "zeros"), and the crossing detector
+  so nothing regresses. _Cons:_ the readouts must relabel ("solutions" vs "zeros"), and the crossing detector
   had to key off the `(expr, target)` the roots reflect, not the live target (else a target drag fakes
   crossings across the debounced finder's lag). — **B (rejected):** keep zeros-only; simpler, but forgoes the
   one generalization the layout makes cheap.
@@ -1959,6 +2013,7 @@ Two of these needed a recorded decision.
   makes "isolate a root" impossible to hold.
 
 ### Consequences
+
 - **App-local only.** The whole arc is `apps/argument-principle` code: no new `@cas/*` package (the ADR-0019
   deferral stands — the finder/winding are still app-local, now a superset), no interchange schema change.
 - **Convention-safety (ADR-0006).** The new `1/2πi` normalization for the `∮ f′/f` readout lives at the app
@@ -1971,6 +2026,7 @@ Two of these needed a recorded decision.
   decode; older `#vs=` permalinks keep opening (the share-link-compat guardrail).
 
 ### Action Items
+
 1. [x] Ship the pedagogy arc (Stages 0–4) and this ADR (Stage 5).
 2. [ ] **Deferred / exploratory:** a Rouché companion, a Nyquist (D-contour) mode, and a phase-tint
        background remain optional backlog (plan §11 lists the full menu); none is taken now.
@@ -1979,21 +2035,23 @@ Two of these needed a recorded decision.
 
 ## ADR-0022: Explicit contour input modes (touch-first)
 
-**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+**Status:** Accepted **Date:** 2026-08 **Deciders:** Andrew
 
-*A `apps/argument-principle` interaction-model decision for the UX/accessibility redesign
+_A `apps/argument-principle` interaction-model decision for the UX/accessibility redesign
 ([plan §12](design/argument-principle-plan.md#12-ux--accessibility-redesign-touch--colour-blind--organization--shipped)).
-App-local; no shared package or schema change.*
+App-local; no shared package or schema change._
 
 ### Context
+
 The tool's input is mouse-only and gesture-overloaded: a plain **hover** places the circular contour γ,
 **right-drag** pans, **wheel** zooms, **left-drag** draws a freehand γ, a **click** pins/isolates a root, and
 **hover** shows a marker tooltip. On touch this collapses — there is no hover without a press, no right-click,
-and no wheel — so the *primary* interaction (place γ) is impossible on a phone/tablet/Chromebook, the devices
+and no wheel — so the _primary_ interaction (place γ) is impossible on a phone/tablet/Chromebook, the devices
 an educational tool most needs. The gesture modes are also undiscoverable (documented only in a text tip) and
 the right-drag-pan / left-drag-draw split is unintuitive on the desktop too.
 
 ### Decision
+
 Introduce an explicit, labelled **contour-mode segmented control `[ Move γ · Draw · Isolate ]`** and **retire
 right-drag-pan and hover-follow**. Move = tap/click to place the circle; Draw = drag to sketch a freehand γ;
 Isolate = tap/click a root to pin it. Pan becomes **one-finger / left-drag** in Move mode; zoom is **wheel +
@@ -2002,20 +2060,23 @@ aware** — hover tooltips on mouse, tap-to-reveal (into the persistent legend/r
 targets are ≥ 44px, including a labelled draggable w₀ handle.
 
 ### Options Considered
+
 - **A — explicit modes (chosen).** The single-pointer alternative WCAG 2.5.1 wants; identical on mouse and
-  touch; makes three hidden features visible. *Cons:* a mode is state the user must set (mitigated: Move is
+  touch; makes three hidden features visible. _Cons:_ a mode is state the user must set (mitigated: Move is
   the default and covers the common case).
 - **B — keep gestures, add touch fallbacks.** Rejected: preserves the desktop mode-overload and the
   discoverability gap, and touch gesture-disambiguation (tap-place vs drag-draw vs drag-pan) is fragile.
 - **C — a "pin contour" toggle only.** Rejected: solves isolate but not draw or touch-place.
 
 ### Consequences
+
 - Touch/classroom devices become first-class; the desktop interaction gets simpler and discoverable.
 - `render/nav.ts` gains a mode-aware pointer layer and pinch handling; the change is app-local, pure-2D.
 - The freehand-draw and isolate features move from hidden gestures to visible modes (no capability lost).
 - **Revisit if:** a genuine stylus/precision workflow wants raw gestures back behind a preference.
 
 ### Action Items
+
 1. [x] Record the decision (this ADR); publish the wireframe.
 2. [x] Implemented in redesign **Phase 2** (#269) — mode control + pinch + target sizes, Playwright
        touch-emulation smokes green.
@@ -2024,21 +2085,23 @@ targets are ≥ 44px, including a labelled draggable w₀ handle.
 
 ## ADR-0023: Accessible marks — validated palette, shape encoding, and a non-rainbow ramp
 
-**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+**Status:** Accepted **Date:** 2026-08 **Deciders:** Andrew
 
-*A `apps/argument-principle` visualization-accessibility decision
+_A `apps/argument-principle` visualization-accessibility decision
 ([plan §12](design/argument-principle-plan.md#12-ux--accessibility-redesign-touch--colour-blind--organization--shipped)).
-App-local; the palette lands as design tokens (a candidate to share later, not now).*
+App-local; the palette lands as design tokens (a candidate to share later, not now)._
 
 ### Context
+
 Identity in the z-plane is carried largely by hue: **zeros and poles use the identical ✕ glyph**, separated
 only by colour (teal vs rose). The house CVD validator rates that pair at **ΔE ≈ 7.3–7.7 under deuteranopia**
-— the 6–8 band that is legal *only with a secondary (non-colour) encoding*, which is absent — and the
+— the 6–8 band that is legal _only with a secondary (non-colour) encoding_, which is absent — and the
 light-theme teal falls below the chroma floor (reads gray). The rainbow parameter-`t` ramp on γ / f(γ) / the
 strip is neither CVD-safe nor perceptually ordered, and the verdict leans on green-vs-rose. This violates
 WCAG 1.4.1 (use of colour) and 1.4.11 (non-text contrast).
 
 ### Decision
+
 1. **Double-encode identity by shape:** **○ zero · ✕ pole · ◆ f′=0 · ● target w₀** — four distinct shapes, so
    identity never depends on colour.
 2. **Adopt a validator-checked categorical mark palette** as tokens, snapped per light/dark mode. The
@@ -2053,14 +2116,16 @@ WCAG 1.4.1 (use of colour) and 1.4.11 (non-text contrast).
    table gives a text alternative; marks/lines meet ≥ 3:1; `prefers-reduced-motion` is honoured.
 
 ### Options Considered
+
 - **A — shape + validated palette + non-rainbow ramp (chosen).** Clears every WCAG check and the validator;
-  keeps the coupling story. *Cons:* the rainbow is the app's signature look — an accepted aesthetic change.
+  keeps the coupling story. _Cons:_ the rainbow is the app's signature look — an accepted aesthetic change.
 - **B — re-hue only (keep the ✕/✕ glyphs).** Rejected: a 6–8 ΔE pair is illegal without secondary encoding,
   and re-hueing alone can't clear it robustly across both themes.
 - **C — texture/pattern instead of shape.** Rejected: noisier on small glyphs than distinct shapes.
 
 ### Consequences
-- Colour-blind readers can tell a zero from a pole by shape *and* by a ΔE-≥-8 palette; the core result is
+
+- Colour-blind readers can tell a zero from a pole by shape _and_ by a ΔE-≥-8 palette; the core result is
   reachable by screen reader.
 - The palette is a token set (validated in CI); ADR-0006 is untouched — these are app-edge presentation
   colours, not core constants.
@@ -2068,29 +2133,31 @@ WCAG 1.4.1 (use of colour) and 1.4.11 (non-text contrast).
 - **Revisit if:** a second app needs the same accessible mark set — then extract the tokens (ADR-0007 rule).
 
 ### Action Items
+
 1. [x] Record the decision (this ADR); lock the validated hexes.
 2. [x] **Phase 1:** shapes + palette tokens + ARIA live + verdict icon + reduced-motion (#266).
 3. [x] **Phase 4:** the non-rainbow ramp (viridis, monotonic-lightness) + periodic direction arrowheads.
 4. [x] Add a CI palette-validator check over the mark token set — `apps/argument-principle/test/palette.test.ts`
-   (+ `palette-validator.ts`): reads the ○/✕/◆ tokens from `main.css` and gates, in both themes, the OKLab
-   ΔE CVD separation (≥ 8 under Machado protan+deutan; the trio measures 8.31 dark / 8.87 light), the
-   normal-vision ΔE floor (≥ 15), the OKLCH lightness band + chroma floor, and ≥ 3:1 contrast on the plane
-   surface. Runs under `pnpm test`, so a token edit that regresses colour-blind safety fails CI.
+       (+ `palette-validator.ts`): reads the ○/✕/◆ tokens from `main.css` and gates, in both themes, the OKLab
+       ΔE CVD separation (≥ 8 under Machado protan+deutan; the trio measures 8.31 dark / 8.87 light), the
+       normal-vision ΔE floor (≥ 15), the OKLCH lightness band + chroma floor, and ≥ 3:1 contrast on the plane
+       surface. Runs under `pnpm test`, so a token edit that regresses colour-blind safety fails CI.
 
 ---
 
 ## ADR-0024: Faber Transform app + `@cas/faber` + polygonal K via the exterior SC engine
 
-**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+**Status:** Accepted **Date:** 2026-08 **Deciders:** Andrew
 
-*Records, retroactively, the suite's **seventh** app — `apps/faber-transform` — its engine package
+_Records, retroactively, the suite's **seventh** app — `apps/faber-transform` — its engine package
 **`@cas/faber`** (the tenth `@cas/*` package), and the **polygonal-domain** extension that gives
 [`@cas/conformal`](../packages/conformal) its second Schwarz–Christoffel family. Research context + the
 prioritized extension list: [`design/faber-transform-research-features.md`](design/faber-transform-research-features.md);
 the polygonal-SC runbook (with the M0 de-risk spike) is
-[`design/faber-polygonal-sc-plan.md`](design/faber-polygonal-sc-plan.md).*
+[`design/faber-polygonal-sc-plan.md`](design/faber-polygonal-sc-plan.md)._
 
 ### Context
+
 The paper (Graven & Makarov, arXiv:2509.03777) makes the exterior Faber transform Φφ: 𝒜(𝔻) → 𝒜(K) the natural
 bridge between the unit disk and a bounded complement `K = ℂ∖Ω`. A separate visualizer app (per
 [decision 8](../CLAUDE.md) / [ADR-0004](#adr-0004-monorepo-topology), mirroring the Argument-Principle app of
@@ -2102,11 +2169,12 @@ SC engine of [ADR-0020](#adr-0020-schwarz-christoffel-engine-lightning-seeded-di
 deferred (its Action Item 7).
 
 ### Decision
+
 1. **Faber Transform is a separate app** (`apps/faber-transform`), not a mode of another tool — the same
    separate-apps-with-hand-off topology every other tool follows (ADR-0004/ADR-0008/ADR-0019).
 2. **The Faber engine is a package, `@cas/faber`** (the tenth). Everything downstream consumes one struct —
    `ExteriorMap = { c, laurent }`, the map's Laurent-at-∞ — so the recurrence, exact images, and render are
-   blind to *how* φ was produced (a curated closed form, or a solved SC map).
+   blind to _how_ φ was produced (a curated closed form, or a solved SC map).
 3. **Polygonal K rides `@cas/conformal`'s exterior SC engine**, not a new package. The exterior variant
    (`exteriorSchwarzChristoffel.ts` forward map + `exteriorScParameterProblem.ts` parameter solve) is added
    **in-package**, sharing the extracted `gaussNewton.ts` damped-Gauss–Newton driver with the interior solver.
@@ -2119,6 +2187,7 @@ deferred (its Action Item 7).
    blank panels rather than NaN garbage.
 
 ### Options Considered
+
 - **A (chosen) — separate app + `@cas/faber` + exterior SC inside `@cas/conformal`.** Reuses the SC substrate;
   adds only the exterior integrand + closure condition; keeps the one-struct contract clean.
 - **B — a new `@cas/schwarz-christoffel` (or `@cas/exterior-sc`) package.** Rejected: one consumer, so ADR-0007
@@ -2127,6 +2196,7 @@ deferred (its Action Item 7).
   two mature apps with a third tool's UI.
 
 ### Consequences
+
 - The domain class expands from curved (ellipse/deltoid/finite-Laurent) to **arbitrary polygons** — convex and
   reentrant — the single biggest coverage gain, with the corner theory (`Λₖ = max{αₖ, 2−αₖ}`) made visible.
 - **Exterior SC math (recorded, not hidden):** the reciprocal `u = 1/z` gives `Ψ(u) = φ(1/u): 𝔻 → Ω` with a
@@ -2140,6 +2210,7 @@ deferred (its Action Item 7).
   interchange `form` for the exterior map is needed (deferred — gate on a receiving tool, as ADR-0020 did).
 
 ### Action Items
+
 1. [x] `@cas/faber` engine: Faber recurrence, exact rational images, exterior-map Laurent jets.
 2. [x] **M0** de-risk spike (exterior integrand + exponent sign + capacity goldens: `Γ(1/4)` to 5 decimals).
 3. [x] **M1a** regular-polygon presets (closed-form exterior map) through the unchanged Faber pipeline.
@@ -2158,14 +2229,14 @@ deferred (its Action Item 7).
 
 ## ADR-0026: Defer consolidating QD's Schwarz engine with `@cas/schwarz` (classical-subset duplication)
 
-**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+**Status:** Accepted **Date:** 2026-08 **Deciders:** Andrew
 
-*A follow-on ADR in the [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) /
+_A follow-on ADR in the [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) /
 [ADR-0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate) shape, recording a deliberate DEFERRAL of a
 duplication surfaced by the 2026-08 suite review: QD's `app/schwarz/schwarz-common.mjs` and `@cas/schwarz`
 implement the same classical Schwarz-reflection σ on the bounded + unbounded-Laurent families. Unlike
 [ADR-0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate)'s `sym-core` (a genuine shape-mismatch
-non-merge), this subset is the SAME shape — so the merge is **deferred, not declined**.*
+non-merge), this subset is the SAME shape — so the merge is **deferred, not declined**._
 
 ### Context
 
@@ -2184,14 +2255,14 @@ QD's own `app/schwarz/schwarz-common.mjs` builds σ for the SAME classical famil
 is genuinely implemented twice, with no record of why.
 
 The review flagged this as reading like **forgotten duplication**. But `@cas/schwarz`'s own header already
-states the intended direction: *"The remaining weighted families (LQD, PQD) follow as the QD app's σ machinery
-is lifted here."* The intended end-state was always **consolidation** — the package grows to family parity,
+states the intended direction: _"The remaining weighted families (LQD, PQD) follow as the QD app's σ machinery
+is lifted here."_ The intended end-state was always **consolidation** — the package grows to family parity,
 then QD consumes it — not a permanent two-engine split.
 
 ### Decision
 
 **Defer the consolidation; do not partial-rewire now.** Keep `schwarz-common.mjs` as the QD-side σ engine for
-the present, and record the boundary explicitly so it is a *deliberate* deferral. When consolidation does
+the present, and record the boundary explicitly so it is a _deliberate_ deferral. When consolidation does
 happen it goes in the direction the package header names — **lift QD's weighted-family σ machinery into
 `@cas/schwarz` to reach family parity, then rewire QD to consume the complete package wholesale** — NOT a
 partial rewire of only the two classical families onto today's incomplete package.
@@ -2199,6 +2270,7 @@ partial rewire of only the two classical families onto today's incomplete packag
 ### Options Considered
 
 #### Option A: Partial rewire now — QD's `boundedQD` + `unboundedQD` onto today's `@cas/schwarz` (the review's first suggestion)
+
 **Pros:** kills the classical-subset duplication immediately; `@cas/schwarz` is a real, tested
 [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) second consumer. **Cons, and why rejected:**
 it leaves QD with a **split σ engine** — two of seven families reconstructed from the TS package, the other
@@ -2209,6 +2281,7 @@ solver's own σ code. That is harder to reason about than either pure state, and
 workers and the headless node suite — to the package graph for only a partial win.
 
 #### Option B: Lift QD's full σ machinery into `@cas/schwarz` NOW (reach parity, then QD consumes it)
+
 **Pros:** the coherent end-state; one σ engine for the suite. **Cons, and why deferred not done:** there is
 **no second consumer for the weighted families yet** — CD and Correspondences use only the unbounded-Laurent +
 bounded reconstructions. [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) is symmetric: don't
@@ -2219,10 +2292,11 @@ against — and unlike [ADR-0018](#adr-0018-extract-casconformal-ahead-of-demand
 deliberate extract-ahead, nothing here is blocked on it.
 
 #### Option C: Keep two engines permanently ([ADR-0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate) `sym-core` style)
+
 **Pros:** no coupling; each side evolves freely. **Cons:** unlike `sym-core` (multivariate vs univariate — a
 real shape mismatch that may never merge), the classical subset here is the **same shape**, genuinely
 redundant. Declaring it permanent would be dishonest — `@cas/schwarz` was built anticipating the lift. So this
-is a *deferral*, not a decline.
+is a _deferral_, not a decline.
 
 ### Trade-off Analysis
 
@@ -2230,12 +2304,12 @@ The honest cost is **duplication of the classical Schwarz kernel**: the bounded 
 implemented in both `schwarz-common.mjs` and `@cas/schwarz`, and a σ fix in one does not reach the other (drift
 risk). That is real debt.
 
-It is accepted *for now* because the coherent fix (Option B) has no demand yet, the cheap fix (Option A) makes
+It is accepted _for now_ because the coherent fix (Option B) has no demand yet, the cheap fix (Option A) makes
 the solver harder to reason about, and the debt is bounded and — once Action Item 2 lands — guarded: a
 differential test turns silent drift into a red build, exactly as
 [ADR-0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate) did for the two ℚ(i) engines. The suite's
-north-star ("each tool builds fewer primitives than the last") is served by *recording the path to
-consolidation and guarding the interim*, not by a partial rewire that trades one kind of complexity for
+north-star ("each tool builds fewer primitives than the last") is served by _recording the path to
+consolidation and guarding the interim_, not by a partial rewire that trades one kind of complexity for
 another.
 
 ### Consequences
@@ -2249,12 +2323,13 @@ another.
   [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) trigger to execute Option B.
 - **Revisit if** any of: (a) a second consumer needs the weighted-family σ (⇒ Option B); (b) the drift-guard
   differential test fires (the two classical engines disagree ⇒ fix + reconsider urgency); or (c)
-  `schwarz-common.mjs` needs a substantial change to the *classical* subset (do it once, in the package, and
+  `schwarz-common.mjs` needs a substantial change to the _classical_ subset (do it once, in the package, and
   consume it — cheaper than editing both).
 
 ### Action Items
+
 1. [x] Note the boundary on both sides — a header line in `app/schwarz/schwarz-common.mjs` and in
-       `@cas/schwarz`'s `index.ts` — stating the classical-subset duplication is a *deliberate deferral* (this
+       `@cas/schwarz`'s `index.ts` — stating the classical-subset duplication is a _deliberate deferral_ (this
        ADR), and that the intended consolidation direction is lift-to-parity-then-consume.
 2. [x] Add the **differential drift-guard**: `apps/quadrature-domains/vitest/schwarz-differential.test.ts`
        feeds three classical φ — the deltoid `ζ + 1/(2ζ²)` (unbounded pole-free), a single-exterior-pole
@@ -2290,7 +2365,7 @@ compiles through the shared `expr` pipeline. Six functions do this — `coeffExp
 The 2026-08-23 suite review found the three copies had **already diverged in a correctness-relevant way**:
 the plotter and Argument-Principle copies had grown two guards — a refusal of a rational map with an
 empty / identically-zero denominator (a 0/0 map), and a refusal of a pole-bearing Laurent map (finite-pole
-`branches`) — that Complex Dynamics' ancestor copy never received. So the *same* interchange payload
+`branches`) — that Complex Dynamics' ancestor copy never received. So the _same_ interchange payload
 imported into CD produced a `NaN` (0/0) or a silently-wrong map (the finite-pole branches dropped) where
 the other two failed loudly. This is exactly the drift ADR-0007 exists to prevent: three consumers of one
 identical bridge, maintained in parallel, one now behind on a correctness fix — and it violates the
@@ -2303,13 +2378,14 @@ helpers (which stay local); the plotter and AP keep their app-specific outer glu
 re-export the shared converter as their interchange-import facade.
 
 `@cas/interchange` is the home (not `@cas/expr`) because it already **owns** `MapSpec` / `Envelope` and all
-three consumers already depend on it. The converter's output is *text in the `@cas/expr` grammar*, not an
+three consumers already depend on it. The converter's output is _text in the `@cas/expr` grammar_, not an
 `@cas/expr` AST, so `@cas/interchange` stays independent of `@cas/expr` — no package import, no dependency
 cycle; the two are coupled only by that documented string grammar. (Putting it in `@cas/expr` would instead
 require `@cas/expr` → `@cas/interchange` for the `MapSpec` type, the wrong direction for a
 serialization → executable layering.)
 
 **Consequences.**
+
 - **CD picks up the guards it lacked** — a degenerate 0/0 rational or a pole-bearing Laurent now throws;
   CD's `main.ts` import path catches and surfaces a toast (fails loudly) instead of building a NaN /
   silently-wrong map. This is a behavior change for exactly those degenerate payloads, and is the fix.
@@ -2319,20 +2395,20 @@ serialization → executable layering.)
 - A future map form (or a fourth consumer) extends one shared converter, not three drifting copies.
 
 **Not in scope.** The `@cas/interchange`-side SC form (still deferred, ADR-0007 — gate on a receiving tool)
-and Riemann Map's *separate* CD → RM Böttcher `LaurentMap` converter (a different converter, left as-is).
+and Riemann Map's _separate_ CD → RM Böttcher `LaurentMap` converter (a different converter, left as-is).
 
 ---
 
 ## ADR-0028: Riemann-surface mode in the plotter — parametrize-by-w, branch machinery in-app
 
-**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+**Status:** Accepted **Date:** 2026-08 **Deciders:** Andrew
 
-*Records the decision to add a true multi-sheeted **Riemann-surface** view to
+_Records the decision to add a true multi-sheeted **Riemann-surface** view to
 `apps/complex-function-plotter`, the **method choice** (parametrize-by-w first, algebraic triangulation
 and z-grid continuation deferred), and — in the [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need)
 shape — keeping the new branch/inverse machinery **in-app** with no package extraction and no new
 [ADR-0005](#adr-0005-expr--interchange-are-the-keystone) multivalued interchange form. The full plan is
-[`docs/design/riemann-surface-plan.md`](design/riemann-surface-plan.md).*
+[`docs/design/riemann-surface-plan.md`](design/riemann-surface-plan.md)._
 
 ### Context
 
@@ -2344,7 +2420,7 @@ end-to-end ([ADR-0005](#adr-0005-expr--interchange-are-the-keystone) deferred mu
 naive height field paints a **spurious vertical wall** at a branch cut that reads as real structure.
 
 There is no single algorithm that turns an arbitrary user expression into a correct Riemann surface; the
-literature (Trott/Wolfram, Wegert, Nieser–Poelke–Polthier/Kranich) is a *ladder* of methods matched to
+literature (Trott/Wolfram, Wegert, Nieser–Poelke–Polthier/Kranich) is a _ladder_ of methods matched to
 function class. See [`docs/design/riemann-surface-research-notes.md`](design/riemann-surface-research-notes.md).
 
 ### Decision
@@ -2361,11 +2437,12 @@ Keep the inverse registry + branch-point detection **in the app** (`src/riemann/
 for both backends; **extract nothing** and add **no interchange form** until a second consumer exists
 ([ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) is symmetric). Every result is honestly
 labeled: exact glued topology, `≈` sampled values, a badge for finite sheet-count truncation, and the mode
-is *only offered* when the map is a recognized primitive (else "principal-branch only").
+is _only offered_ when the map is a recognized primitive (else "principal-branch only").
 
 ### Options Considered
 
 #### Option A: Parametrize-by-w first (chosen)
+
 **Pros:** textbook-correct surfaces for the canonical multivalued primitives; reuses `compileF` /
 `makeComplexFn` with zero new numeric code (the inverse is just another expression); sheets glue with no
 branch-tracking; sidesteps the never-certified continuation problem entirely; coloring + height are affine
@@ -2374,20 +2451,23 @@ does not cover composites with no global inverse (e.g. `log(sin(√z))`), which 
 principal-branch views.
 
 #### Option B: Algebraic-curve triangulation now (Kranich proximity gluing)
-**Pros:** the most general single method for the whole *algebraic* sublanguage as one glued surface; the
+
+**Pros:** the most general single method for the whole _algebraic_ sublanguage as one glued surface; the
 exact tools exist (`@cas/exact` `discriminant`, `@cas/core` `rootsMonic`). **Cons, and why deferred:**
 substantially heavier (AST→`P(z,w)=0` reduction, per-vertex root-finding, adaptive subdivision, Web-Worker
 mesh caching); WebGL loses geometry-shader parallelism; visible holes near ramification at low depth. High
 value but wrong first step — it is M2, gated on its own approval.
 
 #### Option C: Multi-sheet stacking by z-grid analytic continuation
-**Pros:** covers some composites over the z-plane. **Cons, and why rejected as the lead:** it *requires*
+
+**Pros:** covers some composites over the z-plane. **Cons, and why rejected as the lead:** it _requires_
 nearest-value / phase-unwrap continuation, whose failure modes (a branch point inside a cell, silent
 cut-healing that violates true monodromy) are exactly [`RISKS.md`](RISKS.md) §3 — strictly weaker and
 riskier than Option A wherever an inverse exists. Reserved, `≈`-only, for the M3 monodromy explorer.
 
 #### Option D: A separate `apps/riemann-surface`
-**Pros:** clean slate. **Cons:** the request is explicitly an addition *to the plotter*; a new app would
+
+**Pros:** clean slate. **Cons:** the request is explicitly an addition _to the plotter_; a new app would
 duplicate the entire render/expr/coloring/permalink stack it already shares — against the north-star
 ("each new tool builds fewer primitives from scratch").
 
@@ -2395,7 +2475,7 @@ duplicate the entire render/expr/coloring/permalink stack it already shares — 
 
 Option A delivers the headline capability at the lowest risk and the highest reuse, and it is the only
 option that structurally cannot produce the misleading, uncertified output the guardrails forbid. B is the
-right *second* method (broadest algebraic coverage) but is a large, independent build. C's continuation is
+right _second_ method (broadest algebraic coverage) but is a large, independent build. C's continuation is
 the genuinely hard, exploratory core the suite has deliberately never certified; confining it to a labeled
 M3 explorer keeps the honest-labeling guardrail intact. In-app machinery honors ADR-0007 symmetry (no
 extraction without a second consumer) and leaves the clean extraction seams (`render3d/`, a `@cas/branch`)
@@ -2414,6 +2494,7 @@ for when one appears.
   follow-on ADRs for the algebraic engine and any `@cas/core`/`@cas/exact` primitive they pull).
 
 ### Action Items
+
 1. [x] Write [`docs/design/riemann-surface-plan.md`](design/riemann-surface-plan.md) +
        [`riemann-surface-research-notes.md`](design/riemann-surface-research-notes.md) and this ADR at the
        M0 gate.
@@ -2421,22 +2502,22 @@ for when one appears.
        `claude/riemann-surface-rendering-fvybo6`; keep the existing top-down-3D≡2D golden green.
 3. [ ] When (and only when) approved, land M2 (algebraic curves) — record a follow-on ADR for the
        `P(z,w)=0` engine and any shared primitive it needs — then M3 (monodromy explorer, `≈`-labeled).
-       *(M2a approved + recorded as [ADR-0029](#adr-0029-algebraic-curve-riemann-surfaces-m2a-single-radical-npp-proximity-gluing).)*
+       _(M2a approved + recorded as [ADR-0029](#adr-0029-algebraic-curve-riemann-surfaces-m2a-single-radical-npp-proximity-gluing).)_
 4. [ ] On a second consumer of `src/riemann/`, extract `@cas/branch` and supersede this ADR's in-app note.
 
 ---
 
 ## ADR-0029: Algebraic-curve Riemann surfaces (M2a single-radical, NPP proximity gluing)
 
-**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+**Status:** Accepted **Date:** 2026-08 **Deciders:** Andrew
 
-*Follow-on to [ADR-0028](#adr-0028-riemann-surface-mode-in-the-plotter-parametrize-by-w-branch-machinery-in-app)
+_Follow-on to [ADR-0028](#adr-0028-riemann-surface-mode-in-the-plotter-parametrize-by-w-branch-machinery-in-app)
 (anticipated in its Action Item 3). Extends the plotter's Riemann view from single invertible primitives to
 **algebraic** functions via the Nieser–Poelke–Polthier / Kranich proximity-gluing algorithm, scoped this pass
 to the **single-radical class** `w = R(z)^(p/q)` (R rational, constant coefficients). Records the method, the
 scope, the roots-of-unity sheet specialization, the new `@cas/core` dependency, and the deferral of
 `@cas/exact`-based elimination (M2b) and multivalued interchange (ADR-0005). Full plan:
-[`docs/design/riemann-surface-M2-plan.md`](design/riemann-surface-M2-plan.md).*
+[`docs/design/riemann-surface-M2-plan.md`](design/riemann-surface-M2-plan.md)._
 
 ### Context
 
@@ -2462,7 +2543,7 @@ shared `colorAt`. **Dispatch prefers M1's exact parametric surface**; the curve 
 declines. Keep everything **in-app** (ADR-0007); pull **`@cas/core`** only; leave **`@cas/exact`** for M2b.
 
 > **Update (M2.1 as built):** M2a shipped with **no new package deps.** The branch points of this class are
-> exactly the zeros/poles of R, which the mesh's *local* degeneracy test (`minSep → 0`) and the `wCap` catch
+> exactly the zeros/poles of R, which the mesh's _local_ degeneracy test (`minSep → 0`) and the `wCap` catch
 > directly — so `@cas/core rootsMonic` proved unnecessary and was not pulled. Adaptive subdivision is driven
 > by the local test (no precomputed branch-point list); mesh-gen is synchronous (fast enough for M2a grids;
 > the Web Worker is deferred). This strengthens the north-star (zero new primitives) and does not change the
@@ -2480,19 +2561,22 @@ declines. Keep everything **in-app** (ADR-0007); pull **`@cas/core`** only; leav
 ### Options Considered
 
 #### Option A: M2a single-radical, sheets as roots of unity (chosen)
+
 **Pros:** the `q` sheets are elementary (no iterative root solve → fast, robust, no convergence/conditioning
 failure per vertex); no symbolic elimination, so **no spurious "conjugate" branches**; covers the headline
 algebraic cases (elliptic `sqrt(z^3−z)`, `sqrt(z^2−1)`, cube roots of rationals); needs only `@cas/core`
-for branch-point location. **Cons:** does not cover radical *sums* (`√z + √(z−1)`), which have genuinely
+for branch-point location. **Cons:** does not cover radical _sums_ (`√z + √(z−1)`), which have genuinely
 coupled sheets — deferred to M2b.
 
 #### Option B: General `P(z,w)=0` now (per-vertex `rootsMonic`, `@cas/exact` elimination)
+
 **Pros:** one method for all algebraic composites. **Cons, why deferred:** radical **sums** need iterated
 `@cas/exact` resultants to build `P`, which introduce spurious branches that must be filtered by continuity
 from the principal sheet — real complexity and higher-degree `P` (more per-vertex solving, worse
 conditioning). High value but the wrong first step; it is M2b, gated on its own approval.
 
 #### Option C: A `@cas/riemann` / `@cas/branch` package now
+
 **Pros:** a home for the mesh + branch machinery. **Cons:** ADR-0007 is symmetric — no second consumer yet.
 Keep it in `src/riemann/`; the `mat4.ts`-style "second consumer triggers extraction" note already stands
 (ADR-0028).
@@ -2517,6 +2601,7 @@ M1-preferred dispatch keeps the cheapest exact path for the primitives M1 alread
   branch-aware interchange).
 
 ### Action Items
+
 1. [x] Write [`docs/design/riemann-surface-M2-plan.md`](design/riemann-surface-M2-plan.md) + this ADR.
 2. [x] Land M2.0 (spike, `sqrt(z^2−1)`) then M2.1 (full `R(z)^(p/q)`) — both **zero new deps** (local
        degeneracy + `wCap`); existing tests (incl. top-down-3D≡2D) kept green.
@@ -2529,21 +2614,21 @@ M1-preferred dispatch keeps the cheapest exact path for the primitives M1 alread
 
 ## ADR-0030: Riemann-surface exploration tools (M3 — hover-pick, linked base-plane, monodromy)
 
-**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+**Status:** Accepted **Date:** 2026-08 **Deciders:** Andrew
 
-*Follow-on to [ADR-0028](#adr-0028-riemann-surface-mode-in-the-plotter-parametrize-by-w-branch-machinery-in-app)
+_Follow-on to [ADR-0028](#adr-0028-riemann-surface-mode-in-the-plotter-parametrize-by-w-branch-machinery-in-app)
 and [ADR-0029](#adr-0029-algebraic-curve-riemann-surfaces-m2a-single-radical-npp-proximity-gluing). Turns the
 Riemann view from a **renderer** into something **interrogable**: read the multi-sheeted value under the
 cursor (M3.1), see the branch/cut structure beside the surface on a linked base plane (M3.2), and trace how a
 loop permutes the sheets (M3.3, monodromy). Records the pick method, the local-branch-ordinal readout, the
 reuse of the linked-view scaffold, and — critically — the confinement of the `≈`/uncertified monodromy
-explorer. Full plan: [`docs/design/riemann-surface-M3-plan.md`](design/riemann-surface-M3-plan.md).*
+explorer. Full plan: [`docs/design/riemann-surface-M3-plan.md`](design/riemann-surface-M3-plan.md)._
 
 ### Context
 
-M1 (ADR-0028) and M2 (ADR-0029) render the surface but leave it **mute**: no way to ask "what value is *this*
+M1 (ADR-0028) and M2 (ADR-0029) render the surface but leave it **mute**: no way to ask "what value is _this_
 point", no spatial link to the base plane, no way to watch a loop swap sheets — the three things a Riemann
-surface is *for*. The plotter already has a value inspector (catalog H1) for the 2D portrait and the 3D
+surface is _for_. The plotter already has a value inspector (catalog H1) for the 2D portrait and the 3D
 landscape, but the landscape's pick (`render3d/pick.ts`) ray-marches a **single-valued** height field
 `z = h(re, im)`; a Riemann surface stacks sheets over the same base point, so that pick cannot be reused. The
 subtle piece is monodromy: analytic continuation around a loop is exactly the never-certified operation the
@@ -2570,20 +2655,23 @@ in the approved order **M3.1 + M3.2, then M3.3**:
 ### Options Considered
 
 #### Option A: Uniform triangle-mesh pick + local branch ordinal (chosen)
+
 **Pros:** one pick path serves both the parametric and the baked-curve surfaces; a real depth-sorted ray-cast
 picks the sheet the eye actually sees (self-occlusion honest); the branch ordinal `k / N` is well-defined at a
 point and exactly computable from the drawn mesh; near a branch point `N` honestly drops as sheets merge. No
-continuation, so **no RISKS §3 exposure** in M3.1/M3.2. **Cons:** the ordinal is *local*, not a global sheet
+continuation, so **no RISKS §3 exposure** in M3.1/M3.2. **Cons:** the ordinal is _local_, not a global sheet
 identity — but a global one does not exist without fixing monodromy (M3.3), so claiming one would be
 dishonest; labeled accordingly.
 
 #### Option B: Reuse the height-field ray-march (`pick.ts`)
+
 **Cons, why rejected:** the march assumes a single-valued `h(re, im)` — precisely what a Riemann surface is
 not. It would silently return one sheet's height and mislabel overlapping sheets. Multi-valuedness is the
 whole subject; the pick must respect it.
 
 #### Option C: Assign global sheet numbers now
-**Cons, why rejected:** global numbering *is* the monodromy representation — the thing M3.3 explores and that
+
+**Cons, why rejected:** global numbering _is_ the monodromy representation — the thing M3.3 explores and that
 RISKS §3 says is never certified. Baking a global integer into a hover readout would present uncertified
 structure as fact. Deferred and confined to the opt-in M3.3 explorer.
 
@@ -2608,11 +2696,12 @@ the height law identical to the shader, so pick and picture agree.
   interchange — and only with the RISKS §3 labeling intact).
 
 ### Action Items
+
 1. [x] Write [`docs/design/riemann-surface-M3-plan.md`](design/riemann-surface-M3-plan.md) + this ADR.
 2. [x] Land M3.1 (hover-pick) — `riemann/pickMesh.ts` + `Plot.pickRiemann` + readout; node tests; both
        render paths; existing tests (incl. top-down-3D≡2D) kept green. **Paused for review.**
 3. [x] Land M3.2 (linked base-plane pane) — a "Base-plane pane" toggle (not a new mode); reuse `paintLinked`;
-       bidirectional hover-linking (crosshair). **Branch markers deferred to M3.4** (branch-point *location*
+       bidirectional hover-linking (crosshair). **Branch markers deferred to M3.4** (branch-point _location_
        pairs with the polish). Browser golden added; gate green. **Paused for review.**
 4. [x] Land M3.3 (monodromy explorer) — `riemann/monodromy.ts` (nearest-match continuation + confidence
        flags) + `Plot.riemannSheetsAt`/`computeRiemannMonodromy` (exact for curves, census for parametric) +
@@ -2621,7 +2710,7 @@ the height law identical to the shader, so pick and picture agree.
 5. [x] M3.4 (legibility polish) — **branch-point markers** (moved from M3.2): a uniform sheet-separation
        scan (`riemann/branchPoints.ts`), drawn on the base-plane pane + counted in the badge, `≈`. Per-sheet
        tint and cut-shadow were **considered and declined** on honesty grounds (global sheet identity is what
-       monodromy permutes; a cut is a choice, not an invariant — the branch *points* are the invariant mark).
+       monodromy permutes; a cut is a choice, not an invariant — the branch _points_ are the invariant mark).
 
 ### Amendment (D/B arc — visual-intuition follow-ups)
 
@@ -2629,33 +2718,33 @@ Later additive work on the same branch, all inside the opt-in explorer and prese
 posture above (recorded here rather than as separate ADRs, being refinements not new decisions; the group-level
 follow-on is [ADR-0033](#adr-0033-monodromy-group-and-fundamental-group-tools-generator-loops-permutation-diagram-genus)):
 
-- **D1/D2 — direction arrows** on the base-plane loop *and* the lifted per-sheet paths, via AP's
+- **D1/D2 — direction arrows** on the base-plane loop _and_ the lifted per-sheet paths, via AP's
   `drawDirectionTicks` lifted into `@cas/ui` (its second consumer — ADR-0007). **Real-time lift:** the surface
   paths now grow as the loop is drawn (incremental nearest-match continuation).
 - **B2 — winding numbers** per branch point: `windingNumber(loop, center)`, exact integer topology (`=`),
   shown separately from the `≈` permutation it is the topological input to.
 - **B1 — the principal branch cut** is now **drawn** for the M1 parametric primitives. This **refines** the
-  M3.4 "a cut is a choice, not an invariant" note rather than reversing it: for the *auto-gluing* curve /
+  M3.4 "a cut is a choice, not an invariant" note rather than reversing it: for the _auto-gluing_ curve /
   implicit surfaces a cut remains an arbitrary choice and is **still not drawn** (`Plot.riemannCutRays()`
-  returns `[]` there); it is drawn **only** where the surface is built on a *canonical principal branch* (√,
+  returns `[]` there); it is drawn **only** where the surface is built on a _canonical principal branch_ (√,
   ⁿ√, log, arcsin/arccos, arctan and their affine wraps), where the cut is determined by the principal-value
-  convention — not a choice — and is genuinely where that branch is discontinuous. The branch *points* remain
+  convention — not a choice — and is genuinely where that branch is discontinuous. The branch _points_ remain
   the primary invariant mark for every mode.
 
 ---
 
 ## ADR-0031: Implicit `F(w,z)=0` algebraic Riemann surfaces (M2c) — the plotter's first `@cas/core` + `@cas/exact` consumer
 
-**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+**Status:** Accepted **Date:** 2026-08 **Deciders:** Andrew
 
-*Follow-on to [ADR-0029](#adr-0029-algebraic-curve-riemann-surfaces-m2a-single-radical-npp-proximity-gluing)
+_Follow-on to [ADR-0029](#adr-0029-algebraic-curve-riemann-surfaces-m2a-single-radical-npp-proximity-gluing)
 (anticipated in its Action Item 4 / plan §9) and [ADR-0030](#adr-0030-riemann-surface-exploration-tools-m3-hover-pick-linked-base-plane-monodromy).
 Extends the plotter's Riemann view from algebraic functions the user can *name* as radicals (M2a/M2b) to the
 **general algebraic curve entered implicitly** as a bivariate complex polynomial `F(w,z)=0` — including the
 curves with no radical form. Records the dedicated input-mode UX, the reuse of the M2 mesh + M3 exploration
 stack through the `sheetsAt` seam, and the dependency additions (`@cas/core` `rootsMonic`; `@cas/exact`
 `discriminant`) — the plotter's first consumers of both. Full plan:
-[`docs/design/riemann-surface-M2c-plan.md`](design/riemann-surface-M2c-plan.md).*
+[`docs/design/riemann-surface-M2c-plan.md`](design/riemann-surface-M2c-plan.md)._
 
 ### Context
 
@@ -2686,6 +2775,7 @@ and `@cas/exact`** as dependencies (the plotter's first).
 ### Options Considered
 
 #### Option A: Dedicated implicit mode + per-vertex `rootsMonic` + exact discriminant (chosen)
+
 **Pros:** covers the whole algebraic-curve class; reuses the entire M2/M3 stack through the `sheetsAt` seam
 (minimal new code); no spurious branches (direct `F`); the dedicated mode is honest that an implicit relation
 isn't a function; the exact discriminant gives a `=` branch locus where the radicals' local scan was `≈`.
@@ -2693,11 +2783,13 @@ isn't a function; the exact discriminant gives a `=` branch locus where the radi
 heavier than the radicals' closed form (bounded by a degree cap, badged).
 
 #### Option B: Auto-detect `w` in the ordinary box, or an `= 0` equation (input-UX alternatives)
+
 **Cons, why not:** both silently overload the `f(z)` box / blur the function-vs-relation distinction. The
 dedicated mode was chosen for clarity (plan §6); all three share the same engine, so this is a front-door
 choice only.
 
 #### Option C: Emit `F(w,z)` from the radical recognizer via `@cas/exact` resultant elimination
+
 **Cons:** an internal unification (make M2a/M2b share the implicit engine) that would reintroduce the spurious
 branches ADR-0029 avoided; not needed for the user-facing implicit input. Left as a possible later refactor.
 
@@ -2720,6 +2812,7 @@ now is exactly the demand ADR-0029 §9 foresaw. The degree cap + honest labels (
   radical recognizer is unified onto the implicit engine (Option C — its own follow-on).
 
 ### Action Items
+
 1. [x] Write [`docs/design/riemann-surface-M2c-plan.md`](design/riemann-surface-M2c-plan.md) + this ADR.
 2. [x] Land M2c.0 + M2c.1 — `implicitPoly.ts` (generic bivariate expander) + `implicitCurve.ts` (`rootsMonic`
        `sheetsAt`) + the dedicated implicit mode (toggle, box, view pinning, permalink field); adds
@@ -2731,11 +2824,11 @@ now is exactly the demand ADR-0029 §9 foresaw. The degree cap + honest labels (
 
 ## ADR-0032: Extract `@cas/ui` ahead of adoption; port CD's product shell
 
-**Status:** Accepted — a **deliberate exception** to [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need), of the same shape as [ADR-0018](#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore) but *milder* (the second-consumer bar is met many times over; only app-by-app **adoption** is deferred).
+**Status:** Accepted — a **deliberate exception** to [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need), of the same shape as [ADR-0018](#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore) but _milder_ (the second-consumer bar is met many times over; only app-by-app **adoption** is deferred).
 
 ### Context
 
-Every prior `@cas/*` package extracted the suite's *mathematics*. A 2026-08 cross-cutting UX review found the
+Every prior `@cas/*` package extracted the suite's _mathematics_. A 2026-08 cross-cutting UX review found the
 suite's quality is **bimodal**: the two founder apps (Complex Dynamics, Quadrature Domains) are product-mature —
 real keyboard a11y, WebGL fallbacks, `role="alert"` error banners, worker-offloaded solves — while the five
 newer TS apps (riemann-map, argument-principle, faber-transform, correspondences, and to a lesser degree the
@@ -2783,14 +2876,14 @@ the DOM libs are already in `tsconfig.base.json`). Four primitives, each a strai
 
 **Why this is a (mild) ADR-0007 exception.** [ADR-0018](#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore)
 extracted `@cas/conformal` with **zero** consumers. Here the demand is **proven across five to seven apps** by the
-UX audit — so this is *not* extract-ahead-of-demand; it is extract-from-one-reference-implementation (CD) **ahead
-of app-by-app adoption**. The only ADR-0007 tension is that the pattern lives in *one* app today rather than
+UX audit — so this is _not_ extract-ahead-of-demand; it is extract-from-one-reference-implementation (CD) **ahead
+of app-by-app adoption**. The only ADR-0007 tension is that the pattern lives in _one_ app today rather than
 having independently reappeared in two — but "would a second consumer want this?" is already answered six times.
 The extract-ahead is retro-justified as each app adopts (Action Items 6–11), exactly as ADR-0018 AI-6 retro-justified
 its builder when Schwarz–Christoffel landed.
 
 **Scope boundary — QD is deliberately NOT a consumer.** Quadrature Domains is `allowJs`/vanilla
-([ADR-0002](#adr-0002-typescript-as-the-common-language)), large, and *already* product-mature (the audit's
+([ADR-0002](#adr-0002-typescript-as-the-common-language)), large, and _already_ product-mature (the audit's
 top half). Forcing it onto a strict-TS shell buys nothing and violates the ADR-0002 / [ADR-0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate)
 precedent of leaving QD's mature surface in place. `@cas/ui` targets the **strict-TS apps** — six at the
 time of writing, and every TS app added since (ADR-0036's three, ADR-0037's, and `contour-integration`).
@@ -2802,14 +2895,14 @@ when the picker consults the known map kinds. App ids/labels are **data** in `ap
 
 ### Options Considered
 
-- **A — charter `@cas/ui` now, adopt app-by-app (this ADR).** *Pros:* one source of truth for the shell; each new
-  app stops re-omitting it; consolidates CD's proven code rather than inventing. *Cons:* an extract-ahead-of-adoption
+- **A — charter `@cas/ui` now, adopt app-by-app (this ADR).** _Pros:_ one source of truth for the shell; each new
+  app stops re-omitting it; consolidates CD's proven code rather than inventing. _Cons:_ an extract-ahead-of-adoption
   (softens ADR-0007 — recorded, milder than ADR-0018).
-- **B — per-app triage, extract only on the 2nd independent repetition.** *Rejected:* the reference already exists
+- **B — per-app triage, extract only on the 2nd independent repetition.** _Rejected:_ the reference already exists
   (CD) and six apps already need it, so waiting means each app hand-rolls (or re-omits) the shell first and is
   re-seamed later — the build-then-migrate waste [VISION §5](VISION.md#5-the-strategic-thesis) rejects.
-- **C — keep omitting (status quo).** *Rejected:* it is the finding.
-- **D — big-bang: adopt across all six apps in one change.** *Rejected:* violates working-software-per-step; a
+- **C — keep omitting (status quo).** _Rejected:_ it is the finding.
+- **D — big-bang: adopt across all six apps in one change.** _Rejected:_ violates working-software-per-step; a
   regression in one app blocks all. Adoption is one PR per app with a behavior-identical gate.
 
 ### Consequences
@@ -2830,110 +2923,110 @@ when the picker consults the known map kinds. App ids/labels are **data** in `ap
 1. [x] Charter ADR-0032 (this record).
 2. [x] Scaffold `packages/ui` (source-exports; jsdom vitest env) with the four primitives + `SUITE_APPS`.
 3. [x] jsdom unit tests for all four primitives (30 tests as of U6 — the U0 scaffold's 20 grew as U1–U6
-   hardened the primitives); typecheck + lint + dependency-cruiser green.
+       hardened the primitives); typecheck + lint + dependency-cruiser green.
 4. [x] Register in `vitest.workspace.ts` + the test-census `PROJECTS` (a `ui` bucket).
-5. [x] **U1:** adopt in Complex Dynamics **first**, as a *behavior-identical refactor* onto the shared versions —
-   proving the API against the app it was ported from. Adopted the two primitives that are clean drop-ins:
-   `runWithFatalBoundary` (replacing CD's inline `showFatalBanner` + init try/catch/finally, same `#webgl-error`
-   banner and copy) and `createComputeClient` (CD's `JuliaMetricsClient` is now a thin adapter — its send-side
-   coalescing test passes before and after). Proving `createComputeClient` against CD surfaced a behavior the U0
-   primitive lacked — recovering the in-flight request when the worker dies (`cd-metricsworker-01`) — which was
-   folded INTO the shared primitive (with its own worker-path tests), exactly what "prove against the app it came
-   from" is for. `mountCanvas` and `mountNavHeader` are **not** adopted in CD here: CD's canvas is static
-   two-plot HTML (converting it to a JS mount is not behavior-neutral) and a nav header is a new feature — both
-   fit later apps / a deliberate rollout better than a behavior-identical CD refactor. Full CD suite green before
-   and after (84 files / 833 tests).
+5. [x] **U1:** adopt in Complex Dynamics **first**, as a _behavior-identical refactor_ onto the shared versions —
+       proving the API against the app it was ported from. Adopted the two primitives that are clean drop-ins:
+       `runWithFatalBoundary` (replacing CD's inline `showFatalBanner` + init try/catch/finally, same `#webgl-error`
+       banner and copy) and `createComputeClient` (CD's `JuliaMetricsClient` is now a thin adapter — its send-side
+       coalescing test passes before and after). Proving `createComputeClient` against CD surfaced a behavior the U0
+       primitive lacked — recovering the in-flight request when the worker dies (`cd-metricsworker-01`) — which was
+       folded INTO the shared primitive (with its own worker-path tests), exactly what "prove against the app it came
+       from" is for. `mountCanvas` and `mountNavHeader` are **not** adopted in CD here: CD's canvas is static
+       two-plot HTML (converting it to a JS mount is not behavior-neutral) and a nav header is a new feature — both
+       fit later apps / a deliberate rollout better than a behavior-identical CD refactor. Full CD suite green before
+       and after (84 files / 833 tests).
 6. [x] **U2–U6:** adopt in the five TS apps, one PR each, each closing that app's specific audit findings.
-   **faber-transform DONE (U2):** wrapped its entry in `runWithFatalBoundary` (it had no error element — an init
-   throw white-screened into the empty `<div id="app">`) and gave both render panes accessibility + keyboard via
-   `attachCanvasA11y` (arrows pan / ± zoom the viewport, distinct `aria-label`s, the `gl` layer marked
-   `aria-hidden`). Proving `mountCanvas` against Faber surfaced that apps build their own canvas + layout, so the
-   primitive gained `attachCanvasA11y` (an attach mode over the shared code path) rather than forcing a fresh mount
-   — the U2 analogue of U1's worker-recovery discovery. Verified with a headless-Chromium smoke (roles/labels/live
-   region present, no fatal banner, ArrowUp pans + `+` zooms the permalink, no console errors) plus the primitive's
-   jsdom tests. **correspondences DONE (U3):** both entrypoints (`main.ts`, `mating.html`'s `matingMain.ts`)
-   wrapped in `runWithFatalBoundary` (both booted into a bare `<div id="app">`); the four STATIC views on the
-   main page named with `role="img"` labels; the three interactive mating panels given `role="application"` +
-   keyboard (←/→ move the shared equator angle θ, Enter traces its θ↦−2θ orbit) and the fold viewer `role="img"`.
-   Proving against correspondences surfaced that a NON-interactive visualization must be `role="img"`, not
-   `"application"` (which lies to assistive tech that keyboard is handled) — so `attachCanvasA11y` gained a
-   `role: "application" | "img"` option (the U3 discovery, with a jsdom test). Verified with a headless-Chromium
-   smoke over BOTH pages (static views img+labelled+not-focusable; panels application+focusable; ArrowRight moves
-   θ to 2°; no fatal banner; no console errors); correspondences' 97 tests stay green. **riemann-map DONE (U4):**
-   `main()` wrapped in `runWithFatalBoundary`; both pan/zoom panes made accessible + keyboard-operable by enriching
-   the app's own `attachPanZoom` (nav.ts) with an optional `a11yLabel` — so the keyboard pan/zoom rides the SAME
-   `get`/`set`/pan-lock as the pointer path, and both panes get it from one integration point. The left pane's
-   decorative overlay canvas is marked `aria-hidden`. No new primitive gap surfaced (the attach + `role` API already
-   covered it — the adoptions have converged). Verified with a headless-Chromium smoke (both panes
-   application+focusable+labelled, overlay aria-hidden, keyboard `+` zooms the permalink, no fatal banner, no console
-   errors); riemann-map's 60 tests stay green (nav.test.ts unaffected by the transitive @cas/ui import).
-   **argument-principle + plotter DONE (U5+U6, batched):** both `main()`s wrapped in `runWithFatalBoundary`
-   (arg-principle had no error element; the plotter reuses its existing `#error` banner — the wrap now catches
-   init throws OUTSIDE its inner Plot try/catch that previously white-screened). arg-principle's three panes
-   (z-plane, w-plane, argument strip) named `role="img"` (mouse-interactive, keyboard deferred — its contour
-   drawing is the least keyboard-natural interaction). The plotter's `#view` was ALREADY fully accessible in
-   static HTML (role/tabindex/label + its own `keyToNav` keyboard, `#axes` aria-hidden), so U6 added only the
-   boundary. Two small primitive refinements fell out: `attachCanvasA11y` skips its keydown listener when no
-   `onKey` is given (a `role="application"` canvas whose app owns keyboard — the plotter — just needs the
-   name), and the live region falls back to `<body>` so naming a not-yet-attached canvas never appends into
-   it. Both verified with a headless-Chromium smoke (arg-principle: 3 img-labelled panes, no fatal banner;
-   plotter: `#view` a11y intact, no error shown; no console errors either); their 15 + 18 tests stay green.
-   **This completes the app rollout (U1–U6).**
-6b. [x] **Adopted in `apps/contour-integration`** (the fifth app, ADR-0040), which had shipped M0–M3
-   without the shell at all — no nav header, no fatal boundary, no accessible canvas, and it was **not in
-   `SUITE_APPS`**, so no other app's nav could link to it even though it is published. Now: the boot runs
-   inside `runWithFatalBoundary` (it builds a WebGL2 stage, so a driver without WebGL2 left a blank page
-   with the reason only in the console); `mountNavHeader` with `current: "contour-integration"`; and
-   `attachCanvasA11y` on the ink overlay with the GL canvas `aria-hidden`, arrows panning by a fixed
-   *fraction* of the viewport so a step means the same thing at every zoom level. The ledger headline —
-   "does this argument close?", which IS the product — is announced through the live region, guarded
-   against repeating on a redraw that changed nothing. Added to the `a11y` CI roster. A stale
-   `@cas/interchange` dependency that nothing imported was dropped in the same pass; it returns with the
-   `#vs=` permalink work.
+       **faber-transform DONE (U2):** wrapped its entry in `runWithFatalBoundary` (it had no error element — an init
+       throw white-screened into the empty `<div id="app">`) and gave both render panes accessibility + keyboard via
+       `attachCanvasA11y` (arrows pan / ± zoom the viewport, distinct `aria-label`s, the `gl` layer marked
+       `aria-hidden`). Proving `mountCanvas` against Faber surfaced that apps build their own canvas + layout, so the
+       primitive gained `attachCanvasA11y` (an attach mode over the shared code path) rather than forcing a fresh mount
+       — the U2 analogue of U1's worker-recovery discovery. Verified with a headless-Chromium smoke (roles/labels/live
+       region present, no fatal banner, ArrowUp pans + `+` zooms the permalink, no console errors) plus the primitive's
+       jsdom tests. **correspondences DONE (U3):** both entrypoints (`main.ts`, `mating.html`'s `matingMain.ts`)
+       wrapped in `runWithFatalBoundary` (both booted into a bare `<div id="app">`); the four STATIC views on the
+       main page named with `role="img"` labels; the three interactive mating panels given `role="application"` +
+       keyboard (←/→ move the shared equator angle θ, Enter traces its θ↦−2θ orbit) and the fold viewer `role="img"`.
+       Proving against correspondences surfaced that a NON-interactive visualization must be `role="img"`, not
+       `"application"` (which lies to assistive tech that keyboard is handled) — so `attachCanvasA11y` gained a
+       `role: "application" | "img"` option (the U3 discovery, with a jsdom test). Verified with a headless-Chromium
+       smoke over BOTH pages (static views img+labelled+not-focusable; panels application+focusable; ArrowRight moves
+       θ to 2°; no fatal banner; no console errors); correspondences' 97 tests stay green. **riemann-map DONE (U4):**
+       `main()` wrapped in `runWithFatalBoundary`; both pan/zoom panes made accessible + keyboard-operable by enriching
+       the app's own `attachPanZoom` (nav.ts) with an optional `a11yLabel` — so the keyboard pan/zoom rides the SAME
+       `get`/`set`/pan-lock as the pointer path, and both panes get it from one integration point. The left pane's
+       decorative overlay canvas is marked `aria-hidden`. No new primitive gap surfaced (the attach + `role` API already
+       covered it — the adoptions have converged). Verified with a headless-Chromium smoke (both panes
+       application+focusable+labelled, overlay aria-hidden, keyboard `+` zooms the permalink, no fatal banner, no console
+       errors); riemann-map's 60 tests stay green (nav.test.ts unaffected by the transitive @cas/ui import).
+       **argument-principle + plotter DONE (U5+U6, batched):** both `main()`s wrapped in `runWithFatalBoundary`
+       (arg-principle had no error element; the plotter reuses its existing `#error` banner — the wrap now catches
+       init throws OUTSIDE its inner Plot try/catch that previously white-screened). arg-principle's three panes
+       (z-plane, w-plane, argument strip) named `role="img"` (mouse-interactive, keyboard deferred — its contour
+       drawing is the least keyboard-natural interaction). The plotter's `#view` was ALREADY fully accessible in
+       static HTML (role/tabindex/label + its own `keyToNav` keyboard, `#axes` aria-hidden), so U6 added only the
+       boundary. Two small primitive refinements fell out: `attachCanvasA11y` skips its keydown listener when no
+       `onKey` is given (a `role="application"` canvas whose app owns keyboard — the plotter — just needs the
+       name), and the live region falls back to `<body>` so naming a not-yet-attached canvas never appends into
+       it. Both verified with a headless-Chromium smoke (arg-principle: 3 img-labelled panes, no fatal banner;
+       plotter: `#view` a11y intact, no error shown; no console errors either); their 15 + 18 tests stay green.
+       **This completes the app rollout (U1–U6).**
+       6b. [x] **Adopted in `apps/contour-integration`** (the fifth app, ADR-0040), which had shipped M0–M3
+       without the shell at all — no nav header, no fatal boundary, no accessible canvas, and it was **not in
+       `SUITE_APPS`**, so no other app's nav could link to it even though it is published. Now: the boot runs
+       inside `runWithFatalBoundary` (it builds a WebGL2 stage, so a driver without WebGL2 left a blank page
+       with the reason only in the console); `mountNavHeader` with `current: "contour-integration"`; and
+       `attachCanvasA11y` on the ink overlay with the GL canvas `aria-hidden`, arrows panning by a fixed
+       _fraction_ of the viewport so a step means the same thing at every zoom level. The ledger headline —
+       "does this argument close?", which IS the product — is announced through the live region, guarded
+       against repeating on a redraw that changed nothing. Added to the `a11y` CI roster. A stale
+       `@cas/interchange` dependency that nothing imported was dropped in the same pass; it returns with the
+       `#vs=` permalink work.
 
 7. [ ] **U7:** wire the nav header's generic "Send to…" hand-off picker to `@cas/interchange`'s known map kinds
-   (adds the `@cas/interchange` dependency), turning the 3 hard-coded deep-link buttons into discovery.
+       (adds the `@cas/interchange` dependency), turning the 3 hard-coded deep-link buttons into discovery.
 8. [x] **U8 DONE — non-blocking `axe` CI job so a11y regressions are caught, not just introduced-once-and-forgotten.**
-   `scripts/a11y-audit.mjs` stands up a static server over the real `apps/*/dist` bytes (the deploy layout,
-   launcher-at-root + subpaths, plus correspondences and its `mating.html`), loads each of the **9 pages** in
-   headless Chromium under forced software WebGL2 (SwiftShader, so the audited DOM matches CI on any GPU), and runs
-   axe-core's WCAG 2.0/2.1 **A + AA + best-practice** ruleset. Because real apps carry pre-existing findings
-   (a contrast ratio, a missing landmark), it is a **baseline tripwire**, not a pass/fail on the absolute count:
-   `scripts/a11y-baseline.json` records the known findings per page (rule id + violating-node count — node-count,
-   not brittle CSS selectors, so it is robust to layout churn yet still catches "this rule now fails on more
-   elements"), and only a **new rule** or an **increased count** is a regression. The CI job (`a11y` in `ci.yml`,
-   PR-only like `build`) runs in **report mode** — always exit 0 — so a single flaky automated rule can never wedge
-   `master`; regressions surface as `::warning::` annotations + a `$GITHUB_STEP_SUMMARY` table rather than a blocked
-   merge. `--strict` (exit 1 on regression) is available for local hard checks; `--update-baseline` re-records after
-   an intended change; `pnpm a11y` is the local entry point. Publishing stays gated only on lint/typecheck/test
-   (deploy-pages.yml) — the a11y job, like `browser`, is not a publish blocker. The committed baseline documents the
-   suite's remaining known findings (a burn-down list, separate from the tripwire). **First burn-down (done):** every
-   axe **critical** and the **serious** label/keyboard-focus findings were fixed as attribute-level changes (no
-   visual/behavior change) — riemann-map's unnamed preset `<select>` (`select-name`) and the mating fold slider
-   (`label`) got `aria-label`s; QD's view-mode segmented control moved from `role="tablist"` (which demands
-   `role="tab"` children it lacks) to `role="group"`, matching QD's own convention for its other segmented button
-   groups (`aria-required-children`); complex-dynamics' three `title`-only inputs (`label-title-only`) gained
-   `aria-label`s; and the horizontally-scrolling regions (CD's BibTeX `<pre>`, QD's KaTeX equation blocks) became
-   keyboard-focusable (`scrollable-region-focusable`). Baseline tightened **16 → 10 rule findings / 56 → 46 nodes**;
-   complex-dynamics and both correspondences pages now audit clean (launcher and plotter already did). What remains
-   is deliberately deferred: **color-contrast** (a palette decision) and the **region / landmark / heading** cluster
-   (a broader per-app semantic-HTML pass, `moderate` severity). **This completes U8; only U7 (nav-header ↔
-   `@cas/interchange` hand-off wiring) remains open in this ADR.**
+       `scripts/a11y-audit.mjs` stands up a static server over the real `apps/*/dist` bytes (the deploy layout,
+       launcher-at-root + subpaths, plus correspondences and its `mating.html`), loads each of the **9 pages** in
+       headless Chromium under forced software WebGL2 (SwiftShader, so the audited DOM matches CI on any GPU), and runs
+       axe-core's WCAG 2.0/2.1 **A + AA + best-practice** ruleset. Because real apps carry pre-existing findings
+       (a contrast ratio, a missing landmark), it is a **baseline tripwire**, not a pass/fail on the absolute count:
+       `scripts/a11y-baseline.json` records the known findings per page (rule id + violating-node count — node-count,
+       not brittle CSS selectors, so it is robust to layout churn yet still catches "this rule now fails on more
+       elements"), and only a **new rule** or an **increased count** is a regression. The CI job (`a11y` in `ci.yml`,
+       PR-only like `build`) runs in **report mode** — always exit 0 — so a single flaky automated rule can never wedge
+       `master`; regressions surface as `::warning::` annotations + a `$GITHUB_STEP_SUMMARY` table rather than a blocked
+       merge. `--strict` (exit 1 on regression) is available for local hard checks; `--update-baseline` re-records after
+       an intended change; `pnpm a11y` is the local entry point. Publishing stays gated only on lint/typecheck/test
+       (deploy-pages.yml) — the a11y job, like `browser`, is not a publish blocker. The committed baseline documents the
+       suite's remaining known findings (a burn-down list, separate from the tripwire). **First burn-down (done):** every
+       axe **critical** and the **serious** label/keyboard-focus findings were fixed as attribute-level changes (no
+       visual/behavior change) — riemann-map's unnamed preset `<select>` (`select-name`) and the mating fold slider
+       (`label`) got `aria-label`s; QD's view-mode segmented control moved from `role="tablist"` (which demands
+       `role="tab"` children it lacks) to `role="group"`, matching QD's own convention for its other segmented button
+       groups (`aria-required-children`); complex-dynamics' three `title`-only inputs (`label-title-only`) gained
+       `aria-label`s; and the horizontally-scrolling regions (CD's BibTeX `<pre>`, QD's KaTeX equation blocks) became
+       keyboard-focusable (`scrollable-region-focusable`). Baseline tightened **16 → 10 rule findings / 56 → 46 nodes**;
+       complex-dynamics and both correspondences pages now audit clean (launcher and plotter already did). What remains
+       is deliberately deferred: **color-contrast** (a palette decision) and the **region / landmark / heading** cluster
+       (a broader per-app semantic-HTML pass, `moderate` severity). **This completes U8; only U7 (nav-header ↔
+       `@cas/interchange` hand-off wiring) remains open in this ADR.**
 
 ---
 
 ## ADR-0033: Monodromy-group and fundamental-group tools (generator loops, permutation diagram, genus)
 
-**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+**Status:** Accepted **Date:** 2026-08 **Deciders:** Andrew
 
-*Follow-on to [ADR-0030](#adr-0030-riemann-surface-exploration-tools-m3-hover-pick-linked-base-plane-monodromy).
+_Follow-on to [ADR-0030](#adr-0030-riemann-surface-exploration-tools-m3-hover-pick-linked-base-plane-monodromy).
 Extends the opt-in **Monodromy explorer** from tracing one loop to reading the **whole branched cover**:
 one-click **generator loops** around each branch point (a generating set of the base's fundamental group), a
 **permutation diagram** per generator, and the derived **monodromy group**, connectedness, product-one
 consistency check, and the **surface's genus** via Riemann–Hurwitz. Full plan:
 [`docs/design/riemann-surface-fundamental-group-plan.md`](design/riemann-surface-fundamental-group-plan.md).
 Also records the direction-arrow / real-time-lift / branch-cut / winding additions (D1/D2/B1/B2) that precede
-it on the same arc, and reconciles the branch cut with ADR-0030's M3.4 "no cut" note (see Amendment there).*
+it on the same arc, and reconciles the branch cut with ADR-0030's M3.4 "no cut" note (see Amendment there)._
 
 ### Context
 
@@ -2941,9 +3034,9 @@ The explorer (ADR-0030 M3.3) estimates the sheet permutation of **one** hand-dra
 is characterized by its **monodromy representation** `ρ : π₁(base ∖ branch points) → Sₙ` as a whole: `π₁` is
 free on one generator `γᵢ` per branch point, `ρ(γᵢ) = σᵢ`, and from `{σᵢ}` follow the monodromy group, whether
 the surface is connected (transitivity), the product-one relation `σ₁⋯σₘσ_∞ = id`, and — via Riemann–Hurwitz —
-the **genus**. All of this is reachable by reusing the M3.3 pipeline on *canonical* loops rather than arbitrary
+the **genus**. All of this is reachable by reusing the M3.3 pipeline on _canonical_ loops rather than arbitrary
 ones. The hazard is honesty: every `σᵢ` is the never-certified continuation (RISKS §3), so the whole tower is
-`≈` and must stay quarantined; only the *combinatorial topology* (free-group rank, the product-one **form**,
+`≈` and must stay quarantined; only the _combinatorial topology_ (free-group rank, the product-one **form**,
 Riemann–Hurwitz **given** the cycle data) and the winding numbers are `=`.
 
 ### Decision
@@ -2965,18 +3058,21 @@ already-opt-in explorer, in the order **C1 → C3 → C2 → C4**:
 ### Options Considered
 
 #### Option A: reuse the M3.3 pipeline on canonical generator loops (chosen)
+
 **Pros:** no new continuation engine — the risky part is unchanged and already fenced; the only new code is
-loop *generation*, finite-group *algebra*, and Riemann–Hurwitz *arithmetic*, all pure and unit-testable; the
+loop _generation_, finite-group _algebra_, and Riemann–Hurwitz _arithmetic_, all pure and unit-testable; the
 winding number (B2, `=`) certifies each generator; the product-one relation is a free self-check on the
 estimates. **Cons:** results inherit M3.3's `≈`; clustered branch points can defeat automatic generator sizing
 (mitigated: winding self-check + hand-draw fallback).
 
 #### Option B: symbolic monodromy from the defining polynomial (Puiseux / exact analytic continuation)
+
 **Cons, why rejected:** a large new exact-CAS capability (Puiseux expansions, certified tracking) — precisely
 the RISKS §3 problem the repo declines to certify; disproportionate to a visualization feature and a second
 engine to maintain.
 
 #### Option C: leave it at one-loop monodromy (status quo)
+
 **Cons, why rejected:** the user asked to connect the loops to the fundamental group; the group/genus is the
 intellectual payoff and is cheaply reachable by Option A without touching the certified/uncertified boundary.
 
@@ -2984,7 +3080,7 @@ intellectual payoff and is cheaply reachable by Option A without touching the ce
 
 Option A keeps the certification boundary exactly where ADR-0030 drew it (continuation is `≈`, quarantined) and
 buys real mathematical depth with only pure, bounded, testable additions. The genus is the sharpest example: it
-is *exact given* the cycle structure, so the tool honestly reports "genus ≈ 1 (exact given the estimated
+is _exact given_ the cycle structure, so the tool honestly reports "genus ≈ 1 (exact given the estimated
 cycles)". The BFS cap bounds cost for high-degree implicit surfaces. Everything is behind the opt-in explorer,
 so the default plotter is untouched (north-star: no regression, no new primitive built from scratch — it rides
 M3/D/B).
@@ -3000,6 +3096,7 @@ M3/D/B).
   labeling intact; (c) exact monodromy (Option B) is ever justified by a non-visualization consumer.
 
 ### Action Items
+
 1. [x] Write [`docs/design/riemann-surface-fundamental-group-plan.md`](design/riemann-surface-fundamental-group-plan.md) + this ADR (C0).
 2. [ ] C1 — `generatorLoop.ts` + branch-point chips (winding-certified) + tests; gate; pause for review.
 3. [x] C3 — `permGroup.ts` (capped closure + orbit transitivity + Riemann–Hurwitz genus with the exact
@@ -3030,8 +3127,8 @@ consumer). Plan: [`design/complex-potential-studio-plan.md`](design/complex-pote
 ### Context
 
 The suite visualizes maps (dynamics, conformal maps, Faber, the argument principle) but nothing renders a
-**field** — Dictionary I of the author's writeup *"Complex Analysis as Two-Dimensional Electrostatics and
-Hydrodynamics"*, where a meromorphic function *is* a planar field and its poles *are* the sources. The
+**field** — Dictionary I of the author's writeup _"Complex Analysis as Two-Dimensional Electrostatics and
+Hydrodynamics"_, where a meromorphic function _is_ a planar field and its poles _are_ the sources. The
 machinery to do so already exists: `@cas/expr` (the field as an executable expression), `@cas/gpu` (WebGL2
 domain-coloring + the shared GLSL stdlib), `@cas/interchange`/`@cas/export` (permalinks + figure recipes),
 and the new `@cas/ui` shell ([ADR-0032](#adr-0032-extract-casui-ahead-of-adoption-port-cds-product-shell)).
@@ -3058,11 +3155,11 @@ same picture between the electrostatic and hydrodynamic readings.
    `SUITE_APPS`, the launcher, and the combined Pages deploy.
 5. **The Hele-Shaw "twisting" showpiece (M4) lives in this app** — the exact Graven–Makarov one-point family
    and a numerical interior-droplet evolver, plus a **QD → 2D-E hand-off** that imports a one-point unbounded
-   QD via the *existing* `quadrature-domain` `@cas/interchange` payload (the charge α as the `hData` residue,
+   QD via the _existing_ `quadrature-domain` `@cas/interchange` payload (the charge α as the `hData` residue,
    convention-neutral — no new recipe, no schema bump) — keeping the QD app stable and making the hand-off
-   itself a feature. *(As shipped: see the build-status paragraph below; the original sketch of "importing σ /
+   itself a feature. _(As shipped: see the build-status paragraph below; the original sketch of "importing σ /
    Richardson moments via a new recipe + `@cas/schwarz`" was superseded — α travels explicitly, so no
-   φ-inversion is needed.)*
+   φ-inversion is needed.)_
 6. **Honest labelling** throughout (`=` closed-form fields / capacities / residue sums; `≈` numerical contours,
    Fekete relaxation, transplanted flows; `≤`/`⚠` the ill-posed Hele-Shaw evolution past a cusp).
 
@@ -3085,8 +3182,8 @@ payload, so the originally-anticipated `@cas/schwarz` proved unnecessary).
 **M0–M3 complete** (verified in live headless-Chromium WebGL2). M0 (render spike) + M1 (the superposition
 sandbox — palette, inspector with the `c = q+iγ` decomposition, the two-lens toggle, the flux/circulation
 probe, presets, `#vs=` permalink + PNG export, a sensor puck, and an animated tracer-flow layer). **M2**
-(conformal transplant): Joukowski + Kármán–Trefftz airfoils; exterior-SC flow *past* a polygon and interior-SC
-flow *inside* a polygon; the `@cas/interchange` `conformal` map form ([ADR-0035](#adr-0035-the-conformal-casinterchange-form-polygon-schwarzchristoffel-maps-interchange-140)) with a bidirectional Riemann-Map ↔ 2D-Electrostatics
+(conformal transplant): Joukowski + Kármán–Trefftz airfoils; exterior-SC flow _past_ a polygon and interior-SC
+flow _inside_ a polygon; the `@cas/interchange` `conformal` map form ([ADR-0035](#adr-0035-the-conformal-casinterchange-form-polygon-schwarzchristoffel-maps-interchange-140)) with a bidirectional Riemann-Map ↔ 2D-Electrostatics
 hand-off. **M3** (potential theory): the conductor-K view — equilibrium charge, capacity, Green's function —
 with Faber-zero and Fekete/Leja overlays (three roads to μ_K), plus general K with no closed-form map via a
 log-lightning fit. The app now also rides `@cas/conformal` (M2) and `@cas/faber` (M3). **M4a + M4b** (the
@@ -3094,8 +3191,8 @@ Hele-Shaw "twisting" showpiece): the exact Graven–Makarov one-point unbounded-
 driven by a complex charge `α = q + iγ` (thesis §3.3 closed form — engine `src/heleShawOnePoint.ts`), and
 its `twist.html` showpiece page that scrubs/plays the growing, twisting droplet up to a double point (α>0)
 or a (3,2)-cusp, with the conserved quadrature charge as the honest correctness monitor. App-local, no new
-package. **M4c** (the general Polubarinova–Galin time-stepper) is now **built** as the *classical
-interior-droplet* evolver — a bounded droplet `f(w,t)=Σ aₖwᵏ` grown from a central source by the numerical
+package. **M4c** (the general Polubarinova–Galin time-stepper) is now **built** as the _classical
+interior-droplet_ evolver — a bounded droplet `f(w,t)=Σ aₖwᵏ` grown from a central source by the numerical
 PG flow (`≈`), a genuinely different, textbook-validated scenario from the exact exterior M4a family:
 `src/heleShawInterior.ts` (the equation + a closed-form oracle — self-similar disk, the two-term
 4/3-cusp solution, the linearized modal rates), `src/heleShawInteriorStepper.ts` (the Galin–Kufarev
@@ -3106,7 +3203,7 @@ conserved Richardson moments as the honest `≈` error bar, and a hard ⚠ cusp 
 Domains app hands a one-point unbounded QD to the twist page via `@cas/interchange`, driving the family
 from the authored charge. It rides the existing `quadrature-domain` payload with `hData` populated (h(w) =
 α/(w − w₀)) — **no schema bump** (`hData` has existed and been validated since 1.0.0) and **no `@cas/schwarz`**
-(both revising the original spec): the charge α is the *residue* of h, a convention-neutral rational
+(both revising the original spec): the charge α is the _residue_ of h, a convention-neutral rational
 coefficient read straight off the CANONICAL wire (no π/2πi conversion), so the twist engine drives from it
 directly. QD emits a "Send to 2D Electrostatics (Hele-Shaw)" link (`schwarz-export.mjs`
 `buildHeleShawEnvelope`); 2D-E consumes it (`importHeleShaw.ts`), honestly rejecting anything but a single
@@ -3174,8 +3271,8 @@ engine enum, a ≥ 2-corner polygon, and the bounded/typed optional fit data so 
 ## ADR-0036: Split `2d-electrostatics` into three apps; extract `@cas/flow`
 
 **Status:** Accepted. **Supersedes ADR-0034's single-app premise** — decision 5 there ("the Hele-Shaw
-'twisting' showpiece M4 *lives in this app*") and the one-app framing of
-[`design/complex-potential-studio-plan.md`](design/complex-potential-studio-plan.md). ADR-0034's *other*
+'twisting' showpiece M4 _lives in this app_") and the one-app framing of
+[`design/complex-potential-studio-plan.md`](design/complex-potential-studio-plan.md). ADR-0034's _other_
 decisions stand unchanged (the hybrid physics framing, convention-at-the-edge (ADR-0006), honest `=`/`≈`/`⚠`
 labelling, and every per-mode engine); they simply now live across three apps. ADR-0035 (the `conformal`
 interchange form) is unaffected — its producer/consumer (the polygon page) stays in `2d-electrostatics`.
@@ -3185,11 +3282,11 @@ interchange form) is unaffected — its producer/consumer (the polygon page) sta
 A state-of-the-app review found `apps/2d-electrostatics` had grown by **page-accretion** (M2→M3→M4a–d, one
 page + one engine each) into a portmanteau of the author's paper rather than one tool. Concretely: **six
 pages spanning three distinct mathematical subjects** — static superposition (the sandbox), steady
-conformal-transplant flow (airfoil, polygon), potential theory (the conductor view), and *time-evolving free
-boundaries* (the two Hele-Shaw pages). The naming model `field.ts` (the `W=φ+iψ` field of charges) and the
+conformal-transplant flow (airfoil, polygon), potential theory (the conductor view), and _time-evolving free
+boundaries_ (the two Hele-Shaw pages). The naming model `field.ts` (the `W=φ+iψ` field of charges) and the
 electrostatic↔fluid lens — the app's two headline ideas — are imported by **only the sandbox page**; the
 other five share nothing but a render substrate. The Hele-Shaw pair is a moving-boundary / quadrature-domain
-topic (the twist page already *imports a QD recipe* over interchange, ADR-0034/M4d). The clean fault line is
+topic (the twist page already _imports a QD recipe_ over interchange, ADR-0034/M4d). The clean fault line is
 **steady vs. evolving**.
 
 ### Decision
@@ -3204,13 +3301,13 @@ sheds two clusters (so the moved surface is minimised and the `RM→polygon` con
    three apps) → squarely on the ADR-0007 second-consumer rule.
 2. **2D Electrostatics** (the residue; keeps the dir): sandbox + airfoil + polygon. Re-centred on the
    long-promised **theorem-gallery spine** (a guided walk of the paper's dictionary, sandbox as the
-   interactive core); the deferred `flow` interchange kind lands here so the app's *own* object becomes a
+   interactive core); the deferred `flow` interchange kind lands here so the app's _own_ object becomes a
    first-class hand-off. Adopts `@cas/ui`'s `mountNavHeader` (retires the ad-hoc, non-reversible page links).
 3. **Hele-Shaw Flow** (new `apps/hele-shaw-flow`): the exact Graven–Makarov twist family (`twist.html`, `=`)
-   + the numerical interior-droplet PG evolver (`droplet.html`, `≈`) + the QD import. The suite's
-   Laplacian-growth hub, tightly interoperating with Quadrature Domains. Roadmap: M4e surface-tension
-   regularisation (Saffman–Taylor λ=½), general-node / multi-point families, the bounded-QD→droplet
-   hand-off, an exact-vs-numerical overlay.
+   - the numerical interior-droplet PG evolver (`droplet.html`, `≈`) + the QD import. The suite's
+     Laplacian-growth hub, tightly interoperating with Quadrature Domains. Roadmap: M4e surface-tension
+     regularisation (Saffman–Taylor λ=½), general-node / multi-point families, the bounded-QD→droplet
+     hand-off, an exact-vs-numerical overlay.
 4. **Potential Theory** (new `apps/potential-theory`): the conductor-K view (capacity, equilibrium measure,
    Green's function; Faber-zero + Fekete/Leja overlays; general K via log-lightning). Roadmap: the
    `(1/n)log|Fₙ|→g_K` growth law, corner-clustered log-charges, condenser capacity, and RM/QD interop.
@@ -3218,7 +3315,7 @@ sheds two clusters (so the moved surface is minimised and the `RM→polygon` con
 ### Consequences
 
 - **Migration is staged, one reviewable PR each; working software at every gate.** Stage 0 — extract
-  `@cas/flow` and rewire the *current* app to it (pure refactor, six pages unchanged, gate green). Stage 1 —
+  `@cas/flow` and rewire the _current_ app to it (pure refactor, six pages unchanged, gate green). Stage 1 —
   carve Hele-Shaw Flow (`git mv`, wire the app, move the QD→Hele-Shaw hand-off). Stage 2 — carve Potential
   Theory. Stage 3 — reshape 2D Electrostatics (nav header, retitle) with the gallery + `flow` kind as
   follow-on milestones.
@@ -3231,7 +3328,7 @@ sheds two clusters (so the moved surface is minimised and the `RM→polygon` con
 - **Wiring per new app:** `packages/ui/src/apps.ts` (`SUITE_APPS`), `vitest.workspace.ts`, the census
   `PROJECTS` (`scripts/assert-test-census.mjs`), a launcher card, the `deploy-pages.yml` `cp`, the
   dependency-cruiser / ESLint boundary graph, and the **a11y roster** (`scripts/a11y-audit.mjs`) — which
-  today lists *no* 2D-E page, a pre-existing gap the split closes for all three. CLAUDE.md moves from eight
+  today lists _no_ 2D-E page, a pre-existing gap the split closes for all three. CLAUDE.md moves from eight
   apps to ten; `@cas/flow` is the twelfth `@cas/*` package.
 - **Docs:** three short per-app plan docs accompany their carve stages; the single studio plan is retired in
   favour of them plus this ADR.
@@ -3247,33 +3344,33 @@ sheds two clusters (so the moved surface is minimised and the `RM→polygon` con
 2D Electrostatics. **Partially supersedes [ADR-0036](#adr-0036-split-2d-electrostatics-into-three-apps-extract-casflow)** —
 only the airfoil's placement (ADR-0036 kept sandbox + airfoil + polygon together as the "steady field-and-flow"
 app); every other ADR-0036 decision stands. **No new package** ([ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) —
-the app is a new *consumer* of built machinery, and its one extraction is second-consumer-justified). Plan:
+the app is a new _consumer_ of built machinery, and its one extraction is second-consumer-justified). Plan:
 [`design/2d-hydrodynamics-plan.md`](design/2d-hydrodynamics-plan.md).
 
 ### Context
 
 ADR-0036 split the old portmanteau along the **steady vs. evolving** fault line, carving out Hele-Shaw Flow
-(evolving) and Potential Theory (the conductor view) and leaving 2D Electrostatics as the *steady*
+(evolving) and Potential Theory (the conductor view) and leaving 2D Electrostatics as the _steady_
 field-and-flow app: sandbox + airfoil + polygon. A **finer seam** survives inside "steady", though — between
 the two things "steady" bundles:
 
 - **Field superposition you relabel** — the sandbox: `field.ts` (the `W = φ + iψ` field of dropped charges /
-  sources / vortices / doublets) and the **electrostatic↔fluid lens**. These are the app's two *headline*
+  sources / vortices / doublets) and the **electrostatic↔fluid lens**. These are the app's two _headline_
   ideas, and its name is built around the electrostatic reading.
 - **A reference flow you transplant** — the airfoil and polygon: flow past the unit disk carried through a
   conformal map onto a body.
 
 The **airfoil is the acute case of the mismatch.** Of the three pages it is the only one that (a) imports
-*neither* headline idea (no `field.ts`, no lens), (b) has *no* meaningful electrostatic reading — its whole
+_neither_ headline idea (no `field.ts`, no lens), (b) has _no_ meaningful electrostatic reading — its whole
 payload is **lift, the Kutta condition, camber, angle of attack, `L = −ρUΓ`**, aerodynamic vocabulary with no
-electrostatic dual anyone studies, and (c) is a self-contained *leaf* — it consumes only `@cas/gpu` (its GPU
+electrostatic dual anyone studies, and (c) is a self-contained _leaf_ — it consumes only `@cas/gpu` (its GPU
 render) and `@cas/ui` (the shell); unlike the polygon it touches no `@cas/flow`, no `@cas/interchange`, and no
 cross-app golden. It is at once the **worst fit** for an app branded around the electrostatic reading and the
 **cheapest to move**. Three further facts point the same way: 2D-E's own roadmap milestone **ES-4** ("more
-transplant families — slit, ellipse, star") is a *flow gallery* accreting onto the app and drifting from its
+transplant families — slit, ellipse, star") is a _flow gallery_ accreting onto the app and drifting from its
 electrostatic identity; the closed-form maps ES-4 wants **already exist** in the suite (Riemann-Map's
 `EXTERIOR_MAP_PRESETS` — Joukowski / vertical-slit / ellipse / deltoid / astroid / star); and the airfoil
-already has a *documented* tie to the fluids side ([Hele-Shaw's HS-6](design/hele-shaw-flow-plan.md), relating
+already has a _documented_ tie to the fluids side ([Hele-Shaw's HS-6](design/hele-shaw-flow-plan.md), relating
 the airfoil Kutta circulation to the Hele-Shaw twist γ — McKee–Bush 2024). The airfoil is not homeless; it is
 the seed of the suite's missing **ideal-flow** app.
 
@@ -3282,19 +3379,19 @@ the seed of the suite's missing **ideal-flow** app.
 Add **`apps/2d-hydrodynamics`** ("2D Hydrodynamics") — an interactive realization of **ideal (inviscid,
 irrotational) flow past a body `B`**, realized as flow past the unit disk `𝔻*` carried through a conformal map
 `ψ: 𝔻* → ext(B)`. It is the deliberate **hydrodynamic twin of 2D Electrostatics**: the two apps are the two
-readings of the *same* `W = φ + iψ` (the paper's own title pairing, *"…Two-Dimensional Electrostatics and
-Hydrodynamics"*), split by which phenomena each showcases — **superposition fields you relabel** (Electrostatics)
+readings of the _same_ `W = φ + iψ` (the paper's own title pairing, _"…Two-Dimensional Electrostatics and
+Hydrodynamics"_), split by which phenomena each showcases — **superposition fields you relabel** (Electrostatics)
 vs. **flow past bodies, and lift** (Hydrodynamics).
 
 1. **Anchored by the airfoil, broadened by a gallery.** The Joukowski / Kármán–Trefftz airfoil (with the Kutta
    condition and Kutta–Joukowski lift) is the crown-jewel page and the app's reason to exist; a **closed-form
    transplant gallery** (slit / flat-plate, ellipse, deltoid, astroid, star) is its breadth. The airfoil is just
    the Joukowski special case — a body with a sharp edge, hence a Kutta condition and lift — of the one object
-   the app owns: *transplant a reference flow through a closed-form exterior map.*
+   the app owns: _transplant a reference flow through a closed-form exterior map._
 2. **The airfoil moves; the sandbox and polygon stay in 2D Electrostatics.** The airfoil (`airfoil.html`,
    `main-airfoil.ts`, `airfoil.ts`, `render/airfoilView.ts` + `airfoilShader.ts`, and its two tests) moves by
    `git mv` (provenance preserved). The **polygon stays** (for now, HD-4): unlike the airfoil it is
-   dual-readable (flow past a body ↔ the field around a charged polygonal conductor) *and* it is the
+   dual-readable (flow past a body ↔ the field around a charged polygonal conductor) _and_ it is the
    [ADR-0035](#adr-0035-the-conformal-casinterchange-form-polygon-schwarzchristoffel-maps-interchange-140)
    `conformal` interchange hub — its `RM_TO_POTENTIAL_CONFORMAL_LINK` golden and Riemann-Map's "Send to 2D
    Electrostatics ↗" deep link anchor it. Moving it re-opens exactly the coupling ADR-0036 chose to leave
@@ -3304,14 +3401,14 @@ vs. **flow past bodies, and lift** (Hydrodynamics).
    `@cas/flow` (the transplant kernel — `flowNet` builds the streamline/equipotential net past `𝔻*`,
    `pushforward` carries it onto the body), and `@cas/export` (HD-3 PNG). The airfoil engine moves intact. The
    gallery's closed-form maps are a textbook **second-consumer extraction** of Riemann-Map's
-   `EXTERIOR_MAP_PRESETS` into `@cas/flow` (Riemann-Map = consumer 1, its exterior *image* pane; 2D
-   Hydrodynamics = consumer 2, the flow *transplant*), pinned by a shared golden since an app may not import
-   another app (the CLAUDE.md golden-corpus rule). The extraction *nets more reuse than it spends.*
+   `EXTERIOR_MAP_PRESETS` into `@cas/flow` (Riemann-Map = consumer 1, its exterior _image_ pane; 2D
+   Hydrodynamics = consumer 2, the flow _transplant_), pinned by a shared golden since an app may not import
+   another app (the CLAUDE.md golden-corpus rule). The extraction _nets more reuse than it spends._
 4. **Honest labelling** ([guardrail](../CLAUDE.md)): `=` for the closed-form airfoil and gallery; the polygon
    keeps its `≈` / `degraded` fit tier if HD-4 later moves it.
 5. **2D Electrostatics' ES-4 is reassigned here.** "More transplant families (slit, ellipse, star)" belongs to
-   the app the transplant gallery *is*; 2D-E re-centres on the sandbox + polygon + its ES-1 theorem-gallery
-   spine. 2D-E keeps a legitimate "flow" story — the lens, streamlines, and tracers all live in the *sandbox*;
+   the app the transplant gallery _is_; 2D-E re-centres on the sandbox + polygon + its ES-1 theorem-gallery
+   spine. 2D-E keeps a legitimate "flow" story — the lens, streamlines, and tracers all live in the _sandbox_;
    the airfoil was the one flow page with none of them, so its departure leaves the "Fields & flow" identity
    intact.
 
@@ -3331,7 +3428,7 @@ vs. **flow past bodies, and lift** (Hydrodynamics).
   `flowNet` + `pushforward` (line-art first; a GPU domain-color upgrade generalizing `airfoilShader.ts` is an
   HD-3 option). **HD-3** — parity polish (angle of attack, stagnation points, stream-function contours,
   `#vs=` permalinks + PNG via `@cas/export`). **HD-4** (deferred) — migrate the polygon (the expensive move:
-  the ADR-0035 form, the golden, the RM deep link). **HD-5** (deferred) — the app becomes the *second consumer*
+  the ADR-0035 form, the golden, the RM deep link). **HD-5** (deferred) — the app becomes the _second consumer_
   of the `flow` interchange kind that 2D-E's ES-2 defines.
 - **URLs / hand-offs:** only the airfoil page changes URL (`2d-electrostatics/airfoil.html` →
   `2d-hydrodynamics/airfoil.html`) — no known external users (ADR-0036's "update, not redirect" norm), and the
@@ -3354,7 +3451,7 @@ vs. **flow past bodies, and lift** (Hydrodynamics).
 **Status:** Accepted. An **internal restructure** of `apps/2d-hydrodynamics` (a single-page app + one render
 path); it does **not** reverse any [ADR-0037](#adr-0037-the-tenth-published-app--apps2d-hydrodynamics-ideal-flow-past-bodies-via-conformal-transplant)
 decision (the app, zero-new-packages, the airfoil promotion, and the `@cas/flow` extraction all stand) — it
-supersedes only ADR-0037's *incidental* three-page shape (hub + `airfoil.html` + `gallery.html`). No new
+supersedes only ADR-0037's _incidental_ three-page shape (hub + `airfoil.html` + `gallery.html`). No new
 package. Plan: [`design/2d-hydrodynamics-plan.md`](design/2d-hydrodynamics-plan.md) §HD-6.
 
 ### Context
@@ -3374,7 +3471,7 @@ look**, resting on one unifying identity and one render idiom.
 
 1. **Every body is a forward map `ψ: 𝔻* → ext(B)` driven by flow past the unit disk.** The closed-form bodies
    already are (`ψ = a·z + b·z⁻ᵏ`, `@cas/flow`'s `EXTERIOR_MAP_PRESETS`). **The airfoil is too:** flow past the
-   cylinder `|ζ−ζ₀| = R` through the Joukowski map `J` is *identical* to flow past the **unit disk** through
+   cylinder `|ζ−ζ₀| = R` through the Joukowski map `J` is _identical_ to flow past the **unit disk** through
    `ψ(w) = J(ζ₀ + R·w)` with reference speed `U' = U·R` and the same circulation `Γ` (the `R` cancels in
    `dW/dz = W_ref'(w)/ψ'(w)`; verified algebraically and pinned by a golden). So the airfoil folds into the
    same `ψ`-framework, Kutta circulation and all — the KT case identically.
@@ -3383,7 +3480,7 @@ look**, resting on one unifying identity and one render idiom.
    flow `W_ref` (color + `φ`/`ψ` contours + the `|z| = 1` outline) — one shader for all bodies. The **right
    pane** (body) is a **forward-mapped colored mesh**: a polar tessellation of the disk exterior whose vertices
    the CPU warps through `ψ` and colors by the exact physical velocity `W_ref'(w)/ψ'(w)` (both closed-form),
-   the GPU interpolating + applying the *same* colormap. The mesh's inner ring is `ψ(∂𝔻)` = the body outline.
+   the GPU interpolating + applying the _same_ colormap. The mesh's inner ring is `ψ(∂𝔻)` = the body outline.
    A thin 2D overlay carries stagnation markers + the lift readout.
 3. **Rejected alternative — a generic per-pixel inverse.** Extending the shader to compute `ζ = ψ⁻¹(z)` per
    pixel is closed-form only for the `k=1` bodies (airfoil, ellipse, slit); the cusped bodies need polynomial
@@ -3407,7 +3504,7 @@ look**, resting on one unifying identity and one render idiom.
 ### Consequences
 
 - **Positive:** the app becomes one cohesive tool — one page, one control panel, one rich visual language —
-  and *richer than the sum*: the airfoil gains domain-colored **stagnation markers** (its rear stagnation on
+  and _richer than the sum_: the airfoil gains domain-colored **stagnation markers** (its rear stagnation on
   the trailing edge is the Kutta condition made visible), and the gallery gains the domain-colored field. The
   render matches the app's forward-map idiom and needs no fragile in-shader root-finding.
 - **Migration is staged, each an independently-green gate** (HD-6.0…HD-6.4): the ADR + plan; the unified
@@ -3434,10 +3531,10 @@ readings) — the hydrodynamic reading now lives in its own app. No new package;
 ADR-0034 shipped the field sandbox with one **lens** toggle ("Electrostatic | Fluid") that relabelled the same
 complex potential `W = φ + iψ` between the two Dictionary readings — a relabel only, no recompute. Since then,
 [ADR-0037](#adr-0037-the-tenth-published-app--apps2d-hydrodynamics-ideal-flow-past-bodies-via-conformal-transplant)
-carved *flow past a body* into its own app, **2D Hydrodynamics**, and
+carved _flow past a body_ into its own app, **2D Hydrodynamics**, and
 [ADR-0036](#adr-0036-split-2d-electrostatics-into-three-apps-extract-casflow) moved the evolving / analysis flow
 stories to Hele-Shaw Flow and Potential Theory. With the hydrodynamic reading now the province of a dedicated
-app, the sandbox's Fluid lens is redundant — a second vocabulary for a picture the user reads, in *this* app, as
+app, the sandbox's Fluid lens is redundant — a second vocabulary for a picture the user reads, in _this_ app, as
 an electrostatic field.
 
 ### Decision
@@ -3452,7 +3549,7 @@ Make 2D Electrostatics present the **electrostatic reading only**.
 3. Update the app's own descriptions (index.html, package.json, README) and the app plan to match.
 
 The field **math is untouched** — `velocity = conj(E)` still drives the tracer layer, and `W = φ + iψ` is the
-same object; only the *product surface* narrows.
+same object; only the _product surface_ narrows.
 
 ### Consequences
 
@@ -3466,13 +3563,13 @@ same object; only the *product surface* narrows.
 
 ---
 
-## ADR-0040: `@cas/rigor`: extraction by *reimplementation*
+## ADR-0040: `@cas/rigor`: extraction by _reimplementation_
 
-**Status:** Accepted  **Date:** 2026-09  **Deciders:** Andrew
+**Status:** Accepted **Date:** 2026-09 **Deciders:** Andrew
 
-*A follow-on ADR in the sense [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) asks
+_A follow-on ADR in the sense [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) asks
 for, but recording a move ADR-0007 does not cover: a shared package created by writing the code
-again rather than by moving it.*
+again rather than by moving it._
 
 > **Provenance note.** This record was drafted against a stale checkout (4 apps, 5 packages) and is
 > filed here renumbered, against the real suite of twelve apps and thirteen packages. The argument is
@@ -3481,6 +3578,7 @@ again rather than by moving it.*
 > reimplemented it" count is larger than the draft assumed, not smaller.
 
 ### Context
+
 [`CLAUDE.md`](../CLAUDE.md) lists honest labelling among the **non-negotiable guardrails** — "`=`
 exact, `≤` rigorous bound, `≈` estimate". It is the guardrail the suite leans on hardest: QD's
 whole proof workflow, CD's exactness claims, and the correspondence tool's uncertified straightening
@@ -3497,14 +3595,15 @@ Roughly 6,000 lines of QD-specific `.mjs`, none of it importable. Every app that
 concept since has reimplemented it, and the next one was about to as well.
 
 The new contour-integration app leans on it harder than any predecessor: its central claim is not a
-number but a *verdict* — "this argument closes" — assembled from per-piece evidence. Landing a
+number but a _verdict_ — "this argument closes" — assembled from per-piece evidence. Landing a
 fourth private copy of the vocabulary underneath that would be the point at which the guardrail
 stops being a guardrail and becomes a habit.
 
 ### Decision
+
 **Create `packages/rigor` (`@cas/rigor`) as new, small, strict TypeScript**, and consume it from
 `apps/contour-integration`. **Do not touch the Quadrature app.** Its migration is a separate
-decision on its own schedule, and is explicitly *not* part of this one.
+decision on its own schedule, and is explicitly _not_ part of this one.
 
 The package's goal is narrow and stated as such in its README: **make `=` impossible to write by
 hand.** `Certificate` and `Verdict` are branded types with no public constructors, so a certificate
@@ -3515,19 +3614,22 @@ was established, never chosen by the call site.
 ### Options Considered
 
 #### Option A: Write `@cas/rigor` fresh; leave QD alone (this ADR)
+
 **Pros:** small (≈200 lines), strict TS from the start, no risk to a mature and heavily-tested app,
-and it can be *better* than what it replaces — the branding turns the rule into a compiler error,
+and it can be _better_ than what it replaces — the branding turns the rule into a compiler error,
 which the `.mjs` original cannot do. **Cons:** for a period the suite has two implementations of the
 same vocabulary, which is precisely the duplication ADR-0008 accepted knowingly for `sym-core` and
 is accepting again here. Creates a package whose second consumer is future rather than present.
 
 #### Option B: Port QD's implementation into a package and migrate QD onto it
+
 **Pros:** eliminates the duplication outright; one vocabulary, immediately. **Cons:** the logic is
 entangled with QD's proof tree, its store, and its PWA build; the port is large and its blast radius
 is the app with the most to lose. It puts a mature app at risk for a new app's benefit, against the
-*working software at every step* guardrail. Nothing about it has to happen now.
+_working software at every step_ guardrail. Nothing about it has to happen now.
 
 #### Option C: Reimplement it app-locally again, extract later
+
 **Pros:** strictly ADR-0007-compliant — no package until a second consumer exists in code.
 **Cons:** app-local code that works is rarely promoted; this is the fourth copy, and "extract later"
 is what produced the present situation. The rule exists to stop speculative generality, and a
@@ -3535,7 +3637,8 @@ guardrail that `CLAUDE.md` calls non-negotiable having no shared implementation 
 need.
 
 ### Trade-off Analysis
-ADR-0007's demand-driven rule is about *extraction* — moving code once a second consumer proves the
+
+ADR-0007's demand-driven rule is about _extraction_ — moving code once a second consumer proves the
 shape. It has no clause for a primitive that four consumers have each rebuilt because the original
 was never extractable in the first place. Applying the rule literally (Option C) optimises for the
 thing it was written to prevent and produces a fifth copy next time.
@@ -3547,9 +3650,10 @@ migrated; there is nothing meaningful to differential-test against today, becaus
 
 The decisive asymmetry: Option A is small and reversible, Option B is large and touches the app with
 the most to lose, and the two are not mutually exclusive. Doing A first makes B easier, because B
-then has a target to migrate *to* rather than a design to invent mid-port.
+then has a target to migrate _to_ rather than a design to invent mid-port.
 
 ### Consequences
+
 - The suite has **six** packages. `@cas/rigor` is the first created rather than extracted, and the
   first whose justification is a guardrail rather than a second consumer.
 - `@cas/rigor` depends on nothing, knows nothing about what is being measured (ADR-0006), and is
@@ -3564,6 +3668,7 @@ then has a target to migrate *to* rather than a design to invent mid-port.
   input, which makes the migration urgent rather than optional.
 
 ### Action Items
+
 1. [x] Create `packages/rigor` with the level lattice, branded certificates, and `assembleVerdict`.
 2. [x] Verify the branding actually bites: a hand-written `{ level: "=" }` certificate fails to
        typecheck (`TS2741: Property '[CERTIFICATE_BRAND]' is missing`), confirmed by trying it.
@@ -3576,14 +3681,14 @@ then has a target to migrate *to* rather than a design to invent mid-port.
 
 ---
 
-## ADR-0041: Tier D's output basis is *carried*, not reduced; and Pass 5 moves to ℚ(i)(π)
+## ADR-0041: Tier D's output basis is _carried_, not reduced; and Pass 5 moves to ℚ(i)(π)
 
-**Status:** Accepted  **Date:** 2026-09  **Deciders:** Andrew
+**Status:** Accepted **Date:** 2026-09 **Deciders:** Andrew
 
-*The two engine decisions M4 (branch cuts) cannot start without, taken before any keyhole code
+_The two engine decisions M4 (branch cuts) cannot start without, taken before any keyhole code
 exists. `apps/contour-integration/src/families/system.ts` parks the second one explicitly — "the
 decision is deferred to M4, where a record that needs it actually exists" — and that record now
-exists.*
+exists._
 
 ### Context
 
@@ -3596,7 +3701,7 @@ are visibly outside that: `π/sin(πα)`, `(π/n)/sin(πa/n)`, `π³/8`, `(π/si
 c^μ(c−b)^{1−μ})`.
 
 **And what ring does Pass 5's matrix live in?** D4's lower edge reproduces an affine combination of
-*three* targets with coefficients `−(1, 4πi, −4π²)`; D5's has four, `−(1, 6πi, −12π², −8π³i)`.
+_three_ targets with coefficients `−(1, 4πi, −4π²)`; D5's has four, `−(1, 6πi, −12π², −8π³i)`.
 `linear.ts` solves `M t = r` over `Frac`, exactly, so that rank is **decided rather than
 thresholded** — the property four of the gallery's classical traps are detected by. A `2π` does not
 fit in it, and `exactConstant` currently refuses rather than rounding, which is correct and also a
@@ -3624,22 +3729,25 @@ polynomial ring, its fraction field admits exact elimination, and **rank stays d
 ### Options Considered
 
 #### Option A: carry the form; π as an indeterminate (this ADR)
+
 **Pros:** small — one exponent widening, one recogniser, one `Field` abstraction over code that
 already exists. Keeps the form the reader asked for: the records write their own `value` fields as
 `"pi/sin(pi*alpha)"` and `"(pi/(2*sqrt(2)))*(17 - 40^(3/4))"`, which is this basis exactly. Uniform
-with tier B, so the app gains no second idiom. **Cons:** the engine cannot *decide* equality of two
+with tier B, so the app gains no second idiom. **Cons:** the engine cannot _decide_ equality of two
 carried forms in general, so a simplifier-style question ("are these the same number?") is out of
 reach; and the basis must be policed, since a record outside it fails late rather than at load.
 
 #### Option B: reduce everything into an algebraic number field
+
 **Pros:** one number, comparable and printable; no carried symbols. **Cons:** the fixtures decide it.
 `sin(3π/8)` is the nested `√(2+√2)` — degree 4; `sin(3π/7)` is degree 3; `sin(23π/50)` is **degree
 20**; D7 needs `40^{3/4}` and `10^{1/3}·6^{2/3}`. That is a general algebraic number field with
-minimal-polynomial arithmetic, to express answers whose *whole value* is the closed form. It is a
+minimal-polynomial arithmetic, to express answers whose _whole value_ is the closed form. It is a
 large, delicate piece of exact algebra bought in exchange for throwing away what the user wanted to
 see.
 
 #### Option C: rescale the unknowns to clear π from Pass 5's matrix
+
 The alternative `system.ts`'s own docstring names. Substituting `Tₖ = π^{eₖ}·tₖ` would clear π if the
 unknowns were homogeneous in it. **They are not.** For `R = 1/(1+x²)`, `T0 = π/2` and `T2 = π³/8` —
 degrees 1 and 3 — while for `R = 1/(1+x²)²`, `T0 = π/4` **and** `T1 = −π/4` are both degree 1, which
@@ -3657,7 +3765,7 @@ the matrix.
 
 The cost is honest and worth stating: an engine that carries forms cannot compare them. Two
 expressions equal as numbers may not be recognised as equal, so the corpus's numeric cross-check
-remains the only equality oracle, and the output basis becomes a thing that must be *policed* —
+remains the only equality oracle, and the output basis becomes a thing that must be _policed_ —
 PLAN §9's R3 ("declare the output basis and refuse outside it") stops being advice and becomes a
 code path.
 
@@ -3725,12 +3833,12 @@ code path.
 
 ## ADR-0042: An exactly-known IMPORTED value is `=` on its form, with the import in its provenance
 
-**Status:** Accepted  **Date:** 2026-09  **Deciders:** Andrew
+**Status:** Accepted **Date:** 2026-09 **Deciders:** Andrew
 
-*The one engine decision M5 (the rest of the taxonomy) cannot start without. It is
+_The one engine decision M5 (the rest of the taxonomy) cannot start without. It is
 [`gallery/tier-efg.md`](contour-integration/gallery/tier-efg.md) §10.2's schema gap **SG-2**,
 promoted to a decision because it puts the honest-labelling guardrail in direct conflict with the
-correct verdict for two of tier E–F's five entries.*
+correct verdict for two of tier E–F's five entries._
 
 ### Context
 
@@ -3773,7 +3881,7 @@ exactly the point where it is handing you a result from elsewhere.
 ### Consequences
 
 - **E3 and F2 can carry `=`.** Their arguments are exact and now read exact.
-- **The derivation gains a fourth kind of step** beside COVER/KILL/CATCH's own: an *imported* one. A
+- **The derivation gains a fourth kind of step** beside COVER/KILL/CATCH's own: an _imported_ one. A
   reader can see precisely which part of the argument came from outside it, which is strictly more
   information than either of the two behaviours it replaces.
 - **`free` keeps its meaning** — a piece with a value nobody has pinned, priced by quadrature at `≈`.
@@ -3814,11 +3922,11 @@ exactly the point where it is handing you a result from elsewhere.
 
 ## ADR-0043: Contour Integration rebuilds its shell — two rails, a keyed renderer, KaTeX, textbook vocabulary
 
-**Status:** Accepted  **Date:** 2026-09-15  **Deciders:** Andrew
+**Status:** Accepted **Date:** 2026-09-15 **Deciders:** Andrew
 
-*The decision behind M8. Plan: [`contour-integration/M8-plan.md`](contour-integration/M8-plan.md);
+_The decision behind M8. Plan: [`contour-integration/M8-plan.md`](contour-integration/M8-plan.md);
 review: `https://claude.ai/artifact/3uUWAhH4PM9qGR2siHvpjV`, materials under
-[`contour-integration/M8/review-inputs/`](contour-integration/M8/review-inputs/).*
+[`contour-integration/M8/review-inputs/`](contour-integration/M8/review-inputs/)._
 
 ### Context
 
@@ -3853,8 +3961,8 @@ students, as an exploration instrument first with a pedagogical mode.
    `toLatex` prints expressions; the app adds LaTeX siblings for its exact-value formatters and the
    record targets. Maths inside engine-minted strings uses a `$…$` delimiter convention the shell
    renders; structured `Claim` objects carry typed arguments for the ledger and derivation.
-4. **Vocabulary**: the ids stay data keys; the screen shows *Hypotheses · Residues · Boundary terms ·
-   Target*, with headlines "Hypotheses verified." / "Hypotheses fail: ⟨piece⟩ does not vanish."
+4. **Vocabulary**: the ids stay data keys; the screen shows _Hypotheses · Residues · Boundary terms ·
+   Target_, with headlines "Hypotheses verified." / "Hypotheses fail: ⟨piece⟩ does not vanish."
    House notation `∮_γ f(z) dz`, `Res(f, a)`, `Ind_γ(a)`, `Γ_R`. Prose is terse and textbook-neutral;
    every engine sentence is listed for owner sign-off before it ships.
 5. **Stage modes** quiet (default) · full · isochromatic · textbook, plus the modulus toggle; the CET-C6
@@ -3883,3 +3991,142 @@ students, as an exploration instrument first with a pedagogical mode.
 1. Phase 0 through Phase 5 per the plan; STATUS.md is the record.
 2. After the final merge: CLAUDE.md status paragraph, README, PLAN §5 and §7 updated; the M8 plan's
    findings folded into `docs/refactor/LOG.md`.
+
+---
+
+## ADR-0044: Withdraw the in-app suite navigation header (the launcher is the unified menu)
+
+**Status:** Accepted **Date:** 2026-09-16 **Deciders:** Andrew
+
+**Supersedes** the navigation-header element of
+[ADR-0032](#adr-0032-extract-casui-ahead-of-adoption-port-cds-product-shell) — its primitive 4
+(`mountNavHeader` + `nav.css` + `SUITE_APPS`) and its open action item 7 (**U7**, the "Send to…"
+hand-off picker), which is closed as **withdrawn, not done**. **Narrows** the nav-header half of
+[ADR-0036](#adr-0036-split-2d-electrostatics-into-three-apps-extract-casflow) Stage 3 and
+[ADR-0037](#adr-0037-the-tenth-published-app--apps2d-hydrodynamics-ideal-flow-past-bodies-via-conformal-transplant)
+HD-0, which adopted it. **Closes** [ADR-0016](#adr-0016-extract-casexport--shared-png-text-metadata--shared-glsl-snippets)
+action item 5 (`mountNavHeader`'s unstated positional contract) as **moot**. The launcher is
+untouched: locked decision 8's _unified menu_ stands; only its "plus a shared nav header later"
+clause is withdrawn.
+
+### Context
+
+ADR-0032 chartered `@cas/ui` on a 2026-08 UX audit whose finding #1 was **one-way navigation** —
+once inside an app, the only way back to the launcher or across to a sibling is the browser's back
+button. `mountNavHeader` was the answer: a fixed 32-px dark bar with a "Suite" home link and one
+link per sibling app, plus a deferred hand-off picker (U7).
+
+Thirteen months later it is in **five apps across seven pages** — 2D Electrostatics (both pages),
+Hele-Shaw Flow (both), Potential Theory, 2D Hydrodynamics, Contour Integration — and in no other.
+The six remaining TS apps never adopted it and QD is deliberately out of scope
+([ADR-0002](#adr-0002-typescript-as-the-common-language) / [ADR-0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate)).
+The 2026-09-16 Complex Dynamics review raised its absence there as a finding
+([`review/2026-09-16-complex-dynamics-review/REPORT.md`](review/2026-09-16-complex-dynamics-review/REPORT.md) U5).
+The owner's decision, with the rollout question finally in front of him, is the opposite of the
+finding: **no app in the suite gets an in-app header.** The reasons worth recording:
+
+- **It is foreign chrome over a full-bleed instrument.** Every app is a viewport-filling canvas with
+  its own dense toolbar. The bar is hard-coded dark at `z-index: 6`;
+  [ADR-0043](#adr-0043-contour-integration-rebuilds-its-shell--two-rails-a-keyed-renderer-katex-textbook-vocabulary)
+  already had to record that it "stays hard-coded dark" with a light theme deferred — a debt that
+  only exists because the bar exists. And it does not merely sit _above_ an app's own chrome, it
+  lands _on_ it unless the app compensates: Contour Integration's `ui/app.css` records that it
+  "adopted the nav without the offset, so the top 32 px of its 48 px bar — the brand, the integrand
+  box and five of the seven presets — were covered, and because the nav sits at z-index 6 it
+  swallowed every click in that band as well." Five app stylesheets now carry that compensation.
+- **Partial adoption is worse than none.** Five of twelve apps carry it, so the suite it advertises
+  is false: a reader in Hele-Shaw sees a bar linking to Complex Dynamics, and a reader who follows
+  that link arrives somewhere with no bar and no way back to Hele-Shaw.
+- **It leaks layout into five app stylesheets.** Each offsets its own fixed chrome by
+  `var(--cas-nav-h, 0px)` — a package deciding where an app's toolbar sits.
+- **Its contract is positional and unstated** (ADR-0016 AI-5): `mountNavHeader` ends with
+  `appendChild`, so reading order depends on call order. It was already wrong once — Contour
+  Integration's M6.4 found the nav reading _last_, after the entire rail, while drawing first.
+- **The hand-off picker was the strongest argument for the bar, and it does not hold.** A hand-off
+  carries _state_, so it belongs where the state is: Complex Dynamics' "Riemann Map ↗" sits inside
+  the Exterior-map panel because that is where the Laurent coefficients are. A generic top-bar
+  picker must ask the app for `accepts`/`hrefFor` anyway (the U0 API already does), so it buys
+  placement, not capability — and the placement is worse.
+- **The launcher already is the unified menu**, every app is a bookmarkable permalinked page reached
+  from it, and the browser's back button returns there.
+
+### Decision
+
+1. **No in-app suite navigation header, in any app**, now or later. `apps/launcher` remains the
+   unified menu. CLAUDE.md decision 8, VISION §6, ARCHITECTURE §11 and RISKS §Decisions 3 drop the
+   "plus a shared nav header" clause; the launcher half of each stands unchanged.
+2. **`@cas/ui` loses the primitive**: `src/navHeader.ts`, `src/nav.css`, their `index.ts` exports
+   (`mountNavHeader`, `NavHeaderOptions`, `NavHeader`, `HandoffConfig`) and `test/navHeader.test.ts`
+   are removed. The package keeps its other three primitives (`mountCanvas`/`attachCanvasA11y`,
+   `runWithFatalBoundary`/`showFatalBanner`, `createComputeClient`) and `drawDirectionTicks`; it
+   remains the ADR-0032 extract-ahead exception, retro-justified by those three many times over.
+3. **`SUITE_APPS` / `SuiteApp` go with it.** After the removal nothing imports them, and
+   [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) does not keep a registry with no
+   consumer alive on the gate. The two places that do enumerate the apps — `scripts/a11y-audit.mjs`
+   and `.github/workflows/deploy-pages.yml` — carry their own lists today and are unaffected. If a
+   later feature needs a machine-readable app registry it returns with that consumer; git history
+   holds this one.
+4. **The cross-app hand-off stays in the panel that owns the state.** Today that is Complex
+   Dynamics' "Riemann Map ↗" and "Import map…", the plotter's and Riemann Map's `window.open`
+   buttons, and the QD → CD / QD → Hele-Shaw deep links. The discovery problem U7 was meant to solve
+   is answered by [`INTERCHANGE.md`](INTERCHANGE.md) and by each producing panel naming its
+   destination, not by a bar. Improving those panels (a real paste dialog rather than
+   `window.prompt`) is app work, tracked in the CD remediation plan, not a package feature.
+5. **The five adopting apps** drop the import, the call and the `var(--cas-nav-h, …)` offsets. The
+   offsets already carry a `0px` fallback, so the visual result of dropping the stylesheet is
+   exactly the intended one; the declarations are removed rather than left as dead `var()` calls.
+6. **Contour Integration is sequenced through M8.** Its shell is being rebuilt right now
+   (ADR-0043, branch `claude/inspiring-keller-5sizwl`, Phase 1 builds `src/shell2/` beside
+   `src/shell/`), and its nav host exists for a structural reason — it is what lets the shell be a
+   `<main>` at all. The new shell simply never mounts a nav; the old shell's removal rides M8's
+   merge rather than racing it.
+
+### Consequences
+
+- **Accepted cost, stated plainly:** this re-accepts UX audit finding #1. From inside an app the way
+  to a sibling is the back button or the launcher URL. That is judged the right trade for a suite of
+  deep single-purpose instruments whose users arrive by permalink and stay.
+- **Positive:** one cross-app coupling fewer; no dark bar over light apps; ADR-0043's deferred
+  nav-theme problem evaporates; five stylesheets lose a layout dependency on a package; the
+  positional contract that already misfired once cannot misfire again.
+- **Backward compatibility: total.** No URL, permalink, PNG recipe or interchange payload has ever
+  carried nav state, and the deployed layout (launcher at root, each app at `<id>/`) is unchanged, so
+  every existing link keeps working.
+- **Accessibility:** a `<nav aria-label="Suite navigation">` landmark disappears from seven pages, so
+  `scripts/a11y-baseline.json` is re-recorded after the removal and any change in the `region` rule's
+  node counts is explained rather than absorbed. Contour Integration's "the nav reads before
+  `<main>`" invariant (`test/shell.test.ts`) is replaced by "there is no `.cas-nav`, and `<main>` is
+  the root's first element".
+- **Tests:** `packages/ui` loses one test file (its jsdom environment is still exercised by
+  `mountCanvas`); the app suites are unaffected because no app test asserts the nav except Contour
+  Integration's one structural case.
+- **Docs:** ARCHITECTURE §11 item 2 and the `@cas/ui` blurbs (§3, §12), VISION §6, RISKS §146,
+  CLAUDE.md decision 8 + the U7 line + the ADR-0036 Stage 3 sentence, the root README package tree,
+  and `packages/ui/README.md` are corrected in the same pass.
+
+### Alternatives considered
+
+1. **Finish the rollout** (the pre-decision plan: adopt in the remaining six TS apps, then wire U7).
+   Rejected: it puts a hard-coded dark fixed bar on top of six more apps, five of them light-themed,
+   and completes a feature the owner does not want.
+2. **Freeze at five apps — keep it where it is, roll out no further.** Rejected: partial adoption is
+   the worst of the three states. The bar promises an affordance two-thirds of the suite lacks, and
+   `@cas/ui` keeps the layout coupling for five consumers anyway.
+3. **Keep `mountNavHeader` in `@cas/ui`, unused, for later.** Rejected under ADR-0007: a primitive
+   with zero consumers is dead code the gate must keep green and a maintainer must keep reading. It
+   can return with its consumer.
+4. **Replace it with a bare "Suite" link** (home only, no sibling list). Rejected: the same foreign
+   chrome, for something the back button already does.
+
+### Action items
+
+Staged in [`review/2026-09-16-complex-dynamics-review/NAV-WITHDRAWAL-PLAN.md`](review/2026-09-16-complex-dynamics-review/NAV-WITHDRAWAL-PLAN.md).
+
+1. [x] This ADR; TOC row; the CD remediation plan's "Decisions to record" entry resolved.
+2. [ ] **N1** — drop the call sites and CSS offsets in the four non-M8 apps (2D Electrostatics,
+       Hele-Shaw Flow, Potential Theory, 2D Hydrodynamics; six pages).
+3. [ ] **N2** — remove `navHeader.ts`, `nav.css`, `apps.ts`, the exports and the test from `@cas/ui`.
+4. [ ] **N3** — Contour Integration, through M8 (the new shell never mounts it; the old shell's host
+       and the structural test go with the M8 merge).
+5. [ ] **N4** — the documentation sweep listed under _Consequences_.
+6. [ ] **N5** — rebuild, re-run the a11y roster, re-record the baseline, explain every delta.
