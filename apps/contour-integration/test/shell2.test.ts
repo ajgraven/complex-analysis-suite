@@ -776,7 +776,7 @@ describe("the stage's gestures", () => {
     app.applyState({ ...app.currentState(), mode: "gallery", record: "circle-linear-cos", fixture: 0 });
     const drawn = app.resolution();
     const onScreen =
-      drawn.kind === "gallery" ? (drawn.run?.contour.pieces ?? []).map((q) => q.name) : [];
+      drawn.kind === "gallery" ? (drawn.run?.contour.pieces ?? []).map((piece) => piece.name) : [];
     expect(onScreen, "the record resolved a contour of its own").not.toHaveLength(0);
     expect(onScreen, "the test is vacuous unless the two contours differ").not.toContain(sandboxName);
     const stops: string[] = [];
