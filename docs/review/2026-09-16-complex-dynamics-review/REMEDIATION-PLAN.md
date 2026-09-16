@@ -13,26 +13,21 @@ pushed. Because the owner's usage is metered, each WP is sized to one session an
 STATUS line in a `STATUS.md` next to this file (the M8 pattern: read it first, do the step it names,
 update it, push).
 
-## Scope — `apps/complex-dynamics` and nothing else
+## Scope — Complex Dynamics, and what its findings drive
 
-**Every change lands under `apps/complex-dynamics/`.** No shared package is modified, no sibling app is
-touched, and no repo-level config or doc is edited. Four work packages were re-routed to honour that; each
-keeps its finding closed, by an in-app route:
+**The app, plus any shared-package change a Complex Dynamics finding motivates** (owner's call,
+2026-09-16). No sibling app is touched and no repo-level documentation is edited. A `packages/*` change
+ships with tests covering that package's _other_ consumers, so a CD-motivated fix cannot regress them.
+Three work packages were re-routed for reasons that outlive the scope question:
 
-| was                                                             | now                                                                              | WP   |
-| --------------------------------------------------------------- | -------------------------------------------------------------------------------- | ---- |
-| root `eslint.config.js` gains `no-shadow` for this app          | `apps/complex-dynamics/eslint.config.js` gains it (the app has its own config)   | WP3  |
-| `packages/ui/src/computeClient.ts` returns worker errors        | this app's `fromMessage` maps the error to a defined result — see WP6            | WP6  |
-| `scripts/a11y-audit.mjs` audits the Exterior panel's open state | the invariants are asserted in this app's own jsdom shell test, which **blocks** | WP11 |
-| repo-level docs refreshed alongside the app's                   | app-local docs only; the repo-level list is deferred below                       | WP12 |
+| was                                                             | now                                                                | WP   | why                                                     |
+| --------------------------------------------------------------- | ------------------------------------------------------------------ | ---- | ------------------------------------------------------- |
+| root `eslint.config.js` gains `no-shadow` for this app          | `apps/complex-dynamics/eslint.config.js` gains it                  | WP3  | the app has its own config; the rule belongs beside it  |
+| `scripts/a11y-audit.mjs` audits the Exterior panel's open state | also asserted in this app's own jsdom shell test, which **blocks** | WP11 | the axe job never blocks, so the test is the real guard |
+| repo-level docs refreshed alongside the app's                   | app-local docs only; the repo-level list is deferred below         | WP12 | out of scope                                            |
 
 **Deferred, with the reason** (each is real, none is in this plan):
 
-- **`createComputeClient` drops a worker error** (`packages/ui/src/computeClient.ts:102`) — a package defect
-  with three consumers. WP6 fixes this app's symptom at its own boundary; the package keeps the latent bug,
-  and the other two consumers keep it too. Worth its own small PR later.
-- **The a11y roster only ever audits default page states** (`scripts/a11y-audit.mjs`) — a suite-wide gap the
-  contour-integration drill already worked around per-app. WP11 does the same here.
 - **Repo-level documentation:** root `README.md`'s CD row and test count, `CLAUDE.md`'s CD paragraph,
   `docs/design/SIGMA-HANDOFF.md`'s stale status header, `docs/refactor/LOG.md`. All named in REPORT §3 and
   all outside the app.
@@ -42,7 +37,7 @@ keeps its finding closed, by an in-app route:
   [`NAV-WITHDRAWAL-PLAN.md`](NAV-WITHDRAWAL-PLAN.md) is a separate exercise for a separate session and is
   not started here.
 
-**The one unavoidable edge.** WP6 adds `@cas/rigor` to this app's `package.json`, which rewrites the root
+**On the lockfile.** WP6 adds `@cas/rigor` to this app's `package.json`, which rewrites the root
 `pnpm-lock.yaml`. That is consuming an existing package, not modifying one. If you would rather not touch
 the lockfile at all, say so and WP6 ships the `≈` labels as plain strings — the honest-labelling fix still
 lands, it just is not compiler-enforced.
@@ -232,21 +227,22 @@ no exact-dimension row.
   gate that `mateableLimbs` already encodes so an obstructed pair is refused by name before any
   compute. Test: `1/7 ⊔ 2/7` reports "did not converge (limit N)" not silence; `1/3 ⊔ 2/3` reports
   "obstructed (conjugate limbs)".
-- **Worker errors, fixed at this app's boundary.** `juliaMetrics.worker.ts` already posts
-  `{ reqId, error }` on a throw, but `juliaMetricsClient.ts:50-53` maps it to `result: r.metrics`, which is
-  `undefined` — and `createComputeClient` drops an undefined result without calling back, so the
-  Julia-properties rows sit at "measuring…" forever. Widen this app's result type to
-  `JuliaImageMetrics | { failed: string }` and have `fromMessage` return the failure as a **defined**
-  result; `main.ts` renders "failed: …". No package change: the fix is the app not throwing information
-  away at its own edge. Test in the existing `test/juliaMetricsClient.test.ts` — a worker that posts an
-  error reaches the callback. (The package-side defect is recorded under _Scope_ as deferred.)
+- **Worker errors, fixed in `@cas/ui` where the defect is.** `juliaMetrics.worker.ts` already posts
+  `{ reqId, error }` on a throw and `juliaMetricsClient.ts:50-53` maps that to `result: undefined` — but
+  `createComputeClient` (`packages/ui/src/computeClient.ts:102`) drops an undefined result **without
+  calling back**, so the Julia-properties rows sit at "measuring…" forever with no message. Add an
+  `onError` option so a failure reaches the caller; `main.ts` then renders "failed: …". CD-motivated, so
+  in scope — and because `createComputeClient` has three consumers it ships with tests in
+  `packages/ui/test/computeClient.test.ts` proving the **default is unchanged** for a caller that passes
+  no handler (the other two consumers keep today's silent drop). CD-side test in
+  `test/juliaMetricsClient.test.ts`.
 - Inspector rows (`main.ts:356-419`): every numerically-derived row carries `≈` (multiplier, distance,
   Lyapunov) and only closed-form rows carry `=`; import `@cas/rigor`'s branded labels so a bare `=`
   string is a compile error (the app has `@cas/rigor` available via the workspace; add the dependency).
   Herman panel: "Ring detected (≈)". Glossary "Profiles" entry: Artist's AA is 1 with temporal
   accumulation — say so (`ui/glossary.ts:72`).
 
-**Gate:** as WP1. (No package test runs — nothing outside the app changed.)
+**Gate:** as WP1 plus `pnpm --filter @cas/ui test` (the package changed).
 
 ---
 
@@ -344,16 +340,22 @@ light, mode}` into an `ExportOptions` object at entry and `setupDraw` reads that
 
 ## WP10 — Shell UX: first run, sidebar, σ as a peer, import, labels · effort L · closes U3, U4, U6, U8, U11 (duplication)
 
-Decisions the owner should confirm before this WP (recommended defaults in bold):
+**Three decisions are needed before this WP is written.** Each is stated in full — with the measurements
+behind it and every option costed — in [`WP10-DESIGN-QUESTIONS.md`](WP10-DESIGN-QUESTIONS.md). In brief,
+recommendations in bold:
 
-1. Default view: **`c = −0.7+0.27015i` (a connected dendrite-ish Julia set with a visible interior)**
-   or the rabbit `−0.1226+0.7449i`. Either fixes U3; the rabbit shows period-3 structure but hides
-   the "outside M ⇒ Cantor dust" lesson, which the tour can teach instead.
-2. Sidebar shape: **tabs — Function · Look · Precision · Instruments · Studio** (five tabs, the
-   Instruments tab holding the z²+c panels with the gating line from WP8) vs. keeping one accordion
-   with group headers. Tabs cut the 2,200 px column to one screen.
-3. σ view: **keep the sidebar visible with a σ-specific tab active** (peer, not takeover), vs. the
-   current full takeover with the ↩ button.
+1. **Default view** — **the rabbit, `c = −0.122561 + 0.744862i`** (period 3, 13.6 % interior), or the
+   basilica `c = −1`, or keep the dust and fix only the legend. The current default escapes at n = 10 and
+   has **0.0 %** interior, so the legend's "filled Julia set" swatch points at nothing. _(An earlier draft
+   of this plan recommended `−0.7 + 0.27015i`; measured, it escapes at n = 95 and is wrong.)_
+2. **Sidebar shape** — **a grouped accordion under four section headers**, or five tabs, or a filter box,
+   or placement fixes only. Measured: 2,091 px at 1440 × 900 and 2,127 px at 1280 × 720 — 2.3 and 3.0
+   screens — across 15 groups with 1 open by default. Tabs are rejected in the recommendation because
+   this app's settings silently change the rendered picture, and a tab hides them.
+3. **σ view** — **keep the full takeover and fix its three real defects** (dead mobile button, overlays
+   dropped from share links, re-entry discarding the σ window), or make σ replace the dynamical plane as
+   ADR-0009's "alongside" wording promised. Three panes side by side is ruled out by measurement: 322 px
+   each at 1440, 282 px at 1280.
 
 **Changes**
 
@@ -410,10 +412,10 @@ not baselined dirty).
 - σ capture-phase keyboard handler (`main.ts:4535-4614`): act only when focus is on the σ canvas
   (or body), not on any focusable element.
 
-**Gate:** as WP1. Run `node scripts/a11y-audit.mjs` locally to confirm this app still reports zero
-findings, but **do not re-record the baseline** — `scripts/a11y-baseline.json` is a repo-level file and
-this app's entry is already `{}`, so a clean run needs no edit. If the run ever shows a _new_ CD finding,
-that is a defect to fix in the app, not a baseline to update.
+**Gate:** as WP1, plus `node scripts/a11y-audit.mjs` to confirm this app still reports zero findings.
+Its baseline entry is already `{}`, so a clean run needs no edit — and a _new_ CD finding is a defect to
+fix in the app, never a baseline to update. Adding the Exterior panel's open state to the roster is
+permitted (CD-motivated) but optional: the blocking shell test is the stronger guard.
 
 ---
 
