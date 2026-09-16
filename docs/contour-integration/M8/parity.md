@@ -181,7 +181,7 @@ about it passed.
 
 ## What the port found
 
-Eight defects in shell2 and one in the browser harness, all found by writing a counterpart or by
+Nine defects in shell2 and one in the browser harness, all found by writing a counterpart or by
 opening a state a test cannot reach — none by reading the code.
 
 1. **The pen's card was dead in the live app.** `penStart` / `penStop` / `penBack` went through the
@@ -227,3 +227,9 @@ opening a state a test cannot reach — none by reading the code.
    The harness destroys every shell and clears the hash after each test. The first guess was WebGL
    contexts accumulating past Chromium's cap, and measuring refuted it: twenty undestroyed mounts in
    one test, and ten across ten tests, all drew 10,963 ink pixels apiece.
+10. **`clampView` bounded the zoom and not where it landed**, which is not a port finding but the
+    one that explains 9: `zoomAt` folds a wheel's factor into the CENTRE as well as the half-height,
+    so one `deltaY: 100000` left the camera 1e64 from the origin at a perfectly ordinary
+    half-height — a sane magnification pointed at nothing. The test firing exactly that event is
+    called *a flick cannot lose the plane* and asserted the half-height alone. `syncHash` then
+    minted a permalink to that camera, and the next mount in the same document opened it.
