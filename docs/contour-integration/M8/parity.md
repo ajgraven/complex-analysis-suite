@@ -9,7 +9,7 @@ specs are deleted — at which point a row with no counterpart is a behaviour ab
 this file is the only place that would say so.
 
 **What a row means.** A counterpart is not a transcription. The old specs query by card position and
-by class, which is what plan §4.0 forbids; every ported test is re-expressed by role, accessible
+by class, which plan §4's rule from the review forbids; every ported test is re-expressed by role, accessible
 name, `data-testid` or `data-card`, and several assert something the old one could not. Where the
 behaviour itself moved — a bar button that failed on press becoming a card that refuses before it is
 pressed — the notes say so rather than pretending the assertion is the same.

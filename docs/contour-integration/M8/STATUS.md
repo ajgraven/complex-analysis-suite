@@ -23,7 +23,16 @@ changed.
   generated description. 1.5b and 1.6 were written by three agents in parallel, each owning a
   disjoint file set, with the shared plumbing landed first and the review, the sweep and the gate
   kept here.
-  **Next execution action: step 1.7** (modes, the bar, permalinks, contrasts and drill). The branch may be
+  **Step 1.7 is done**: the bar (brand as the page's `<h1>`, the segmented Explore / Worked example /
+  Drill control, the record button, Sandbox, Contrasts, Fit contour, Copy link, Save figure), the
+  three modes with `workedExample` in the codec, the **permalink** (which did not exist —
+  `syncHash` is called from `commit` and nowhere else, so the three view-only changes the old shell
+  forgot are covered structurally), the contrasts **modal**, and the drill as a right-rail card with
+  its masks applied and a task chooser. Written by four agents in parallel on disjoint files, with
+  the plumbing landed first and the review, the sweep, the browser pass and the gate kept here.
+  The step's gate is [`M8/parity.md`](parity.md) — every behaviour of the old shell's three jsdom
+  specs against the new one, three gaps named and dated to the step that builds their surface.
+  **Next execution action: step 1.8** (the front door, and the cold start). The branch may be
   red between 1.1 and 1.12 and must be green at 1.13; it is green now. The look is recorded at
   [`M8/screens/1.2-shell2-1440x900.png`](screens/1.2-shell2-1440x900.png) and
   [`1.3-shell2-stage-1440x900.png`](screens/1.3-shell2-stage-1440x900.png) /
@@ -33,7 +42,9 @@ changed.
   [`1.4b-shell2-declared-1440x900.png`](screens/1.4b-shell2-declared-1440x900.png) /
   [`1.5-shell2-result-1440x900.png`](screens/1.5-shell2-result-1440x900.png) /
   [`1.5-shell2-refused-1440x900.png`](screens/1.5-shell2-refused-1440x900.png) /
-  [`1.5b-shell2-full-1440x900.png`](screens/1.5b-shell2-full-1440x900.png).
+  [`1.5b-shell2-full-1440x900.png`](screens/1.5b-shell2-full-1440x900.png) /
+  [`1.7-shell2-contrasts-1440x900.png`](screens/1.7-shell2-contrasts-1440x900.png) /
+  [`1.7-shell2-drill-rung3-1440x900.png`](screens/1.7-shell2-drill-rung3-1440x900.png).
 - **Last commit:** see `git log -1` on the branch; this file is updated in the same commit as the work
   it describes.
 
@@ -57,6 +68,8 @@ changed.
 | 2026-09-15 | **0.5a** | aaad6e7 | `claims.md` generated — 202 sentences, five blanket decisions, 72 ledger sentences with 60 drafted; `test/helpers/claimsDoc.ts` + `claimsProposals.ts` + `test/claimsDoc.test.ts` (5 tests) |
 
 | 2026-09-15 | **0.5b-i** | 597697d | the five decisions applied to the ledger's 72 own sentences; `shell/math.ts` + KaTeX; 43 wording-pinned tests re-keyed on templates; new `ledger-dump.txt` baseline |
+
+| 2026-09-16 | **1.7** | 5b10e44 | modes + the bar + the **permalink** + the contrasts modal + the drill as a rail card. `shellMode` derives the mode (drill wins, then `workedExample`, then Explore) and the codec carries `we`. The permalink DID NOT EXIST: `syncHash` is coalesced on a 250 ms timer and called from `commit` alone, so the scrub, the iso toggle and the contrast mode — the three the old shell forgot at three of its five call sites — are covered structurally; the boot link is read LAST and once, and one it cannot honour gets a `role="alert"` banner outside `<main>` rather than the notice region. `drillMask` was computed and read by NOTHING, so rung ii showed the full ledger and rung iii drew the answer; its three readers are wired (ink 6384 / 6384 / **344** / 7003, ledger rows 7 / 5 / 0 / 7). The drill had no DOOR — the bar refused with "Choose a drill task from the panel" about a panel nothing built. Four agents in parallel on disjoint files; the review, the sweep, the browser pass and the gate here. Gate: [`M8/parity.md`](parity.md) — 68 behaviours (35 + 19, plus the 14 of `pen.test.ts` that mount the app; its other 24 exercise the pure contour model and the codec and are untouched by the rebuild), with three gaps dated to 1.8 and 1.9. **Nine defects, none found by reading**: the pen's card dead in the live app (the controller's `redraw` reached the stage only), the unread mask, the missing door, a record offering a handle from the PARKED sandbox contour (an optional resolution three of four call sites omitted), the arrival banner outliving its own field, every left-rail card crushed by flex (22 px of 114), a `serious` axe finding the roster structurally cannot see (`overflow-x: auto` computes `overflow-y: auto`), and the browser harness leaking state through the address bar. Full gate: PENDING |
 
 | 2026-09-16 | **1.5b + 1.6** | 68ce2dc | the **Derivation** card (stages as `<details>`, the failing one open, lines typeset with their method / restriction / repair, provenance nested, the pole table in Residues only, `pieceId` hover-linked), the **Share** card, and the **accumulator strip** (`src/shell2/strip.ts` — cached accumulation, a scrub that maps to a STEP INDEX shared with the drawn head, compare toggles, a generated `role="img"` description) wired into `mountShell2`. Written by three agents in parallel on disjoint files; plumbing, review, sweep and gate here. Sweeps: 35/35 (derivation), 11/11 (strip), 10/10 (share), 8/9 mine with one recorded gap. Full gate green: 560 files / 5870 tests, lint and typecheck silent, browser suite 160/160, a11y no regressions |
 
