@@ -89,11 +89,21 @@ function galleryCell(record: string, bindings: Record<string, number>): ShellSta
   };
 }
 
-/** The sandbox cell: an expression on a template, which is the only way to close the wrong way. */
+/**
+ * The sandbox cell: an expression on a template, which is the only way to close the wrong way.
+ *
+ * **`mode` and `record` are PINNED, and were inherited.** This spreads `defaultState`, whose mode is
+ * the app's boot default — so a function whose name and whole purpose say *sandbox* was a sandbox
+ * only for as long as the app happened to boot into one. M8's measurement for the A6 cold start
+ * found it: flipping that default turned this cell, and the drill's rungs iii and iv, into gallery
+ * states, taking 31 tests with them. A caller that means the sandbox says the sandbox.
+ */
 function sandboxCell(expr: string): ShellState {
   const contour = semicircleTemplate(3, "lower");
   return {
     ...defaultState(contour),
+    mode: "sandbox",
+    record: null,
     expr,
     contourSource: { template: "semicircleDown", shift: [0, 0] },
     sandboxContour: contour,

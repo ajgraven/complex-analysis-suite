@@ -264,3 +264,30 @@ describe("the table marks the contrast, and only the contrast", () => {
     expect(table.cells.slice(1).every((c) => (c.because ?? "").length > 0)).toBe(true);
   });
 });
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+// A CONTRACT test, which today passes either way — M8 step 1.8.
+//
+// `sandboxCell` spreads `defaultState`, whose mode is the app's BOOT default, so a function whose
+// name and whole purpose say *sandbox* was a sandbox only for as long as the app happened to boot
+// into one. The measurement for M8's A6 cold start found it, along with the drill's rungs iii and
+// iv: flipping that default turned all three into gallery states and took 31 tests with them.
+//
+// **The discrimination is absent today**, because the default IS the sandbox — this assertion holds
+// with the pin removed. It is written down anyway, and said out loud here rather than left to
+// quietly stop meaning anything, because it is the assertion that bites the moment the default
+// moves, which is exactly what the cold start is going to do.
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+
+describe("the wrong-way cell is a SANDBOX state, whatever the app boots into", () => {
+  it("pins its own mode rather than inheriting the default's", () => {
+    const cell = CONTRAST_CELLS.find((c) => c.id === "wrong-way");
+    if (cell === undefined) throw new Error("no wrong-way cell");
+    const state = cell.state();
+    expect(state.mode).toBe("sandbox");
+    expect(state.record).toBeNull();
+    // And it is the cell's whole point: only a sandbox state can be closed the wrong way, because a
+    // record derives its closing side from its own parameters and a `derived` one is read-only.
+    expect(state.contourSource?.template).toBe("semicircleDown");
+  });
+});

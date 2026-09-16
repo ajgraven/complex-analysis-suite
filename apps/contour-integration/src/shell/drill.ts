@@ -451,6 +451,11 @@ export function taskState(task: DrillTask, stage: DrillStage): ShellState {
   const contour = TEMPLATES[0].build();
   return {
     ...defaultState(contour),
+    // **Pinned, and inherited before.** Rung iv IS the sandbox — it is where the pen lives, and the
+    // Contour card offers the pen in the sandbox alone — but this spread `defaultState` and so was
+    // the sandbox only for as long as the app booted into one. See `contrastGrid.ts`'s `sandboxCell`.
+    mode: "sandbox",
+    record: null,
     expr: task.twin,
     drill: { task: task.id, stage },
   };
@@ -463,6 +468,10 @@ export function pickState(task: DrillTask, template: TemplateId): ShellState {
   const contour = spec.build();
   return {
     ...defaultState(contour),
+    // Pinned for `taskState`'s reason: a pick puts an ORDINARY sandbox state on screen, which is
+    // what stops `drillMask` masking the reply to the reader's own move.
+    mode: "sandbox",
+    record: null,
     expr: task.twin,
     contourSource: { template, shift: [0, 0] },
     sandboxContour: contour,

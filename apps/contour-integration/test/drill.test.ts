@@ -617,3 +617,34 @@ describe("progress — the fade", () => {
     expect(readProgress(s)).toEqual(NO_PROGRESS);
   });
 });
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+// The same CONTRACT, for the two rungs that are the sandbox — M8 step 1.8.
+//
+// Rung iv IS the sandbox: it is where the pen lives, and the Contour card offers the pen in the
+// sandbox alone. A rung-iii pick puts an ORDINARY sandbox state on screen, which is what stops
+// `drillMask` masking the reply to the reader's own move. Both spread `defaultState` and so were
+// sandbox states only for as long as the app booted into one. As in `contrastGrid.test.ts`, this
+// passes with the pin removed TODAY and is the assertion that bites when the cold start moves.
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+
+describe("the drill's sandbox rungs pin their own mode", () => {
+  it("opens rung iv in the sandbox for every task, whatever the app boots into", () => {
+    for (const task of DRILL_TASKS) {
+      const state = taskState(task, 4);
+      expect(state.mode, `${task.id} rung iv`).toBe("sandbox");
+      expect(state.record, `${task.id} rung iv`).toBeNull();
+      expect(state.expr, `${task.id} rung iv carries the record's twin`).toBe(task.twin);
+    }
+  });
+
+  it("opens a rung-iii pick in the sandbox, for every option the menu offers", () => {
+    for (const task of DRILL_TASKS) {
+      for (const option of task.menu) {
+        const state = pickState(task, option);
+        expect(state.mode, `${task.id}/${option}`).toBe("sandbox");
+        expect(state.record, `${task.id}/${option}`).toBeNull();
+      }
+    }
+  });
+});
