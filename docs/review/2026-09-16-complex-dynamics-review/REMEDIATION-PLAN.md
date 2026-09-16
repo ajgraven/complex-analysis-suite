@@ -340,22 +340,55 @@ light, mode}` into an `ExportOptions` object at entry and `setupDraw` reads that
 
 ## WP10 — Shell UX: first run, sidebar, σ as a peer, import, labels · effort L · closes U3, U4, U6, U8, U11 (duplication)
 
-**Three decisions are needed before this WP is written.** Each is stated in full — with the measurements
-behind it and every option costed — in [`WP10-DESIGN-QUESTIONS.md`](WP10-DESIGN-QUESTIONS.md). In brief,
-recommendations in bold:
+**All three decisions are made** (2026-09-16), with the measurements behind them in
+[`WP10-DESIGN-QUESTIONS.md`](WP10-DESIGN-QUESTIONS.md) and the sidebar mockups at
+<https://claude.ai/artifact/7tFh8FBbjweE5PZfbK5fR4>:
 
-1. **Default view** — **the rabbit, `c = −0.122561 + 0.744862i`** (period 3, 13.6 % interior), or the
-   basilica `c = −1`, or keep the dust and fix only the legend. The current default escapes at n = 10 and
-   has **0.0 %** interior, so the legend's "filled Julia set" swatch points at nothing. _(An earlier draft
-   of this plan recommended `−0.7 + 0.27015i`; measured, it escapes at n = 95 and is wrong.)_
-2. **Sidebar shape** — **a grouped accordion under four section headers**, or five tabs, or a filter box,
-   or placement fixes only. Measured: 2,091 px at 1440 × 900 and 2,127 px at 1280 × 720 — 2.3 and 3.0
-   screens — across 15 groups with 1 open by default. Tabs are rejected in the recommendation because
-   this app's settings silently change the rendered picture, and a tab hides them.
-3. **σ view** — **keep the full takeover and fix its three real defects** (dead mobile button, overlays
-   dropped from share links, re-entry discarding the σ window), or make σ replace the dynamical plane as
-   ADR-0009's "alongside" wording promised. Three panes side by side is ruled out by measurement: 322 px
-   each at 1440, 282 px at 1280.
+1. **Default view = the Douady rabbit**, `c = −0.122561 + 0.744862i` (period 3, superattracting, 13.6 %
+   of the default window interior). The legend's disconnected-set wording is fixed regardless, since a
+   reader can always drag to a dust.
+2. **Sidebar = five tabs** — _Function · Appearance · Precision · Instruments · Studio_ — **with an
+   active-settings strip**. Measured: tabs cut the pane to 32 % of today's height, and are the only
+   option that does; they are also the only option in which a picture-changing setting can sit in
+   another mode, which the strip exists to cancel.
+3. **σ stays a full takeover**; its three real defects are fixed (dead mobile button, overlays dropped
+   from share links, re-entry discarding the σ window).
+
+### The tab specification
+
+**Tab contents** (every group keeps its current internals; only its home changes):
+
+| tab             | holds                                                                                                                                   |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **Function**    | `f(z,c)`, Import map…, Schwarz reflection σ…, the `a` slider, Presets, apply, **Newton's method** (moved — it changes what is iterated) |
+| **Appearance**  | coloring, palette, trap shape, Appearance, Overlays, colour legend                                                                      |
+| **Precision**   | iterations, auto-iterations + strength, perturbation, BLA, anti-aliasing, refine while idle, suggestions, orbit preview                 |
+| **Instruments** | Julia set properties, Exterior map, and the seven z²+c panels + Herman ring, behind **one** gating line                                 |
+| **Studio**      | Projection & Riemann sphere, Export image, Animate                                                                                      |
+
+**Five rules the build must honour.**
+
+1. **Global actions are pinned, not tabbed.** `apply changes / reset / ↶ undo / ↷ redo` sit in a sticky
+   footer on the pane, visible from every tab. They are global; putting them on one tab would strand them.
+2. **The active-settings strip is the condition of the whole option.** A sticky bar above the tabs listing
+   every setting that is non-default _and_ changes the render — perturbation, Newton, auto-iterations,
+   AA > 1, refine-while-idle, relief lighting, post-processing, a projection, the sphere. Each entry is a
+   button that switches to the owning tab and focuses the control. Empty and hidden when everything is at
+   its default, so the common case costs no height. This is what makes S4 visible from every tab.
+3. **The `z²+c` gate is one line, once.** The Instruments tab opens with "These need `f = z²+c` — current
+   `f` is …" and disables the panels below when the formula is not quadratic, replacing seven per-panel
+   toasts (WP8's U7 fix, which lands there and is simply re-sited here).
+4. **The open tab is a per-viewer convenience, not shared state.** It goes in `localStorage` under the
+   app's existing `cdjs.*` key convention, wrapped in try/catch; it is **not** added to `SHARE_IDS`, since
+   a permalink restores a mathematical view and which tab the sharer had open is not part of it. The
+   citation block leaves the pane for the page footer.
+5. **Accessibility is part of the definition of done**, not a follow-up: `role="tablist"` / `tab` /
+   `tabpanel`, `aria-selected`, `aria-controls`, roving `tabindex` with Left/Right/Home/End, and a visible
+   focus ring. WP3's shell test asserts the roles, that exactly one tab is selected, that every panel has
+   an accessible name, and that the strip appears when perturbation is on.
+
+**The mobile sheet keeps the same tabs** — the bottom sheet renders the identical tablist, so there is one
+structure to learn, and the sheet opens at 50 % height with a drag handle to full.
 
 **Changes**
 

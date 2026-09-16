@@ -10,9 +10,11 @@ Everything below was measured against the built app in headless Chromium (SwiftS
 
 ---
 
-> **Decided 2026-09-16.** Q1 = **A**, the Douady rabbit. Q3 = **A**, keep the σ takeover and fix its three
-> defects. Q2 is open — four working mockups are at <https://claude.ai/artifact/7tFh8FBbjweE5PZfbK5fR4>
-> (source kept beside this file as [`sidebar-mockups.html`](sidebar-mockups.html)).
+> **All three decided 2026-09-16.** Q1 = **A**, the Douady rabbit. Q2 = **A**, five tabs. Q3 = **A**, keep
+> the σ takeover and fix its three defects. The mockups that settled Q2 are at
+> <https://claude.ai/artifact/7tFh8FBbjweE5PZfbK5fR4> (source beside this file as
+> [`sidebar-mockups.html`](sidebar-mockups.html)); the build spec for the tabs is in
+> [`REMEDIATION-PLAN.md`](REMEDIATION-PLAN.md) under WP10.
 
 ## Q1 — What should the app open on? · **DECIDED: A**
 
@@ -99,12 +101,18 @@ this is a defect — but say if you want a particular convention (`a + bi` vs `a
 
 ---
 
-## Q2 — What shape should the sidebar be? · **OPEN**
+## Q2 — What shape should the sidebar be? · **DECIDED: A**
 
 **Mockups:** four working replicas at the app's real 346 px width, carrying the app's real groups and
 control labels, each measuring itself live — <https://claude.ai/artifact/7tFh8FBbjweE5PZfbK5fR4>.
 
-**Building them corrected this section's central claim.** I expected the grouped accordion to take "a
+**Chosen: A, five tabs** — the option that actually collapses the column, to 32 % of today's height. It
+ships under the two conditions the recommendation attached, both already in the plan's sequence: WP8's
+visible-reason work (S4) lands first, and the tabs carry a persistent **active-settings strip** so no
+picture-changing setting can sit unseen in another tab. My own recommendation was B; the owner's call is
+A, and the plan is written for A.
+
+**Building the mockups corrected this section's central claim.** I expected the grouped accordion to take "a
 third to a half" off the column. Measured in the replica it takes **6 %**: all fifteen groups are still in
 the scroll, so reordering changes where things are, not how much there is. **Only hiding shortens the
 column**, and tabs are the only option that hides — they cut it to **32 %** of today. So height is an
@@ -187,7 +195,7 @@ into the report, and move the citation to the footer.
 - _Against:_ leaves 2.3 screens of flat list.
 - _Cost:_ **S**, and it is a subset of B, so it is not wasted work if you later want B.
 
-### Recommendation
+### Recommendation at the time — superseded by the decision above
 
 **B, with D as its first commit.** Tabs are the tempting answer and the wrong one _for this app_
 specifically: its settings change the rendered picture, and A makes the already-real problem of silent
@@ -285,11 +293,11 @@ to do; the width budget allows it, and it is the only option that does.
 
 ## Summary
 
-| #   | question     | recommended                                          | cost | the deciding evidence                                                                               |
-| --- | ------------ | ---------------------------------------------------- | ---- | --------------------------------------------------------------------------------------------------- |
-| 1   | default view | **A** rabbit — **decided**                           | S    | current default escapes at n = 10; 0.0 % interior                                                   |
-| 2   | sidebar      | **B** grouped accordion, D first — **open**          | M    | B buys hierarchy, not height (94 %); only tabs collapse the column (32 %), and only tabs hide state |
-| 3   | σ view       | **A** keep takeover, fix three defects — **decided** | S    | three panes give 282 px each at 1280; σ is not coupled to `c`                                       |
+| #   | question     | recommended                                           | cost | the deciding evidence                                                                                      |
+| --- | ------------ | ----------------------------------------------------- | ---- | ---------------------------------------------------------------------------------------------------------- |
+| 1   | default view | **A** rabbit — **decided**                            | S    | current default escapes at n = 10; 0.0 % interior                                                          |
+| 2   | sidebar      | **A** five tabs + active-settings strip — **decided** | L    | the only option that collapses the column (32 % of today); the state-hiding risk is met by the strip + WP8 |
+| 3   | σ view       | **A** keep takeover, fix three defects — **decided**  | S    | three panes give 282 px each at 1280; σ is not coupled to `c`                                              |
 
 Each recommendation is reversible and none blocks the other eleven work packages. If you pick
 differently on any of them, only WP10 changes — WP1–WP9, WP11 and WP12 are unaffected.
