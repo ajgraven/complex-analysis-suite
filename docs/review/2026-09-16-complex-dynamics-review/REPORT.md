@@ -4,13 +4,13 @@ A full-app review of `apps/complex-dynamics`: code, docs, and the built app driv
 Chromium (SwiftShader WebGL2) at 1440×900, 1280×720 and 390×844. Every item carries how it was
 established — **[browser]** reproduced in the running app, **[code]** confirmed by reading the code
 path, **[measured]** reproduced numerically against the module in node. Nothing below is speculation
-unless marked *likely*.
+unless marked _likely_.
 
 The app is in good shape structurally: 84 test files / 833 tests pass in 9.7 s, lint and typecheck
 are silent, the a11y roster records zero findings for the default page, every `id` referenced from
 TypeScript exists in the HTML and every control has a handler, and all nine localStorage keys are
 read and written symmetrically. The problems are elsewhere: a handful of rendering defects that make
-the picture on screen differ from the picture exported, several *instrument* readouts that print a
+the picture on screen differ from the picture exported, several _instrument_ readouts that print a
 confident number that is wrong, a shell with real UX debt from feature accretion, and documentation
 that has drifted a long way from the code.
 
@@ -88,7 +88,7 @@ comes from a throwaway context that may be WebGL1 (`hiResExport.ts:71-76`) inste
 context's `maxTextureSize`.
 
 **R9 [code] Performance.** Recording renders every frame twice (`main.ts:5408, 5426, 5492, 5573,
-5597` set state *and* call `plot.render()`); the BLA table and the double-double reference orbit are
+5597` set state _and_ call `plot.render()`); the BLA table and the double-double reference orbit are
 rebuilt on every zoom tick with auto-iterations on (`glPlot.ts:1334, 1436`); the field pre-pass
 loses both interior shortcuts (`shaderBuilder.ts:641, 966`).
 
@@ -115,7 +115,7 @@ clustering artefacts.** Leaves are landing points within `tol = 4e-3` (`laminati
 6: 26 leaves, 24 spurious (only {1/3,2/3} and {1/6,5/6} are real); rabbit: 30 leaves, 24 spurious;
 detail 8: 394 of 396, including a leaf joining the β-ray, which `test/lamination.test.ts:36` says
 cannot happen (it passes only at period 6). QML: 8/52 spurious at detail 6, 126/260 at detail 8,
-some pairing *unrefined* landings. `angleOfPoint.ts:67-68, 163-184` uses the same 5e-3 clustering:
+some pairing _unrefined_ landings. `angleOfPoint.ts:67-68, 163-184` uses the same 5e-3 clustering:
 at c = 0.1+0.1i (a Jordan curve, every point valence 1) it reports valence 4; near the tip on ∂M,
 valence 6. `yoccozPuzzle.ts:75-76` seeds its α-angles from the same finder. README calls the leaves
 "measured, not assumed … faithful", and `test/lamination.test.ts:33` (`> 3` leaves) pins the
@@ -140,7 +140,7 @@ closed-form (already used in `yoccozPuzzle.ts:29`), so λ = 2α can be classifie
 **I6 [code] A custom polynomial's "critical orbit" is the orbit of 0.** `preset.criticalPoint ??
 [0,0]` (`glPlot.ts:2314`) feeds the parameter-plane render, the critical-orbit overlay, the Julia
 properties panel, the inspector, Find nucleus and Misiurewicz (`main.ts:1109, 2104, 5657, 6188`).
-For `z³−3z+c` (critical points ±1) the panel prints "Lyapunov ≈ 1.0986" — log 3 at the *repelling*
+For `z³−3z+c` (critical points ±1) the panel prints "Lyapunov ≈ 1.0986" — log 3 at the _repelling_
 fixed point 0. `findCriticalPoints` (`critical.ts:160`) exists and seeds nothing but connectivity.
 
 **I7 [code] Smaller.** Ruelle's `1+|c|²/(4 ln 2)` is applied across the whole cardioid
@@ -156,7 +156,7 @@ callback so Julia-properties rows can stay at "measuring…" forever (`packages/
 
 **S1 [code] A global `keyup` Enter handler re-applies the whole app from anywhere.**
 `document.addEventListener("keyup", e => e.key === "Enter" && applyChanges())` (`main.ts:5609-5611`)
-has no target check: Enter in the formula textareas inserts a newline *and* re-applies; Enter in the
+has no target check: Enter in the formula textareas inserts a newline _and_ re-applies; Enter in the
 Views name box applies the plots instead of saving; keyboard-activating any button (Save view,
 Delete, glossary ×, undo, a suggestion action) fires a full `applyChanges`; Enter on a focused plot
 runs the plot's own Enter (`plotView.ts:785-793`) and then re-applies both plots.
@@ -203,7 +203,7 @@ surprising interaction in the app, and the tour text ("pick a preset below") imp
 
 **U2 [browser] First load is inconsistent about iterations.** Both iteration boxes read 200 (the
 Explore profile) while both "applied …" chips read "100 it" (the preset). `updateViewChips`
-(`main.ts:2240`) prints the *input's* value, not the applied one, and is not refreshed after the
+(`main.ts:2240`) prints the _input's_ value, not the applied one, and is not refreshed after the
 profile writes the inputs; the suggestion "Raise to N" action (`:1251-1259`) and the profile label
 (`:6834-6836` listens only on `.controls-pane`, but the boxes live in `.plots-pane`) desync the same
 way.
@@ -220,7 +220,7 @@ Siegel / Misiurewicz / Pin-note inputs at the very top before anything has been 
 the footer citation below "Save & animate". On the phone the "Controls" bottom sheet opens to this
 same list and covers the plots entirely (the sheet starts under the app bar), contradicting
 README's "so the plot stays visible while you adjust them". Group the sidebar into
-*Function · Look · Precision · Instruments (z²+c) · Studio* tabs or a two-level accordion, move
+_Function · Look · Precision · Instruments (z²+c) · Studio_ tabs or a two-level accordion, move
 the inspector's action inputs into the report they act on, and let the phone sheet open half-height.
 
 **U5 [browser] No suite navigation.** CD never calls `mountNavHeader` (`.cas-nav` absent), so the
@@ -229,7 +229,7 @@ hand-offs live in unrelated places — "Import map…" under the formula box (a 
 `window.prompt`, `main.ts:5164-5171`) and "Riemann Map ↗" inside the Exterior-map panel
 (`index.html:2078`). U7 (the nav header's hand-off picker) is wired in no app.
 
-**U6 [browser+code] The σ view is a takeover, not a peer.** It hides both plots *and* the sidebar
+**U6 [browser+code] The σ view is a takeover, not a peer.** It hides both plots _and_ the sidebar
 (`main.css:454-458`); the mobile "Controls" FAB stays visible but toggles a `display:none` pane;
 the entry button is a plain "Schwarz reflection σ…" under the formula with no tour step; every σ
 analysis overlay (orbit family, level curves, cycles, forward curves, limit set, preimage tree) is
@@ -260,7 +260,7 @@ The gradient editor is pointer-only (`ui/gradient.ts:519-528`); the onboarding d
 trap or return (`withModalFocus` is used only by glossary/help); `#inspector` is `aria-live` on a
 region full of inputs, so each click announces the whole report; suggestion severity is
 colour-only; `.schwarz-formula-note` at `--muted` × `opacity .6` × 10.5 px is ≈2.8:1 contrast
-(*likely*, from tokens); the σ capture-phase keyboard handler pans the field when focus is on a
+(_likely_, from tokens); the σ capture-phase keyboard handler pans the field when focus is on a
 button, the glossary body or the BibTeX `<pre>` (`main.ts:4535-4614`).
 
 **U11 [code] Duplication that will drift.** "Snap c and re-inspect" is copy-pasted five times
@@ -341,7 +341,7 @@ Ordered by how close each is to what already exists.
    `≈` to the inspector rows and put the app on `@cas/rigor` so the labels are typed.
 3. **State integrity:** S2, S3, S4, S6, U2 — and a `test/shell.test.ts` for CD in the
    contour-integration mould (mount `main.ts` under jsdom with `getContext` stubbed) so the shell
-   has *any* test; enable `no-shadow` for the app.
+   has _any_ test; enable `no-shadow` for the app.
 4. **Shell UX:** U4 sidebar regrouping and inspector layout, U5 nav header, U6 make σ a real peer
    (keep the sidebar; carry overlays in the link), U7 visible gating text.
 5. **Docs:** rewrite README's Architecture/Known-limitations/CI paragraphs, add the σ and

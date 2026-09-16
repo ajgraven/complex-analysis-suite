@@ -1,7 +1,7 @@
 # Remediation plan — Complex Dynamics review of 2026-09-16
 
 A sequenced plan to close **every** finding in [`REPORT.md`](REPORT.md) except the suite nav header
-(see *Decisions to record* at the end). Twelve work packages (WPs), each a self-contained,
+(see _Decisions to record_ at the end). Twelve work packages (WPs), each a self-contained,
 independently reviewable PR that leaves the gate green. Ordered by value ÷ risk and by dependency.
 Effort: S = under half a day, M = half to one day, L = one to two days. Finding ids (R1, I3, S1, U4 …)
 refer to the report.
@@ -65,7 +65,7 @@ test scaffold.
 **I1 distance to set** (`src/render/inspect.ts:255-278`). Replace the "break on first escape" with the
 standard DE loop: keep iterating `z` and `D` until `|z| > DE_RADIUS` (1e10 is conventional and safe in
 float64 for degree ≤ 8) or `MAX_DE_ITER`, with a NaN/overflow guard on `D`. Keep the existing
-`esc(z,c)` test only to decide *whether* the point escapes; the formula reads the large-radius state.
+`esc(z,c)` test only to decide _whether_ the point escapes; the formula reads the large-radius state.
 Tag the result `≈` when it reaches `MAX_DE_ITER` before `DE_RADIUS`. Test (`test/inspect.test.ts`):
 pin `c = −2.01 → 0.01 ± 20 %`, `c = 0.2501 → 1e-4 ± 20 %`, and the dynamical-plane `c = 0, z₀ = 1.01 →
 0.01 ± 20 %` (exact for the unit circle); negative control: the old code fails all three.
@@ -73,7 +73,7 @@ pin `c = −2.01 → 0.01 ± 20 %`, `c = 0.2501 → 1e-4 ± 20 %`, and the dynam
 **I2 Herman ring** (`src/render/hermanRing.ts:112-127`, `weightedBirkhoff.ts:348-360`). Add a
 periodicity rejection before the quasiperiodic test: an orbit whose tail returns within `1e-6` of an
 earlier point with period ≤ 64, or whose consecutive-point distances shrink geometrically (ratio < 0.99
-over the last 200 steps), is *not* a ring candidate. Also require the measured rotation number to be
+over the last 200 steps), is _not_ a ring candidate. Also require the measured rotation number to be
 irrational-looking (no continued-fraction convergent with denominator ≤ 64 within `1e-6`). Rename the
 status "Ring confirmed" → "Ring detected (≈)"; the panel's `?` glossary entry says what the test can and
 cannot see. Test (`test/hermanRing.test.ts`): the shipped family at τ = 0, 0.5, 0.25, 0.1 returns
@@ -119,7 +119,7 @@ repair is one rule applied in four places: **two rays land at the same point onl
 Newton-refined landings coincide to `1e-9·max(1,|z|)`, and an unrefined landing never pairs.**
 
 - `src/render/lamination.ts:63, 282-318`: `DEFAULT_TOL = 1e-9`; skip `refined: false` landings; keep
-  the 4e-3 value only as the *pre-filter* that decides which pairs are worth refining (so cost does
+  the 4e-3 value only as the _pre-filter_ that decides which pairs are worth refining (so cost does
   not explode).
 - `src/render/angleOfPoint.ts:67, 163-184`: same rule; the snap-to-nearest (0.06) stays, but valence
   is counted over refined coincident landings only; report `valence ≥ n (≈)` when any candidate was
@@ -127,7 +127,7 @@ Newton-refined landings coincide to `1e-9·max(1,|z|)`, and an unrefined landing
 - `src/render/yoccozPuzzle.ts:75-76`: build the α-angles from the closed-form α fixed point and the
   orbit-portrait machinery (`combinatorics/orbitPortrait.ts`) instead of the clustering finder; refuse
   (by name) when `c` is outside M (Cantor set) instead of returning a puzzle.
-- Tests: rewrite `test/lamination.test.ts:33-36` to assert the *exact* leaf sets — basilica at detail
+- Tests: rewrite `test/lamination.test.ts:33-36` to assert the _exact_ leaf sets — basilica at detail
   6 is `{1/3,2/3}, {1/6,5/6}` and their preimages up to the period bound, nothing else; the rabbit's α
   is the triangle `{1/7,2/7,4/7}`; the β-ray `0` is in no leaf at any detail ≤ 8. `test/angleOfPoint.test.ts`:
   `c = 0.1+0.1i` reports valence 1 at every sampled point; basilica α ← `{1/3,2/3}`. QML at detail 6:
@@ -152,7 +152,7 @@ when false. `angleParameter.ts:503-532` and `:407-414`: the same distance-to-see
 from `(−0.15, 1.03)`, period 4 → the known centre to 1e-12.
 
 **Gate:** as WP1; update the README "Lamination" and "Angles of a point" paragraphs to say what a
-leaf now *is* (two refined landings that coincide).
+leaf now _is_ (two refined landings that coincide).
 
 ---
 
@@ -162,7 +162,7 @@ leaf now *is* (two refined landings that coincide).
 (`yoccozPuzzle.ts:29`, `siegelCurves.ts:353`): add `classifyFixedPointExact(c)` in `inspect.ts`
 returning λ = 1 − √(1−4c) (the α root), and route `fatouComponentType` through it whenever the
 formula is `z²+c` and the clicked orbit does not converge to a cycle. `siegelCurves.ts:340, 361`:
-require `||λ| − 1| ≤ 1e-9` (indifferent, not "almost") *and* a Brjuno-positive rotation number, and
+require `||λ| − 1| ≤ 1e-9` (indifferent, not "almost") _and_ a Brjuno-positive rotation number, and
 draw nothing otherwise. `brjuno.ts:228, 305`: a rotation number with a continued-fraction convergent
 of denominator ≤ 10⁶ within float64 rounding is rational → "parabolic (p/q)", never Siegel; print the
 disc radius as "order of magnitude ≈" with the glossary noting Yoccoz's constant is dropped. Tests:
@@ -172,7 +172,7 @@ parabolic.
 
 **I6 critical point.** `glPlot.ts:2314` and the six call sites (`main.ts:1109, 2104, 5657, 6188`;
 `juliaProperties.ts:173`; `inspect`): derive `criticalPoints` from `findCriticalPoints(f)`
-(`critical.ts:160`) whenever the formula parses as a polynomial; the *parameter plane* iterates the
+(`critical.ts:160`) whenever the formula parses as a polynomial; the _parameter plane_ iterates the
 first (or, per the user's choice, a selected one — a small select appears under the formula when
 there is more than one), the critical-orbit overlay draws all of them in distinct dashes, and the
 Lyapunov / class rows are computed per critical point (print the list). A non-polynomial keeps `0`
@@ -190,8 +190,8 @@ no exact-dimension row.
 
 ## WP6 — Instruments, tier 4: matings, worker errors, honest labels in the inspector · effort S · closes I7 (matings, worker), U9
 
-- `matingEngine.ts` `generalMate`: when the pullback diverges, return a *reason* (`{refused: "obstructed"
-  | "did not converge in N"}`) rather than `null`, and the panel prints it; add the Tan-Lei conjugate-limb
+- `matingEngine.ts` `generalMate`: when the pullback diverges, return a _reason_ (`{refused: "obstructed"
+| "did not converge in N"}`) rather than `null`, and the panel prints it; add the Tan-Lei conjugate-limb
   gate that `mateableLimbs` already encodes so an obstructed pair is refused by name before any
   compute. Test: `1/7 ⊔ 2/7` reports "did not converge (limit N)" not silence; `1/3 ⊔ 2/3` reports
   "obstructed (conjugate limbs)".
@@ -241,7 +241,7 @@ no exact-dimension row.
 
 - **S4 silent mode change.** `main.ts:2851-2861`: when `updateDerivativeGating` has to move `#mode`,
   toast "Distance (analytic) needs a holomorphic f — showing Smooth" and set a `title` on the disabled
-  option; under perturbation, *disable* the modes the kernel does not render (`glPlot.ts:1492`) rather
+  option; under perturbation, _disable_ the modes the kernel does not render (`glPlot.ts:1492`) rather
   than listing them, and make the note at `index.html:1757` visible text. Same visible-reason rule for
   `laurent-*` and the keyframe buttons: a `<small class="why">` under each disabled control.
 - **U7 gating text.** Overlay checkboxes (`index.html:1602, 1619, 1650, 1659, 1668`): move the
@@ -255,7 +255,7 @@ no exact-dimension row.
   clears `#schwarz-error` like the ↩ button (`:4684`).
 - **S7 orbit start.** `plotView.ts:450` `fireInspect` uses the same `z₀ = c` convention as the drawn
   orbit (`overlay.ts:645`) for the parameter plane, or the overlay switches to the critical point —
-  pick the critical point (it is what the parameter plane *means*, and WP5 makes it exact) and fix
+  pick the critical point (it is what the parameter plane _means_, and WP5 makes it exact) and fix
   the overlay + shader start to match (`shaderBuilder` param-plane iterator). Test: the inspector's
   "escapes (n = k)" equals the overlay label's k.
 
@@ -274,7 +274,7 @@ no exact-dimension row.
   shaders use the same `LOG_DEGREE`. Test: `test/glslCodegen.test.ts` — the emitted constant for
   `z^3−z+c` is `log(3)` in both programs.
 - **R6 export consistency.** `renderToImageData` (`:2245`) snapshots `{draft:false, aa, outline,
-  light, mode}` into an `ExportOptions` object at entry and `setupDraw` reads that object while
+light, mode}` into an `ExportOptions` object at entry and `setupDraw` reads that object while
   `_exporting` is set; ignore pointer input on the plots during export (the progress overlay already
   covers them — make it `pointer-events: all`). `renderExportCanvas` (`plotView.ts:279`) skips the
   overlay and scale bar in sphere/projection mode, matching the on-screen path. Histogram export:
@@ -332,14 +332,14 @@ Decisions the owner should confirm before this WP (recommended defaults in bold)
   regeneration on the builder's values, as the stage's rebuild guard already does); add a tour step
   for the σ button. Test: `schwarzState` round-trip with an orbit family and a level-curve set.
 - **Import.** Replace `window.prompt` (`main.ts:5164-5171`) with a small dialog (paste area + "Load"
-  + a link to the QD app's Export map) using the glossary dialog's `withModalFocus`. Test: shell
-  test pastes a `QD_TO_CD` golden payload and asserts σ mode entered.
+  - a link to the QD app's Export map) using the glossary dialog's `withModalFocus`. Test: shell
+    test pastes a `QD_TO_CD` golden payload and asserts σ mode entered.
 - **U8.** `overlay.ts` label placement: flip the label to the left of the point when it would clip
   the right edge, and clamp vertically; the Herman preset's parameter plane opens on a view where
   the tongues are visible (`center [0.25, 0], zoom 2`) with `nplot` small enough that the polyline
   stays in frame; a custom `f` legend says "in the set" not "the set".
 - **U11 duplication.** Extract `snapCAndReinspect(c)` (five copies → one), `drawSchwarzOverlays(ctx,
-  opts)` (six → one, export passes `{hover:false}`), and fold `applyPreset` into `applyChanges` with a
+opts)` (six → one, export passes `{hover:false}`), and fold `applyPreset` into `applyChanges` with a
   `source` argument. Pure refactors, each proven a no-op the M6.1 way: dump the rail/strip before and
   after across the presets and diff.
 
@@ -351,9 +351,9 @@ not baselined dirty).
 ## WP11 — Accessibility · effort S · closes U10
 
 - Exterior-map lists (`#exterior-param-list`, `#exterior-dyn-list`): `tabindex="0"` + `role="region"`
-  + `aria-label`; wrap the panel's status/labels in the group's landmark (the `region` findings) —
-  and add the Exterior panel's open state to the a11y roster (`scripts/a11y-audit.mjs`) via a
-  permalink that opens it, the way the drill rung is audited, so non-default states are covered.
+  - `aria-label`; wrap the panel's status/labels in the group's landmark (the `region` findings) —
+    and add the Exterior panel's open state to the a11y roster (`scripts/a11y-audit.mjs`) via a
+    permalink that opens it, the way the drill rung is audited, so non-default states are covered.
 - Gradient editor (`ui/gradient.ts:519-528`): a keyboard path — focused stop handle moves with
   arrows, `Insert`/`+` adds a stop at the focused position, `Delete` removes; expose values in
   `aria-valuenow`.
@@ -374,18 +374,18 @@ not baselined dirty).
 
 Written last so it describes the app as it ends up after WP1–11.
 
-- `apps/complex-dynamics/README.md`: rewrite *Architecture* (the real tree: `state/`, `combinatorics/`,
+- `apps/complex-dynamics/README.md`: rewrite _Architecture_ (the real tree: `state/`, `combinatorics/`,
   `interchange/`, the render modules by group, and that `expr`/`glsl` live in `@cas/expr`/`@cas/gpu`);
-  *Known limitations* (delete the "BLA not yet wired" sentence; state the projection/precision rule
+  _Known limitations_ (delete the "BLA not yet wired" sentence; state the projection/precision rule
   from WP9); a new **Schwarz reflection σ** section and an **Interchange** section (QD → CD import,
   CD → Riemann-Map export, the `#s=` link, the paste dialog); the full function list from
-  `packages/expr/src/ast.ts`; the CI sentence; `pnpm` not `npm` in *Running*; the Lamination /
+  `packages/expr/src/ast.ts`; the CI sentence; `pnpm` not `npm` in _Running_; the Lamination /
   Angles / Herman / Siegel paragraphs per WP2–5; the Presets line per WP1; the phone-sheet sentence
   per WP10. Delete `apps/complex-dynamics/package-lock.json`.
 - `CONTRIBUTING.md`: the three gotchas point at the packages; the `uMode` list gains interior-DE,
   Marty and Newton-basins.
 - `index.html:2644, 2834-2845` and `main.ts:2451, 4269`: the suite URL and `Software:
-  "complex-dynamics (complex-analysis-suite)"`; write `cas:state` alongside `cdjs:state` for one
+"complex-dynamics (complex-analysis-suite)"`; write `cas:state` alongside `cdjs:state` for one
   release, then drop the old key (a reader that opens any suite figure is the point of the documented
   key); fix the two "Latin-1, ASCII only" comments (`main.ts:2441`, `schwarzState.ts:628`).
 - `FEATURE_RESEARCH.md` §0, `FRONTIER_ROADMAP.md` §4 A2, `PERFORMANCE_REVIEW.md` deep-zoom track,
