@@ -644,6 +644,51 @@ function distinctGl(gl: HTMLCanvasElement): number {
 // at all.
 // ──────────────────────────────────────────────────────────────────────────────────────────────
 
+describe("the cold start's camera", () => {
+  it("FRAMES the record it opens on, rather than showing half of it", async () => {
+    // **Not assertable in jsdom, and that is why it lives here.** `fitContour` needs a viewport, and
+    // the node harness stubs the stage's size AFTER mounting — so the boot fit runs against a
+    // zero-size stage there and the mutant that deletes it survives the whole node suite.
+    //
+    // A6's contour is `[−R, R]` closed by the arc at **R = 4**, against `DEFAULT_VIEW`'s half-height
+    // of **2**: unframed, the top of the semicircle is off screen, which is the app opening on half
+    // of its own argument. The camera is asserted directly AND the ink corroborates it, because a
+    // half-height alone could be large for some other reason.
+    const { root, app } = mountCold();
+    const ink = root.querySelector<HTMLCanvasElement>("canvas.ink");
+    if (ink === null) throw new Error("no stage");
+    await drawn();
+
+    const { halfHeight } = app.currentState().view;
+    expect(halfHeight, "the cold start kept the default camera, so A6's arc is off screen").toBeGreaterThan(4);
+
+    // Every stroke inside the plate, and spanning most of it — an unframed camera clips the arc, and
+    // a camera zoomed far out leaves the contour a dot in the middle.
+    const ctx = ink.getContext("2d");
+    if (ctx === null) throw new Error("no 2d context");
+    const { data } = ctx.getImageData(0, 0, ink.width, ink.height);
+    let minX = Infinity;
+    let maxX = -1;
+    let minY = Infinity;
+    let maxY = -1;
+    for (let i = 3, k = 0; i < data.length; i += 4, k++) {
+      if (data[i] <= 24) continue;
+      const px = k % ink.width;
+      const py = Math.floor(k / ink.width);
+      minX = Math.min(minX, px);
+      maxX = Math.max(maxX, px);
+      minY = Math.min(minY, py);
+      maxY = Math.max(maxY, py);
+    }
+    // Measured against the dev server at 1440 x 900: 81% x 59%. The floor is well under both, since
+    // what is being separated is "framed" from "clipped or a dot", not one framing from another.
+    expect((maxX - minX) / ink.width, "the contour does not span the stage").toBeGreaterThan(0.5);
+    expect((maxY - minY) / ink.height, "the contour does not span the stage").toBeGreaterThan(0.35);
+    expect(minY, "the top of the arc is clipped — the camera never framed it").toBeGreaterThan(0);
+    expect(maxY, "the contour runs off the bottom of the stage").toBeLessThan(ink.height - 1);
+  });
+});
+
 describe("the phase portrait, under a record", () => {
   it("is DRAWN for every record, the branch-factor ones included", async () => {
     const { root, app } = mount();

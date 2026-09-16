@@ -373,6 +373,29 @@ describe("the new shell's structure", () => {
     expect(q(root, '[data-testid="record"]').textContent).not.toBe("Choose a record");
   });
 
+  it("OPENS the front door from the bar, and tells the shell it is up", () => {
+    // **Two mutants survived here, one in each direction**, because `test/frontDoor.test.ts` drives
+    // the dialog object and no test pressed the button a reader presses. `openFrontDoor` could set
+    // `session.frontDoorOpen` and never call `open()` — a control that swallows a click — or call
+    // `open()` and never set the flag, which is the bar and the dialog disagreeing about whether the
+    // panel is up, exactly what `setContrastsOpen` has a comment about avoiding.
+    const { root, app } = mountCold();
+    expect(root.querySelector('[role="dialog"]'), "a panel nobody opened was already up").toBeNull();
+    expect(app.session().frontDoorOpen).toBe(false);
+
+    q<HTMLButtonElement>(root, '[data-testid="record"]').click();
+
+    const dialog = root.querySelector('[role="dialog"]');
+    expect(dialog, "the record button did not raise the picker").not.toBeNull();
+    expect(app.session().frontDoorOpen, "the shell does not know its own panel is up").toBe(true);
+    // And it is the front door rather than the ladder — both are dialogs, and the bar has a button
+    // for each, so the name is what tells them apart.
+    expect(dialog?.textContent).toContain("Worked examples");
+    // The page behind it is inert, which is `modal.ts`'s half and is asserted here only because a
+    // panel raised by the wrong call would have skipped it.
+    expect(q(root, "main.shell2").hasAttribute("inert")).toBe(true);
+  });
+
   it("gives the SANDBOX its circle at 1/z, framed, when the reader asks for it", () => {
     // The plan's clause that the cold start must not cost: *the sandbox's default expression stays
     // `1/z` on the circle for when Sandbox is chosen*. It holds because `coldStartState` layers the
