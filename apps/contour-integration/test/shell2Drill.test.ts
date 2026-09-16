@@ -15,7 +15,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { constraintLabel } from "../src/engine/vocabulary.js";
-import { DRILL_STAGES, DRILL_TASKS, taskById, taskState, type DrillTask } from "../src/shell/drill.js";
+import { DRILL_STAGES, DRILL_TASKS, runTask, taskById, taskState, type DrillTask } from "../src/shell/drill.js";
 import { PROGRESS_KEY, readProgress } from "../src/shell/drillProgress.js";
 import { encodeShell } from "../src/shell/viewState.js";
 import { mountShell2, type Shell2Handle } from "../src/shell2/app.js";
@@ -115,6 +115,20 @@ const link = (id: string, stage: (typeof DRILL_STAGES)[number]): string => {
 const constraints = (root: ParentNode): string[] =>
   [...root.querySelectorAll(".ledgerRow .tag")].map((t) => (t.textContent ?? "").trim());
 
+/**
+ * The hypothesis disclosure's summary — the sentence a reader decides on WITHOUT opening it.
+ *
+ * By its own words rather than by position: the Result card carries a second disclosure (`Numerics`)
+ * and a third would silently re-point an index.
+ */
+function checkedSummary(root: ParentNode): string {
+  const s = [...root.querySelectorAll('[data-card="result"] summary')].find((x) =>
+    textOf(x).startsWith("What was checked"),
+  );
+  if (s === undefined) throw new Error("no 'What was checked' summary");
+  return textOf(s);
+}
+
 // ──────────────────────────────────────────────────────────────────────────────────────────────
 // The drill's own surface.
 // ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -198,6 +212,33 @@ describe("rung ii — the KILL column is MASKED, and comes back", () => {
     clickExact(theDrillCard(root), "Check");
     expect(constraints(root)).toContain(constraintLabel("KILL"));
     expect(textOf(q(root, '[data-card="derivation"]'))).not.toContain("Masked");
+  });
+
+  it("counts the rows the table HAS in its summary, not the rows the ledger has", () => {
+    // **The mutant this kills**: the hypothesis disclosure's `${shown.length} rows` →
+    // `${ledger.rows.length} rows`. `shown` is the ledger with its KILL rows filtered out, and that
+    // filter is the whole of the mask on this card — so the ledger's own count promises a reader
+    // deciding whether to open the disclosure rows the table cannot show, and states in a number
+    // exactly the column the rung is asking them to supply.
+    const t = task("oscillatory");
+    const run = runTask(t);
+    if (run === null) throw new Error("the drill's own record did not solve");
+    const killed = run.ledger.rows.filter((r) => r.constraint === "KILL").length;
+    expect(killed, "a ledger with no KILL row masks nothing, and the mutant would survive it").toBeGreaterThan(0);
+
+    const { root, app } = mount();
+    app.applyState(taskState(t, 1));
+    const unmasked = constraints(root).length;
+    expect(unmasked, "rung i renders the ledger the engine solved").toBe(run.ledger.rows.length);
+
+    app.applyState(taskState(t, 2));
+    const rendered = constraints(root).length;
+    expect(rendered).toBe(unmasked - killed);
+    // **Both numbers are read, neither is transcribed** — the rendered count from the page, the
+    // unmasked one from the engine — so the day the record's ledger grows a row the claim still
+    // holds rather than going stale.
+    expect(checkedSummary(root)).toBe(`What was checked — ${rendered} rows`);
+    expect(rendered, "the summary of a masked table must not quote the unmasked total").toBeLessThan(unmasked);
   });
 });
 
@@ -360,6 +401,11 @@ describe("the fade", () => {
   });
 
   it("LEAVES the drill on request, unmasking everything", () => {
+    // **This cannot see whether Explore puts the CHOOSER away**, though the assertion below says so
+    // in its own words: the rung is reached through `applyState`, which never sets
+    // `session.drillPicker`, so the flag is false throughout and `setMode`'s clear of it is removing
+    // a `false`. The test below presses the chooser's only door first, which is the one path on
+    // which that line does anything.
     const { root, app } = mount();
     app.applyState(taskState(task("oscillatory"), 2));
     expect(constraints(root), "masked to begin with").not.toContain(constraintLabel("KILL"));
@@ -369,5 +415,24 @@ describe("the fade", () => {
     // Every row is back, KILL included, and the derivation with them.
     expect(constraints(root)).toContain(constraintLabel("KILL"));
     expect(textOf(q(root, '[data-card="derivation"]'))).not.toContain("Masked");
+  });
+
+  it("puts the CHOOSER away on Explore, not only the rung", () => {
+    // **The mutant this kills**: `setMode`'s `session.drillPicker = false`, the line before its final
+    // `commit`, removed. Pressing Drill with no rung open is the chooser's only door and the only
+    // thing that raises the flag, so it is also the only route on which clearing it is observable —
+    // reaching a rung by `applyState` or by a link never sets it, which is why the test above claims
+    // the property and passes without it. A list left standing after the reader said Explore is a
+    // menu outliving its mode, over the page they asked to be given back.
+    const { root } = mount();
+    const press = (label: string): void => clickExact(q(root, '[data-testid="mode"]'), label);
+
+    press("Drill");
+    expect(theDrillCard(root).querySelectorAll("li"), "the chooser is on screen to be put away").toHaveLength(
+      DRILL_TASKS.length,
+    );
+
+    press("Explore");
+    expect(drillCard(root), "Explore means the same thing from the chooser as from a rung").toBeNull();
   });
 });
