@@ -11,11 +11,10 @@
 // belongs in the description, and the action is the side effect — which reports its own outcome
 // through `session.notice`, because a description cannot await a promise.
 //
-// **The plates are three and only one is built.** Phase 2 draws the light and print ones; the plan
-// wants them SHOWN rather than hidden, so a reader learns what is coming instead of discovering it.
-// They are rendered disabled with `title="Phase 2"` and the card never re-derives WHY — `saveFigure`
-// already refuses a non-dark theme in its own words, and a second copy of that sentence here would
-// be a second place for it to drift.
+// **The plates are three and all three are built** (M8 step 2.3): the stage as shown, the same
+// picture washed onto paper, and the textbook plate in black on white. The card names what each one
+// is for and nothing else — which treatment produces it is `stageView`'s, and the caption, the
+// permalink and the verdict are the same on all three.
 import { encodeShell } from "../../shell/viewState.js";
 import { fmtNum } from "../format.js";
 import { h, type Child, type Desc } from "../dom.js";
@@ -118,24 +117,26 @@ export const shareCard: Card = (ctx) => {
       "div",
       { key: "save", class: "btnRow" },
       h("span", { key: "l", class: "muted small" }, "Save figure"),
-      h(
-        "button",
-        {
-          key: "dark",
-          "aria-label": "download this figure as a PNG carrying its own permalink",
-          onClick: () => actions.saveFigure("dark"),
-        },
-        "Dark",
-      ),
-      h(
-        "button",
-        { key: "light", disabled: true, title: "Phase 2", "aria-label": "download this figure as a light plate — Phase 2" },
-        "Light",
-      ),
-      h(
-        "button",
-        { key: "print", disabled: true, title: "Phase 2", "aria-label": "download this figure as a print plate — Phase 2" },
-        "Print",
+      // **Three plates, each named by what it is FOR** — M8 step 2.3, and the accessible name says
+      // which picture, because "Light" and "Print" alone describe a colour scheme rather than a
+      // figure. Every one carries the same permalink and the same verdict; what differs is whether
+      // the portrait is the app's, washed onto paper, or absent.
+      ...(
+        [
+          ["dark", "Dark", "the stage as it is on screen"],
+          ["light", "Light", "the portrait washed onto paper, for a page that is not a screen"],
+          ["print", "Print", "no portrait: axes, grid, contour, poles and cuts, in black on white"],
+        ] as const
+      ).map(([plate, label, what]) =>
+        h(
+          "button",
+          {
+            key: plate,
+            "aria-label": `download this figure as a PNG carrying its own permalink — ${what}`,
+            onClick: () => actions.saveFigure(plate),
+          },
+          label,
+        ),
       ),
     ),
     // **The level is the notice's own**, never a literal: `say` already chose `=` for a copy that

@@ -53,7 +53,18 @@ export interface StageDraw {
    */
   readonly poles: PoleReport | null;
   readonly theme?: InkTheme;
+  /**
+   * Which export plate this draw is for — M8 step 2.3. Absent is the stage as it is shown.
+   *
+   * `"light"` washes the portrait onto paper (`glStage`'s `wash`) and takes the light ink; `"print"`
+   * draws the textbook plate, which is the stage mode of the same name and needs no new drawing code
+   * at all. `"dark"` is the stage exactly as the reader has it, including their own stage mode.
+   */
+  readonly plate?: FigurePlate;
 }
+
+/** The three plates `Save figure` offers. A `dark` plate is the stage as shown. */
+export type FigurePlate = "dark" | "light" | "print";
 
 export interface StageView {
   readonly gl: HTMLCanvasElement;
@@ -84,6 +95,20 @@ export interface StageView {
   schedule(d: () => StageDraw): void;
   /** Draw now — for a test, and for the figure export, which must not wait a frame. */
   drawNow(d: StageDraw): void;
+  /**
+   * Draw a plate into the stage's OWN canvases and hand them back, at `scale` times device size.
+   *
+   * **The live canvases, not a second pair**, and the reason is the GL one: a second context would
+   * need its own program, its own ramp texture and its own relink for every integrand, to draw the
+   * picture this one has already been built for. The plate is captured in the same synchronous task
+   * — nothing is composited in between, so the reader never sees the intermediate frame — and the
+   * caller restores the live stage with an ordinary `drawNow` the moment it has the pixels.
+   *
+   * The INK is re-rendered at `scale`; the portrait is not. A phase portrait is a smooth field and
+   * `drawImage` upscales it for nothing visible, where the contour, the arrowheads and the glyphs
+   * are hairlines: those are what a 2x plate is for.
+   */
+  plate(d: StageDraw, scale: number): { readonly gl: HTMLCanvasElement; readonly ink: HTMLCanvasElement };
   /** Whether WebGL2 was available. The shell reports the reason rather than showing an empty box. */
   readonly glError: string | null;
   destroy(): void;
@@ -161,9 +186,18 @@ export function createStageView(host: HTMLElement): StageView {
 
   const viewport = (): Viewport => ({ width: host.clientWidth || 1, height: host.clientHeight || 1 });
 
+  /**
+   * Extra resolution for the ink layer while an export plate is being drawn — 1 on screen.
+   *
+   * A module-level dial rather than a parameter threaded through `drawNow`, `drawAxes`, `drawContour`
+   * and everything else that takes a viewport in CSS pixels: the whole 2-D layer is written in CSS
+   * pixels on purpose, and the only place that turns those into device pixels is `sized`.
+   */
+  let inkScale = 1;
+
   /** Size a canvas to its box at the device ratio, and return its context ready to draw in CSS px. */
   function sized(canvas: HTMLCanvasElement, vp: Viewport): CanvasRenderingContext2D | null {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2) * inkScale;
     const px = Math.round(vp.width * dpr);
     const py = Math.round(vp.height * dpr);
     if (canvas.width !== px || canvas.height !== py) {
@@ -270,7 +304,7 @@ export function createStageView(host: HTMLElement): StageView {
       // defined, and a bare ring there is indistinguishable from a grabbable handle — which
       // `drawContour` also draws as a ring, on the same canvas. Over a portrait the pole is already
       // the white anchor the shader paints, so the ring is an annotation on something visible.
-      if (d.state.stageMode === "textbook") {
+      if (drawMode(d) === "textbook") {
         drawPoleGlyph(ctx, x, y, {
           theme: t,
           r: POLE_R,
@@ -324,7 +358,11 @@ export function createStageView(host: HTMLElement): StageView {
    * already chosen a palette — the figure export — is not overruled by the mode.
    */
   const inkTheme = (d: StageDraw): InkTheme =>
-    d.theme ?? (d.state.stageMode === "textbook" ? LIGHT_INK : DARK_INK);
+    d.theme ??
+    (d.plate === "light" || d.plate === "print" || d.state.stageMode === "textbook" ? LIGHT_INK : DARK_INK);
+
+  /** The stage mode this draw paints in: a print plate is the textbook mode, whatever is on screen. */
+  const drawMode = (d: StageDraw): StageMode => (d.plate === "print" ? "textbook" : d.state.stageMode);
 
   /** `#rrggbb` as three floats in [0, 1], for a GL clear, which cannot read a CSS colour. */
   function paperRgb(hex: string): [number, number, number] {
@@ -336,7 +374,7 @@ export function createStageView(host: HTMLElement): StageView {
     const vp = viewport();
     const t = inkTheme(d);
     const view = d.state.view;
-    const textbook = d.state.stageMode === "textbook";
+    const textbook = drawMode(d) === "textbook";
 
     // **The overlay first, and unconditionally.** It is DOM, and the two returns below are both
     // about CANVAS — an absent 2D context, and an empty resolution. Drawing it at the end made a
@@ -370,7 +408,9 @@ export function createStageView(host: HTMLElement): StageView {
           programKey = program.key;
         }
         stage.render(view, vp, {
-          mode: d.state.stageMode,
+          mode: drawMode(d),
+          // The light plate washes the portrait onto paper; every other draw leaves it alone.
+          ...(d.plate === "light" ? { wash: 1, paper: paperRgb(t.paper) } : {}),
           // The reader's modulus-contour toggle is INDEPENDENT of the mode (plan §1.9), so it rides
           // alongside rather than being folded into it: `iso` the mode draws phase isolines every
           // 30°, `iso` the toggle draws |f| contours, and a reader may want either, both or neither.
@@ -547,6 +587,24 @@ export function createStageView(host: HTMLElement): StageView {
     patch(overlay, chips);
   }
 
+  /**
+   * Draw an export plate into the stage's own canvases, at `scale` times the device size.
+   *
+   * The ink is re-rendered at `scale` and the portrait is left at its own resolution — see the
+   * interface for why. `inkScale` is restored before returning, so the next ordinary `drawNow`
+   * sizes the ink layer back down: a caller that forgot to restore the picture would still not be
+   * left with a canvas the reader's pointer coordinates no longer match.
+   */
+  function plate(d: StageDraw, scale: number): { readonly gl: HTMLCanvasElement; readonly ink: HTMLCanvasElement } {
+    inkScale = Math.max(1, scale);
+    try {
+      drawNow(d);
+    } finally {
+      inkScale = 1;
+    }
+    return { gl, ink };
+  }
+
   function schedule(next: () => StageDraw): void {
     if (pending !== 0) return;
     pending = requestAnimationFrame(() => {
@@ -564,6 +622,7 @@ export function createStageView(host: HTMLElement): StageView {
     resolvedPieces,
     schedule,
     drawNow,
+    plate,
     glError,
     destroy: () => {
       if (pending !== 0) cancelAnimationFrame(pending);

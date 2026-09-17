@@ -135,6 +135,7 @@ uniform float uIsoStrength;  // 0 = no modulus contours
 uniform sampler2D uRamp;     // CET-C6, 256x1, REPEAT + LINEAR (ui/stage/cetC6.ts)
 uniform int uMode;           // ui/stage/mode.ts, via STAGE_MODE_CODE below
 uniform vec3 uPaper;         // the textbook plate's ground, in sRGB [0,1]
+uniform float uWash;         // export only: 0 = the portrait as shown, 1 = washed onto paper
 
 ${stdlib}
 ${OKLAB_GLSL}
@@ -185,6 +186,15 @@ void main() {
   float lightScale = uMode == ${STAGE_MODE_CODE.quiet} ? 0.78 : 1.0;
   float chromaScale = uMode == ${STAGE_MODE_CODE.quiet} ? 0.42 : (uMode == ${STAGE_MODE_CODE.iso} ? 0.75 : 1.0);
 
+  // **The export's light plate, and it is a WASH rather than a fifth mode.** A figure printed on
+  // paper cannot carry a field this app draws on a near-black ground: the portrait would be the
+  // darkest thing on the page and the contour drawn over it would have nothing to sit against. So
+  // the plate lifts the lightness into the upper two thirds of the range, cuts the chroma, and
+  // blends what is left toward the paper. It is a uniform and not a 'StageMode' because it is not a
+  // picture a reader can choose: 'stageMode' rides the codec and the bar, and a fifth value there
+  // would be a portrait nobody can ask for appearing in every switch that handles the four.
+  chromaScale *= 1.0 - 0.45 * uWash;
+
   // Modulus as a lightness modulation on C6's own L, one band per doubling of |f| — and SUBTRACTED
   // rather than centred, which is the gamut fact in the header: raising L off a map that rides the
   // sRGB boundary leaves the gamut over two thirds of the wheel.
@@ -197,7 +207,10 @@ void main() {
   L = mix(0.0, L, smoothstep(-24.0, -16.0, t));
   L = mix(L, 1.0, smoothstep(16.0, 24.0, t));
 
+  L = mix(L, 0.34 + 0.62 * L, uWash);
+
   vec3 rgb = linearToSrgb(oklchToLinearSrgb(L, baseC * chromaScale, baseH));
+  rgb = mix(rgb, uPaper, 0.35 * uWash);
 
   // **Phase ISOLINES — 'iso' mode.** A dark line every 30 degrees of arg f, which makes the phase
   // COUNTABLE: twelve crossings per turn, so a reader can count the wheel's turns around a pole

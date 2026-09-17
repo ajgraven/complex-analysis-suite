@@ -106,7 +106,7 @@ export class GLStage {
     if (this.program) gl.deleteProgram(this.program);
     this.program = next;
     this.uniforms = {};
-    for (const name of ["uRange", "uParamC", "uA", "uModulusDepth", "uGridStrength", "uIsoStrength", "uCutCount", "uRamp", "uMode", "uPaper"]) {
+    for (const name of ["uRange", "uParamC", "uA", "uModulusDepth", "uGridStrength", "uIsoStrength", "uCutCount", "uRamp", "uMode", "uPaper", "uWash"]) {
       this.uniforms[name] = gl.getUniformLocation(next, name);
     }
   }
@@ -137,8 +137,11 @@ export class GLStage {
        * type error about a picture it did not ask to choose.
        */
       mode?: StageMode;
-      /** The textbook plate's ground, as `[r, g, b]` in [0, 1]. Only mode `textbook` reads it. */
+      /** The textbook plate's ground, as `[r, g, b]` in [0, 1]. Read by mode `textbook` and by
+       *  `wash`, which blends the portrait toward it. */
       paper?: readonly [number, number, number];
+      /** Export only: 0 draws the portrait as shown, 1 washes it onto `paper` for a light plate. */
+      wash?: number;
     } = {},
   ): void {
     const { gl, program } = this;
@@ -159,6 +162,7 @@ export class GLStage {
     gl.uniform1i(this.uniforms.uMode ?? null, STAGE_MODE_CODE[opts.mode ?? DEFAULT_STAGE_MODE]);
     const paper = opts.paper ?? [0, 0, 0];
     gl.uniform3f(this.uniforms.uPaper ?? null, paper[0], paper[1], paper[2]);
+    gl.uniform1f(this.uniforms.uWash ?? null, opts.wash ?? 0);
     // Unit 0, bound on every draw rather than once at link: the app has ONE stage and one texture,
     // but a sampler left pointing at whatever was bound last is the class of defect that shows up
     // as a portrait in the wrong colours only after some other feature starts using a texture.

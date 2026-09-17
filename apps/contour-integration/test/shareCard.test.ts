@@ -102,11 +102,17 @@ function shareCardOf(state: ShellState, session?: Session): { card: HTMLElement;
 }
 
 /** A control by its ACCESSIBLE NAME, which is what a reader who cannot see the card has. */
-const byName = (root: ParentNode, name: string): HTMLButtonElement =>
-  q<HTMLButtonElement>(root, `button[aria-label="${name}"]`);
+const byName = (root: ParentNode, name: string): HTMLButtonElement => {
+  const hit = [...root.querySelectorAll<HTMLButtonElement>("button")].filter((b) =>
+    (b.getAttribute("aria-label") ?? "").startsWith(name),
+  );
+  if (hit.length !== 1) throw new Error(`${hit.length} buttons named '${name}…'`);
+  return hit[0];
+};
 
 const COPY_LINK = "copy a permalink to this state";
-const SAVE_FIGURE = "download this figure as a PNG carrying its own permalink";
+/** The three plates share this prefix and differ after the dash — see the card. */
+const SAVE_FIGURE = "download this figure as a PNG carrying its own permalink — the stage as it is on screen";
 const COPY_FIGURE = "copy this figure to the clipboard";
 
 const RECORD_IDS = offeredCorpus()
@@ -204,28 +210,23 @@ describe("the Share card", () => {
     expect(actions.calls).toEqual(["saveFigure:dark", "copyFigure"]);
   });
 
-  it("shows all three plates, builds one, and marks the other two Phase 2", () => {
-    // Hiding the unbuilt plates would make Phase 2 a surprise; offering them enabled would make the
-    // action refuse in its own words after a click, which is the shape the card exists to replace.
-    // The enabled dark button is what stops "every plate is disabled" from passing.
+  it("offers three plates, each asking for ITS OWN", () => {
+    // **The defect this prevents is three buttons wired to one plate.** Until step 2.3 two of them
+    // were disabled with `title="Phase 2"`; now all three work, and a button that read `Print` while
+    // asking for the dark plate would save the wrong picture in silence — a failure with no symptom
+    // on screen at all, since the download is a file the app never shows.
     const { card, actions } = shareCardOf(sandbox());
-    const plates = [...card.querySelectorAll<HTMLButtonElement>(".btnRow button")].filter(
-      (b) => (b.textContent ?? "") === "Light" || (b.textContent ?? "") === "Print",
+    const plates = [...card.querySelectorAll<HTMLButtonElement>(".btnRow button")].filter((b) =>
+      ["Dark", "Light", "Print"].includes((b.textContent ?? "").trim()),
     );
-    expect(plates.length, "the light and print plates are not offered at all").toBe(2);
+    expect(plates.length, "the three plates are not offered").toBe(3);
     for (const p of plates) {
-      expect(p.disabled, `${p.textContent} is offered as though it worked`).toBe(true);
-      expect(p.getAttribute("title")).toBe("Phase 2");
+      expect(p.disabled, `${p.textContent} is offered as though it did not work`).toBe(false);
+      // Each name says which PICTURE, not just which colour scheme.
+      expect((p.getAttribute("aria-label") ?? "").length).toBeGreaterThan(50);
       p.click();
     }
-    // A disabled plate asks for NOTHING — not `saveFigure("light")`, which the action would then
-    // have to refuse, and not `saveFigure("dark")`, which would save the wrong plate in silence.
-    expect(actions.calls).toEqual([]);
-
-    const dark = byName(card, SAVE_FIGURE);
-    expect(dark.disabled).toBe(false);
-    dark.click();
-    expect(actions.calls).toEqual(["saveFigure:dark"]);
+    expect(actions.calls).toEqual(["saveFigure:dark", "saveFigure:light", "saveFigure:print"]);
   });
 
   it("stamps a notice with the level the NOTICE carries, not one of its own", () => {

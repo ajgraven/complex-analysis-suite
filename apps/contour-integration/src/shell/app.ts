@@ -23,14 +23,22 @@ import type { Family } from "../families/schema.js";
 import type { PoleReport } from "../kernel/poles.js";
 import type { StageDraw } from "./stageView.js";
 import { injectPngText } from "@cas/export";
+import { LIGHT_INK } from "../ui/inkTheme.js";
 
-import { drawFigure, figureCaption, figureLayout, figureMetadata, type FigureCaption } from "./figure.js";
+import {
+  FIGURE_THEMES,
+  drawFigure,
+  figureCaption,
+  figureLayout,
+  figureMetadata,
+  type FigureCaption,
+} from "./figure.js";
 import { decodeShell, encodeShell } from "./viewState.js";
 import { patch, h } from "./dom.js";
 import { render, type ShellActions } from "./render.js";
 import { defaultSession, resetTransient, type Session } from "./session.js";
 import { createStageController, type StageController } from "./stageController.js";
-import { createStageView, describeStage } from "./stageView.js";
+import { createStageView, describeStage, type FigurePlate } from "./stageView.js";
 import { createUndo, type CommitReason } from "./undo.js";
 import { createStripView, type StripDraw } from "./strip.js";
 import { createContrastsDialog } from "./contrasts.js";
@@ -374,11 +382,7 @@ export function mountShell2(root: Element): Shell2Handle {
     },
 
     saveFigure: (theme) => {
-      if (theme !== "dark") {
-        say("Only the dark plate is built yet — the light and print plates are Phase 2.", "⚠");
-        return;
-      }
-      void figureBytes().then((bytes) => {
+      void figureBytes(theme).then((bytes) => {
         if (bytes === null) {
           say("The figure could not be drawn.", "⚠");
           return;
@@ -386,8 +390,10 @@ export function mountShell2(root: Element): Shell2Handle {
         const url = URL.createObjectURL(pngBlob(bytes));
         const a = document.createElement("a");
         a.href = url;
-        a.download =
-          resolution.kind === "gallery" ? `${resolution.family.id}.png` : "contour-integration.png";
+        // The plate is in the NAME, because three files in one folder that differ only in their
+        // pixels are three files a reader has to open to tell apart.
+        const stem = resolution.kind === "gallery" ? resolution.family.id : "contour-integration";
+        a.download = `${stem}-${theme}.png`;
         // **In the document, and revoked LATER.** A detached anchor's click is ignored by some
         // browsers, and revoking the URL in the same task cancels the download in others — the old
         // shell learned both, and copying the shape is cheaper than relearning them.
@@ -480,7 +486,9 @@ export function mountShell2(root: Element): Shell2Handle {
       }
       // **The PROMISE goes into `ClipboardItem`, not the resolved blob** — Safari requires the write
       // to be made inside the user gesture, and awaiting the bytes first leaves the gesture.
-      const png = figureBytes().then((bytes) => {
+      // The DARK plate, because the clipboard offers no choice of theme and the dark one is the
+      // picture the reader is looking at.
+      const png = figureBytes("dark").then((bytes) => {
         if (bytes === null) throw new Error("no figure");
         return pngBlob(bytes);
       });
@@ -582,13 +590,17 @@ export function mountShell2(root: Element): Shell2Handle {
    * metadata could straddle a recompute — a figure whose drawn caption said one thing and whose
    * stamped verdict said another, which is the dishonesty the verdict key exists to prevent.
    */
-  async function figureBytes(scale = 2): Promise<Uint8Array | null> {
+  async function figureBytes(plate: FigurePlate = "dark", scale = 2): Promise<Uint8Array | null> {
     // The GL context has `preserveDrawingBuffer`, but the buffer holds the LAST frame; drawing now
-    // makes the plate a picture of the state the caption is about (M6.3's finding).
-    stageView.drawNow(drawState());
+    // makes the plate a picture of the state the caption is about (M6.3's finding). For an export
+    // plate the same call draws the chosen treatment — a washed portrait, or the textbook plate —
+    // into the same canvases, and the live stage is put back below, before anything is awaited.
+    const layers = stageView.plate({ ...drawState(), plate }, plate === "dark" ? 1 : 2);
     // The strip too: the plate composites it, and a coalesced draw would put the LAST frame's trail
-    // under this frame's caption.
-    stripView.drawNow(stripState());
+    // under this frame's caption. **In the plate's own palette**, which the first draft forgot: a
+    // trail drawn in the dark theme onto a white print plate is a pale blue hairline over paper,
+    // with axes at 16% alpha that are not there at all.
+    stripView.drawNow(plate === "dark" ? stripState() : { ...stripState(), theme: LIGHT_INK });
     const caption = captionNow();
     const enc = encodeShell(state);
     const permalink = enc.ok ? window.location.origin + window.location.pathname + enc.hash : null;
@@ -598,17 +610,34 @@ export function mountShell2(root: Element): Shell2Handle {
       scale,
     );
     const style = getComputedStyle(shell);
-    const plate = document.createElement("canvas");
-    drawFigure(plate, layout, [glCanvas, inkCanvas], accCanvas, caption, {
-      background: style.getPropertyValue("--g-ground").trim() || "#0f1115",
-      text: style.getPropertyValue("--g-text").trim() || "#e7e9ee",
-      muted: style.getPropertyValue("--g-muted").trim() || "#99a1b3",
-    });
+    const target = document.createElement("canvas");
+    drawFigure(
+      target,
+      layout,
+      // **The print plate composites NO portrait.** Its GL buffer is a flat clear of the paper
+      // colour, which the plate's own background already is, and leaving it out is what makes the
+      // ink band the only thing on the picture — measured by the browser suite as one colour.
+      plate === "print" ? [layers.ink] : [layers.gl, layers.ink],
+      accCanvas,
+      caption,
+      plate === "dark"
+        ? {
+            background: style.getPropertyValue("--g-ground").trim() || "#0f1115",
+            text: style.getPropertyValue("--g-text").trim() || "#e7e9ee",
+            muted: style.getPropertyValue("--g-muted").trim() || "#99a1b3",
+          }
+        : FIGURE_THEMES[plate],
+    );
+    // **Back to what the reader has, in this same task.** Nothing has been composited since the
+    // plate was drawn, so no intermediate frame reaches the screen; an `await` before this line
+    // would leave a washed portrait up until the next draw.
+    stageView.drawNow(drawState());
+    stripView.drawNow(stripState());
     const blob = await new Promise<Blob | null>((done) => {
-      plate.toBlob(done, "image/png");
+      target.toBlob(done, "image/png");
     });
     if (blob === null) return null;
-    return injectPngText(new Uint8Array(await blob.arrayBuffer()), figureMetadata(permalink, caption));
+    return injectPngText(new Uint8Array(await blob.arrayBuffer()), figureMetadata(permalink, caption, plate));
   }
 
   /** The stage's accessible name: what the keys do, then what is on screen right now. */
