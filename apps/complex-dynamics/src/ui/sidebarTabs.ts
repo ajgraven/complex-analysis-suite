@@ -117,6 +117,8 @@ function memberEl(m: TabMember): HTMLElement | null {
 export function mountSidebarTabs(tablist: HTMLElement, panels: HTMLElement): SidebarTabs {
   const buttons: HTMLButtonElement[] = [];
   const bodies = new Map<string, HTMLElement>();
+  /** Containers a member was taken OUT of — checked for emptiness once every move is done. */
+  const emptied = new Set<HTMLElement>();
   /** member id → tab id, for `reveal`. */
   const owner = new Map<string, string>();
 
@@ -144,8 +146,41 @@ export function mountSidebarTabs(tablist: HTMLElement, panels: HTMLElement): Sid
     for (const m of spec.members) {
       const el = memberEl(m);
       if (!el) continue; // a member the markup does not have is simply absent, not an error
+      if (el.parentElement) emptied.add(el.parentElement);
       body.append(el);
       owner.set(m.id, spec.id);
+    }
+  }
+
+  // A container this left with nothing in it goes with its contents.
+  //
+  // `<section class="panel" aria-label="Function and presets">` had ALL twelve of its groups moved
+  // onto tabs (and its action row taken by the pinned footer), and the empty shell stayed behind: a
+  // named `<section>` is a `region` LANDMARK, so a screen-reader user cycling landmarks arrived at
+  // "Function and presets" and found nothing there, and `.panel`'s border and padding drew an empty
+  // ~34 px box under the inspector. axe cannot see this — its `region` rule checks that content
+  // sits INSIDE a region, never that a region has content — so WP11's clean audit was true and
+  // blind. Only containers whose remaining children are all gone are removed, so one that keeps
+  // anything of its own is left alone. (Review follow-up.)
+  // "Empty" means no text and nothing a reader can use — not `children.length === 0`, because a
+  // member's parent is an inner `.panel-group` wrapper and removing THAT is what leaves the section
+  // hollow. So it cascades upward, stopping at the pane itself and at anything holding the tabs.
+  const INTERACTIVE = "input, button, select, textarea, canvas, a, img, svg, pre";
+  const isEmpty = (el: HTMLElement): boolean =>
+    (el.textContent ?? "").trim() === "" && el.querySelector(INTERACTIVE) === null;
+  for (const host of emptied) {
+    let node: HTMLElement | null = host;
+    while (
+      node &&
+      node !== panels &&
+      node !== tablist &&
+      !node.contains(panels) &&
+      node.parentElement &&
+      isEmpty(node)
+    ) {
+      const parent: HTMLElement | null = node.parentElement;
+      node.remove();
+      node = parent;
     }
   }
 

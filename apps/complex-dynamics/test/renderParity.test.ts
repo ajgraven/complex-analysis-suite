@@ -56,9 +56,37 @@ describe("R5 — both programs normalise the smooth escape time by the SAME degr
     expect(logDegreeOf(withoutFix)).toBeCloseTo(Math.log(2), 12);
   });
 
-  it("compile() passes the general-polynomial degree when there is one", () => {
-    // Source-level, because `compile` is private and needs a live context to call.
-    expect(SRC).toContain("this._polyPerturb?.degree ?? this._monicDegree");
+  it("EVERY shader this plot builds is handed the same degree, not just the first one", () => {
+    // Source-level, because both build sites are private and need a live context to reach. But the
+    // assertion this replaces was `SRC.toContain("this._polyPerturb?.degree ?? this._monicDegree")`
+    // — an EXISTENTIAL claim, satisfied by one fixed site — and `ensureDf64` was still passing bare
+    // `_monicDegree` 130 lines away, so `z³ − z + c` re-banded the exterior at DF64_THRESHOLD
+    // instead of at the perturbation toggle. The defect is a second site diverging, so the guard has
+    // to be EXHAUSTIVE: find every call and check each one, and fail on a call this test has never
+    // seen rather than silently covering fewer than exist. (Review follow-up.)
+    const calls = [...SRC.matchAll(/buildFragmentShader\(([\s\S]*?)\n\s*\),/g)].map((m) => m[1]);
+    expect(calls.length, "both build sites are found — add the new one here if this fails").toBe(2);
+    for (const [i, args] of calls.entries()) {
+      expect(args, `build site ${i} passes the shared degree`).toContain("this.smoothDegree");
+      expect(args, `build site ${i} does not reach past it to the raw field`).not.toContain(
+        "this._monicDegree",
+      );
+    }
+  });
+
+  it("the two precisions emit the same constant from the same degree", () => {
+    // The builder half of the same claim, driven rather than read: whatever glPlot hands in, the
+    // single and df64 programs must normalise by it identically — so a divergence can only come
+    // from the CALLER, which is what the exhaustive check above covers.
+    const f = parse("z^3-z+c");
+    const poly = extractPolyPerturbation(f, [0, 0], 8); // same call the site above makes
+    const dz = differentiate(f, "z");
+    const dc = differentiate(f, "c");
+    const degree = poly?.degree ?? null;
+    const single = buildFragmentShader(f, ESC, "single", dz, dc, degree);
+    const df64 = buildFragmentShader(f, ESC, "df64", dz, dc, degree);
+    expect(logDegreeOf(df64)).toBeCloseTo(logDegreeOf(single), 12);
+    expect(logDegreeOf(df64)).toBeCloseTo(Math.log(3), 12);
   });
 
   it("z^d + c is unaffected — its monic degree was always right", () => {

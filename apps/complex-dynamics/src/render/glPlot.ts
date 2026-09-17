@@ -456,6 +456,19 @@ export class GLPlot {
   private _perturbation = false; // perturbation deep-zoom toggle
   private _perturbEligible = false; // current f is a monic z^d+c the kernel handles (auto-detected)
   private _monicDegree: number | null = null; // degree d if f is z^d + c, else null
+  /**
+   * The degree the SMOOTH-ITERATION normalisation divides by, for EVERY shader this plot builds.
+   *
+   * `_monicDegree` is null for anything that is not exactly z^d + c, so `z³ − z + c` normalised by
+   * log 2 while the perturbation kernel divided by log 3, and toggling perturbation visibly re-banded
+   * the exterior (WP9/R5). That was fixed at the single-precision build site and NOT at the df64 one,
+   * so the same mismatch survived one zoom threshold away: past DF64_THRESHOLD the program swaps and
+   * the exterior re-bands. A getter rather than the expression repeated twice, because two call sites
+   * that must agree and are 130 lines apart will not stay agreed. (Review follow-up.)
+   */
+  private get smoothDegree(): number | null {
+    return this._polyPerturb?.degree ?? this._monicDegree;
+  }
   // Squared escape radius R² the perturbation kernel bails at — probed from the map's escapeFn so its
   // smooth-colour bands match the standard render; 4.0 (|z| > 2) is the default / z²+c value.
   private _perturbEscape2 = 4.0;
@@ -842,13 +855,10 @@ export class GLPlot {
         precision,
         this._fZAst,
         this._fCAst,
-        // The degree the SMOOTH-ITERATION normalisation divides by, and it has to be the same number
-        // the perturbation kernel uses (`perturbDegree()` → `uPerturbDegree`). `_monicDegree` is null
-        // for anything that is not exactly z^d + c, so `z³ − z + c` got LOG_DEGREE = log 2 here while
-        // the kernel divided by log 3, and toggling perturbation visibly re-banded the exterior. log 3
-        // is also the correct one: the smooth escape time normalises by the polynomial's DEGREE.
-        // (WP9/R5, review 2026-09-16.)
-        this._polyPerturb?.degree ?? this._monicDegree,
+        // Must be the same number the perturbation kernel uses (`perturbDegree()` →
+        // `uPerturbDegree`): the smooth escape time normalises by the polynomial's DEGREE.
+        // See {@link smoothDegree}. (WP9/R5, review 2026-09-16.)
+        this.smoothDegree,
         this._interiorBailout,
         this._periodicityBailout,
       ),
@@ -984,7 +994,7 @@ export class GLPlot {
           "df64",
           this._fZAst,
           this._fCAst,
-          this._monicDegree,
+          this.smoothDegree, // NOT `_monicDegree` — see the getter; this site was the one R5 missed
           this._interiorBailout,
           this._periodicityBailout,
         ),
@@ -2428,30 +2438,35 @@ export class GLPlot {
     if (this.contextLost || this.gl.isContextLost()) {
       throw new Error("The graphics context was lost — try the export again");
     }
-    // Commit to ONE look for the whole image, before the first strip (WP9/R6).
-    this.exportLook = {
-      aa: this._aa,
-      mode: this._mode,
-      light: this._light,
-      outline: this._outline,
-      equipotential: this._equipotential,
-      palette: this._palette,
-      gradientOffset: this._gradientOffset,
-    };
-    if (this._mode === 5) {
-      // Histogram: the CDF is content-derived, so it must be built ONCE, before the first strip, and
-      // not from a full-size readback — at 8192² that is a synchronous 268 MB `readPixels` before the
-      // progress bar or the Cancel button can do anything. It is a cumulative distribution over
-      // escape counts, not an image, so a bounded render resolves it to well under a count's width:
-      // CDF_EXPORT_MAX² samples against 65,536 buckets. (WP9/R6.)
-      this.updateCdf(
-        Math.min(size, CDF_EXPORT_MAX),
-        Math.min(size, CDF_EXPORT_MAX),
-      );
-      this.cdfDirty = true; // this overwrote the shared CDF — rebuild for the live view afterwards
-    }
-
+    // Commit to ONE look for the whole image, before the first strip (WP9/R6). Inside the `try`,
+    // NOT before it: `updateCdf` below allocates a full-size `Uint8Array` and does a `readPixels`,
+    // so an allocation failure or a context lost between the entry check and here threw with
+    // `exportLook` already set and no `finally` to clear it. `get exporting()` then stayed true for
+    // ever, `PlotView.frozen()` refused every pointer and keyboard event on that plot permanently,
+    // and the live view kept rendering someone else's palette. The freeze's own cleanup has to
+    // cover everything that can create the freeze. (Review follow-up.)
     try {
+      this.exportLook = {
+        aa: this._aa,
+        mode: this._mode,
+        light: this._light,
+        outline: this._outline,
+        equipotential: this._equipotential,
+        palette: this._palette,
+        gradientOffset: this._gradientOffset,
+      };
+      if (this._mode === 5) {
+        // Histogram: the CDF is content-derived, so it must be built ONCE, before the first strip,
+        // and not from a full-size readback — at 8192² that is a synchronous 268 MB `readPixels`
+        // before the progress bar or the Cancel button can do anything. It is a cumulative
+        // distribution over escape counts, not an image, so a bounded render resolves it to well
+        // under a count's width: CDF_EXPORT_MAX² samples against 65,536 buckets. (WP9/R6.)
+        this.updateCdf(
+          Math.min(size, CDF_EXPORT_MAX),
+          Math.min(size, CDF_EXPORT_MAX),
+        );
+        this.cdfDirty = true; // this overwrote the shared CDF — rebuild for the live view afterwards
+      }
       return await this.renderExportStrips(size, opts);
     } finally {
       // Whatever happened — a cancel, a lost context, a throw from `drawFractal` — the live view
@@ -2776,6 +2791,24 @@ export class GLPlot {
    * output `gamma` (1 = unchanged). Applied on-screen as a final fullscreen pass;
    * a render-only change. Note: not yet applied to high-resolution exports.
    */
+  /**
+   * Is the on-screen grade ON, and therefore ABSENT from a high-resolution export?
+   *
+   * `renderExportStrips` draws straight into its own framebuffer and never runs the post pass, so
+   * an export is ungraded whatever the sliders say — a vignette of 0.9 darkens the corners on
+   * screen and not at all in the PNG. WP1/R1 fixed the other half of this (the accumulator used to
+   * grade the DEFAULT view while a plain render stayed ungraded) and its commit message describes
+   * the export asymmetry as the old behaviour; it is still the current one.
+   *
+   * Applying it per strip is not a one-liner and is deliberately not attempted here: the vignette
+   * is a function of position in the WHOLE frame, so a strip would need its offset as a new uniform
+   * and the result is only checkable by pixel parity against the screen, in the browser suite. Until
+   * then the export SAYS so rather than quietly differing from what the reader is looking at.
+   */
+  get gradeMissingFromExport(): boolean {
+    return this._post && (this._vignette > 0 || this._gamma !== 1);
+  }
+
   setPost(on: boolean, vignette: number, gamma: number): void {
     this._post = on;
     this._vignette = vignette;

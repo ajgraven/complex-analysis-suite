@@ -211,6 +211,46 @@ describe("JuliaMetricsClient — settled()", () => {
     expect(painted).toEqual(["r2"]);
   });
 
+  // The direction the case above does NOT cover, and the defect it hid. There, r1 returns WITHOUT
+  // metrics, so nothing is painted from it and the wait is genuinely answered by r2. Here r1 returns
+  // WITH metrics while r2 is still queued: the panel is painted from the OLDER measurement, and
+  // releasing there is what let "Copy properties" put c₁'s numbers under c₂'s heading.
+  it("an OLDER result landing with a fresher request still queued does NOT settle the wait", async () => {
+    // The METRICS are what identify the measurement, not the callback: the client keeps only the
+    // latest `cb`, so r1's numbers are delivered THROUGH r2's callback. In the app both callbacks
+    // are the same painter, which is exactly why the staleness is invisible at the call site.
+    const M1 = { tag: "c1" } as unknown as JuliaImageMetrics;
+    const M2 = { tag: "c2" } as unknown as JuliaImageMetrics;
+    const client = new JuliaMetricsClient();
+    const w = MockWorker.instances[0];
+    const painted: JuliaImageMetrics[] = [];
+    client.request(req("r1"), (m) => void painted.push(m));
+    const landed = client.settled();
+    client.request(req("r2"), (m) => void painted.push(m)); // coalesced behind r1
+    expect(w.posted.length, "r2 is queued, not yet posted").toBe(1);
+
+    w.respond(w.posted[0].reqId, M1); // r1's measurement PAINTS — with r2 already waiting
+    expect(painted, "the old measurement did reach the panel").toEqual([M1]);
+    expect(await settledYet(landed), "but it is not the answer the caller asked for").toBe(false);
+    expect(w.posted.length, "r2 went out on the freed lane").toBe(2);
+
+    w.respond(w.posted[1].reqId, M2); // now the current one paints
+    expect(await settledYet(landed)).toBe(true);
+    expect(painted, "and the wait ended on the CURRENT measurement").toEqual([M1, M2]);
+  });
+
+  it("a failure with a fresher request queued behind it does not settle the wait either", async () => {
+    const client = new JuliaMetricsClient();
+    const w = MockWorker.instances[0];
+    client.request(req("r1"), () => {});
+    const landed = client.settled();
+    client.request(req("r2"), () => {});
+    w.fail(w.posted[0].reqId, "boom"); // r1 throws; r2 is still queued
+    expect(await settledYet(landed)).toBe(false);
+    w.respond(w.posted[1].reqId, METRICS);
+    expect(await settledYet(landed)).toBe(true);
+  });
+
   it("has a backstop, so a worker that never answers does not disable a button for ever", async () => {
     vi.useFakeTimers();
     try {

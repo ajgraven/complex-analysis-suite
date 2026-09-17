@@ -27,7 +27,11 @@ export interface LegendModel {
  * onto the palette with a black interior; the interior-structure modes (period, multiplier) and
  * domain / Newton colouring use their own colour schemes.
  */
-export function describeLegend(mode: string, setName: string): LegendModel {
+export function describeLegend(
+  mode: string,
+  setName: string,
+  plane: "param" | "dyn" = "param",
+): LegendModel {
   switch (mode) {
     case "escape":
     case "smooth":
@@ -54,13 +58,28 @@ export function describeLegend(mode: string, setName: string): LegendModel {
         interior: setName,
       };
     case "interiorDE":
-      return {
-        title: "Interior distance",
-        visual: "gradient",
-        low: "near the edge",
-        high: "deep interior",
-        note: "outside the set: black",
-      };
+      // The shader's interior-DE block is guarded `uMode == 15 && uFractType == 1` — PARAMETER
+      // plane only. On the dynamical plane mode 15 falls through every branch to
+      // `palette(iters / uN)`, i.e. ordinary escape time, so the chip described a picture that was
+      // not on the canvas beside it: "near the edge → deep interior, outside the set: black" over a
+      // frame coloured to the boundary. Same class as WP1/R3, in the one mode R3's sweep did not
+      // check. The legend now names what is DRAWN, and says why it differs. (Review follow-up.)
+      return plane === "dyn"
+        ? {
+            title: "Escape time",
+            visual: "gradient",
+            low: "escapes fast",
+            high: "escapes slowly",
+            note: "interior distance is a parameter-plane mode — this plane shows escape time",
+            interior: setName,
+          }
+        : {
+            title: "Interior distance",
+            visual: "gradient",
+            low: "near the edge",
+            high: "deep interior",
+            note: "outside the set: black",
+          };
     case "orbit":
       return {
         title: "Orbit trap",

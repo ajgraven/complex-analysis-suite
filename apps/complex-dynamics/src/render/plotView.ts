@@ -351,6 +351,16 @@ export class PlotView {
         "warn",
       );
     }
+    // See `GLPlot.gradeMissingFromExport`: the export path never runs the post pass, so the saved
+    // image differs from the screen whenever the grade is on. Saying so is the honest-labelling
+    // guardrail applied to a picture rather than a number. (Review follow-up.)
+    if (this.plot.gradeMissingFromExport) {
+      showToast(
+        "Post-processing (vignette / gamma) is not applied to high-resolution exports — " +
+          "the saved image is ungraded.",
+        "warn",
+      );
+    }
   }
 
   /** Render the plot at `size` and copy it to the clipboard as a PNG, overlay optional. */
@@ -373,6 +383,12 @@ export class PlotView {
         : "Image copied to the clipboard.",
       result.clamped ? "warn" : "info",
     );
+    if (this.plot.gradeMissingFromExport) {
+      showToast(
+        "Post-processing (vignette / gamma) is not applied to exports — the copied image is ungraded.",
+        "warn",
+      );
+    }
   }
 
   private syncOverlaySize(): void {

@@ -578,6 +578,31 @@ describe("WP8/S5 — Escape closes one layer, not all of them", () => {
     escape();
     expect(workspace.classList.contains("expand-param")).toBe(false);
   });
+
+  // The KEYBOARD REFERENCE, which none of the three above reaches — they all use `help-btn`, the
+  // glossary. Its opener was registered as a DETACHED method (`addEventListener("click",
+  // modal.open)`), so inside `open()` `this` was the button and the pushed layer was
+  // `button.close()`. That throws; `escapeStack` calls preventDefault/stopPropagation BEFORE the
+  // layer, so the key was consumed, the release never ran, and the dead layer stayed on top for the
+  // rest of the session. The defect is therefore invisible to the FIRST Escape's own dialog state
+  // and shows on the SECOND — which is why this walks two layers. (Review follow-up.)
+  it("the keyboard reference closes on Escape, and does not wedge the stack under it", async () => {
+    await mount();
+    const workspace = document.querySelector(".workspace") as HTMLElement;
+    byId("expand-param").click();
+    byId("help-ref-btn").click();
+    expect(byId("help-ref").hidden, "the reference opened").toBe(false);
+
+    escape();
+    expect(byId("help-ref").hidden, "its own layer closed it").toBe(true);
+    expect(workspace.classList.contains("expand-param"), "and only it").toBe(true);
+
+    escape();
+    expect(
+      workspace.classList.contains("expand-param"),
+      "the layer underneath still has the key — the stack is not wedged",
+    ).toBe(false);
+  });
 });
 
 describe("WP8/S4 — a mode the app cannot draw says so, and says so when it moves", () => {
@@ -629,6 +654,156 @@ describe("WP8/S4 — a mode the app cannot draw says so, and says so when it mov
     byId<HTMLInputElement>("perturbation").checked = false;
     fire("perturbation", "change");
     expect([...sel.options].filter((o) => o.disabled).map((o) => o.value)).toEqual(before);
+  });
+});
+
+describe("Review follow-up — the tab move leaves nothing behind, and the tour follows it", () => {
+  it("no empty landmark or empty panel survives the move", async () => {
+    await mount();
+    // A named <section> is a `region` landmark; an empty one sends a screen-reader user somewhere
+    // with nothing in it. axe's `region` rule cannot see this — it checks that content is INSIDE a
+    // region, never that a region has content — so it is asserted here, where it blocks.
+    // Scoped to the STRUCTURAL landmarks — a named `<section>`, `<main>`, `<nav>`. Deliberately not
+    // every `role="region"`: the exterior-coefficient lists are named regions that are empty until
+    // the map is computed, which is legitimate, and a canvas a11y overlay is empty by nature
+    // because its name describes the canvas it covers. What must never be empty is a container the
+    // markup declares and the tab move then hollows out.
+    for (const el of document.querySelectorAll<HTMLElement>(
+      "section[aria-label], section[aria-labelledby], main, nav",
+    )) {
+      const hasContent = el.children.length > 0 || (el.textContent ?? "").trim() !== "";
+      expect(hasContent, `${el.tagName}.${el.className} "${el.getAttribute("aria-label")}"`).toBe(
+        true,
+      );
+    }
+  });
+
+  it("every tour step points at an element on a VISIBLE tab when it is highlighted", async () => {
+    await mount();
+    const { SIDEBAR_TABS } = await import("../src/ui/sidebarTabs");
+    // The tour's two Appearance steps used to highlight a `display: none` element, because the app
+    // opens on Function. Rather than driving driver.js, assert the fact underneath: each step's
+    // target is owned by a tab, and the tour is told which one before it highlights.
+    const ownerOf = (id: string): string | null => {
+      for (const t of SIDEBAR_TABS) if (t.members.some((m) => m.id === id)) return t.id;
+      return null;
+    };
+    const src = (await import("../src/main.ts?raw")).default as string;
+    // Every element id the tour steps at, in order.
+    const targets = [...src.matchAll(/element: "#([\w-]+)"/g)].map((m) => m[1]);
+    expect(targets.length, "the tour has steps").toBeGreaterThan(4);
+    for (const id of targets) {
+      const tab = ownerOf(id);
+      if (tab === null) continue; // not a sidebar control (the canvases, the app bar)
+      const step = src.slice(src.indexOf(`element: "#${id}"`));
+      expect(
+        step.slice(0, 200),
+        `the step at #${id} is on the "${tab}" tab and must open it`,
+      ).toContain(`showTabFor("${id}")`);
+    }
+  });
+});
+
+describe("Review follow-up — three shell defects the review found", () => {
+  it("the SAME preset can be applied again — the menu acts, it does not show state", async () => {
+    await mount();
+    const sel = byId<HTMLSelectElement>("fractal_presets");
+    // Apply one, then diverge from it by hand, then pick THE SAME ONE again.
+    setVal("fractal_presets", "tricorn");
+    fire("fractal_presets", "change");
+    expect(val("inpf")).toContain("conj");
+    expect(sel.value, "the menu returned to its placeholder").toBe("");
+
+    setVal("inpf", "z^2+c");
+    byId("apply_all").click();
+    expect(val("inpf")).toBe("z^2+c");
+
+    setVal("fractal_presets", "tricorn"); // the same one — a `change` the old markup could not fire
+    fire("fractal_presets", "change");
+    expect(val("inpf"), "picking it again applied it again").toContain("conj");
+  });
+
+  it("clearing the fragment is not a link that failed to parse", async () => {
+    await mount();
+    // A foreign link warns — that much is right, and is the anti-vacuity clause here. Set it AFTER
+    // mounting, so it is a link arriving in an open tab rather than one the app already applied.
+    window.location.hash = "#vs=" + btoa(JSON.stringify({ v: 1, app: "qd", state: {} }));
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    expect(document.querySelector(".toast")?.textContent ?? "").toContain("no Complex Dynamics");
+
+    for (const t of document.querySelectorAll(".toast")) t.remove();
+    window.location.hash = ""; // e.g. pressing Back after applying a permalink
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    expect(
+      document.querySelector(".toast"),
+      "an absent link is not an unreadable one",
+    ).toBeNull();
+  });
+
+  it("Insert leaves the colour picker on the stop it just added", async () => {
+    await mount();
+    setVal("palette", "custom");
+    fire("palette", "change");
+    const handles = () => [...document.querySelectorAll<HTMLElement>(".gradient-handle")];
+    const before = handles().length;
+    expect(before, "the custom gradient editor is showing").toBeGreaterThan(1);
+
+    handles()[0].focus();
+    handles()[0].dispatchEvent(new KeyboardEvent("keydown", { key: "Insert", bubbles: true }));
+    const after = handles();
+    expect(after.length, "a stop was added").toBe(before + 1);
+    // The defect: `selected` was set to the new stop and then overwritten back to the focused one,
+    // so the picker edited the OLD stop — change a colour and the wrong handle moved.
+    const sel = after.findIndex((h) => h.classList.contains("selected"));
+    expect(sel, "the new stop is the selected one").toBe(1);
+    expect(document.activeElement, "and focus is on it").toBe(after[1]);
+  });
+});
+
+describe("Review follow-up — the projection picker re-runs the gates it moves", () => {
+  // A projection REFUSES both deep-zoom kernels (WP9/R4), so `perturbationActive` flips with this
+  // control. `applyProjection` ran neither gate, so the UI kept describing the previous kernel.
+  const opts = (): HTMLOptionElement[] => [
+    ...byId<HTMLSelectElement>("mode").querySelectorAll("option"),
+  ];
+  const disabledModes = (): string[] =>
+    opts()
+      .filter((o) => o.disabled)
+      .map((o) => o.value);
+
+  it("entering a projection gives back the modes perturbation had taken away", async () => {
+    await mount();
+    byId<HTMLInputElement>("perturbation").checked = true;
+    fire("perturbation", "change");
+    expect(disabledModes().length, "perturbation greys the modes it cannot draw").toBeGreaterThan(0);
+    expect(byId("perturbation-note").hidden).toBe(false);
+
+    setVal("projection-mode", "poincare");
+    fire("projection-mode", "change");
+    expect(disabledModes(), "the standard shader is drawing, so nothing is greyed").toEqual([]);
+    expect(byId("perturbation-note").hidden, "and the note about it is down").toBe(true);
+  });
+
+  it("LEAVING a projection re-arms the kernel, and does not leave a mode it cannot draw", async () => {
+    // The dangerous direction. Under the projection every mode is selectable; pick one the
+    // perturbation kernel does not render, then switch back — the kernel re-arms and draws
+    // `uMode = mode === 1 ? 1 : 0`, i.e. plain escape time, while the control still says "Orbit
+    // trap". That is WP8/S4's silent substitution, through a control WP8 never touched.
+    await mount();
+    byId<HTMLInputElement>("perturbation").checked = true;
+    fire("perturbation", "change");
+    setVal("projection-mode", "poincare");
+    fire("projection-mode", "change");
+
+    const sel = byId<HTMLSelectElement>("mode");
+    sel.value = "orbit";
+    fire("mode", "change");
+    expect(sel.value).toBe("orbit");
+
+    setVal("projection-mode", "off");
+    fire("projection-mode", "change");
+    expect(sel.value, "the selection moved off a mode the kernel cannot draw").not.toBe("orbit");
+    expect(disabledModes(), "and orbit is greyed again").toContain("orbit");
   });
 });
 

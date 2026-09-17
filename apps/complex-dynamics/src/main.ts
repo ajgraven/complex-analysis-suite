@@ -293,6 +293,14 @@ const isQuadraticFamily = (plot: { monicDegree: number | null }): boolean => plo
 
 /** Opens the glossary modal at an optional term anchor; assigned by setupGlossary(). */
 let openGlossary: (termId?: string) => void = () => {};
+/**
+ * Show the sidebar tab owning a control — late-bound, because the tabs are built inside `init()`
+ * while {@link startTour} is module-level. Two of the tour's eight steps point at controls WP10
+ * moved onto a tab that is hidden by default (`#mode` and `#overlays-group` both live on
+ * Appearance, and the app opens on Function), so driver.js highlighted a `display: none` element
+ * and the popover had no anchor. (Review follow-up.)
+ */
+let showTabFor: (memberId: string) => void = () => {};
 
 /**
  * The placeholder the image-derived Julia-properties rows hold until the Tier-2 worker returns.
@@ -423,6 +431,8 @@ function showInspect(info: InspectResult, point: Vec2, plane: FractType): void {
  */
 function startTour(): void {
   // Expand the Overlays group so its tour step shows the actual toggles, not just the header.
+  // (Its tab is opened by that step's own `onHighlightStarted` — opening a <details> inside a
+  // hidden panel is what made the step highlight a zero-size box.)
   document.getElementById("overlays-group")?.setAttribute("open", "");
   driver({
     showProgress: true,
@@ -453,6 +463,7 @@ function startTour(): void {
       },
       {
         element: "#inpf",
+        onHighlightStarted: () => showTabFor("inpf"),
         popover: {
           title: "Function f(z, c)",
           description: "Edit the iterated function — it is typeset live just below.",
@@ -460,6 +471,7 @@ function startTour(): void {
       },
       {
         element: "#fractal_presets",
+        onHighlightStarted: () => showTabFor("fractal_presets"),
         popover: {
           title: "Presets",
           description: "Jump to a built-in family — Mandelbrot, burning ship, magnet, and more.",
@@ -467,6 +479,7 @@ function startTour(): void {
       },
       {
         element: "#mode",
+        onHighlightStarted: () => showTabFor("mode"),
         popover: {
           title: "Colouring",
           description:
@@ -475,6 +488,7 @@ function startTour(): void {
       },
       {
         element: "#overlays-group",
+        onHighlightStarted: () => showTabFor("overlays-group"),
         popover: {
           title: "Overlays",
           description:
@@ -483,6 +497,7 @@ function startTour(): void {
       },
       {
         element: "#places",
+        onHighlightStarted: () => showTabFor("places"),
         popover: {
           title: "Places",
           description:
@@ -796,24 +811,32 @@ function withModalFocus(
       e.preventDefault();
     }
   };
-  return {
-    open() {
-      returnFocus = document.activeElement as HTMLElement | null;
-      rawOpen();
-      overlay.addEventListener("keydown", onKeydown);
-      releaseEscape?.(); // a second open without a close would otherwise stack two layers
-      releaseEscape = pushEscapeLayer(() => this.close());
-      initialFocus.focus();
-    },
-    close() {
-      overlay.removeEventListener("keydown", onKeydown);
-      releaseEscape?.();
-      releaseEscape = null;
-      rawClose();
-      if (returnFocus && typeof returnFocus.focus === "function") returnFocus.focus();
-      returnFocus = null;
-    },
+  // Declared as plain closures rather than object methods, and the Escape layer captures `close`
+  // directly — NOT `this.close`. With a method, `this` is whatever the call site supplies, and
+  // `byId("help-ref-btn").addEventListener("click", modal.open)` supplies the BUTTON: the layer
+  // then called `button.close()`, which throws. `escapeStack` consumes the key before invoking the
+  // layer, so the throw skipped the release and left a dead layer on top of the stack — after one
+  // visit to the keyboard reference, Escape closed nothing for the rest of the session (not the
+  // mobile sheet, not an expanded plot, not the σ view). Only the ✕ and the backdrop still worked.
+  // A detached method is a legitimate way to pass a handler, so the fix belongs here, where no call
+  // site can reintroduce it, rather than at the one that happened to do it. (Review follow-up.)
+  const close = (): void => {
+    overlay.removeEventListener("keydown", onKeydown);
+    releaseEscape?.();
+    releaseEscape = null;
+    rawClose();
+    if (returnFocus && typeof returnFocus.focus === "function") returnFocus.focus();
+    returnFocus = null;
   };
+  const open = (): void => {
+    returnFocus = document.activeElement as HTMLElement | null;
+    rawOpen();
+    overlay.addEventListener("keydown", onKeydown);
+    releaseEscape?.(); // a second open without a close would otherwise stack two layers
+    releaseEscape = pushEscapeLayer(close);
+    initialFocus.focus();
+  };
+  return { open, close };
 }
 
 /** Populate + wire the glossary modal, and set the module-level {@link openGlossary} opener
@@ -2855,7 +2878,7 @@ export function init(): void {
         el.replaceChildren();
         continue;
       }
-      const model = describeLegend(modeStr, legendSetName(view, plane));
+      const model = describeLegend(modeStr, legendSetName(view, plane), plane);
       renderLegend(el, model, palette, custom, rotation);
     }
   }
@@ -6226,9 +6249,18 @@ export function init(): void {
     dynamicalView.setPointRays(null);
 
     if (res.angles.length === 0 || !res.point) {
-      readout.textContent =
-        "No external ray lands near that point — it may be interior or exterior, or its rays have period above the search bound.";
-      showToast("No external ray found near that point.", "info");
+      // Two different answers wore the same sentence. "Nothing landed here" and "rays landed here
+      // but Newton could not resolve them" are not the same claim, and the second used to be
+      // reported as the first — or, worse, as a confident valence that omitted them. (Follow-up.)
+      readout.textContent = res.exact
+        ? "No external ray lands near that point — it may be interior or exterior, or its rays have period above the search bound."
+        : "≈ Rays land near that point, but none could be resolved: the ray tracer did not converge, so no valence is claimed. Zoom in and click closer to the boundary, or raise the search bound.";
+      showToast(
+        res.exact
+          ? "No external ray found near that point."
+          : "≈ Rays are present but unresolved — no valence claimed.",
+        "info",
+      );
       return;
     }
     const turns = res.angles.map((a) => a.p / a.q);
@@ -6237,12 +6269,19 @@ export function init(): void {
 
     const list = res.angles.map((a) => `${a.p}/${a.q}`).join(", ");
     const where = plane === "dyn" ? "ζ" : "c";
+    // `exact` false ⇒ an unresolved landing sits near this point, so the count is a LOWER BOUND and
+    // "not biaccessible" could be a false negative. Say ≥ and ≈ rather than printing a bare number:
+    // at the period-6 root c ≈ −1.28418 − 0.42710i the two co-landing rays are both unresolved, and
+    // the app read "Not biaccessible (valence 1)" about a point that is biaccessible.
+    const n = res.exact ? `${res.valence}` : `≥ ${res.valence}`;
     const bicc = res.biaccessible
-      ? `Biaccessible (valence ${res.valence}).`
-      : `Not biaccessible (valence ${res.valence}).`;
+      ? `Biaccessible (valence ${n}).`
+      : res.exact
+        ? `Not biaccessible (valence ${n}).`
+        : `≈ Biaccessibility undecided — at least one ray here could not be resolved.`;
     readout.textContent =
-      `${res.valence} ray${res.valence === 1 ? "" : "s"} land at ${where} = ${fmtPt(res.point)}: ` +
-      `θ ∈ {${list}}. ${bicc}`;
+      `${res.exact ? "" : "≈ "}${n} ray${res.valence === 1 && res.exact ? "" : "s"} land at ` +
+      `${where} = ${fmtPt(res.point)}: θ ∈ {${list}}. ${bicc}`;
     // On ∂M a component root's rays name a hyperbolic component — append its internal address (the
     // combinatorial GPS: rabbit 1-3 vs airplane 1-2-3). Both co-landing angles share it, so read the
     // first; a Misiurewicz point's rays are pre-periodic ⇒ no address (said honestly, not guessed).
@@ -6252,7 +6291,7 @@ export function init(): void {
         ? ` Internal address ${addr.address.join("-")} (period ${addr.period}, ν = ${formatKneading(addr.kneading)}). Tuning tower: ${formatTower(addr.address)}.`
         : " These rays are pre-periodic (a Misiurewicz point) — no internal address.";
     }
-    showToast(`${where} = ${fmtPt(res.point)} ← {${list}} (valence ${res.valence}).`, "info");
+    showToast(`${where} = ${fmtPt(res.point)} ← {${list}} (valence ${n}).`, "info");
   });
   // Symbolic console: strip an internal address to its kneading sequence + characteristic angles.
   const fmtAngleBits = (ang: { p: number; q: number }, period: number): string =>
@@ -6373,6 +6412,16 @@ export function init(): void {
       view.refreshOverlay();
     }
     updateProjectionNote(val);
+    // A projection REFUSES both deep-zoom kernels (WP9/R4), so `plot.perturbationActive` flips with
+    // this control — and both gates read it. Without re-running them, entering a projection with
+    // perturbation ticked left thirteen colouring modes disabled under "perturbation (deep zoom)
+    // renders escape / smooth colouring only" while the standard shader was in fact drawing; and
+    // LEAVING one was worse, because the kernel re-arms and draws `uMode = mode === 1 ? 1 : 0`, so a
+    // reader who had selected Orbit trap under the projection got plain escape time with the control
+    // still reading "Orbit trap" and no toast — the silent substitution WP8/S4 closed, reintroduced
+    // through a control WP8 never touched. (Review follow-up.)
+    updatePerturbationGating();
+    updateDerivativeGating();
   }
   byId("projection-mode").addEventListener("change", applyProjection);
   // --- serializing an active projection ------------------------------------------------------
@@ -6956,8 +7005,26 @@ export function init(): void {
   // highlight and no unapplied-edits hint on the select — so choosing "Herman ring" left the app
   // showing z²+c with nothing on screen saying why, which measured as the most surprising interaction
   // in the app. The button is gone from the markup; the select is the control. (WP1/U1.)
-  byId("fractal_presets").addEventListener("change", (event) => {
-    applyPreset((event.currentTarget as HTMLSelectElement).value as PresetName);
+  // The menu ACTS rather than showing state, and returns to its placeholder after each pick.
+  //
+  // WP1/U1 deleted the Apply button and left a bare `change` listener — but `change` does not fire
+  // when a reader re-picks the option already selected, so after editing `f` by hand, choosing the
+  // preset that was still showing did nothing at all, silently. That is verbatim the complaint U1
+  // exists to close ("choosing one used to leave the app unchanged with nothing on screen saying
+  // why"), in a narrower case, and the select's own tooltip was false there.
+  //
+  // It was never a state display in any case: pick "rabbit", drag c, and the menu still says
+  // "rabbit" while the app shows something else. Returning to the placeholder makes every pick a
+  // change, so every pick applies, and stops the control claiming to describe the current view.
+  // `reset_all` therefore reads the last preset APPLIED rather than the menu. (Review follow-up.)
+  let lastPreset: PresetName | null = null;
+  const presetSelect = byId<HTMLSelectElement>("fractal_presets");
+  presetSelect.addEventListener("change", () => {
+    const name = presetSelect.value;
+    if (name === "") return; // the placeholder
+    lastPreset = name as PresetName;
+    applyPreset(lastPreset);
+    presetSelect.value = ""; // so the SAME preset can be chosen again
   });
   byId("reset_all").addEventListener("click", () => {
     // Reset every option, including coloring + lighting (which presets don't carry).
@@ -7036,7 +7103,9 @@ export function init(): void {
     byId<HTMLInputElement>("sphere-light").checked = true; // HTML default
     applySphere();
     clearKeyframes();
-    applyPreset(byId<HTMLSelectElement>("fractal_presets").value as PresetName);
+    // With the menu on its placeholder, "reset" means the preset last APPLIED, or the app's own
+    // default when none has been — which is what the menu's first option used to supply.
+    applyPreset(lastPreset ?? "mandelbrot");
   });
   byId("print_param_space").addEventListener("click", () => {
     void runExport(
@@ -7275,6 +7344,9 @@ export function init(): void {
     const actions = byId("apply_all").closest(".inline-actions");
     if (actions instanceof HTMLElement) byId("pane-actions").append(actions);
     sidebarTabs = mountSidebarTabs(byId("sidebar-tablist"), byId("sidebar-panels"));
+    // `select` takes a member id and opens its owning tab WITHOUT moving focus, which is what the
+    // tour needs — `reveal` would fight driver.js for it.
+    showTabFor = (memberId) => sidebarTabs?.select(memberId);
     const strip = byId("active-settings");
     refreshActiveSettings = () =>
       renderActiveSettings(strip, (control) => sidebarTabs?.reveal(control));
@@ -7292,6 +7364,12 @@ export function init(): void {
   // did not move. (WP7/S6, review 2026-09-16.)
   window.addEventListener("hashchange", () => {
     if (location.hash === lastHashApplied) return; // our own write, or the same link twice
+    // An EMPTY fragment is not a link that failed to parse — it is the absence of one, and the two
+    // need different answers. Pressing Back after applying a permalink clears the hash, and the app
+    // used to warn that the reader's (non-existent) link carried no Complex Dynamics view. Nothing
+    // is applied either way; only the sentence was wrong. (Review follow-up.)
+    const hash = location.hash.replace(/^#/, "");
+    if (hash === "") return;
     if (!loadFromHash()) showToast("That link carries no Complex Dynamics view.", "warn");
   });
   refreshProfileLabel(); // a shared view usually diverges from a named profile → "Custom…"

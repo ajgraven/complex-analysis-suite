@@ -49,6 +49,8 @@ export class JuliaMetricsClient {
     for (const done of w) done();
   }
 
+
+
   constructor() {
     this.client = createComputeClient<JuliaMetricsRequest, JuliaImageMetrics>({
       compute: runSync,
@@ -64,9 +66,30 @@ export class JuliaMetricsClient {
         const r = data as JuliaMetricsResponse;
         return { reqId: r.reqId, result: r.metrics, error: r.error };
       },
+      // The waiters are released by `onBusy(false)` below, not from here: a failure with a fresher
+      // request already queued is not the end of the wait either.
       onError: (message) => {
-        this.release();
         this.errorCb?.(message);
+      },
+      /**
+       * The client goes idle — nothing in flight, nothing queued — and THAT is what releases
+       * {@link settled}'s waiters.
+       *
+       * Releasing on delivery instead was wrong, because the client COALESCES: a request arriving
+       * while one is in flight is queued, and the in-flight one still delivers. So a delivery can be
+       * an answer to an OLDER question with a fresher request still behind it. That let "Copy
+       * properties" read rows measured at the previous c under a heading naming the current one —
+       * move c twice quickly, click Copy while the first measure is in flight, and the clipboard
+       * said `c = c₂` over c₁'s box dimension and pixel area. Exactly the attribution error
+       * `settled()` exists to prevent. (Review follow-up.)
+       *
+       * `busy()` cannot be read from inside the result callback — the worker path calls
+       * `setBusy(false)` AFTER `cb` and the synchronous path before it — but the TRANSITION is
+       * unambiguous on both. Releasing before the paint on the sync path is harmless: a promise
+       * continuation is a microtask, so a waiter always resumes after the rows have been written.
+       */
+      onBusy: (busy) => {
+        if (!busy) this.release();
       },
     });
   }
@@ -75,7 +98,6 @@ export class JuliaMetricsClient {
   request(req: JuliaMetricsRequest, cb: (m: JuliaImageMetrics) => void): void {
     this.client.request(req, (m) => {
       cb(m);
-      this.release();
     });
   }
 
