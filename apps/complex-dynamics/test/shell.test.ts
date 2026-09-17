@@ -1223,15 +1223,42 @@ describe("WP11/U10 — accessibility, asserted where the axe roster cannot look"
   });
 
   it("a suggestion's severity is not carried by colour alone", async () => {
+    // ⚠ This used to read the STATIC markup only — which hard-codes `role="img"
+    // aria-label="Warning"` — so it never showed a suggestion and never checked the claim it was
+    // written for: that the glyph and its label DIFFER by severity. Measured: disabling the whole
+    // hunk in `suggestions.ts` left it green, so an `info` suggestion announced as "Warning" would
+    // have shipped. It drives the engine now. (Review follow-up C.)
     await mount();
-    for (const id of ["param-suggestion", "dyn-suggestion"]) {
-      const icon = byId(id).querySelector(".suggestion-icon");
-      expect(icon, id).not.toBeNull();
-      expect(icon?.getAttribute("aria-hidden"), `${id} icon is not hidden from readers`).not.toBe(
-        "true",
-      );
-      expect((icon?.getAttribute("aria-label") ?? "").length, id).toBeGreaterThan(0);
-    }
+    const { SuggestionEngine } = await import("../src/ui/suggestions");
+    const engine = new SuggestionEngine("param-suggestion", "dyn-suggestion");
+    const icon = (): HTMLElement => {
+      const el = byId("param-suggestion").querySelector(".suggestion-icon");
+      if (!(el instanceof HTMLElement)) throw new Error("no suggestion icon");
+      return el;
+    };
+
+    let severity: "info" | "warn" = "warn";
+    engine.register(() => ({
+      id: "probe",
+      scope: "param" as const,
+      severity,
+      message: "probe",
+      actions: [],
+    }));
+
+    engine.evaluate();
+    expect(byId("param-suggestion").hidden, "the badge is showing").toBe(false);
+    const warnGlyph = icon().textContent;
+    const warnLabel = icon().getAttribute("aria-label");
+    expect(warnLabel).toBe("Warning");
+    expect(icon().getAttribute("aria-hidden")).not.toBe("true");
+
+    severity = "info";
+    engine.evaluate();
+    expect(icon().getAttribute("aria-label"), "an info suggestion is not announced as a warning").toBe(
+      "Tip",
+    );
+    expect(icon().textContent, "and the glyph differs too, not just the label").not.toBe(warnGlyph);
   });
 
   it("the onboarding card traps Tab and gives focus back, like every other dialog", async () => {

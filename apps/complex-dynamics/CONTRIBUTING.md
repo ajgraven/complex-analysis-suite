@@ -30,9 +30,13 @@ checks on every push and PR, plus a `browser` job for the real-WebGL2 GLSL harne
 Pure logic — the expression compiler (lexer/parser/evaluator), the df64
 primitives, transforms, presets — is unit-tested, and the shared GLSL is now checked in CI
 (the `@cas/gpu` dual-backend `browser` job runs the actual WebGL2 shaders against the JS
-backend). The app-level *composited* render still has no automated test, so **verify it by
-hand** in `pnpm dev`: both plots draw, dragging the `c` point updates the dynamical plane,
-panning/zoom/presets work, a deep zoom stays sharp, and export works.
+backend). The app-level *composited* render is now covered too — [`test/shell.test.ts`](test/shell.test.ts)
+drives the real `init()` under jsdom, and this app's own `pnpm test:browser` suite
+([`postAndCollar`](test/postAndCollar.browser.test.ts),
+[`renderRobustness`](test/renderRobustness.browser.test.ts)) drives a real `GLPlot` against a real
+WebGL2 context and reads pixels back. Neither replaces a look, so still **verify by hand** in
+`pnpm dev`: both plots draw, dragging the `c` point updates the dynamical plane, panning/zoom/presets
+work, a deep zoom stays sharp, and export works.
 
 ## How the renderer fits together
 
@@ -47,9 +51,9 @@ parses each into one AST and emits **two backends**:
 
 Both are written in terms of abstract complex ops (`cmul`, `cexp`, …). The GLSL
 stdlib supplies those ops in **two precisions** behind the same names — single
-([`complexSingle.glsl.ts`](../../packages/gpu/src/complexSingle.glsl.ts)) and df64
-([`df64.glsl.ts`](../../packages/gpu/src/df64.glsl.ts) + [`complexDf64.glsl.ts`](../../packages/gpu/src/complexDf64.glsl.ts)) —
-plus a precision-agnostic derived layer ([`complexDerived.glsl.ts`](../../packages/gpu/src/complexDerived.glsl.ts)).
+([`complexSingle.glsl.ts`](../../packages/gpu/src/glsl/complexSingle.glsl.ts)) and df64
+([`df64.glsl.ts`](../../packages/gpu/src/glsl/df64.glsl.ts) + [`complexDf64.glsl.ts`](../../packages/gpu/src/glsl/complexDf64.glsl.ts)) —
+plus a precision-agnostic derived layer ([`complexDerived.glsl.ts`](../../packages/gpu/src/glsl/complexDerived.glsl.ts)).
 [`GLPlot`](src/render/glPlot.ts) compiles the single-precision program eagerly and
 the df64 one lazily and **asynchronously** (it can be huge), switching to df64 past
 a zoom threshold once it's ready — so the first deep zoom shows single precision and
@@ -67,8 +71,8 @@ stable and never flips mid-interaction; see the `render` / `applyRenderSize` /
    `packages/expr/src/complexJs.ts`, or the orbit will disagree with the shader. The
    `evaluate.ts` tests are the safety net.
 
-2. **df64 has a JS reference.** The df64 GLSL ([`df64.glsl.ts`](../../packages/gpu/src/df64.glsl.ts))
-   is a line-for-line transliteration of [`df64Ref.ts`](../../packages/gpu/src/df64Ref.ts),
+2. **df64 has a JS reference.** The df64 GLSL ([`df64.glsl.ts`](../../packages/gpu/src/glsl/df64.glsl.ts))
+   is a line-for-line transliteration of [`df64Ref.ts`](../../packages/gpu/src/glsl/df64Ref.ts),
    which is unit-tested. Edit the reference first, get the test passing, then port.
    Note the `* uOne` optimization barriers on the error-free transforms — without
    them the shader compiler reassociates the math and df64 silently collapses to
@@ -148,7 +152,7 @@ The richer instruments are **pure, unit-tested modules** consumed by `overlay.ts
 distance, plus `findNucleus`), [`farey.ts`](src/render/farey.ts) (bulb labels),
 [`rays.ts`](src/render/rays.ts) (external rays + `bulbRayAngles`),
 [`orbitPreview.ts`](src/render/orbitPreview.ts) (the hover preview),
-[`uniformize.ts`](src/render/uniformize.ts) (exterior-map Laurent coefficients of the filled
+[`uniformize.ts`](../../packages/dynamics/src/uniformize.ts) (exterior-map Laurent coefficients of the filled
 Julia set — any polynomial or rational map — and the multibrot, by exact recurrences, plus
 `reconstructBoundary`; with [`rational.ts`](../../packages/expr/src/rational.ts) splitting f over ℂ(z)), and
 [`src/state/places.ts`](src/state/places.ts) (curated locations). User-facing **jargon is
@@ -181,8 +185,11 @@ Worker** ([`juliaMetrics.worker.ts`](src/render/juliaMetrics.worker.ts) via
 `juliaProperties.computeJuliaImageMetrics`, with a synchronous fallback when workers are unavailable;
 and deep zoom past df64 uses the **perturbation** kernel (`PERTURBATION_FRAGMENT_SHADER`) with a
 double-double reference orbit ([`perturbation.ts`](src/render/perturbation.ts)) and **rebasing** for
-glitch-free renders (a per-pixel BLA table, [`bla.ts`](src/render/bla.ts), is staged for future
-iteration-skipping but not yet wired to the kernel).
+glitch-free renders, accelerated by the per-pixel **BLA** skip-table: [`bla.ts`](src/render/bla.ts)
+builds and packs the binary tree, `glPlot.ensureBLA` uploads it as a float texture, and the shader's
+`fetchBLA`/`lookupBLA` traverse it per fragment (`traverseBLA` + [`bla.test.ts`](test/bla.test.ts)
+are the CPU mirror). The kernel also takes any additive-c polynomial `P(z) + B·c`, not only z²+c
+([`perturbationPoly.ts`](src/render/perturbationPoly.ts)).
 
 ### Add a control input
 

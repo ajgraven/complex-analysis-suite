@@ -117,7 +117,16 @@ test scaffold.
 >
 > **I2.** The disqualifier is "the tail closes up on a cycle", since a rotation domain contains no
 > periodic orbit — not the rationality test sketched here, whose resolution is worse than the
-> rotation number's own measurement error (0.621 measured for a golden 0.618). The review's tongue
+> rotation number's own measurement error. **⚠ The number first given for that was wrong, and the
+> correction is recorded rather than quietly swapped** (review follow-up C): this said "0.621
+> measured for a golden 0.618", which the suite's own `< 1e-3` assertion makes impossible —
+> re-measured through the shipped code, the golden case returns **0.618033972**, 1.7e-8 out. The
+> conclusion survives on the OTHER end of the same measurement, which is where it belonged: on the
+> parameters that are rejected, the rotation number read off the orbit differs from τ by **7.4e-3**
+> (τ = 2/7), **9.3e-3** (τ = 1/4) and **4.0e-2** (τ = 0.1) — because there the orbit is falling into a
+> cycle and the number is not being measured on an invariant curve at all. An error of that size
+> swamps any rationality test at a useful denominator bound, while "does the tail close up?" decides
+> the same question directly. The review's tongue
 > list was also wrong: measured, τ = 0, ½, ⅓ and **1/√2** close up (periods 1, 2, 3, 7 — the last an
 > Arnold tongue at an _irrational_ τ), while τ = ¼, 0.1 and 2/7 do **not** within 1500 iterations and
 > are therefore asserted in neither direction.
@@ -832,8 +841,10 @@ structure to learn, and the sheet opens at 50 % height with a drag handle to ful
     test pastes a `QD_TO_CD` golden payload and asserts σ mode entered.
 - **U8.** `overlay.ts` label placement: flip the label to the left of the point when it would clip
   the right edge, and clamp vertically; the Herman preset's parameter plane opens on a view where
-  the tongues are visible (`center [0.25, 0], zoom 2`) with `nplot` small enough that the polyline
-  stays in frame; a custom `f` legend says "in the set" not "the set".
+  the tongues are visible (`center [0.5, 0], zoom 2` — **corrected in review follow-up C from
+  `[0.25, 0]`**, which framed one period offset by a quarter so τ = 0.6152 sat 86 % across; the
+  comment beside it also had the direction, the magnitude and the centre wrong) with `nplot` small
+  enough that the polyline stays in frame; a custom `f` legend says "in the set" not "the set".
 - **U11 duplication.** Extract `snapCAndReinspect(c)` (five copies → one), `drawSchwarzOverlays(ctx,
 opts)` (six → one, export passes `{hover:false}`), and fold `applyPreset` into `applyChanges` with a
   `source` argument. Pure refactors, each proven a no-op the M6.1 way: dump the rail/strip before and

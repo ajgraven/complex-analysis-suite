@@ -34,7 +34,14 @@ export interface ComputeClientOptions<Req, Res> {
    * shows "computing…" keeps showing it for ever. That is a real symptom: Complex Dynamics' metrics
    * worker already posts `{ reqId, error }` on a throw, and the Julia-properties rows sat at
    * "measuring…" indefinitely with no message. Optional, and omitting it keeps exactly the previous
-   * behaviour — the other consumers pass no handler and are unaffected.
+   * behaviour.
+   *
+   * (There is exactly ONE consumer of `createComputeClient` today — Complex Dynamics'
+   * `juliaMetricsClient`. This used to say "the other consumers pass no handler and are
+   * unaffected", which reads as a compatibility claim across several apps; the other `@cas/ui`
+   * adopters import `runWithFatalBoundary` / `attachCanvasA11y` / `mountCanvas` / `mountNavHeader`
+   * / `drawDirectionTicks` and never this. The optionality is still the right contract for the next
+   * consumer; the breadth was not a fact.)
    */
   readonly onError?: (message: string) => void;
   /** Defer the synchronous fallback to a macrotask so the busy state can paint first (default true). */

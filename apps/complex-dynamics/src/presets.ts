@@ -223,11 +223,18 @@ export const paramPresets: Record<PresetName, Preset> = {
     nplot: "6",
     escape: "abs(z)>1000",
     mode: "period",
-    // Opened at 1.1× on [0.5, 0], which frames the parameter c but not the TONGUES — the structure
-    // the preset exists to show. Widened to 2 units across about the origin so the rotation-number
-    // tongues along the unit interval are in frame on arrival. (WP10/U8, review 2026-09-16.)
+    // Framed on EXACTLY ONE PERIOD, τ ∈ [0, 1]. `c` enters only through `e^{2πi·c}`, so the parameter
+    // plane is 1-periodic in Re c and one unit interval is a fundamental domain — which is where the
+    // rotation-number tongues live. `plotRange` is `centre ± 1/zoom`, so this is x ∈ [0, 1] and the
+    // preset's own τ = 0.6152 sits 62 % across.
+    //
+    // ⚠ The comment here previously read "widened to 2 units across about the origin", which was
+    // wrong in direction, magnitude AND centre: zoom 2 NARROWS the frame from the old 1.818 units to
+    // 1.0, and the old centre [0.25, 0] gave τ ∈ [−0.25, 0.75] — still one period, but offset, so a
+    // quarter of the frame duplicated the right-hand quarter by periodicity and τ sat at 86 %, near
+    // the edge. The framing is corrected to the one the sentence describes. (Review follow-up C.)
     zoom: 2,
-    center: [0.25, 0],
+    center: [0.5, 0],
     criticalPoint: [0.5470656, 0],
   },
 };

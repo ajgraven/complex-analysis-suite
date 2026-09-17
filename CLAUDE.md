@@ -42,7 +42,9 @@ Read the docs in this order before making changes: [`docs/VISION.md`](docs/VISIO
    `sym-core.mjs` separate.)
 7. **Package scope `@cas/*`** (internal, `workspace:*`, not published).
 8. **Topology:** separate apps + a **unified menu** (a launcher page in `apps/launcher`,
-   plus a shared nav header later). **No** unified single-page shell.
+   plus a shared nav header later — that clause is **WITHDRAWN by ADR-0044**; the launcher is the
+   unified menu and no in-app header replaces it, with the removal staged as N1–N6). **No**
+   unified single-page shell.
 9. **Correspondence tool** is a **separate app** (`apps/correspondences`), quadratic-first
    (deltoid + circle-and-cardioid), with the **deltoid** as the first ground-truth
    milestone.
@@ -95,13 +97,15 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **553 test files / 5721 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **560 test files / 5895 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
-separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` plus
-three of Contour-Integration's specs are the only jsdom ones — `test/shell.test.ts`,
-`test/pen.test.ts` and `test/drillShell.test.ts`, each per-file through a
-`// @vitest-environment jsdom` docblock, because all three reach `src/shell/app.ts`. **Never pipe the gate through `tail` or `head`** — doing so has truncated
+separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and several suites are
+**jsdom** rather than node, each per-file through a `// @vitest-environment jsdom` docblock —
+`packages/ui`; three of Contour-Integration's (`shell`, `pen`, `drillShell`, all reaching
+`src/shell/app.ts`); three of Complex-Dynamics' (`shell`, `escapeStack`, `gradientKeyboard`, reaching
+`src/main.ts`); and ~34 of Quadrature-Domains' DOM specs under `vitest/`, despite that project's
+config saying `environment: "node"`. **Never pipe the gate through `tail` or `head`** — doing so has truncated
 real failures before.
 
 Dev servers go through `.claude/launch.json` (one entry per app, each with its port), not a bare
@@ -281,8 +285,9 @@ as a devDependency only, for the ADR-0026 σ drift-guard). **U8 is now done** �
 (`a11y` in `ci.yml` → `scripts/a11y-audit.mjs` + `scripts/a11y-baseline.json`, or `pnpm a11y`) audits all nine
 built app pages in headless Chromium against a per-page baseline, surfacing a11y *regressions* as `::warning::`
 annotations + a step summary without ever blocking a merge (publishing stays gated only on lint/typecheck/test).
-Still open: **U7** (wire the nav header's hand-off picker to `@cas/interchange`'s known map kinds — the one place
-cross-app interop becomes user-visible). Two correctness guards also landed this arc: a **convention-neutral**
+**U7 is CLOSED as withdrawn, not done** (ADR-0044): it would have wired the nav header's hand-off picker to
+`@cas/interchange`'s known map kinds, and the header itself is withdrawn — a cross-app hand-off belongs in the
+panel that owns the state instead. Two correctness guards also landed this arc: a **convention-neutral**
 scan over `@cas/core` (ADR-0006 AI-2) and a **Schwarz σ differential** guard between QD's engine and `@cas/schwarz`
 (ADR-0026 AI-2).
 
