@@ -11,11 +11,10 @@
 // own readers. A panel that derived a number would be a second place for the app to say what a
 // record comes to, and the first time the two disagreed the more decorative one would be the one on
 // screen.
-import { targetText } from "../families/describe.js";
 import { FAMILIES } from "../families/index.js";
 import { citationLine } from "../families/describe.js";
-import { closedFormLatex, targetLatex } from "../families/latex.js";
-import { TAXONOMY_SECTIONS, type Family, type Golden, type TaxonomySection } from "../families/schema.js";
+import { identityLatex, identityText } from "../families/latex.js";
+import { TAXONOMY_SECTIONS, type Family, type TaxonomySection } from "../families/schema.js";
 import type { ShellState } from "./state.js";
 import { h, patch, type Child, type Desc } from "./dom.js";
 import { math, mathText } from "./math.js";
@@ -118,25 +117,6 @@ export function frontDoorState(current: ShellState, recordId: string): ShellStat
     drill: null,
     workedExample: false,
   };
-}
-
-/**
- * The identity a card leads with: the target at its first fixture, and what it comes to.
- *
- * `null` on the right where the record's own claim is not an expression — `closedFormLatex` returns
- * `null` for the two families whose general form is a SENTENCE about several unknowns — and the card
- * then prints the integral alone rather than an `=` with nothing after it.
- */
-function identityLatex(family: Family, golden: Golden): string {
-  const target = family.targets[0];
-  const lhs = targetLatex(target, { at: golden.params });
-  const rhs = closedFormLatex(family, golden).atFixture;
-  return rhs === null ? lhs : `${lhs} = ${rhs}`;
-}
-
-/** The same identity as a sentence, for the accessible name of the formula. */
-function identityText(family: Family, golden: Golden): string {
-  return `${targetText(family.targets[0])} = ${golden.value}`;
 }
 
 /**

@@ -25,42 +25,12 @@ import { drillMask } from "../drillPanel.js";
 import { fmtApprox, fmtNum } from "../format.js";
 import { h, type Child, type Desc } from "../dom.js";
 import { math, mathText } from "../math.js";
-import { card, nothing, type Card, type CardContext } from "./card.js";
+import { card, disclosure, nothing, type Card, type CardContext } from "./card.js";
 
 /** `=` / `≤` / `≈` / `⚠` as the square stamp `theme.css` draws. */
 const badge = (level: string, key = "b"): Desc =>
   h("span", { key, class: "badge", "data-level": level }, level);
 
-/**
- * A disclosure whose default is a COMPUTED fact and whose explicit state is the reader's.
- *
- * `session.open[id]` is tri-state on purpose: `undefined` is "never touched", which is what lets the
- * hypothesis table open itself the moment a row fails and STAY closed afterwards if the reader has
- * shut it. A boolean with a false default cannot express that, and one with a true default would
- * re-open on every recompute.
- */
-function disclosure(
-  ctx: CardContext,
-  id: string,
-  byDefault: boolean,
-  summary: Child,
-  ...body: Child[]
-): Desc {
-  const open = ctx.session.open[id] ?? byDefault;
-  return h(
-    "details",
-    {
-      key: `d:${id}`,
-      open,
-      onToggle: (e: Event) => {
-        const el = e.target as HTMLDetailsElement;
-        if (el.open !== (ctx.session.open[id] ?? byDefault)) ctx.actions.setOpen(id, el.open);
-      },
-    },
-    h("summary", { key: "s" }, summary),
-    ...body,
-  );
-}
 
 /** Everything the card reads, gathered once — a record's from its run, the sandbox's from `analyse`. */
 interface Facts {

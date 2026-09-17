@@ -282,14 +282,14 @@ export const d6DogboneInverseSqrt: Family = {
       numeric: 2.2214414690791831,
       verifiedTo: 6e-16,
       method:
-        "(a) tanh-sinh on [-1,1] with sqrt(1-x^2) from the transform's own cancellation-free endpoint distances; (b) x = sin(theta), which turns the integral into int_{-pi/2}^{pi/2} dtheta/(sin^2 theta + a^2), a smooth periodic integrand and a tier-A unit-circle problem. The two agree to <= 8e-16",
+        "two routes: tanh-sinh on $[-1,1]$, with $\\sqrt{1-x^2}$ taken from the transform's own cancellation-free endpoint distances; and $x = \\sin\\theta$, which turns the integral into $\\int_{-\\pi/2}^{\\pi/2} d\\theta/(\\sin^2\\theta + a^2)$, a smooth periodic integrand and a unit-circle problem of the first tier. The two agree to $8\\times10^{-16}$ or better",
     },
     {
       params: { a: 2 },
       value: "pi/(2*sqrt(5))",
       numeric: 0.70248147310407261,
       verifiedTo: 8e-16,
-      method: "as above; 1 + a^2 = 5, so the residue's modulus is 1/sqrt5 and no rational factor hides a dropped logarithm",
+      method: "as above; $1 + a^2 = 5$, so the residue's modulus is $1/\\sqrt5$ and no rational factor hides a dropped logarithm",
     },
     {
       params: { a: 0.5 },
@@ -297,7 +297,7 @@ export const d6DogboneInverseSqrt: Family = {
       numeric: 5.6198517848325809,
       verifiedTo: 4e-16,
       method:
-        "as above; 1 + a^2 = 5/4 is the fixture where the modulus needs BOTH a numerator and a denominator prime - ln(5/4) = ln5 - 2ln2 - so a basis keyed by the rational rather than by primes would carry it as one uncancelled atom",
+        "as above; $1 + a^2 = 5/4$, where the modulus needs both a numerator and a denominator prime — $\\ln(5/4) = \\ln 5 - 2\\ln 2$ — so a basis keyed by the rational rather than by the primes would carry it as one uncancelled atom",
     },
     {
       params: { a: 3.7 },
@@ -305,7 +305,7 @@ export const d6DogboneInverseSqrt: Family = {
       numeric: 0.22153239909292310,
       verifiedTo: 6e-16,
       method:
-        "as above; 1 + a^2 = 1469/100 = (13 * 113)/(2^2 * 5^2), the fixture that exercises the trial division rather than a prime anyone would have guessed",
+        "as above; $1 + a^2 = 1469/100 = (13\\cdot113)/(2^2\\cdot5^2)$, which exercises the trial division rather than a prime anyone would have guessed",
     },
   ],
 };

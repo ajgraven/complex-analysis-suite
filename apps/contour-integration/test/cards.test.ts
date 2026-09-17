@@ -548,6 +548,57 @@ describe("the Target card", () => {
     expect(opt.textContent ?? "").toContain("not executable");
   });
 
+  it("leads with the identity — the target AND what it comes to", () => {
+    // The record's own statement, which is what the front door's cards lead with too. It is not a
+    // verdict: the right rail says whether the argument establishes it, and this line says what it
+    // is. `= ` appears in the typeset form and in the spoken one, which are a pair.
+    const { host } = rail(gallery("circle-linear-cos"));
+    const line = q(host, '[data-card="target"] .targetLine .math');
+    expect(line.getAttribute("aria-label") ?? "").toContain("= 2*pi/sqrt(3)");
+    expect(line.textContent ?? "", "the typeset identity has no equals sign").toContain("=");
+  });
+
+  it("does NOT append the answer at a VARIANT fixture, where it belongs to another quantity", () => {
+    // **`golden.value` belongs to the record's first target.** A5's variant is the half-range
+    // corollary, worth `pi/4`, under a target written `\int_{-\infty}^{\infty}` — worth `pi/2`.
+    // Appending the fixture's value there would print an identity that is simply false.
+    const variantAt = (id: string): number =>
+      (recordOf(gallery(id))?.family.golden ?? []).findIndex((g) => g.params.halfRange === true);
+    const k = variantAt("semicircle-order2");
+    expect(k, "A5 no longer carries its half-range variant").toBeGreaterThan(0);
+    const plain = q(rail(gallery("semicircle-order2", 0)).host, '[data-card="target"] .targetLine .math');
+    const variant = q(rail(gallery("semicircle-order2", k)).host, '[data-card="target"] .targetLine .math');
+    expect(plain.getAttribute("aria-label") ?? "").toContain("= pi/2");
+    expect(variant.getAttribute("aria-label") ?? "", "the variant's value is on the wrong integral").not.toContain("=");
+  });
+
+  it("says what the argument turns on — the record's own one line, under the contour", () => {
+    // `description.point` is the second line of every front-door card and was on no rail card at
+    // all: the Target card named the contour and then went straight to the citations, so the one
+    // sentence saying why THIS contour was chosen was reachable only from the picker.
+    for (const id of ["circle-linear-cos", "mellin-keyhole", "indented-sinc"]) {
+      const record = recordOf(gallery(id));
+      if (record === null) throw new Error(`no ${id}`);
+      const said = (q(rail(gallery(id)).host, '[data-card="target"]').textContent ?? "").replace(/\s+/g, " ");
+      const want = record.family.description.point.split("$")[0].trim().slice(0, 25);
+      expect(want.length, `${id}: the point starts with a formula, so this asserts nothing`).toBeGreaterThan(8);
+      expect(said, `${id}: the card does not say what the argument turns on`).toContain(want);
+    }
+  });
+
+  it("folds away HOW THE VALUE WAS CHECKED, shut, carrying this fixture's own method", () => {
+    // The capability the rebuild dropped: a value with no method is an assertion, and the shell
+    // rendered the field nowhere for five milestones. Shut by default — it is not what a reader
+    // needs first — and it is the METHOD of the fixture on screen, not of the record's first.
+    const { host } = rail(gallery("circle-linear-cos", 1));
+    const det = q<HTMLDetailsElement>(host, '[data-card="target"] details');
+    expect(det.open, "the method disclosure opens itself").toBe(false);
+    expect(q(det, "summary").textContent ?? "").toBe("How the value was checked");
+    const said = (det.textContent ?? "").replace(/\s+/g, " ");
+    expect(said, "not the fixture's own method").toContain("splits over");
+    expect(said, "the record's first method, not this fixture's").not.toContain("reciprocal pair");
+  });
+
   it("shows the picker on the fixture the app is ACTUALLY running", () => {
     const { host } = rail(gallery("circle-linear-cos", 1));
     expect(q<HTMLSelectElement>(host, '[data-card="target"] select').value).toBe("1");
@@ -560,7 +611,14 @@ describe("the Target card", () => {
     const record = recordOf(state);
     if (record === null) throw new Error("no record");
     const { host } = rail(state);
-    const shown = q(host, '[data-card="target"] .targetLine .math').getAttribute("aria-label") ?? "";
+    // **Both halves of the pair.** `aria-label` is the spoken form and KaTeX's own `<annotation>`
+    // carries the TeX it was given, so this reads the typeset form too — measured by a mutant that
+    // dropped the bindings from the LATEX alone and passed, leaving the picture in symbols and the
+    // accessible name in numbers.
+    const node = q(host, '[data-card="target"] .targetLine .math');
+    const shown =
+      `${node.getAttribute("aria-label") ?? ""} ${node.querySelector("annotation")?.textContent ?? ""}`;
+    expect(node.querySelector("annotation"), "no typeset source to read").not.toBeNull();
     const bound = Object.entries(record.golden.params).filter(([, v]) => typeof v === "number");
     expect(bound.length, "this record binds nothing, so the test asserts nothing").toBeGreaterThan(0);
     for (const [name] of bound) {

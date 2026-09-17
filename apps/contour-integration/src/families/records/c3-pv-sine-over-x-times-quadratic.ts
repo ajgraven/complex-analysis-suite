@@ -234,7 +234,7 @@ export const c3PvSineOverXTimesQuadratic: Family = {
       numeric: 1.9858653037988714,
       verifiedTo: 2e-16,
       method:
-        "BOTH mechanisms: the enclosed pole at i contributes 2πi·Res = −iπ/e and the indented pole at 0 contributes −iπ·Res = −iπ, and Im of their difference is π(1 − 1/e). Independently verified in research two ways — (a) half-period decomposition of the even integrand with a repeated-averaging tail, and (b) direct composite Gauss–Legendre to x = 2000 with an accelerated oscillatory tail — identical to all 17 digits; contour bookkeeping checked separately with the indentation measured at (0, −3.1415925) = −iπ",
+        "both mechanisms at once: the enclosed pole at $i$ contributes $2\\pi i\\operatorname{Res} = -i\\pi/e$ and the indented pole at 0 contributes $-i\\pi\\operatorname{Res} = -i\\pi$, and the imaginary part of their difference is $\\pi(1 - 1/e)$. Verified independently two ways — half-period decomposition of the even integrand with a repeated-averaging tail, and composite Gauss–Legendre to $x = 2000$ with an accelerated oscillatory tail — identical to all seventeen digits; the contour bookkeeping was checked separately, with the indentation measured at $(0, -3.1415925) = -i\\pi$",
     },
     {
       params: { b: 2 },
@@ -242,7 +242,7 @@ export const c3PvSineOverXTimesQuadratic: Family = {
       numeric: 0.6791060805005392,
       verifiedTo: 1e-15,
       method:
-        "b ≠ 1 separates the 1/b² prefactor from the e^{−b} exponent, which at b = 1 coincide in a way that would hide a confusion between them",
+        "$b \\neq 1$ separates the $1/b^2$ prefactor from the $e^{-b}$ exponent, which coincide at $b = 1$ in a way that would hide a confusion between them",
     },
   ],
 };

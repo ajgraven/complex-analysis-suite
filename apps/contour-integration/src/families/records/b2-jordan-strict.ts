@@ -200,7 +200,7 @@ export const b2JordanStrict: Family = {
       numeric: 1.1557273497909217,
       verifiedTo: 1e-15,
       method:
-        "Res(z e^{iz}/(1+z²), i) = i e^{−1}/(2i) = e^{−1}/2 exactly in the exponential basis, so 2πi·Res = iπ/e and the IMAGINARY part is the target; cross-checked against a small-circle quadrature (0.183939720585720) and the contour quadrature to 7.7e-16 relative",
+        "$\\operatorname{Res}(z e^{iz}/(1+z^2), i) = ie^{-1}/(2i) = e^{-1}/2$ exactly in the exponential basis, so $2\\pi i\\operatorname{Res} = i\\pi/e$ and the imaginary part is the target; cross-checked against a small-circle quadrature ($0.183939720585720$) and the contour quadrature to $7.7\\times10^{-16}$ relative",
     },
     {
       params: { companion: "re" },
@@ -209,7 +209,7 @@ export const b2JordanStrict: Family = {
       numeric: 0,
       verifiedTo: 1e-14,
       method:
-        "the free companion ∫_ℝ x cos x/(1+x²) dx = Re(iπ/e) = 0 — the integrand is odd AND the integral converges (Dirichlet), so this is a genuine zero, not just a symmetric-limit zero",
+        "the free companion $\\int_{\\mathbb{R}} x\\cos x/(1+x^2)\\,dx = \\operatorname{Re}(i\\pi/e) = 0$ — the integrand is odd and the integral converges (Dirichlet), so this is a genuine zero rather than a symmetric-limit one",
     },
   ],
 };

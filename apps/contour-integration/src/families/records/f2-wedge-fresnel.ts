@@ -270,14 +270,14 @@ export const f2WedgeFresnel: Family = {
       numeric: 0.62665706865775006,
       verifiedTo: 8.9e-16,
       method:
-        "PRIMARY, handling the conditional convergence honestly: split at the sign changes x_k = √((k+½)π) into a strictly alternating series of smooth 80-pt Gauss–Legendre panels, then Cohen–Rodriguez Villegas–Zagier acceleration over 140 terms. INDEPENDENT CROSS-CHECK: 80-panel-per-oscillation quadrature to X = 40 plus the 5-term asymptotic tail from repeated integration by parts of ∫_{X²}^∞ cos u·u^{−1/2}/2 du (rel 2.4e-13); and at X = 60 (rel 5.0e-13).",
+        "the primary route handles the conditional convergence honestly: split at the sign changes $x_k = \\sqrt{(k+\\tfrac12)\\pi}$ into a strictly alternating series of smooth 80-point Gauss–Legendre panels, then Cohen–Rodriguez Villegas–Zagier acceleration over 140 terms. Independently: 80 panels per oscillation out to $X = 40$, plus the five-term asymptotic tail from repeated integration by parts of $\\int_{X^2}^{\\infty}\\cos u\\cdot u^{-1/2}/2\\,du$ (relative $2.4\\times10^{-13}$), and the same at $X = 60$ (relative $5.0\\times10^{-13}$)",
     },
     {
       params: { n: 3 },
       value: "gamma(4/3)*cos(pi/6)",
       numeric: 0.77334294207799015,
       verifiedTo: 7.2e-16,
-      method: "alternating + CVZ, exercising the general n form where cos(π/(2n)) ≠ sin(π/(2n))",
+      method: "the alternating series with the same acceleration, exercising the general $n$ form where $\\cos(\\pi/(2n)) \\neq \\sin(\\pi/(2n))$",
     },
   ],
 };

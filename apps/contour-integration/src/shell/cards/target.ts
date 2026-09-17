@@ -8,14 +8,20 @@
 // reading "—" forever teaches a reader the app has a target it is failing to find.
 import { fixtureLabel, isVariant } from "../../families/describe.js";
 import { citationLine } from "../../families/describe.js";
-import { targetLatex } from "../../families/latex.js";
+import { identityLatex, identityText, targetLatex } from "../../families/latex.js";
 import { h } from "../dom.js";
 import { math, mathText } from "../math.js";
-import { card, nothing, type Card } from "./card.js";
+import { card, disclosure, nothing, type Card } from "./card.js";
 
-export const targetCard: Card = ({ state, resolution, actions }) => {
+export const targetCard: Card = (ctx) => {
+  const { state, resolution, actions } = ctx;
   if (resolution.kind !== "gallery") return card("target", nothing("The sandbox has no record."));
   const { family, golden } = resolution;
+  // **The answer belongs to the FIRST target, and only at a fixture that computes it.** A variant
+  // fixture computes something else — A5's half-range corollary is `π/4` under a target written
+  // `\int_{-\infty}^{\infty}` — so appending `golden.value` there would print a false identity.
+  // The picker already says what a variant is; the line below says the integral alone.
+  const variant = isVariant(family, golden);
 
   return card(
     "target",
@@ -30,7 +36,9 @@ export const targetCard: Card = ({ state, resolution, actions }) => {
       h(
         "div",
         { key: `t${i}`, class: "targetLine" },
-        math(targetLatex(t, { at: golden.params }), { display: true, key: "m" }),
+        i === 0 && !variant
+          ? math(identityLatex(family, golden), { display: true, key: "m", label: identityText(family, golden) })
+          : math(targetLatex(t, { at: golden.params }), { display: true, key: "m" }),
         t.convergence === "absolute"
           ? null
           : h(
@@ -69,6 +77,8 @@ export const targetCard: Card = ({ state, resolution, actions }) => {
     ),
 
     h("p", { key: "contour", class: "small" }, ...mathText(family.description.contour, "dc")),
+    // What the argument turns ON — the record's own one line, and the front door's second line.
+    h("p", { key: "point", class: "muted small" }, ...mathText(family.description.point, "dp")),
     h(
       "ul",
       { key: "cites", class: "cites" },
@@ -78,6 +88,19 @@ export const targetCard: Card = ({ state, resolution, actions }) => {
         // delimiters. Found by the sweep that asserts no `$` reaches a reader.
         h("li", { key: `c${i}`, class: "muted small" }, ...mathText(citationLine(c), `c${i}`)),
       ),
+    ),
+
+    // **How the value was checked** — M8 step 2.2, and a capability the rebuild had dropped: the old
+    // shell folded this away under "how the golden value was verified" and `shell2` rendered it
+    // nowhere, so a reader had the record's answer and no way to ask what stands behind it. A value
+    // with no method is an assertion, which is the whole reason the field is required; it is still
+    // not what a reader needs first, so it folds.
+    disclosure(
+      ctx,
+      "target:method",
+      false,
+      "How the value was checked",
+      h("p", { key: "m", class: "muted small" }, ...mathText(golden.method, "gm")),
     ),
   );
 };

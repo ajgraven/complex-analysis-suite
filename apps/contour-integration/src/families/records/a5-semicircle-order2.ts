@@ -194,7 +194,7 @@ export const a5SemicircleOrder2: Family = {
       numeric: 1.5707963267948966,
       verifiedTo: 1e-14,
       method:
-        "exact residue by the order-2 derivative formula, cross-checked by the Laurent series in w = z−i (which needs no factorial) and by a small-circle quadrature at r = 1e-4",
+        "the exact residue by the order-2 derivative formula, cross-checked by the Laurent series in $w = z - i$, which needs no factorial, and by a small-circle quadrature at $r = 10^{-4}$",
     },
     {
       params: { halfRange: true },
@@ -203,7 +203,7 @@ export const a5SemicircleOrder2: Family = {
       numeric: 0.78539816339744828,
       verifiedTo: 1e-14,
       method:
-        "the even-integrand half-range corollary ∫₀^∞ = ½∫_ℝ, guarded by traps.half-range-requires-even",
+        "the half-range corollary $\\int_0^{\\infty} = \\tfrac12\\int_{\\mathbb{R}}$, which holds because the integrand is even",
     },
   ],
 };

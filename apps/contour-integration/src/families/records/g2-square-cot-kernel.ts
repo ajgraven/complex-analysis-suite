@@ -233,28 +233,28 @@ export const g2SquareCotKernel: Family = {
       numeric: 4.2647306427126592,
       verifiedTo: 5.8e-15,
       method:
-        "direct summation to n = 200000 plus a 4-term Euler–Maclaurin tail; and independently, the engine's own contour quadrature over the four sides of Γ_N",
+        "direct summation to $n = 200\\,000$ plus a four-term Euler–Maclaurin tail; and independently, the engine's own contour quadrature over the four sides of $\\Gamma_N$",
     },
     {
       params: { a: 1 },
       value: "pi*coth(pi)",
       numeric: 3.1533480949371619,
       verifiedTo: 8.5e-15,
-      method: "same",
+      method: "the same summation and the same contour quadrature, at $a = 1$",
     },
     {
       params: { a: 2.3 },
       value: "(pi/a)*coth(pi*a)",
       numeric: 1.3659112958955153,
       verifiedTo: 2.0e-15,
-      method: "same",
+      method: "the same summation and the same contour quadrature, at $a = 2.3$",
     },
     {
       params: { a: 0.2 },
       value: "(pi/a)*coth(pi*a)",
       numeric: 28.20641417901556,
       verifiedTo: 1.7e-14,
-      method: "same — small a pushes ±ia close to the integer 0 and is the conditioning stress case",
+      method: "the same two checks at $a = 0.2$, where the small $a$ pushes $\\pm ia$ close to the integer 0 — the conditioning stress case",
     },
     {
       // A VARIANT: `sided` is no parameter of this family, so the loader reads it as selecting an
@@ -267,7 +267,7 @@ export const g2SquareCotKernel: Family = {
       value: "((pi/a)*coth(pi*a) - 1/a^2)/2",
       numeric: 1.2434764324674408,
       verifiedTo: 0,
-      method: "direct one-sided summation plus the same Euler–Maclaurin tail; exact float agreement",
+      method: "direct one-sided summation plus the same Euler–Maclaurin tail; exact agreement in float64",
     },
   ],
 };

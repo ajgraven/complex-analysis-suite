@@ -9,7 +9,7 @@
 // The Greek-letter convention and the printing itself live in `kernel/exprLatex.ts`, whose second
 // consumer is the ledger's own exact claims.
 import type { Family, FamilyTarget, Golden } from "./schema.js";
-import { closedFormClaim, contourIntegrandExpr } from "./describe.js";
+import { closedFormClaim, contourIntegrandExpr, targetText, withParams } from "./describe.js";
 import { latexOf, printLatex } from "../kernel/exprLatex.js";
 
 export { latexOf };
@@ -21,16 +21,6 @@ function boundLatex(x: string): string {
   return latexOf(x) ?? x;
 }
 
-/** Substitute a fixture's bindings into an expression before printing it. */
-function withParams(src: string, params: Golden["params"] | undefined): string {
-  if (params === undefined) return src;
-  let out = src;
-  for (const [name, value] of Object.entries(params)) {
-    if (typeof value === "boolean") continue;
-    out = out.replace(new RegExp(`(?<![A-Za-z0-9_])${name}(?![A-Za-z0-9_])`, "g"), `(${value})`);
-  }
-  return out;
-}
 
 export interface TargetLatexOptions {
   /** Show the fixture's numbers in place of the symbols. */
@@ -81,4 +71,35 @@ export function closedFormLatex(family: Family, golden: Golden): ClosedFormLatex
     atFixture: latexOf(claim.atFixture),
     general: claim.general === null ? null : latexOf(claim.general),
   };
+}
+
+/**
+ * The identity a card leads with: the target at a fixture, and what it comes to.
+ *
+ * The right-hand side is dropped where the record's own claim is not an expression — `closedFormLatex`
+ * returns `null` for the two families whose general form is a sentence about several unknowns — and
+ * the caller then prints the integral alone rather than an `=` with nothing after it.
+ *
+ * **Both sides are read at the same fixture, which step 2.2 found they were not.** The left-hand
+ * side has substituted the bindings since step 1.4 and the right-hand side is `golden.value`, which
+ * is the record's own text and may carry the symbols still: D1 printed `\int_0^{\infty}
+ * x^{0.3-1}/(1+x)\,dx = \pi/\sin(\pi\alpha)`, an identity half in numbers and half in letters, on
+ * this card and on the front door's cards since they were built. The general form, in symbols, is
+ * the Result card's business.
+ *
+ * **The caller decides WHICH fixture, and step 2.2 found that it matters too.** `golden.value` belongs to
+ * the record's first target, so at a VARIANT fixture — the half-range corollary, the companion
+ * integral — it is the value of a different quantity: A5's variant is `pi/4` against a target written
+ * `\int_{-\infty}^{\infty}`, and printing that identity would be false. The front door only ever
+ * shows the primary fixture; the Target card asks `isVariant` first.
+ */
+export function identityLatex(family: Family, golden: Golden): string {
+  const lhs = targetLatex(family.targets[0], { at: golden.params });
+  const rhs = closedFormLatex(family, golden).atFixture;
+  return rhs === null ? lhs : `${lhs} = ${latexOf(withParams(golden.value, golden.params)) ?? rhs}`;
+}
+
+/** The same identity as a sentence, for the accessible name of the formula. */
+export function identityText(family: Family, golden: Golden): string {
+  return `${targetText(family.targets[0], { at: golden.params })} = ${withParams(golden.value, golden.params)}`;
 }

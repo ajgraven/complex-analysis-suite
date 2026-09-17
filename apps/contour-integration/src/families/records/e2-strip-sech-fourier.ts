@@ -201,7 +201,7 @@ export const e2StripSechFourier: Family = {
       numeric: 0.2710149513994184,
       verifiedTo: 2e-16,
       method:
-        "composite Gauss-Legendre on [-40,40] with exact sech tail bound; cross-checked against the closed form pi/cosh(pi) = 0.27101495139941840",
+        "composite Gauss–Legendre on $[-40, 40]$ with an exact $\\operatorname{sech}$ tail bound; cross-checked against the closed form $\\pi/\\cosh\\pi = 0.27101495139941840$",
     },
     {
       params: { xi: 0 },
@@ -209,14 +209,14 @@ export const e2StripSechFourier: Family = {
       numeric: 3.1415926535897931,
       verifiedTo: 0,
       method:
-        "int sech = pi exactly (the arctan(sinh) antiderivative); the fixture that tests 'unconditionally well-posed', since 1 - lambda = 2 here and a sign error would make it 0",
+        "$\\int\\operatorname{sech} = \\pi$ exactly, by the $\\arctan(\\sinh)$ antiderivative; this is the point that tests the claim of being well posed unconditionally, since $1 - \\lambda = 2$ here and a sign error would make it 0",
     },
     {
       params: { xi: 1 },
       value: "pi*sech(pi*xi/2)",
       numeric: 1.2520403312521475,
       verifiedTo: 3e-16,
-      method: "same quadrature; pi/cosh(pi/2)",
+      method: "the same quadrature, against $\\pi/\\cosh(\\pi/2)$",
     },
     {
       params: { xi: -1.5 },
@@ -224,7 +224,7 @@ export const e2StripSechFourier: Family = {
       numeric: 0.59021960169103926,
       verifiedTo: 4e-16,
       method:
-        "same quadrature at a NEGATIVE xi, where |e^{i xi z}| grows across the strip and the vertical bound picks up its e^{pi|xi|} constant — the evenness sech(pi xi/2) = sech(-pi xi/2) is the check",
+        "the same quadrature at a negative $\\xi$, where $|e^{i\\xi z}|$ grows across the strip and the vertical bound picks up its $e^{\\pi|\\xi|}$ constant; the evenness $\\operatorname{sech}(\\pi\\xi/2) = \\operatorname{sech}(-\\pi\\xi/2)$ is the check",
     },
   ],
 };

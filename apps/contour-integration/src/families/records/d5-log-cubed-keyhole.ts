@@ -302,7 +302,7 @@ export const d5LogCubedKeyhole: Family = {
       numeric: 3.875784585037477,
       verifiedTo: 1e-13,
       method:
-        "exp-sinh DE quadrature on (0, inf) via x = e^t -> 3.8757845850373167 (rel 4.2e-14); and the classical Mellin route M''(1) for M(s) = (pi/2)csc(pi s/2). Contour bookkeeping: Sigma3 = 13 pi^3/8 is purely REAL, which is also the consistency check Im Sigma3 = 0 <=> T1 = 0",
+        "exp-sinh double-exponential quadrature on $(0,\\infty)$ via $x = e^t$, giving $3.8757845850373167$ (relative $4.2\\times10^{-14}$); and the classical Mellin route $M''(1)$ for $M(s) = (\\pi/2)\\csc(\\pi s/2)$. In the bookkeeping $\\Sigma_3 = 13\\pi^3/8$ is purely real, which is also the consistency check that $\\operatorname{Im}\\Sigma_3 = 0$ exactly when $T_1 = 0$",
     },
     {
       params: { p: 2 },
@@ -310,7 +310,7 @@ export const d5LogCubedKeyhole: Family = {
       numeric: 1.9378922925187385,
       verifiedTo: 1e-13,
       method:
-        "exp-sinh DE quadrature on (0, inf) via x = e^t -> 1.9378922925187103 (rel 1.5e-14). This is the fixture with a NON-ZERO bonus: Sigma3 = 13 pi^3/16 + 3 i pi^2/2, so T1 = -pi/4 — which is D4's own primary answer at the same p, reached by a different contour",
+        "exp-sinh double-exponential quadrature on $(0,\\infty)$ via $x = e^t$, giving $1.9378922925187103$ (relative $1.5\\times10^{-14}$). Here the companion value is not zero: $\\Sigma_3 = 13\\pi^3/16 + 3i\\pi^2/2$, so $T_1 = -\\pi/4$ — which is the log-squared record's own primary answer at the same parameters, reached by a different contour",
     },
   ],
 };

@@ -17,13 +17,31 @@ import { fmt } from "../kernel/decimal.js";
 
 import type { Citation, Family, FamilyTarget, Golden } from "./schema.js";
 
-/** The real quantity a record is about: `∫ (0 → 2π)  1/(a + b*cos(theta))  dtheta`. */
-export function targetText(t: FamilyTarget): string {
+/** Substitute a fixture's bindings into an expression before printing it. */
+export function withParams(src: string, params: Golden["params"] | undefined): string {
+  if (params === undefined) return src;
+  let out = src;
+  for (const [name, value] of Object.entries(params)) {
+    if (typeof value === "boolean") continue;
+    out = out.replace(new RegExp(`(?<![A-Za-z0-9_])${name}(?![A-Za-z0-9_])`, "g"), `(${value})`);
+  }
+  return out;
+}
+
+/**
+ * The real quantity a record is about: `∫ (0 → 2π)  1/(a + b*cos(theta))  dtheta`.
+ *
+ * `at` substitutes the fixture's numbers, exactly as `targetLatex` does — **and it has to, because
+ * the two are a pair**: this is the spoken form of that formula, and step 2.2 found them apart the
+ * moment the Target card started passing an explicit label. The picture said `1/(1 + 1\cdot\cos)`
+ * and the accessible name said `1/(a + b*cos(theta))`, which is the one place a reader who cannot
+ * see the formula would have been told the symbols were still there.
+ */
+export function targetText(t: FamilyTarget, opts: { readonly at?: Golden["params"] } = {}): string {
   const bound = (x: string): string => (x === "inf" ? "∞" : x === "-inf" ? "−∞" : x);
   const range = `(${bound(t.lower)} → ${bound(t.upper)})`;
-  return t.kind === "sum"
-    ? `Σ ${t.variable} ${range}  ${t.summand ?? "?"}`
-    : `∫ ${range}  ${t.integrand ?? "?"}  d${t.variable}`;
+  const body = withParams((t.kind === "sum" ? t.summand : t.integrand) ?? "?", opts.at);
+  return t.kind === "sum" ? `Σ ${t.variable} ${range}  ${body}` : `∫ ${range}  ${body}  d${t.variable}`;
 }
 
 /**

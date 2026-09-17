@@ -188,3 +188,39 @@ export function card(id: CardId, ...body: Child[]): Desc {
 export function nothing(reason: string): Desc {
   return h("p", { key: "none", class: "placeholder" }, reason);
 }
+
+/**
+ * A disclosure whose default is a COMPUTED fact and whose explicit state is the reader's.
+ *
+ * `session.open[id]` is tri-state on purpose: `undefined` is "never touched", which is what lets the
+ * hypothesis table open itself the moment a row fails and STAY closed afterwards if the reader has
+ * shut it. A boolean with a false default cannot express that, and one with a true default would
+ * re-open on every recompute — and a derivation recomputes on every frame of a contour drag, so the
+ * second failure mode is a panel that will not stay shut while the reader is dragging.
+ *
+ * **Here since M8 step 2.2, where the Target card became the third consumer.** `result.ts` and
+ * `derivation.ts` carried byte-identical copies, differing only in the last sentence of the comment
+ * above; the second-consumer rule was already past when the second one was written.
+ */
+export function disclosure(
+  ctx: CardContext,
+  id: string,
+  byDefault: boolean,
+  summary: Child,
+  ...body: Child[]
+): Desc {
+  const open = ctx.session.open[id] ?? byDefault;
+  return h(
+    "details",
+    {
+      key: `d:${id}`,
+      open,
+      onToggle: (e: Event) => {
+        const el = e.target as HTMLDetailsElement;
+        if (el.open !== (ctx.session.open[id] ?? byDefault)) ctx.actions.setOpen(id, el.open);
+      },
+    },
+    h("summary", { key: "s" }, summary),
+    ...body,
+  );
+}

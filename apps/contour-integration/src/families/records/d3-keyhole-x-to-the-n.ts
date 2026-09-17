@@ -220,14 +220,14 @@ export const d3KeyholeXToTheN: Family = {
       numeric: 0.85010884618536919,
       verifiedTo: 3e-16,
       method:
-        "exp-sinh DE quadrature on (0, inf); contour bookkeeping verified at a = 1.5, n = 4 (eps = 1e-9, R = 1e9): closed total = 2*pi*i*Sum Res to 1.2e-14, edge factor c recovered to 3.7e-14. The same integral by the 2pi/n wedge agrees to 2.6e-16",
+        "exp-sinh double-exponential quadrature on $(0,\\infty)$; the contour bookkeeping was verified at $a = 1.5$ and $n = 4$ (with $\\varepsilon = 10^{-9}$, $R = 10^{9}$): the closed total is $2\\pi i\\sum\\operatorname{Res}$ to $1.2\\times10^{-14}$ and the edge factor comes back to $3.7\\times10^{-14}$. The same integral by the $2\\pi/n$ sector agrees to $2.6\\times10^{-16}$",
     },
     {
       params: { a: 0.5, n: 2 },
       value: "(pi/2)/sin(pi/4)",
       numeric: 2.2214414690791831,
       verifiedTo: 1e-16,
-      method: "exp-sinh DE quadrature on (0, inf); the two roots ±i are Gaussian, so this fixture is reachable by the per-pole route as well as by the sum",
+      method: "exp-sinh double-exponential quadrature on $(0,\\infty)$; the two roots $\\pm i$ are Gaussian, so this point is reachable by the per-pole route as well as by the sum",
     },
     {
       params: { a: 2.3, n: 5 },
@@ -235,7 +235,7 @@ export const d3KeyholeXToTheN: Family = {
       numeric: 0.63331238805904555,
       verifiedTo: 2e-16,
       method:
-        "exp-sinh DE quadrature on (0, inf). NOT reachable pole by pole: the roots of 1 + z^5 generate a degree-4 field and none of them is expressible in one quadratic extension. The geometric sum needs none of them",
+        "exp-sinh double-exponential quadrature on $(0,\\infty)$. It is not reachable pole by pole: the roots of $1 + z^5$ generate a field of degree 4, and none of them lies in a single quadratic extension. The geometric sum needs none of them",
     },
     {
       params: { a: 3, n: 7 },
@@ -243,7 +243,7 @@ export const d3KeyholeXToTheN: Family = {
       numeric: 0.46034065176003164,
       verifiedTo: 1.1e-15,
       method:
-        "INTEGER a: the VALUE is right and the keyhole DERIVATION is degenerate. This entry must appear in refusals.json as well as here",
+        "at integer $a$ the value is right and the keyhole derivation is degenerate, which is why this point is recorded as a refusal as well as a value",
       refuses:
         "at integer a the integrand has no branch point, the two edges are the same integral traversed both ways, and 1 + Σcⱼ = 0 exactly — the value stands by continuity, the derivation does not",
     },
@@ -252,7 +252,7 @@ export const d3KeyholeXToTheN: Family = {
       value: "2*pi/(3*sqrt(3))",
       numeric: 1.2091995761561452,
       verifiedTo: 2e-16,
-      method: "INTEGER a: equals gallery F1 by the 2pi/n wedge; the keyhole refuses",
+      method: "at integer $a$: equal to the sector record's value by the $2\\pi/n$ wedge, while the keyhole itself refuses",
       refuses: "a = 1 is an integer; the repair is the 2π/n wedge (gallery F1), not this contour",
     },
   ],

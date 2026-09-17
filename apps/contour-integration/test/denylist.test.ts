@@ -322,9 +322,13 @@ describe("nothing the SHELL puts on screen carries a house word", () => {
     // puts the delimiters on screen. Step 2.1 shipped exactly that twice in one afternoon — a
     // refusal naming $R(z)$ printed as text, and a picker option, where an `<option>` renders no
     // markup at all and the fix is Unicode rather than markup.
-    const dollars = [...visibleText().matchAll(/[^\n]{0,40}\$[^\n]{0,40}/g)].map((m) => m[0]);
+    // **A backslash too**, and the same sweep found two: two records cite a chapter with a note in
+    // TeX's OTHER inline delimiters, `\(x^{\alpha}R(x)\)`, which this app's convention does not
+    // read — so the citation printed its own markup. A `$` says a sentence was not typeset; a
+    // backslash says it was typeset in a notation nothing here parses.
+    const raw = [...visibleText().matchAll(/[^\n]{0,40}[$\\][^\n]{0,40}/g)].map((m) => m[0]);
     for (const a of mounted.splice(0)) a.destroy();
-    return { name, size: text.length, why: offences(text), dollars };
+    return { name, size: text.length, why: offences(text), dollars: raw };
   });
 
   it("reaches every state the list names", () => {
@@ -334,7 +338,7 @@ describe("nothing the SHELL puts on screen carries a house word", () => {
     expect(swept.length).toBeGreaterThan(38);
   });
 
-  it("puts no `$` on screen — every formula is typeset, or is Unicode in a picker", () => {
+  it("puts no `$` and no backslash on screen — every formula is typeset, or is Unicode in a picker", () => {
     expect(swept.filter((s2) => s2.dollars.length > 0).map((s2) => `${s2.name}: ${s2.dollars.join(" | ")}`)).toEqual([]);
   });
 

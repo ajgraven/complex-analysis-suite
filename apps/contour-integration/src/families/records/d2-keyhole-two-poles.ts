@@ -259,7 +259,7 @@ export const d2KeyholeTwoPoles: Family = {
       numeric: 0.92015118451061029,
       verifiedTo: 1e-14,
       method:
-        "(a) exp-sinh DE quadrature on (0, inf) -> 0.92015118451061029 (rel 0.0e0); (b) x = t^2 to remove the sqrt, then a split at t = 1 with t -> 1/u on (1, inf), composite 60-pt Gauss-Legendre -> 0.92015118451059041 (rel 2.2e-14). Contour: closed total = 2*pi*i*(i/sqrt2 - i) to 5.1e-15 at eps = 1e-10, R = 1e10; c recovered as +1 to 2.2e-5 (the edge truncation, not the factor)",
+        "two routes: exp-sinh double-exponential quadrature on $(0,\\infty)$, giving $0.92015118451061029$; and $x = t^2$ to remove the square root, then a split at $t = 1$ with $t \\to 1/u$ on $(1,\\infty)$ and composite 60-point Gauss–Legendre, giving $0.92015118451059041$ (relative $2.2\\times10^{-14}$). The closed-contour total is $2\\pi i(i/\\sqrt2 - i)$ to $5.1\\times10^{-15}$ at $\\varepsilon = 10^{-10}$ and $R = 10^{10}$, with the edge factor recovered as $+1$ to $2.2\\times10^{-5}$ — the edge's own truncation, not the factor's",
     },
     {
       params: { s: 1.5, p: 1, q: 3 },
@@ -267,7 +267,7 @@ export const d2KeyholeTwoPoles: Family = {
       numeric: 1.1499027195564300,
       verifiedTo: 2e-16,
       method:
-        "exp-sinh DE quadrature on (0, inf), agreeing with (pi/2)(sqrt3 - 1) to 2e-16; the second fixture exists because p = 1 makes ln p = 0, so it is the one that would still pass if the pole modulus were dropped from the OTHER pole only",
+        "exp-sinh double-exponential quadrature on $(0,\\infty)$, agreeing with $(\\pi/2)(\\sqrt3 - 1)$ to $2\\times10^{-16}$; this second point exists because $p = 1$ makes $\\ln p = 0$, so it would still pass with the modulus dropped from the other pole alone",
     },
   ],
 };

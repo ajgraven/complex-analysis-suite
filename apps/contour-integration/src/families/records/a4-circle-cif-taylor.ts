@@ -170,7 +170,7 @@ export const a4CircleCifTaylor: Family = {
       numeric: 6.283185307179586,
       verifiedTo: 1e-15,
       method:
-        "the manufactured pole is SIMPLE here, so Res = g(0)/i = −i and 2πi·Res = 2π — the mean-value property of a harmonic function over a circle, and the base case of the order ladder",
+        "the manufactured pole is simple here, so $\\operatorname{Res} = g(0)/i = -i$ and $2\\pi i\\operatorname{Res} = 2\\pi$ — the mean-value property of a harmonic function over a circle, and the base case of the order ladder",
     },
     {
       params: { g: "exp(z)", n: 1 },
@@ -178,21 +178,21 @@ export const a4CircleCifTaylor: Family = {
       numeric: 6.283185307179586,
       verifiedTo: 1e-15,
       method:
-        "the order rises to 2 while the VALUE is unchanged (1/1! = 1/0!), which is the fixture that separates 'the order changed' from 'the answer changed'",
+        "the order rises to 2 while the value is unchanged ($1/1! = 1/0!$), which separates a change of order from a change of answer",
     },
     {
       params: { g: "exp(z)", n: 2 },
       value: "pi",
       numeric: 3.141592653589793,
       verifiedTo: 1e-15,
-      method: "order 3; Res = c₂/i = −i/2, and the value halves",
+      method: "order 3; $\\operatorname{Res} = c_2/i = -i/2$, and the value halves",
     },
     {
       params: { g: "exp(z)", n: 3 },
       value: "pi/3",
       numeric: 1.0471975511965976,
       verifiedTo: 1e-15,
-      method: "order 4; Res = c₃/i = −i/6",
+      method: "order 4; $\\operatorname{Res} = c_3/i = -i/6$, a third of the value above",
     },
     {
       params: { g: "exp(z)", n: 5 },
@@ -200,7 +200,7 @@ export const a4CircleCifTaylor: Family = {
       numeric: 0.05235987755982988,
       verifiedTo: 1e-14,
       method:
-        "order 6, where a derivative-based residue would need d⁵/dz⁵ of a quotient and the series route needs no factorial at all; verified against quadrature for n = 0…5 with max relative error 6.1e-15",
+        "order 6, where a derivative-based residue would need $d^5/dz^5$ of a quotient and the series route needs no factorial at all; verified against quadrature for $n = 0$ to $5$ with a maximum relative error of $6.1\\times10^{-15}$",
     },
   ],
 };

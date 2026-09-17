@@ -172,7 +172,7 @@ export const a1CircleLinearCos: Family = {
       numeric: 3.6275987284684357,
       verifiedTo: 1e-14,
       method:
-        "exact residue −i/√(a²−b²) at the enclosed root of the reciprocal pair, in ℚ(i)(√3); cross-checked against a small-circle quadrature at r = 1e-4 and against the contour quadrature",
+        "the exact residue $-i/\\sqrt{a^2-b^2}$ at the enclosed root of the reciprocal pair, in $\\mathbb{Q}(i)(\\sqrt3)$; cross-checked against a small-circle quadrature at $r = 10^{-4}$ and against the contour quadrature",
     },
     {
       params: { a: 5, b: 3 },
@@ -180,7 +180,7 @@ export const a1CircleLinearCos: Family = {
       numeric: 1.5707963267948966,
       verifiedTo: 1e-14,
       method:
-        "the rational case — b z² + 2a z + b = (3z+1)(z+3) splits over ℚ, so the whole computation stays in ℚ(i) and no quadratic extension is needed",
+        "the rational case: $bz^2 + 2az + b = (3z+1)(z+3)$ splits over $\\mathbb{Q}$, so the whole computation stays in $\\mathbb{Q}(i)$ and no quadratic extension is needed",
     },
     {
       params: { a: 2, b: -1 },
@@ -188,7 +188,7 @@ export const a1CircleLinearCos: Family = {
       numeric: 3.6275987284684357,
       verifiedTo: 1e-14,
       method:
-        "b < 0: the enclosed root MOVES and the value does not — the fixture that separates 'which root' from 'what answer'",
+        "$b < 0$: the enclosed root changes and the value does not, which separates which root is taken from what the answer is",
     },
     {
       params: { a: -2, b: 1 },
@@ -196,7 +196,7 @@ export const a1CircleLinearCos: Family = {
       numeric: -3.6275987284684357,
       verifiedTo: 1e-14,
       method:
-        "the sign case, and the fixture that guards traps.textbook-form-drops-sign: the residue route returns the correct negative value while the textbook closed form returns its positive negation",
+        "the sign case: the residue route returns the correct negative value where the textbook closed form returns its positive negation",
     },
     {
       params: { a: 10, b: -9.5 },
@@ -204,7 +204,7 @@ export const a1CircleLinearCos: Family = {
       numeric: 2.012229726507833,
       verifiedTo: 1e-14,
       method:
-        "a pole near the circle (|z| ≈ 0.724 against a companion at 1.381): legal, stiff, and exact only because the root split happens in ℚ(i)(√39) rather than in floating point",
+        "a pole near the circle ($|z| \\approx 0.724$ against a companion at $1.381$): legal, stiff, and exact only because the roots split in $\\mathbb{Q}(i)(\\sqrt{39})$ rather than in floating point",
     },
   ],
 };

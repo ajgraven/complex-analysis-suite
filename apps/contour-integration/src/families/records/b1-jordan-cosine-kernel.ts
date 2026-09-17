@@ -223,21 +223,21 @@ export const b1JordanCosineKernel: Family = {
       numeric: 1.1557273497909217,
       verifiedTo: 1e-15,
       method:
-        "Res(e^{iz}/(z²+1), i) = e^{−1}/(2i) exactly in the exponential basis, giving 2πi·Res = π/e; cross-checked against a small-circle quadrature (−0.183939720585721 i) and the contour quadrature",
+        "$\\operatorname{Res}(e^{iz}/(z^2+1), i) = e^{-1}/(2i)$ exactly in the exponential basis, giving $2\\pi i\\operatorname{Res} = \\pi/e$; cross-checked against a small-circle quadrature ($-0.183939720585721\\,i$) and the contour quadrature",
     },
     {
       params: { a: 2, b: 3 },
       value: "(pi/3)*exp(-6)",
       numeric: 0.0025957432094282466,
       verifiedTo: 1e-14,
-      method: "a ≠ b, so the exponent −ab = −6 is neither the frequency nor the pole location alone",
+      method: "$a \\neq b$, so the exponent $-ab = -6$ is neither the frequency nor the pole location alone",
     },
     {
       params: { a: 0.5, b: 2 },
       value: "(pi/2)*exp(-1)",
       numeric: 0.57786367489546087,
       verifiedTo: 1e-15,
-      method: "a fractional frequency: ab = 1 again, from a different pair",
+      method: "a fractional frequency: $ab = 1$ again, from a different pair",
     },
     {
       params: { a: -1, b: 1 },
@@ -245,14 +245,14 @@ export const b1JordanCosineKernel: Family = {
       numeric: 1.1557273497909217,
       verifiedTo: 1e-15,
       method:
-        "THE SIGN CASE: a < 0 closes through the LOWER half-plane, the enclosed pole becomes −i, the closed path runs clockwise, and the two sign flips cancel to the same π/e — which is what `derived.sgnA` exists to make executable rather than commented",
+        "the sign case: $a < 0$ closes through the lower half-plane, the enclosed pole becomes $-i$, the closed path runs clockwise, and the two sign changes cancel to the same $\\pi/e$",
     },
     {
       params: { a: 3, b: 0.5 },
       value: "2*pi*exp(-1.5)",
       numeric: 1.4019681438332423,
       verifiedTo: 1e-15,
-      method: "b < 1, so the pole is close to the real axis and the exponent is not an integer",
+      method: "$b < 1$, so the pole is close to the real axis and the exponent is not an integer",
     },
     {
       params: { a: 0, b: 1 },
@@ -260,7 +260,7 @@ export const b1JordanCosineKernel: Family = {
       numeric: 3.1415926535897931,
       verifiedTo: 1e-15,
       method:
-        "THE DEGENERATION: at a = 0 the exponential is 1, Jordan's π/|a| is infinite and says nothing, and plain ML discharges the arc instead — the fixture that catches an engine treating π/0 as a failure",
+        "the degeneration: at $a = 0$ the exponential is 1, Jordan's $\\pi/|a|$ is infinite and says nothing, and the plain ML estimate discharges the arc instead — $\\pi/0$ is not a failure here",
     },
   ],
 };

@@ -220,7 +220,7 @@ export const g1SquareCotCollision: Family = {
       numeric: 1.6449340668482264,
       verifiedTo: 1.4e-16,
       method:
-        "the merged residue against a 4096-point circle trapezoid on |z| = 0.25, and the sum itself against its own accelerated series",
+        "the merged residue against a 4096-point circle trapezoid on $|z| = 0.25$, and the sum itself against its own accelerated series",
     },
     {
       // A VARIANT: `sided` is no parameter of this family, so the loader reads it as selecting an
@@ -231,7 +231,7 @@ export const g1SquareCotCollision: Family = {
       value: "pi^2/3",
       numeric: 3.2898681336964528,
       verifiedTo: 1.4e-16,
-      method: "2× the above",
+      method: "the same two checks, for the two-sided sum $\\sum_{n\\in\\mathbb{Z}\\setminus\\{0\\}}$, which is twice the one above",
     },
   ],
 };

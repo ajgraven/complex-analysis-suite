@@ -270,21 +270,21 @@ export const e3GaussianShiftZeroResidue: Family = {
       value: "sqrt(pi)*exp(-1/4)",
       numeric: 1.3803884470431429,
       verifiedTo: 6.4e-16,
-      method: "1200-panel × 32-pt Gauss–Legendre on [−12,12]; e^{−144} tail",
+      method: "1200 panels of 32-point Gauss–Legendre on $[-12, 12]$, with an $e^{-144}$ tail",
     },
     {
       params: { b: 1.7 },
       value: "sqrt(pi)*exp(-b^2/4)",
       numeric: 0.86059173957255597,
       verifiedTo: 5.2e-16,
-      method: "same — the gallery's own most-measured fixture",
+      method: "the same quadrature at $b = 1.7$, the shift this record is most often measured at",
     },
     {
       params: { b: 3 },
       value: "sqrt(pi)*exp(-b^2/4)",
       numeric: 0.18681526145713168,
       verifiedTo: 5.9e-16,
-      method: "same",
+      method: "the same quadrature and the same tail bound, at $b = 3$",
     },
     {
       params: { b: 6.5 },
@@ -292,7 +292,7 @@ export const e3GaussianShiftZeroResidue: Family = {
       numeric: 4.585001385525313e-5,
       verifiedTo: 2.0e-12,
       method:
-        "same — the worst case in the tier: the target is 4e-5 against an integrand of order 1, so cancellation costs ~4 digits. Kept as the entry where the quadrature label degrades honestly while the exact one does not.",
+        "the same quadrature at $b = 6.5$: the worst case in this tier, where the target is $4\\times10^{-5}$ against an integrand of order 1, so cancellation costs about four digits. Kept as the point where the quadrature's label degrades honestly while the exact one does not",
     },
   ],
 };
