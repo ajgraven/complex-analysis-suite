@@ -69,18 +69,27 @@ const DEFAULT_MAX_PREPERIOD = 1;
  * of the clustering rather than a measured identification. Measured over the enumerated angles, the
  * separation is stark and leaves a wide choice:
  *
- * | case                     | genuine co-landings | nearest DISTINCT pair | gaps at 4e-3 |
- * | ------------------------ | ------------------- | --------------------- | ------------ |
- * | basilica, detail 6       | ≤ 1.1e-16           | 1.4e-4                | 26 (2 real)  |
- * | basilica, detail 8       | ≤ 1.1e-16           | 1.3e-6                | 642          |
- * | rabbit, detail 8         | ≤ 2.5e-16           | 2.1e-6                | 648          |
- * | QML, detail 8            | ≤ 8.9e-14           | 1.2e-12               | 257          |
+ * | case               | genuine co-landings | nearest DISTINCT pair | refined landings |
+ * | ------------------ | ------------------- | --------------------- | ---------------- |
+ * | basilica, detail 6 | ≤ 1.1e-16           | 4.6e-4                | 105              |
+ * | basilica, detail 8 | ≤ 1.1e-16           | 4.2e-6                | 471              |
+ * | rabbit, detail 8   | ≤ 2.5e-16           | 5.8e-6                | 471              |
+ * | QML, detail 8      | ≤ 2.2e-11           | 1.2e-5                | 754              |
  *
- * 1e-9 sits inside every one of those gaps: on the dynamical side it gives bit-identical results to
- * 1e-12, and on the QML it recovers five genuine pairs at detail 6 (39 → 44) whose refinement landed
- * a little over 1e-12 apart, while admitting none of the artefacts. The check that it is right is
+ * 1e-9 sits inside every one of those gaps — above every genuine co-landing and more than three
+ * orders below the nearest distinct pair. On the dynamical side it gives bit-identical results to
+ * 1e-12; on the QML it recovers five genuine pairs at detail 6 (39 → 44) whose refinement landed a
+ * little over 1e-12 apart, while admitting none of the artefacts. The check that it is right is
  * structural rather than numeric — **every QML gap comes out size 2**, which is what a hyperbolic
  * component root must be, where 4e-3 produced gaps of size 17, 10 and 9 at detail 8.
+ *
+ * ⚠ This table was re-measured in review follow-up C and three of its numbers were wrong, the QML
+ * row consequentially so: it read `≤ 8.9e-14` genuine against a `1.2e-12` nearest distinct pair,
+ * which says 1e-9 sits ABOVE the nearest distinct pair — i.e. that the shipped tolerance merges
+ * distinct component roots, the exact opposite of the conclusion drawn from it. The conclusion was
+ * right and the evidence offered for it was not. The old "gaps at 4e-3" column is replaced by the
+ * landing count: a gap count depends on how gaps are counted, three independent measurements of it
+ * disagreed, and it was never what the tolerance argument rests on.
  */
 const DEFAULT_TOL = 1e-9;
 

@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describeLegend } from "../src/render/legend";
 
 describe("describeLegend", () => {
@@ -51,8 +53,13 @@ describe("describeLegend", () => {
 
 // ── WP1 / R3 (review 2026-09-16): the legend must describe what the shader DRAWS ──────────────
 // Four notes were checked against `shaderBuilder.ts` and three of them described the opposite of
-// the picture. These assertions are keyed to the shader expression in each case, so a future change
-// to the shader that is not mirrored here goes red.
+// the picture. The assertions below read `describeLegend` only — the coupling to the shader is
+// pinned separately, by the last test in this file.
+//
+// ⚠ That separation is the point. This comment used to claim these assertions were "keyed to the
+// shader expression in each case, so a future change to the shader that is not mirrored here goes
+// red", and nothing in the file read `shaderBuilder.ts` at all: re-inverting the orbit-trap ramp
+// left all nine green. A comment claiming a guard is how a missing guard survives. (Follow-up C.)
 describe("the legend agrees with the shader", () => {
   it("multiplier: bright at the superattracting centre, not dark (val = sqrt(1 - |λ|))", () => {
     const m = describeLegend("multiplier", "filled Julia set");
@@ -87,4 +94,34 @@ describe("the legend agrees with the shader", () => {
       expect(d.note ?? "").toMatch(/darkened/i);
     }
   });
+});
+
+// The coupling the comment above used to claim, implemented. Each legend note is a reading of ONE
+// shader expression; if that expression changes, the note may no longer describe the picture, so
+// the change has to come back through here. This does not check that the note is RIGHT — only that
+// what it was read from still says what it said. (Review follow-up C.)
+describe("the shader expressions the legend notes were read from are still there", () => {
+  const SHADER = readFileSync(
+    fileURLToPath(new URL("../src/render/shaderBuilder.ts", import.meta.url)),
+    "utf8",
+  );
+
+  const KEYED: [string, string][] = [
+    // "bright at the superattracting centre": |λ| → 0 gives val → 1.
+    ["multiplier", "float val = sqrt(1.0 - mag);"],
+    // "hugging the trap is the HIGH end": a small closest approach maps to the top of the ramp.
+    ["orbit trap", "palette(1.0 - clamp(sqrt(trap) * 1.3, 0.0, 1.0))"],
+    // "no order — a hash": the hue is `fract(period · φ)`, not a ramp in the period.
+    ["period", "palette(fract(float(period) * 0.618))"],
+    // "the boundary itself is darkened": the escape colour is MULTIPLIED by an edge factor.
+    ["distance", "palette(clamp(s / float(uN), 0.0, 1.0)) * edge"],
+  ];
+
+  for (const [mode, expr] of KEYED) {
+    it(`${mode} still colours with the expression its legend note describes`, () => {
+      expect(SHADER, `${mode}: the legend note in legend.ts was read from this line`).toContain(
+        expr,
+      );
+    });
+  }
 });
