@@ -100,8 +100,6 @@ export interface Session {
   /** Which `<details>` are open, by id. Read from here and never from the DOM, so a patch cannot
    *  silently close one — the old shell's disclosures lost their state whenever a card rebuilt. */
   open: Record<string, boolean>;
-  /** The theme the figure export draws in; not a property of the argument, so not in the link. */
-  figureTheme: "light" | "dark";
   /**
    * What just happened, for the reader — "Link copied", "Could not copy the figure".
    *
@@ -181,7 +179,6 @@ export function defaultSession(): Session {
     drillGraded: false,
     rails: { left: false, right: false },
     open: {},
-    figureTheme: "light",
     notice: null,
     contrastsOpen: false,
     frontDoorOpen: false,

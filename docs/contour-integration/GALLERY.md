@@ -10,10 +10,10 @@
 
 ---
 
-## 0. What a record says on screen (M8 step 0.6)
+## 0. What a record says on screen (M8 steps 0.6 and 2.2)
 
-Each record carries a **four-line standard**, and it is data rather than prose in the record's header
-comment, so the screen and the corpus cannot drift:
+Each record carries a **four-line standard** — with a fifth line added at step 2.2 — and it is data
+rather than prose in the record's header comment, so the screen and the corpus cannot drift:
 
 1. **The identity**, which is not a field — it is `targets` and `closedForm`, the two the engine
    actually computes. A copy would be a second source of truth for the one thing that must be right.
@@ -26,6 +26,15 @@ comment, so the screen and the corpus cannot drift:
    gallery cannot support. A reference whose section was itself unconfirmed is widened to its
    chapter; one that was confirmed keeps its section, because citing `Ch. 4 §5` where `Ch. 4 §5.3`
    was checked discards something true.
+
+5. **`Golden.method`** — how the golden value itself was checked, one per fixture. It was already
+   required by the schema (a value with no method is an assertion), and until **M8 step 2.2** it
+   was rendered **nowhere**: ninety-four strings written for whoever was building the corpus went
+   five milestones without a reader, and they read like it — trap ids, fixture flags, references to
+   research documents nobody has, `PLAN §3.2`, `refusals.json`. They are rewritten for a reader and
+   typeset, and the Target card shows them under *How the value was checked*. The standard is step
+   0.5a's five rules plus: every formula inside `$…$` and parsing under KaTeX, no house id, no
+   shouted word, no back-reference to a document the reader does not have.
 
 `title` is the human title — *what the integral is and which contour does it* — with a `titleLatex`
 sibling for the card. The essay titles it replaced (`— the reciprocal-root pair`, `— where ML is not

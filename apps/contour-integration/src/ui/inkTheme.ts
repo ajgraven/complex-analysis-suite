@@ -135,5 +135,8 @@ export const LIGHT_INK: InkTheme = {
   },
 };
 
-/** The two, by name — for the session's `figureTheme` and the later theme switch. */
-export const INK_THEMES = { dark: DARK_INK, light: LIGHT_INK } as const;
+// **There was an `INK_THEMES = { dark, light }` map here, and a `Session.figureTheme` beside it.**
+// Both are gone at M8 step 2.5, having had no reader since step 2.3: the figure export takes its
+// plate as an argument (`saveFigure(plate)`, one of `dark | light | print`) rather than reading a
+// session field, so the field was written once at session start and never looked at, and the map
+// could not express the third plate anyway. The two themes are exported by name above.

@@ -1,6 +1,8 @@
 # M8 — the Contour Integration shell rebuild
 
-> **Status: plan complete** (Parts 1–3, 2026-09-15). The live state of execution is in
+> **Status: plan complete** (Parts 1–3, 2026-09-15); **executing.** Phase 0 is merged to `master`,
+> Phase 1 is cut over (the old shell is deleted) and Phase 2 is under way, on branch
+> `claude/inspiring-keller-5sizwl`. The live state of execution is in
 > [`M8/STATUS.md`](M8/STATUS.md) — **read that first**, every session. The plan changes only through
 > a STATUS.md finding that names the step and the reason.
 
