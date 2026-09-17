@@ -16,6 +16,7 @@
 // is for and nothing else — which treatment produces it is `stageView`'s, and the caption, the
 // permalink and the verdict are the same on all three.
 import { encodeShell } from "../../shell/viewState.js";
+import { shareRefusal } from "../errors.js";
 import { fmtNum } from "../format.js";
 import { h, type Child, type Desc } from "../dom.js";
 import { mathText } from "../math.js";
@@ -58,18 +59,19 @@ export const shareCard: Card = (ctx) => {
 
   const head: Child[] = [];
   if (refusal !== null) {
-    // **The reason, in the codec's own words.** Paraphrasing it here would put a second sentence in
-    // front of the reader for a decision one module makes — and the sentences are specific on
-    // purpose ("the contour's recipe … does not rebuild the contour on screen"), which a friendlier
-    // summary would spend. It goes through `mathText` for the same reason every engine sentence in
-    // the rail does: the `$…$` rule is the rail's, not each card's, and a sentence that grows a
-    // formula must not start rendering its delimiters.
-    // **And no repair line.** `EncodeResult` carries a reason and no repair, and one guessed here
-    // would be false for at least one of the reasons it has to cover: "redraw the contour" is the
-    // answer to a recipe that does not rebuild and nonsense for gallery mode with no record open,
-    // which is repaired by opening one. A row that says something false is the defect M5.6c found
-    // three of; the codec's sentence alone says less and says it truly.
-    head.push(h("p", { key: "no", class: "verdict" }, badge("⚠"), ...mathText(` ${refusal}`, "rf")));
+    // **The reason, through `shell/errors.ts` and not in the codec's own words** — M8 step 2.4.
+    // The card still does not paraphrase: it asks ONE module what to say, the same module the
+    // arrival banner asks, so there is no second sentence in front of a reader for a decision one
+    // place makes. What changed is which module writes it. The codec's own reason names the wire
+    // field that was wrong (`the contour's shift in this link is not a pair of numbers`), which is a
+    // fact about this program; `shareRefusal` says what a reader can act on, and the codec's reason
+    // is still the string every test of the wire format reads.
+    //
+    // **And still no repair line**, for the reason it never had one: a repair guessed here would be
+    // false for at least one of the cases it has to cover — "redraw the contour" is the answer to a
+    // recipe that does not rebuild and nonsense for a gallery with no example open, which is
+    // repaired by opening one. Each sentence carries its own repair or none.
+    head.push(h("p", { key: "no", class: "verdict" }, badge("⚠"), ...mathText(` ${shareRefusal(refusal)}`, "rf")));
   } else if (bytes !== null) {
     const over = bytes > URL_WARNING_BYTES;
     head.push(

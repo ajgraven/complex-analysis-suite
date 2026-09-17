@@ -489,8 +489,12 @@ describe("the `#vs=` permalink, at the shell", () => {
       .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""));
     const box = refusal(opened.root);
     expect(box.hidden).toBe(false);
-    expect(box.textContent).toContain("no-such-record");
-    expect(box.textContent).toContain("could not be opened");
+    // **The reader's sentence, and it deliberately does NOT name the record** — step 2.4: an id
+    // this build does not have is a string from somebody else's URL, and repeating it tells a reader
+    // nothing they can act on. What must survive is that the link was refused and the app did not
+    // open something plausible instead, which the two checks below are.
+    expect(box.textContent).toContain("names a worked example this version does not have");
+    expect(box.textContent).toContain("starting state is shown instead");
     // Exactly where it would have been with no link at all. Compared on the STATE rather than on the
     // screen, because the refusal box is part of the page — which is the point, not a discrepancy.
     expect(opened.app.currentState()).toEqual(defaults);

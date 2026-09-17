@@ -525,6 +525,64 @@ describe("citationLine", () => {
   });
 });
 
+describe("the empty states", () => {
+  it("INVITES an integrand where the box is empty, and diagnoses one where it is broken", () => {
+    // **An empty box is not an error**, and it was told it was one: `compile` refuses an empty
+    // string with `Empty expression`, which the parse rules turn into *there is no expression to
+    // read* — true, and addressed to somebody who has just cleared the box on purpose.
+    const said = (expr: string): string =>
+      (q(rail(sandbox({ expr })).host, '[data-card="integrand"]').textContent ?? "").replace(/\s+/g, " ");
+    expect(said("")).toContain("Type an integrand to begin");
+    expect(said("   "), "whitespace is an empty box too").toContain("Type an integrand to begin");
+    expect(said("1/(1+z"), "a broken expression got the invitation instead of the reason").toContain(
+      "unbalanced parenthesis",
+    );
+    expect(said("1/(1+z")).not.toContain("Type an integrand to begin");
+  });
+
+  it("says a worked example could not be RUN, rather than that there is no integrand", () => {
+    // The Result card is where a reader looks for an explanation, and for a record whose run failed
+    // it said "There is no integrand." — false, and the reason was reachable only from the
+    // Derivation card. Driven through a resolution rather than a record that happens to fail today,
+    // so the test does not depend on the corpus having a broken entry.
+    const state = gallery("circle-linear-cos");
+    const base = resolveState(state, compile(state.expr));
+    if (base.kind !== "gallery") throw new Error("not a gallery resolution");
+    const host = document.createElement("div");
+    patch(host, render(state, { ...base, run: null, solved: null, fatal: "its contour has no pieces" }, defaultSession(), spyActions(), null).right);
+    const said = (q(host, '[data-card="result"]').textContent ?? "").replace(/\s+/g, " ");
+    expect(said).toContain("could not be run");
+    expect(said).toContain("its contour has no pieces");
+    expect(said, "the old sentence is still there").not.toContain("There is no integrand");
+  });
+
+  it("says WHY there is no target value, where the ledger is sound and the solve refused", () => {
+    // **Pass 5 may refuse while the run itself is perfectly readable**, and `StateResolution.note`
+    // has carried that sentence since step 1.1 with no reader: the card showed `∮` and left the
+    // integral the example set out to determine unmentioned — the reader seeing a result card with
+    // an answer on it and no way to learn that the answer is not the one they asked for.
+    //
+    // Found in the CORPUS rather than staged, so the branch is one a reader can reach: D3 at an
+    // integer exponent is the record's own declared refusal — the two edges of the cut carry the
+    // same phase, so they cancel and the contour says nothing about the target.
+    const found = RECORD_IDS.flatMap((id) =>
+      FAMILIES.find((f) => f.id === id)?.golden.map((_, i) => gallery(id, i)) ?? [],
+    )
+      .map((s) => ({ state: s, resolution: resolveState(s, compile(s.expr)) }))
+      .find(({ resolution }) => resolution.kind === "gallery" && resolution.note !== null && resolution.run !== null);
+    expect(found, "no record in the corpus refuses the solve with its run intact").toBeDefined();
+    const { state, resolution } = found as NonNullable<typeof found>;
+    const host = document.createElement("div");
+    patch(host, render(state, resolution, defaultSession(), spyActions(), null).right);
+    const said = (q(host, '[data-card="result"]').textContent ?? "").replace(/\s+/g, " ");
+    expect(said).toContain("No value for the target");
+    // The reason itself, not only the fact that there is one — and the ledger is still shown, which
+    // is why the card cannot simply refuse: `∮` is sound here and the target is what is missing.
+    expect(said).toContain("carries no information about the target");
+    expect(q(host, '[data-card="result"]').querySelectorAll(".katex").length).toBeGreaterThan(0);
+  });
+});
+
 describe("the Target card", () => {
   it("shows the record's unknowns AT THIS FIXTURE, and where to read the argument", () => {
     const { host } = rail(gallery("circle-linear-cos"));

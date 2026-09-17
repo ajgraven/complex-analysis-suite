@@ -17,7 +17,7 @@ import { contourIntegrandLatex } from "../../families/latex.js";
 import { h } from "../dom.js";
 import { math, mathText } from "../math.js";
 import { card, type Card } from "./card.js";
-import { parseErrorText } from "./parseError.js";
+import { integrandEmpty } from "../errors.js";
 
 export const integrandCard: Card = ({ state, resolution, actions }) => {
   if (resolution.kind === "gallery") {
@@ -83,11 +83,9 @@ export const integrandCard: Card = ({ state, resolution, actions }) => {
           // `resolution.reason` straight, so the whole mapping existed, passed its own suite, and
           // reached no reader. `test/cards.test.ts` asserts the sentence AND the absence of the
           // parser's own wording, which is what caught it.
-          resolution.kind === "empty" && resolution.reason !== null
-            ? parseErrorText(resolution.reason)
-            : resolution.kind === "declared-refused"
-              ? resolution.reason
-              : "this expression cannot be read",
+          resolution.kind === "declared-refused"
+            ? resolution.reason
+            : integrandEmpty(state.expr, resolution.kind === "empty" ? resolution.reason : null),
         )
       : math(preview, { display: true, key: "pv" }),
     h(

@@ -24,6 +24,7 @@ import type { PoleReport } from "../kernel/poles.js";
 import type { StageDraw } from "./stageView.js";
 import { injectPngText } from "@cas/export";
 import { LIGHT_INK } from "../ui/inkTheme.js";
+import { DONE, FAILED, linkRefusal as linkRefusalSentence } from "./errors.js";
 
 import {
   FIGURE_THEMES,
@@ -376,15 +377,15 @@ export function mountShell2(root: Element): Shell2Handle {
       }
       const link = window.location.origin + window.location.pathname + enc.hash;
       void navigator.clipboard?.writeText(link).then(
-        () => say("Link copied.", "="),
-        () => say("Could not copy — the link is in the address bar.", "⚠"),
+        () => say(DONE.copyLink, "="),
+        () => say(FAILED.copyLink, "⚠"),
       );
     },
 
     saveFigure: (theme) => {
       void figureBytes(theme).then((bytes) => {
         if (bytes === null) {
-          say("The figure could not be drawn.", "⚠");
+          say(FAILED.drawFigure, "⚠");
           return;
         }
         const url = URL.createObjectURL(pngBlob(bytes));
@@ -403,7 +404,7 @@ export function mountShell2(root: Element): Shell2Handle {
         window.setTimeout(() => {
           URL.revokeObjectURL(url);
         }, 10_000);
-        say("Figure saved.", "=");
+        say(DONE.saveFigure, "=");
       });
     },
 
@@ -481,7 +482,7 @@ export function mountShell2(root: Element): Shell2Handle {
 
     copyFigure: () => {
       if (typeof ClipboardItem === "undefined" || typeof navigator.clipboard?.write !== "function") {
-        say("This browser cannot copy images — use Save figure.", "⚠");
+        say(FAILED.copyFigure, "⚠");
         return;
       }
       // **The PROMISE goes into `ClipboardItem`, not the resolved blob** — Safari requires the write
@@ -493,8 +494,8 @@ export function mountShell2(root: Element): Shell2Handle {
         return pngBlob(bytes);
       });
       void navigator.clipboard.write([new ClipboardItem({ "image/png": png })]).then(
-        () => say("Figure copied.", "="),
-        () => say("Could not copy the figure — use Save figure.", "⚠"),
+        () => say(DONE.copyFigure, "="),
+        () => say(FAILED.copyFigure, "⚠"),
       );
     },
   };
@@ -579,7 +580,7 @@ export function mountShell2(root: Element): Shell2Handle {
     linkBox.textContent =
       why === null
         ? ""
-        : `This shared link could not be opened: ${why}. Showing the app's own starting state instead.`;
+        : `${linkRefusalSentence(why)} The app's own starting state is shown instead.`;
   }
 
   /**

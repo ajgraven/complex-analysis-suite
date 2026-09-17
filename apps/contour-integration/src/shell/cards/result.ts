@@ -63,6 +63,13 @@ function factsOf(ctx: CardContext): Facts {
 
 export const resultCard: Card = (ctx) => {
   const { ledger, integral, theorem, poles, solved } = factsOf(ctx);
+  // **A worked example that could not RUN is not an app with no integrand** — M8 step 2.4. It has
+  // one, and a reason it did not get an answer from it, and the reason was reachable only from the
+  // Derivation card: this card said "There is no integrand", which is false in the one place a
+  // reader is looking for an explanation.
+  if (ctx.resolution.kind === "gallery" && ctx.resolution.fatal !== null) {
+    return card("result", nothing(`This worked example could not be run: ${ctx.resolution.fatal}`));
+  }
   if (ledger === null || integral === null) return card("result", nothing("There is no integrand."));
 
   // **The drill's mask, read here rather than re-derived.** `drillMask` is the one decision (its own
@@ -192,7 +199,16 @@ export const resultCard: Card = (ctx) => {
     ...numericBody(integral, theorem),
   );
 
-  return card("result", ...head, hypotheses, numerics);
+  // **Why there is no target value, where there is a ledger and no answer** — M8 step 2.4. The solve
+  // may refuse while the run itself is sound (a rank-deficient system, a route this example does not
+  // carry), and `StateResolution.note` has held that sentence since step 1.1 with no reader at all:
+  // the card showed `∮` and left the integral the example set out to determine unmentioned.
+  const note =
+    ctx.resolution.kind === "gallery" && ctx.resolution.note !== null && solved === null
+      ? h("p", { key: "why", class: "muted small" }, ...mathText(`No value for the target: ${ctx.resolution.note}`, "rn"))
+      : null;
+
+  return card("result", ...head, hypotheses, numerics, note);
 };
 
 /** The badge Pass 5's own certificates carry — never a literal, never the ledger's meet. */

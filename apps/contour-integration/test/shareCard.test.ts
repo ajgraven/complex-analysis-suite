@@ -20,6 +20,7 @@ import {
   type ShellState,
 } from "../src/shell/state.js";
 import { encodeShell } from "../src/shell/viewState.js";
+import { shareRefusal } from "../src/shell/errors.js";
 import { patch } from "../src/shell/dom.js";
 import { render } from "../src/shell/render.js";
 import { defaultSession, type Session } from "../src/shell/session.js";
@@ -145,15 +146,18 @@ describe("the Share card", () => {
     expect(actions.calls).toEqual(["copyLink", "saveFigure:dark", "copyFigure"]);
   });
 
-  it("shows the CODEC's own sentence when there can be no link, and disables Copy link", () => {
-    // **A card that says why beats a button that fails when pressed.** The reason is compared
-    // against `encodeShell`'s own return rather than a transcription of it, so a card that
-    // paraphrased — or that printed a friendlier summary of its own invention — fails here; and the
-    // enabled control on the default state is what stops `disabled` being vacuously true.
+  it("says WHY there can be no link, and disables Copy link", () => {
+    // **A card that says why beats a button that fails when pressed.** The sentence is compared
+    // against `shareRefusal` of the codec's own return rather than a transcription of it, so a card
+    // that paraphrased — or that printed a friendlier summary of its own invention — fails here; and
+    // the enabled control on the default state is what stops `disabled` being vacuously true.
+    //
+    // It was the codec's own words until M8 step 2.4, which is why that is the shape of the check:
+    // one module decides the wording, and the card asks it.
     const state = noRecipe();
     const enc = encodeShell(state);
     expect(enc.ok, "this state is linkable, so the test asserts nothing about a refusal").toBe(false);
-    const reason = enc.ok ? "" : enc.reason;
+    const reason = enc.ok ? "" : shareRefusal(enc.reason);
 
     const { card, actions } = shareCardOf(state);
     expect(card.textContent ?? "").toContain(reason);
@@ -169,11 +173,13 @@ describe("the Share card", () => {
     expect(byName(shareCardOf(sandbox()).card, COPY_LINK).disabled).toBe(false);
   });
 
-  it("prints EVERY refusal the codec can reach in its own words, and they are three sentences", () => {
+  it("prints EVERY refusal the codec can reach, and they are three distinct sentences", () => {
     // The test above could be satisfied by a card that prints one hardcoded apology whenever
     // anything goes wrong. So every refusal a state can actually be built into is rendered, and the
-    // sentences are required to be DISTINCT — which is what makes "the codec's own words" a claim
-    // rather than a coincidence. The third is the one a reader meets most: `moveContour` keeps the
+    // sentences are required to be DISTINCT — which is what makes the mapping a claim rather than a
+    // coincidence, and is also what caught step 2.4's own first draft: a rule keyed on the word
+    // *vertices* answered "this contour came from neither a template nor the pen" with a repair
+    // ("until it is committed") for a case that has nothing to commit. The third is the one a reader meets most: `moveContour` keeps the
     // recipe and the geometry in step, and this is the state where they have come apart.
     const states: Record<string, ShellState> = {
       "no record": sandbox({ mode: "gallery", record: null }),
@@ -189,10 +195,10 @@ describe("the Share card", () => {
     for (const [name, state] of Object.entries(states)) {
       const enc = encodeShell(state);
       expect(enc.ok, `${name}: this state is linkable, so it asserts nothing`).toBe(false);
-      const reason = enc.ok ? "" : enc.reason;
+      const reason = enc.ok ? "" : shareRefusal(enc.reason);
       seen.add(reason);
       const { card } = shareCardOf(state);
-      expect(card.textContent ?? "", `${name}: the card did not print the codec's reason`).toContain(reason);
+      expect(card.textContent ?? "", `${name}: the card did not say why`).toContain(reason);
       expect(byName(card, COPY_LINK).disabled, `${name}: Copy link is still live`).toBe(true);
     }
     expect(seen.size, "two of the refusals print the same sentence").toBe(3);

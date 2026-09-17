@@ -316,7 +316,9 @@ describe("a rung opened by a link", () => {
     expect(drillCard(root), "not the chooser either — a refusal is not an invitation").toBeNull();
     const box = q(root, ".linkRefusal");
     expect(box.hidden).toBe(false);
-    expect(box.textContent).toContain("stage 9");
+    // The reader's sentence, not the codec's — M8 step 2.4 put one module between them. The codec's
+    // own reason still names the stage, and `test/errors.test.ts` is what pins the mapping.
+    expect(box.textContent).toContain("opens practice at a stage that does not exist");
   });
 
   it("opens every rung of every task without refusing — the roster the gate names", () => {
