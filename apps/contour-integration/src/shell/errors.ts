@@ -177,3 +177,22 @@ export function integrandEmpty(expression: string, reason: string | null): strin
   if (expression.trim() === "") return "Type an integrand to begin.";
   return reason === null ? "This expression cannot be read." : parseErrorText(reason);
 }
+
+/**
+ * The same thing as a CLAUSE, for the two places that embed it — M8 step 2.6.
+ *
+ * **The Phase 2 gate found both**, and they are the shape of defect a table test structurally
+ * cannot see: `test/errors.test.ts` drives the mapping, and these two readers never called it.
+ * The Derivation card printed `Empty expression` and the accumulator's strip printed *Nothing is
+ * plotted — Empty expression.* — `@cas/expr`'s own words, in an app whose one module for this
+ * exists so that they never reach a reader, three cards away from the invitation the Integrand
+ * card was showing at the same moment.
+ *
+ * A clause rather than a second sentence, because the strip's line is *"Nothing is plotted — ⟨x⟩."*
+ * and a full stop inside it reads as a typo; the parse rules already return this shape, which is
+ * why the sentence form is the one that has to do work.
+ */
+export function integrandEmptyClause(expression: string, reason: string | null): string {
+  if (expression.trim() === "") return "there is nothing in the integrand box";
+  return reason === null ? "this expression cannot be read" : parseErrorText(reason);
+}

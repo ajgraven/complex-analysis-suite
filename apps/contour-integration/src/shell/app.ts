@@ -24,7 +24,7 @@ import type { PoleReport } from "../kernel/poles.js";
 import type { StageDraw } from "./stageView.js";
 import { injectPngText } from "@cas/export";
 import { LIGHT_INK } from "../ui/inkTheme.js";
-import { DONE, FAILED, linkRefusal as linkRefusalSentence } from "./errors.js";
+import { DONE, FAILED, linkRefusal as linkRefusalSentence, shareRefusal } from "./errors.js";
 
 import {
   FIGURE_THEMES,
@@ -372,7 +372,11 @@ export function mountShell2(root: Element): Shell2Handle {
     copyLink: () => {
       const enc = encodeShell(state);
       if (!enc.ok) {
-        say(enc.reason, "⚠");
+        // **Through `shareRefusal`, not the codec's own words** — M8 step 2.6, the third unmapped
+        // reader the Phase 2 gate found. The Share card had been mapped at 2.4 and this button had
+        // not, so the same refusal read one way in the rail and another in the notice — and the
+        // notice is the one a reader gets when they have just asked for a link and not got one.
+        say(shareRefusal(enc.reason), "⚠");
         return;
       }
       const link = window.location.origin + window.location.pathname + enc.hash;

@@ -23,6 +23,7 @@
 // that is M5.1's finding (the old shell relinking its GLSL every frame, its guard comparing identity
 // against a product rebuilt on every resolve) in the one other place the shape recurs.
 import { attachCanvasA11y } from "@cas/ui";
+import { integrandEmptyClause } from "./errors.js";
 
 import { accumulateForIntegral, type Accumulation } from "../engine/contour/accumulate.js";
 import type { ContourIntegral, PathFn } from "../engine/contour/integrate.js";
@@ -132,7 +133,7 @@ type AccInputs =
   /** An engine sentence, never a phrase invented here. */
   | { readonly ok: false; readonly refusal: string };
 
-function inputsOf(resolution: StateResolution): AccInputs {
+function inputsOf(state: ShellState, resolution: StateResolution): AccInputs {
   switch (resolution.kind) {
     case "gallery": {
       const run = resolution.run;
@@ -150,7 +151,10 @@ function inputsOf(resolution: StateResolution): AccInputs {
       return { ok: true, f: resolution.f, pieces: a.resolved, integral: a.integral, sides: a.sides };
     }
     case "empty":
-      return { ok: false, refusal: resolution.reason ?? "there is no integrand to accumulate" };
+      // **The parser's own words used to land in *Nothing is plotted — Empty expression.*** — M8
+      // step 2.6, found at the Phase 2 gate. Every other arm here carries an engine sentence and is
+      // right to; this one carries `@cas/expr`'s, which `shell/errors.ts` translates.
+      return { ok: false, refusal: integrandEmptyClause(state.expr, resolution.reason) };
   }
 }
 
@@ -324,7 +328,7 @@ export function createStripView(host: HTMLElement, input: StripInput): StripView
   }
 
   function accumulation(d: StripDraw): Accumulation | null {
-    return accumulate(d, inputsOf(d.resolution));
+    return accumulate(d, inputsOf(d.state, d.resolution));
   }
 
   function stepAt(d: StripDraw): { readonly index: number; readonly z: Cx } | null {
@@ -445,7 +449,7 @@ export function createStripView(host: HTMLElement, input: StripInput): StripView
 
   function drawNow(d: StripDraw): void {
     last = d;
-    const got = inputsOf(d.resolution);
+    const got = inputsOf(d.state, d.resolution);
     const acc = accumulate(d, got);
     const withheld = got.ok ? (acc === null ? withheldBecause(got.integral) : null) : got.refusal;
 

@@ -651,6 +651,27 @@ describe("the `#vs=` permalink, at the shell", () => {
     expect(sameShape(back.state.contour, drawn)).toBe(true);
   });
 
+  it("says why Copy link gave no link, in the SAME words the Share card uses", () => {
+    // **The third unmapped reader, found at the Phase 2 gate** — M8 step 2.6. Step 2.4 routed the
+    // Share card through `shareRefusal` and left this button on `enc.reason`, so the same refusal
+    // read one way in the rail and another in the notice — and the notice is the one a reader gets
+    // at the moment they asked for a link and did not get one.
+    const { root, app } = mountSandbox();
+    // A contour that came from neither a template nor the pen: a template's shape with its recipe
+    // taken away, which is what a record's curve parked in the sandbox looks like to the codec.
+    app.applyState({ ...app.currentState(), contourSource: null });
+    const enc = encodeShell(app.currentState());
+    expect(enc.ok, "the state encodes, so there is no refusal to map").toBe(false);
+    app.actions().copyLink();
+    const said = app.session().notice?.text ?? "";
+    expect(said).toContain("came from neither a template nor the pen");
+    expect(said).toContain("a link has nothing to rebuild it from");
+    // Not the codec's own words — it names the field, and the field is not something to act on.
+    if (!enc.ok) expect(said).not.toBe(enc.reason);
+    // And it is the sentence the Share card is showing at the same moment.
+    expect(textOf(q(root, '[data-card="share"]'))).toContain("came from neither a template nor the pen");
+  });
+
   // **The worked-example flag reached the wire and nothing round-tripped it through a REAL hash.**
   // Mutant `we-not-in-codec`: `viewState.ts`'s `workedExample: w.we === 1` replaced by
   // `workedExample: false`. It survived the sweep — `test/viewState.test.ts` judges the codec by

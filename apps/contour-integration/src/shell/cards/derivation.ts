@@ -28,6 +28,7 @@ import {
 } from "../../engine/derivation.js";
 import { constraintLabel, tagLabel } from "../../engine/vocabulary.js";
 import { drillMask } from "../drillPanel.js";
+import { integrandEmpty } from "../errors.js";
 import { contourIntegrandLatex, targetLatex } from "../../families/latex.js";
 import { relationText } from "../../families/describe.js";
 import { fmt, fmtCx } from "../../kernel/decimal.js";
@@ -120,12 +121,15 @@ function factsOf(ctx: CardContext): Facts {
       why: "",
     };
   }
+  // **`Empty expression` used to reach a reader here** — M8 step 2.6, found at the Phase 2 gate.
+  // `declared-refused` carries an ENGINE sentence and is shown as written; `empty` carries the
+  // PARSER's, which is exactly what `shell/errors.ts` exists to translate.
   return {
     derivation: null,
     why:
       resolution.kind === "declared-refused"
         ? resolution.reason
-        : (resolution.reason ?? "There is no integrand."),
+        : integrandEmpty(state.expr, resolution.kind === "empty" ? resolution.reason : null),
   };
 }
 

@@ -794,8 +794,13 @@ key on restore, and remember that navigating to a new `#vs=` is a **hashchange, 
 > as the pen's vertices, or — in gallery mode — as **nothing at all**, because the record rebuilds
 > it from `(record, fixture, bindings, geometry)` on every run. The recipe is rebuilt and compared
 > against the live contour before a link is minted, and refuses rather than opening a different
-> shape. Re-measured on the M8 shell at step 2.5: the sandbox's cold start is a **43**-character
-> hash, a gallery link is **84**, and the longest of the 28 is **102**.
+> shape. Re-measured on the M8 shell **in a browser, against the built `dist`** (step 2.6): the
+> cold start's link is **123** characters of fragment, the sandbox's **99**, and the longest of the
+> front door's eight classics **139** (F2, the Fresnel wedge). Measuring `encodeShell` on a
+> synthetic default state instead gives 84, and the difference is the **camera** — the app fits the
+> contour on arrival, so the `view` a reader is actually looking at is never the default one. The
+> app writes no fragment at all until the reader acts, so a cold start's address bar is bare and
+> the Copy link button mints the link itself.
 >
 > **Two of this section's own rules were measured and NOT taken.** Quantising coordinates to ~6
 > significant figures is worth **4.0 %** of the payload, because the bulk is structural (piece ids,

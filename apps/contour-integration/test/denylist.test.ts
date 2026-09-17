@@ -34,7 +34,7 @@ import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { loadFamilies } from "../src/families/index.js";
-import { defaultState, type ShellState } from "../src/shell/state.js";
+import { compile, defaultState, type ShellState } from "../src/shell/state.js";
 import { circleTemplate } from "../src/engine/contour/templates.js";
 import { DRILL_STAGES, DRILL_TASKS, taskState } from "../src/shell/drill.js";
 import { mountShell2, type Shell2Handle } from "../src/shell/app.js";
@@ -228,6 +228,15 @@ const gallery = (record: string, fixture = 0): ShellState => ({
  * `aria-label` is read instead of three copies of the glyphs KaTeX lays down.
  */
 /**
+ * Broken expressions of the shapes a reader types, one per throw site `shell/errors.ts` covers.
+ *
+ * The SAME list `test/errors.test.ts` drives the mapping with — kept here rather than imported so
+ * the two suites cannot be made to agree by editing one file, which is the point of having the
+ * screen sweep at all.
+ */
+const BROKEN_INPUTS = ["", "1/(1+z", "zz(3)", "1/z +", "1 § 2", "*/z", "if(z)", "sin(z, 1)"] as const;
+
+/**
  * The visible text alone — no accessible names, because those legitimately carry LaTeX.
  *
  * `math()` puts the formula's plain-text form in an `aria-label`, which is the app's convention and
@@ -290,6 +299,12 @@ function states(): { readonly name: string; readonly go: (app: Shell2Handle) => 
         if (point !== undefined) a.actions().declare(point.id);
       },
     },
+    // **Two empty states, added at the Phase 2 gate** — M8 step 2.6. They are here rather than in
+    // `errors.test.ts` because what failed was not the mapping: it was two READERS of
+    // `resolution.reason` that never called it, and only a sweep over what is on screen can see a
+    // surface nobody thought to test.
+    { name: "the sandbox with an empty integrand box", go: (a) => { a.actions().toSandbox(); a.actions().setExpr(""); } },
+    { name: "the sandbox with an expression that will not parse", go: (a) => { a.actions().toSandbox(); a.actions().setExpr("1/(1+z"); } },
     { name: "the worked-example mode", go: (a) => a.actions().setMode("worked") },
     { name: "the front door", go: (a) => a.actions().openFrontDoor() },
     { name: "the contrasts panel", go: (a) => a.actions().setContrastsOpen(true) },
@@ -328,7 +343,7 @@ describe("nothing the SHELL puts on screen carries a house word", () => {
     // backslash says it was typeset in a notation nothing here parses.
     const raw = [...visibleText().matchAll(/[^\n]{0,40}[$\\][^\n]{0,40}/g)].map((m) => m[0]);
     for (const a of mounted.splice(0)) a.destroy();
-    return { name, size: text.length, why: offences(text), dollars: raw };
+    return { name, size: text.length, text, why: offences(text), dollars: raw };
   });
 
   it("reaches every state the list names", () => {
@@ -344,6 +359,37 @@ describe("nothing the SHELL puts on screen carries a house word", () => {
 
   it("reaches every state, with enough on screen for the sweep to be about something", () => {
     expect(swept.filter((s2) => s2.size <= 400).map((s2) => s2.name)).toEqual([]);
+  });
+
+  it("puts none of the PARSER's own words on screen, in any state", () => {
+    // **The Phase 2 gate found two that did** — the Derivation card printed `Empty expression` and
+    // the strip printed *Nothing is plotted — Empty expression.*, three cards away from the
+    // Integrand card's *Type an integrand to begin.* at the same moment. `test/errors.test.ts`
+    // drives the mapping and passes either way, because neither reader called it.
+    //
+    // The needles come from the real `compile`, so a reworded upstream message cannot quietly stop
+    // being checked for — and they are the message's own leading words rather than the whole
+    // string, since the mapped sentences legitimately quote the token.
+    const raw = BROKEN_INPUTS.map((src) => {
+      const c = compile(src);
+      return c.ok ? null : c.error.split(/[\s']/)[0];
+    }).filter((w): w is string => w !== null && w.length > 3);
+    expect(new Set(raw).size, "the parser's messages all start with the same word").toBeGreaterThan(2);
+    const found = swept.flatMap((s2) =>
+      [...new Set(raw)].filter((w) => s2.text.includes(w)).map((w) => `${s2.name}: “${w}…”`),
+    );
+    expect(found).toEqual([]);
+  });
+
+  it("shows the MAPPED sentence in each of those two states, so the check above is not passing on a blank screen", () => {
+    const empty = swept.find((s2) => s2.name === "the sandbox with an empty integrand box");
+    const broken = swept.find((s2) => s2.name === "the sandbox with an expression that will not parse");
+    // **TWICE in the empty state**, which is the assertion with content: the Integrand card has
+    // always said it, and the Derivation card — which printed `Empty expression` — now says it too.
+    // One occurrence would pass with the defect still there.
+    expect((empty?.text.match(/Type an integrand to begin/g) ?? []).length).toBe(2);
+    expect(broken?.text).toContain("unbalanced parenthesis");
+    expect(broken?.text).not.toContain("Expected");
   });
 
   it("finds none of them", () => {

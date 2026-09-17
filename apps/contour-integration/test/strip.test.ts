@@ -213,8 +213,26 @@ describe("when there is nothing to accumulate", () => {
     const none = text(host, "[data-testid=acc-none]");
     expect(none.length).toBeGreaterThan(20);
     expect(none.startsWith("Nothing is plotted")).toBe(true);
+    // **And the reason is the app's sentence, not `@cas/expr`'s** — M8 step 2.6, found at the
+    // Phase 2 gate: this line read *Nothing is plotted — Unexpected token 'eof'.* until the strip
+    // was routed through `shell/errors.ts`, so the one surface that says why named a token — and
+    // `eof` at that, which is the parser's name for the end of the input and not a thing a reader
+    // has typed.
+    expect(none).toBe("Nothing is plotted — the expression ends before it is finished.");
+    expect(none).not.toContain("Unexpected token");
     expect(q(host, "[data-testid=acc-value]")).toBe(null);
     expect(q(host, "input[type=range]")).toBe(null);
+  });
+
+  it("invites an integrand where the box is EMPTY, rather than reporting an empty expression", () => {
+    // An empty box is not an error, and this line said it was: `compile("")` refuses with `Empty
+    // expression`, which landed here verbatim. The clause form rather than the card's sentence,
+    // because it is embedded — *Nothing is plotted — ⟨x⟩.*
+    const { host, view } = mount();
+    const d = drawOf({ expr: "" });
+    view.drawNow(d);
+    const none = text(host, "[data-testid=acc-none]");
+    expect(none).toBe("Nothing is plotted — there is nothing in the integrand box.");
   });
 
   it("and when the INTEGRAL was withheld, with the engine's own reason", () => {
