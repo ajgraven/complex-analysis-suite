@@ -15,6 +15,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildDerivation } from "../src/engine/derivation.js";
+import { buildSteps } from "../src/engine/steps.js";
 import { circleTemplate } from "../src/engine/contour/templates.js";
 import { compile, defaultState, offeredCorpus, resolveState, type ShellState } from "../src/shell/state.js";
 import { patch } from "../src/shell/dom.js";
@@ -48,6 +49,7 @@ function spyActions(): ShellActions & { calls: string[] } {
     undeclare: () => calls.push("undeclare"),
     setDeclaration: () => calls.push("decl"),
     setOpen: (id, open) => calls.push(`open:${id}:${open}`),
+    setStep: (step) => calls.push(`step:${step}`),
     copyLink: () => calls.push("copyLink"),
     saveFigure: (t) => calls.push(`saveFigure:${t}`),
     copyFigure: () => calls.push("copyFigure"),
@@ -98,9 +100,15 @@ const RECORD_IDS = offeredCorpus()
   .tiers.flatMap((t) => t.families)
   .map((f) => f.id);
 
-/** The stage disclosures, in order — the card's own children, not any nested `<details>`. */
+/**
+ * The step disclosures, in order — the stepper's own children, not any nested `<details>`.
+ *
+ * `:scope > .stepper > details` since M8 step 3.1b: the blocks moved one level down into the
+ * region that carries the ← → handler, and the stepper's controls sit above them. The selector is
+ * still one level deep on purpose, so a provenance trail inside a step cannot be counted as a step.
+ */
 const stagesOf = (card: HTMLElement): HTMLDetailsElement[] =>
-  [...card.querySelectorAll<HTMLDetailsElement>(":scope > details")];
+  [...card.querySelectorAll<HTMLDetailsElement>(":scope > .stepper > details")];
 
 const summaryOf = (d: HTMLDetailsElement): string => d.querySelector("summary")?.textContent ?? "";
 
@@ -228,7 +236,10 @@ describe("the Derivation card", () => {
     expect(summaryOf(stageNamed(card, "The problem"))).toContain("2 statements");
     expect(summaryOf(stageNamed(card, "Residues"))).toContain("1 pole");
     expect(summaryOf(stageNamed(card, "Hypotheses"))).toContain("1 of 1 failed");
-    expect(summaryOf(stageNamed(derivationOf(sandbox({ expr: "1/z" })).card, "Hypotheses"))).toContain("2 steps");
+    // **`checks`, not `steps`, since M8 step 3.1b**: a step is one of the argument's steps and the
+    // stepper counts those, so a block's lines needed the other word — a card cannot say `10 steps`
+    // over a stepper reading `4 / 8` and mean two different things by it.
+    expect(summaryOf(stageNamed(derivationOf(sandbox({ expr: "1/z" })).card, "Hypotheses"))).toContain("2 checks");
   });
 
   // `session.open[id]` is tri-state, and this is what the third state buys. A reader who shuts the
@@ -237,12 +248,14 @@ describe("the Derivation card", () => {
   // pointer. Both directions, because an override that could only OPEN would leave the failing
   // stage unclosable, which is the half a `?? false` default hides.
   it("lets an explicit open state win over the computed default, both ways", () => {
+    // The ids are the STEP's since M8 step 3.1b (`hypotheses`, `residues`), not the ledger pass's
+    // (`legality`, `catch`) — the blocks are the lecturer's steps now, and the id is what they are.
     const shut = defaultSession();
-    shut.open["derivation:legality"] = false;
+    shut.open["derivation:hypotheses"] = false;
     expect(stageNamed(derivationOf(refusing(), shut).card, "Hypotheses").open).toBe(false);
 
     const opened = defaultSession();
-    opened.open["derivation:catch"] = true;
+    opened.open["derivation:residues"] = true;
     expect(stageNamed(derivationOf(refusing(), opened).card, "Residues").open).toBe(true);
   });
 
@@ -255,7 +268,7 @@ describe("the Derivation card", () => {
     const passing = stageNamed(card, "Residues");
     passing.open = true;
     passing.dispatchEvent(new Event("toggle"));
-    expect(actions.calls).toContain("open:derivation:catch:true");
+    expect(actions.calls).toContain("open:derivation:residues:true");
   });
 
   // **No badge in this card is a literal.** The rule the app is defending is PLAN §9's R2: a
@@ -281,14 +294,22 @@ describe("the Derivation card", () => {
     const resolution = resolveState(state, compiled);
     if (resolution.kind !== "gallery" || resolution.run === null) throw new Error("no run");
     const run = resolution.run;
-    const lines = buildDerivation({
+    // **Through `buildSteps`, in the order the card draws them** — M8 step 3.1b. The comparison is
+    // still against the engine's own levels; what changed is that the card renders the lecturer's
+    // order rather than the ledger's, and reading the stages here would compare two orderings and
+    // call the difference a wrong badge.
+    const derivation = buildDerivation({
       ledger: run.ledger,
       poles: run.poles,
       integral: run.integral,
       theorem: run.theorem,
       spec: run.contour.pieces,
       ...(resolution.solved === null ? {} : { solved: resolution.solved }),
-    }).stages.flatMap((s) => s.lines);
+    });
+    const lines = buildSteps(derivation, {
+      spec: run.contour.pieces,
+      params: run.contour.params,
+    }).flatMap((s) => s.lines);
     const expected = lines.map((l) => (l.status === "failed" ? "⚠" : l.level));
 
     const { card } = derivationOf(state);
@@ -326,12 +347,16 @@ describe("the Derivation card", () => {
       (p) => p.textContent ?? "",
     );
     expect(drawn.length).toBe(methods.length);
-    // The header counts the same lines the stages hold. `8 steps, each with its evidence` is the
-    // card's one summary of its own size, and a constant there would go on reading right while the
+    // The header counts BOTH: the argument's steps, which the stepper moves through, and the
+    // checks, which are the lines. A constant in either slot would go on reading right while the
     // argument beneath it grew or shrank.
+    // The step count is checked against the blocks the card actually DREW rather than against a
+    // second `buildSteps` here — which would have to reproduce the card's own problem statements to
+    // agree, and would then be asserting that two copies of one call agree.
     expect(card.querySelector("p.muted.small")?.textContent ?? "").toBe(
-      `${methods.length} steps, each with its evidence`,
+      `${stagesOf(card).length} steps · ${methods.length} checks, each with its evidence`,
     );
+    expect(stagesOf(card).length).toBeGreaterThan(3);
     // Compared only on the methods carrying no `$`, because a typeset one's `textContent` is
     // KaTeX's rendering and not the source — asserting those by string would be asserting KaTeX.
     const plain = methods.filter((m) => !m.includes("$"));
@@ -373,12 +398,123 @@ describe("the Derivation card", () => {
   // the CATCH line, and a table under `Boundary terms` would attach the winding numbers to the arcs
   // that are being bounded. Both halves are needed: "it is in Residues" passes with a table in every
   // stage, and "it is in no other stage" passes with no table at all.
-  it("puts the per-pole table in the Residues stage and nowhere else", () => {
+  // ── the stepper (M8 step 3.1b) ──────────────────────────────────────────────────────────────
+
+  const stepperOf = (card: HTMLElement): HTMLElement | null => card.querySelector(".stepBar");
+  const dotsOf = (card: HTMLElement): HTMLButtonElement[] =>
+    [...card.querySelectorAll<HTMLButtonElement>(".stepDot")];
+  const openStep = (card: HTMLElement): string =>
+    card.querySelector<HTMLElement>(".stepBody")?.dataset.step ?? "";
+
+  it("shows every step at once by default, which is the form it had before the stepper existed", () => {
+    // `session.step` defaults to `"all"` precisely so that a reader who never touches the control
+    // sees what they saw at Phase 1. The stepper is an OFFER, not a mode the app puts them in.
+    const { card } = derivationOf(gallery("mellin-keyhole"));
+    expect(stagesOf(card).length).toBeGreaterThan(4);
+    expect(card.querySelector(".stepBody")).toBeNull();
+    expect(stepperOf(card)?.textContent ?? "").toContain("Step through");
+  });
+
+  it("steps to ONE step, open, with the others reachable by their dots", () => {
+    const session = defaultSession();
+    session.step = 2;
+    const { card } = derivationOf(gallery("mellin-keyhole"), session);
+    // One step, and it is OPEN: the stepper has already answered "which one", so putting it behind
+    // a disclosure would ask the same question twice.
+    expect(stagesOf(card).length, "a stepped card still drew the disclosures").toBe(0);
+    expect(card.querySelectorAll(".stepBody").length).toBe(1);
+    const dots = dotsOf(card);
+    expect(dots.length).toBeGreaterThan(4);
+    const current = dots.filter((d) => d.getAttribute("aria-current") === "step");
+    expect(current.length, "exactly one dot is the step the reader is on").toBe(1);
+    expect(dots.indexOf(current[0] as HTMLButtonElement)).toBe(2);
+    // Every dot is NAMED, so the shape of the argument is reachable without seeing the dots at all.
+    for (const [i, d] of dots.entries()) {
+      expect(d.getAttribute("aria-label") ?? "", `dot ${i}`).toMatch(/^step \d+ of \d+ — .+/);
+    }
+  });
+
+  it("moves by the buttons, by the dots and by the arrow keys — all through setStep", () => {
+    const session = defaultSession();
+    session.step = 1;
+    const { card, actions } = derivationOf(gallery("mellin-keyhole"), session);
+    const bar = stepperOf(card) as HTMLElement;
+    bar.querySelector<HTMLButtonElement>('[aria-label="next step"]')?.click();
+    bar.querySelector<HTMLButtonElement>('[aria-label="previous step"]')?.click();
+    (dotsOf(card)[4] as HTMLButtonElement).click();
+    // By its label, not by position: `:last-of-type` is per PARENT, so it matches the last button
+    // inside each `<li>` too and `querySelector` then returns the first of those in document order.
+    [...bar.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === "All")?.click();
+    // The arrow keys are the same ask, on the region that holds the controls AND the step body.
+    const region = card.querySelector(".stepper") as HTMLElement;
+    region.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    region.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+    region.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+    expect(actions.calls.filter((c) => c.startsWith("step:"))).toEqual([
+      "step:2",
+      "step:0",
+      "step:4",
+      "step:all",
+      "step:2",
+      "step:0",
+    ]);
+  });
+
+  it("stops at both ends, and CLAMPS an index the record does not have", () => {
+    // A stale index is the ordinary case, not an error: the step count changes with the record and
+    // the fixture, so a reader on step 6 of a keyhole who opens a unit-circle record has asked for
+    // a step that does not exist. Landing on the last one is the answer to that.
+    const session = defaultSession();
+    session.step = 99;
+    const { card, actions } = derivationOf(gallery("circle-linear-cos"), session);
+    const dots = dotsOf(card);
+    expect(dots.length).toBeGreaterThan(0);
+    expect(dots.indexOf(dots.find((d) => d.getAttribute("aria-current") === "step") as HTMLButtonElement)).toBe(
+      dots.length - 1,
+    );
+    const bar = stepperOf(card) as HTMLElement;
+    expect(bar.querySelector<HTMLButtonElement>('[aria-label="next step"]')?.disabled).toBe(true);
+    expect(bar.querySelector<HTMLButtonElement>('[aria-label="previous step"]')?.disabled).toBe(false);
+    // **And the other end**, which the sweep found nothing asserted: a Prev enabled at step 0 is a
+    // control that looks pressable and does nothing, since the clamp swallows the −1.
+    const first = defaultSession();
+    first.step = 0;
+    const start = stepperOf(derivationOf(gallery("circle-linear-cos"), first).card) as HTMLElement;
+    expect(start.querySelector<HTMLButtonElement>('[aria-label="previous step"]')?.disabled).toBe(true);
+    expect(start.querySelector<HTMLButtonElement>('[aria-label="next step"]')?.disabled).toBe(false);
+    // And the arrow key does not walk off the end either.
+    (card.querySelector(".stepper") as HTMLElement).dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }),
+    );
+    expect(actions.calls.filter((c) => c.startsWith("step:"))).toEqual([`step:${dots.length - 1}`]);
+  });
+
+  it("does NOT print the answer under every step — only on the conclusion, or in All", () => {
+    // The stepper exists to walk an argument, and repeating its result beneath step 2 gives away
+    // the ending. In `All` the conclusion stays at the foot of the whole argument, where it has
+    // been since step 1.5b.
+    const value = (card: HTMLElement): string => card.querySelector(".verdict")?.textContent ?? "";
+    expect(value(derivationOf(gallery("semicircle-quartic")).card).length).toBeGreaterThan(0);
+    const early = defaultSession();
+    early.step = 1;
+    expect(value(derivationOf(gallery("semicircle-quartic"), early).card)).toBe("");
+    const last = defaultSession();
+    last.step = 99;
+    const { card } = derivationOf(gallery("semicircle-quartic"), last);
+    expect(openStep(card)).toBe("conclusion");
+    expect(value(card).length).toBeGreaterThan(0);
+  });
+
+  it("puts the per-pole table in the Residues steps and nowhere else", () => {
+    // **Steps, plural, since M8 step 3.1b**: a record whose enclosed residues are individually
+    // expressible gets one step per pole, and each shows its own row. What must stay true is that
+    // no OTHER step shows a pole table — the hypotheses and the boundary terms are not about poles.
     const { card } = derivationOf(gallery("semicircle-quartic"));
-    const residues = stageNamed(card, "Residues");
-    expect(residues.querySelectorAll(".poleTable tbody tr").length).toBeGreaterThan(0);
+    const residues = stagesOf(card).filter((d) => summaryOf(d).startsWith("Residues"));
+    expect(residues.length).toBeGreaterThan(0);
+    expect(residues.reduce((n, d) => n + d.querySelectorAll(".poleTable tbody tr").length, 0)).toBeGreaterThan(0);
     for (const stage of stagesOf(card)) {
-      if (stage === residues) continue;
+      if (residues.includes(stage)) continue;
       expect(stage.querySelectorAll(".poleTable").length, summaryOf(stage)).toBe(0);
     }
   });
@@ -440,7 +576,8 @@ describe("the Derivation card", () => {
   // trails cannot share a key and opening one cannot open another.
   it("honours an explicit open state on one provenance trail only", () => {
     const session = defaultSession();
-    session.open["derivation:kill:prov:0"] = true;
+    // The provenance id carries the STEP's id, which for a boundary term is `boundary:<pieceId>`.
+    session.open["derivation:boundary:circle:prov:0"] = true;
     const { card } = derivationOf(sandbox({ expr: "1/z" }), session);
     const opened = [...card.querySelectorAll<HTMLDetailsElement>("details details")].filter((d) => d.open);
     expect(opened.length).toBe(1);

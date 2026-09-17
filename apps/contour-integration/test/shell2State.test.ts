@@ -651,6 +651,63 @@ describe("the `#vs=` permalink, at the shell", () => {
     expect(sameShape(back.state.contour, drawn)).toBe(true);
   });
 
+  it("opens the stepper at the first step in Worked example, and gives it back in Explore", () => {
+    // **M8 step 3.1b, the plan's *open by default at step 1*.** The two modes differ in what they
+    // OFFER rather than in where a reader happened to leave off, so Explore goes back to `"all"` —
+    // the whole argument at once, which is the form the card had before the stepper existed.
+    const { root, app } = mountCold();
+    expect(app.session().step, "Explore did not start on the whole argument").toBe("all");
+    app.actions().setMode("worked");
+    expect(app.session().step).toBe(0);
+    expect(q(root, '[data-card="derivation"] .stepBody')).not.toBeNull();
+    // **The left rail folds too**, which it did on a LINK and not on this button until step 3.1b —
+    // the same mode arriving with two different layouts depending on how the reader got there.
+    expect(app.session().rails.left, "worked example left its left rail open").toBe(true);
+    app.actions().setMode("explore");
+    expect(app.session().step).toBe("all");
+    expect(app.session().rails.left).toBe(false);
+    // `querySelector`, not `q`: `q` THROWS when it finds nothing, so a `toBeNull()` through it can
+    // never pass — which is how this line was first written and what the failure named.
+    expect(root.querySelector('[data-card="derivation"] .stepBody')).toBeNull();
+  });
+
+  it("gives a folded rail a way BACK, and stops it drawing its cards into 38 px", () => {
+    // **Two defects, both older than M8 step 3.1b and both found by its own screenshot.**
+    // `setRail` had no caller anywhere in the app, so the only thing that ever folded a rail was a
+    // worked-example link and there was no way back from one; and a folded rail went on rendering
+    // every card into a 38 px column — a stripe of one- and two-letter fragments, with the target's
+    // formula an unreachable horizontal scroll region that `axe` flags. Folding on the mode button
+    // is what turned an unreachable state into one a reader reaches by pressing a control.
+    const { root, app } = mountCold();
+    const rail = q(root, ".rail2.left");
+    expect(rail.querySelectorAll("[data-card]").length, "the open rail has no cards").toBeGreaterThan(2);
+
+    app.actions().setMode("worked");
+    expect(app.session().rails.left).toBe(true);
+    expect(rail.querySelectorAll("[data-card]").length, "a folded rail is still drawing its cards").toBe(0);
+    expect(rail.querySelector(".railName")?.textContent ?? "").toMatch(/\S/);
+
+    // And the control is there, named for what is behind it, and it goes back.
+    const toggle = q<HTMLButtonElement>(rail, ".railToggle");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(toggle.getAttribute("aria-label") ?? "").toContain("show the panel");
+    toggle.click();
+    expect(app.session().rails.left).toBe(false);
+    expect(q(root, ".rail2.left").querySelectorAll("[data-card]").length).toBeGreaterThan(2);
+    expect(q<HTMLButtonElement>(root, ".rail2.left .railToggle").getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("puts the stepper back to the whole argument when a link, a cell or a rung arrives", () => {
+    // M7.4's finding in its own shape: a reader's place in ONE argument must not outlive the
+    // argument. `resetTransient` clears it, so every door — a permalink, a contrast cell, a drill
+    // rung — is covered by construction rather than by three callers remembering.
+    const { app } = mountCold();
+    app.actions().setStep(3);
+    expect(app.session().step).toBe(3);
+    app.applyState({ ...app.currentState(), fixture: 0 });
+    expect(app.session().step).toBe("all");
+  });
+
   it("says why Copy link gave no link, in the SAME words the Share card uses", () => {
     // **The third unmapped reader, found at the Phase 2 gate** — M8 step 2.6. Step 2.4 routed the
     // Share card through `shareRefusal` and left this button on `enc.reason`, so the same refusal

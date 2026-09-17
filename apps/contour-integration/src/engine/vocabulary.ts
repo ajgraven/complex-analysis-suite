@@ -298,5 +298,17 @@ export function tagLabel(id: TagId): string {
  * `to` is the schema's own word for where the parameter goes: `"inf"`, `"0+"`, or a number as text.
  */
 export function limitTag(to: string): string {
-  return `$\\to ${to === "inf" ? "\\infty" : to === "0+" ? "0^+" : to}$`;
+  return `$${limitArrow(to)}$`;
+}
+
+/**
+ * The same arrow WITHOUT its delimiters — M8 step 3.1b.
+ *
+ * Its second consumer is the stepper's limit step, whose title is one formula (*Let $R \\to
+ * \\infty$*) rather than a word beside a tag. Composing that from `limitTag` meant `Let $R$ $\\to
+ * \\infty$` — two math spans where a reader sees one statement — and slicing the delimiters back
+ * off at the call site would put the convention in two places.
+ */
+export function limitArrow(to: string): string {
+  return `\\to ${to === "inf" ? "\\infty" : to === "0+" ? "0^+" : to}`;
 }

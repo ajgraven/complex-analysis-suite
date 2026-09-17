@@ -67,6 +67,7 @@ function spyActions(): ShellActions & { calls: string[]; applied: ShellState[] }
     undeclare: () => calls.push("undeclare"),
     setDeclaration: () => calls.push("decl"),
     setOpen: (id, open) => calls.push(`open:${id}:${open}`),
+    setStep: (step) => calls.push(`step:${step}`),
     copyLink: () => calls.push("copyLink"),
     saveFigure: (t) => calls.push(`saveFigure:${t}`),
     copyFigure: () => calls.push("copyFigure"),

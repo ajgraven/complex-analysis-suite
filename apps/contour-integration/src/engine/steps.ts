@@ -35,7 +35,7 @@ import {
   type StageId,
   type Statement,
 } from "./derivation.js";
-import { limitTag, stageTitle } from "./vocabulary.js";
+import { limitArrow, stageTitle } from "./vocabulary.js";
 
 /** What a step is about, for the stage to emphasise. Every field names something the app can find. */
 export interface StepFocus {
@@ -197,12 +197,12 @@ function limitSteps(params: Params): DerivationStep[] {
     .map((p) => ({
       id: `limit:${p.name}`,
       kind: "limit" as const,
-      title: `Let $${p.name}$ ${limitTag(String(p.limit?.to ?? ""))}`,
+      title: `Let $${p.name} ${limitArrow(String(p.limit?.to ?? ""))}$`,
       why: "The bounds above hold at every finite value; the argument needs the limit.",
       statements: [
         {
           label: p.name,
-          text: `$${p.name} ${limitTag(String(p.limit?.to ?? "")).split("$").join("")}$, from $${p.name} = ${p.value}$`,
+          text: `$${p.name} ${limitArrow(String(p.limit?.to ?? ""))}$, from $${p.name} = ${p.value}$`,
         },
       ],
       lines: [],

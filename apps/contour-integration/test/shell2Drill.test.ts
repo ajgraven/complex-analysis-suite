@@ -164,7 +164,9 @@ describe("the drill's own surface", () => {
     expect(state.record).toBe("jordan-cosine-kernel");
 
     const right = q(root, ".rail2.right");
-    expect(right.firstElementChild?.getAttribute("data-card")).toBe("drill");
+    // The first CARD, not the first child: since M8 step 3.1b every rail opens with its own
+    // fold control, which is chrome rather than a card.
+    expect(right.querySelector("[data-card]")?.getAttribute("data-card")).toBe("drill");
     const card = theDrillCard(root);
     expect(textOf(card)).toContain("stage 1 of 4");
     expect(card.querySelector("li"), "the chooser is put away by the pick").toBeNull();

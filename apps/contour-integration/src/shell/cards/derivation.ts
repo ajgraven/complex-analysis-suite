@@ -22,10 +22,11 @@ import {
   buildDerivation,
   type Derivation,
   type DerivationLine,
-  type DerivationStage,
+
   type PoleRow,
   type Statement,
 } from "../../engine/derivation.js";
+import { buildSteps, type DerivationStep } from "../../engine/steps.js";
 import { constraintLabel, tagLabel } from "../../engine/vocabulary.js";
 import { drillMask } from "../drillPanel.js";
 import { integrandEmpty } from "../errors.js";
@@ -45,6 +46,8 @@ const badge = (level: string, key = "b"): Desc =>
 /** Everything the card reads, gathered once — a record's from its run, the sandbox's from `analyse`. */
 interface Facts {
   readonly derivation: Derivation | null;
+  /** The same argument in the lecturer's order — `engine/steps.ts`. Empty when there is no argument. */
+  readonly steps: readonly DerivationStep[];
   /** Why there is nothing, when there is nothing. Never a blank and never a number. */
   readonly why: string;
 }
@@ -90,34 +93,38 @@ function factsOf(ctx: CardContext): Facts {
   // step behind); the sandbox's is the state's, which is the only one there is.
   if (resolution.kind === "gallery") {
     const run = resolution.run;
-    if (run === null) return { derivation: null, why: resolution.fatal ?? "This record could not be run." };
+    if (run === null) return { derivation: null, steps: [], why: resolution.fatal ?? "This record could not be run." };
+    const derivation = buildDerivation({
+      ledger: run.ledger,
+      poles: run.poles,
+      integral: run.integral,
+      theorem: run.theorem,
+      spec: run.contour.pieces,
+      statements: problemStatements(ctx, run.contour.pieces),
+      ...(resolution.solved === null ? {} : { solved: resolution.solved }),
+    });
     return {
-      derivation: buildDerivation({
-        ledger: run.ledger,
-        poles: run.poles,
-        integral: run.integral,
-        theorem: run.theorem,
-        spec: run.contour.pieces,
-        statements: problemStatements(ctx, run.contour.pieces),
-        ...(resolution.solved === null ? {} : { solved: resolution.solved }),
-      }),
+      derivation,
+      steps: buildSteps(derivation, { spec: run.contour.pieces, params: run.contour.params }),
       why: "",
     };
   }
   if (resolution.kind === "plain" || resolution.kind === "declared") {
     // The poles are the CONTEXT's, for the stage's own reason (step 1.3): `Analysis` carries the
     // ledger and not the pole report, so `resolveState` cannot hand one back.
-    if (ctx.poles === null) return { derivation: null, why: "The integrand could not be read." };
+    if (ctx.poles === null) return { derivation: null, steps: [], why: "The integrand could not be read." };
     const a = resolution.analysis;
+    const derivation = buildDerivation({
+      ledger: a.ledger,
+      poles: ctx.poles,
+      integral: a.integral,
+      theorem: a.theorem,
+      spec: state.contour.pieces,
+      statements: problemStatements(ctx, state.contour.pieces),
+    });
     return {
-      derivation: buildDerivation({
-        ledger: a.ledger,
-        poles: ctx.poles,
-        integral: a.integral,
-        theorem: a.theorem,
-        spec: state.contour.pieces,
-        statements: problemStatements(ctx, state.contour.pieces),
-      }),
+      derivation,
+      steps: buildSteps(derivation, { spec: state.contour.pieces, params: state.contour.params }),
       why: "",
     };
   }
@@ -126,6 +133,7 @@ function factsOf(ctx: CardContext): Facts {
   // PARSER's, which is exactly what `shell/errors.ts` exists to translate.
   return {
     derivation: null,
+    steps: [],
     why:
       resolution.kind === "declared-refused"
         ? resolution.reason
@@ -146,7 +154,7 @@ function stepLine(step: { readonly ok: boolean; readonly text: string }, key: st
   );
 }
 
-function lineItem(ctx: CardContext, stage: DerivationStage, line: DerivationLine, i: number): Desc {
+function lineItem(ctx: CardContext, stage: Block, line: DerivationLine, i: number): Desc {
   const { session, actions } = ctx;
   // Read out of the line ONCE: a narrowing on `line.pieceId` does not survive into the closures
   // below, and `hover(undefined)` is not `hover(null)` — one clears the highlight, the other is a
@@ -305,10 +313,27 @@ function poleTable(rows: readonly PoleRow[]): Desc {
  * is exactly why it arrives as a `Statement`), and a refused argument's `Residues` can hold a pole
  * table and nothing else. So the summary counts whichever of the three the stage actually has.
  */
-function stageCount(stage: DerivationStage, failedLines: number): string {
+/**
+ * What `stageBlock` and its two helpers actually read.
+ *
+ * A structural supertype of BOTH `DerivationStage` and `DerivationStep`, so the Phase 1 form (every
+ * stage as a disclosure) and the stepper (one step at a time) render through the same code — which
+ * is what makes `All` the same picture it always was rather than a second renderer that drifts.
+ */
+type Block = {
+  readonly id: string;
+  readonly title: string;
+  readonly why: string;
+  readonly statements: readonly Statement[];
+  readonly lines: readonly DerivationLine[];
+  readonly poles: readonly PoleRow[];
+  readonly failed: boolean;
+};
+
+function stageCount(stage: Block, failedLines: number): string {
   if (failedLines > 0) return `${failedLines} of ${stage.lines.length} failed`;
   const plural = (n: number, one: string): string => `${n} ${one}${n === 1 ? "" : "s"}`;
-  if (stage.lines.length > 0) return plural(stage.lines.length, "step");
+  if (stage.lines.length > 0) return plural(stage.lines.length, "check");
   const rest = [
     ...(stage.statements.length > 0 ? [plural(stage.statements.length, "statement")] : []),
     ...(stage.poles.length > 0 ? [plural(stage.poles.length, "pole")] : []),
@@ -316,7 +341,7 @@ function stageCount(stage: DerivationStage, failedLines: number): string {
   return rest.length > 0 ? rest.join(", ") : "nothing established";
 }
 
-function stageBlock(ctx: CardContext, stage: DerivationStage): Desc {
+function stageBlock(ctx: CardContext, stage: Block): Desc {
   const failedLines = stage.lines.filter((l) => l.status === "failed").length;
   return disclosure(
     ctx,
@@ -327,7 +352,17 @@ function stageBlock(ctx: CardContext, stage: DerivationStage): Desc {
     stage.failed,
     // The summary says how many and whether any failed, so a reader deciding whether to open it does
     // not have to open it to find out.
-    `${stage.title} — ${stageCount(stage, failedLines)}`,
+    //
+    // **Typeset since step 3.1b**, and it had to be: a stage's title is a word (*Hypotheses*) but a
+    // STEP's can carry a formula — `Boundary terms · the $R \to \infty$ semicircle` is the piece's
+    // own name, and `Let $R \to \infty$` is the limit step's. Passed as a plain string it put raw
+    // delimiters on screen, which step 2.1's rendered denylist catches.
+    h(
+      "span",
+      { key: "sum" },
+      ...mathText(stage.title, `st:${stage.id}`),
+      ` — ${stageCount(stage, failedLines)}`,
+    ),
     // Why this step is in the argument at all: a property of the METHOD rather than of this
     // integral, which is why `derivation.ts` can carry it as data.
     h("p", { key: "why", class: "muted small" }, ...mathText(stage.why, `w:${stage.id}`)),
@@ -359,27 +394,65 @@ export const derivationCard: Card = (ctx) => {
   if (drillMask(ctx) !== "none") {
     return card("derivation", nothing("Hidden: what each piece is for is the question."));
   }
-  const { derivation, why } = factsOf(ctx);
+  const { derivation, steps, why } = factsOf(ctx);
   if (derivation === null) return card("derivation", nothing(why));
 
-  const steps = derivation.stages.reduce((n, s) => n + s.lines.length, 0);
+  // **One word for one thing** — M8 step 3.1b, found by looking at it in a browser. The head said
+  // `10 steps` (the ledger's LINES) above a stepper reading `4 / 8` (the argument's steps), two
+  // counts of two different things under one word, on one card. A line is a CHECK — the Result
+  // card's own disclosure already says *What was checked* — and a step is a step of the argument.
+  const claims = derivation.stages.reduce((n, s) => n + s.lines.length, 0);
   const head = derivation.closes
-    ? `${steps} steps, each with its evidence`
+    ? `${steps.length} steps · ${claims} checks, each with its evidence`
     : // `failedAt` is a DATA KEY (`vocabulary.ts` §0.2) — `KILL`, `LEGALITY`. The old shell printed
       // it raw, so a reader met house jargon here and the textbook name for the same group two
       // cards away. When no single constraint stopped it there is nothing to name, and saying so is
       // not the same as naming nothing.
       `where it stops: ${derivation.failedAt === null ? "no single step" : constraintLabel(derivation.failedAt)}`;
 
+  // **Clamped where it is READ, not validated where it is written** — `session.step`'s own contract.
+  // The step count changes with the record and the fixture, so a stale index is the ordinary case:
+  // a reader on step 6 of a keyhole who picks a unit-circle record has asked for a step that does
+  // not exist, and landing on the last one is the answer to that rather than an error.
+  const at = ctx.session.step;
+  const stepping = at !== "all" && steps.length > 0;
+  const index = stepping ? Math.min(Math.max(0, at), steps.length - 1) : 0;
+  const shown = stepping ? [steps[index] as DerivationStep] : steps;
+
   const conclusion = derivation.conclusion;
+  // **The answer is not printed under every step.** It has its own step — the conclusion — and
+  // repeating it beneath step 2 would give away the ending of the argument the stepper exists to
+  // walk, which is exactly what Worked-example mode is for. In `All` it stays where it has been
+  // since step 1.5b, at the foot of the whole argument.
+  const showConclusion = conclusion !== undefined && (!stepping || shown[0]?.kind === "conclusion");
+
   return card(
     "derivation",
     h("p", { key: "head", class: "muted small" }, head),
-    ...derivation.stages.map((stage) => stageBlock(ctx, stage)),
+    h(
+      "div",
+      {
+        key: "stepper",
+        class: "stepper",
+        // **On the whole stepped region, not on the card** — the plan says *← → when the card has
+        // focus* and a `<section>` is not focusable; giving it `tabindex="0"` would add a tab stop
+        // before every card's contents in the suite's busiest rail. Wrapping the controls AND the
+        // step body means the arrows work wherever focus is inside the argument, which is what the
+        // sentence was after.
+        onKeydown: (e: Event) => onStepKey(ctx, steps.length, index, e as KeyboardEvent),
+      },
+      stepperControls(ctx, steps, stepping, index),
+      ...shown.map((step) =>
+        // **Stepping shows the step OPEN**, not as a disclosure a reader must then click: the
+        // stepper has already answered "which one", and a closed card behind a Next button asks the
+        // same question twice.
+        stepping ? openBlock(ctx, step) : stageBlock(ctx, step),
+      ),
+    ),
     // Badged from the CONCLUSION's own evidence, which is NOT the argument-wide meet: a vanishing
     // arc owes a `≤` at finite R and an `=` for its limit, and only the limit enters the answer
     // (DESIGN §4 Pass 3). Carrying the meet here would cap every gallery result at `≤`.
-    conclusion === undefined
+    !showConclusion || conclusion === undefined
       ? null
       : h(
           "p",
@@ -391,3 +464,132 @@ export const derivationCard: Card = (ctx) => {
         ),
   );
 };
+
+/**
+ * ← and → move the stepper; nothing else is touched.
+ *
+ * **There is no "unless a field wants the arrows" guard, and that is deliberate.** The first draft
+ * had one keyed on `INPUT`/`SELECT`/`TEXTAREA`; the sweep found it unreachable, because nothing in
+ * this card takes an arrow key — and measuring what WILL showed the guard would not have helped
+ * either: step 3.2's inline scrub is a `role="slider"` span, not an input, so a tag test would have
+ * read as though the case were handled while letting it through. The guard arrives with its
+ * consumer.
+ */
+function onStepKey(ctx: CardContext, count: number, index: number, e: KeyboardEvent): void {
+  if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+  if (ctx.session.step === "all" || count === 0) return;
+  e.preventDefault();
+  const next = e.key === "ArrowLeft" ? index - 1 : index + 1;
+  ctx.actions.setStep(Math.min(Math.max(0, next), count - 1));
+}
+
+/**
+ * Prev / the dots / Next / All — and `Step through` when every step is showing.
+ *
+ * The dots are a LIST of buttons rather than a decoration: each one is the step it names, so a
+ * reader who can see the shape of the argument can also jump into the middle of it, and a reader
+ * who cannot see it at all gets the same nine controls named `Step 3 of 9 — Boundary terms · …`.
+ */
+function stepperControls(
+  ctx: CardContext,
+  steps: readonly DerivationStep[],
+  stepping: boolean,
+  index: number,
+): Desc {
+  const { actions } = ctx;
+  if (steps.length === 0) return h("div", { key: "ctl" });
+  if (!stepping) {
+    return h(
+      "div",
+      { key: "ctl", class: "stepBar" },
+      h(
+        "button",
+        { key: "enter", type: "button", class: "stepBtn", onClick: () => actions.setStep(0) },
+        `Step through — ${steps.length}`,
+      ),
+    );
+  }
+  const step = steps[index] as DerivationStep;
+  return h(
+    "div",
+    { key: "ctl", class: "stepBar", role: "group", "aria-label": "derivation steps" },
+    h(
+      "button",
+      {
+        key: "prev",
+        type: "button",
+        class: "stepBtn",
+        disabled: index === 0,
+        "aria-label": "previous step",
+        onClick: () => actions.setStep(index - 1),
+      },
+      "‹",
+    ),
+    h(
+      "ol",
+      { key: "dots", class: "stepDots" },
+      ...steps.map((s, i) =>
+        h(
+          "li",
+          { key: `d:${s.id}` },
+          h("button", {
+            key: "b",
+            type: "button",
+            class: "stepDot",
+            // The step a reader is ON, named for assistive tech the same way it is drawn.
+            ...(i === index ? { "aria-current": "step" } : {}),
+            "aria-label": `step ${i + 1} of ${steps.length} — ${s.title}`,
+            "data-failed": s.failed ? "1" : undefined,
+            onClick: () => actions.setStep(i),
+          }),
+        ),
+      ),
+    ),
+    h(
+      "button",
+      {
+        key: "next",
+        type: "button",
+        class: "stepBtn",
+        disabled: index === steps.length - 1,
+        "aria-label": "next step",
+        onClick: () => actions.setStep(index + 1),
+      },
+      "›",
+    ),
+    h("span", { key: "of", class: "muted small" }, `${index + 1} / ${steps.length}`),
+    h(
+      "button",
+      { key: "all", type: "button", class: "stepBtn", onClick: () => actions.setStep("all") },
+      "All",
+    ),
+    h("span", { key: "sr", class: "srOnly" }, `Step ${index + 1} of ${steps.length}: ${step.title}`),
+  );
+}
+
+/** One step, open — the same body `stageBlock` puts inside its disclosure, without the disclosure. */
+function openBlock(ctx: CardContext, step: DerivationStep): Desc {
+  return h(
+    "div",
+    { key: `open:${step.id}`, class: "stepBody", "data-step": step.id },
+    h("h3", { key: "t" }, ...mathText(step.title, `ot:${step.id}`)),
+    h("p", { key: "why", class: "muted small" }, ...mathText(step.why, `w:${step.id}`)),
+    ...step.statements.map((s, i) =>
+      h(
+        "p",
+        { key: `st:${i}`, class: "small" },
+        h("span", { key: "l", class: "tag" }, ...mathText(s.label, `sl${i}`)),
+        " ",
+        ...mathText(s.text, `sv${i}`),
+      ),
+    ),
+    step.poles.length === 0 ? null : poleTable(step.poles),
+    step.lines.length === 0
+      ? null
+      : h(
+          "ul",
+          { key: "lines", class: "pieces2" },
+          ...step.lines.map((line, i) => lineItem(ctx, step, line, i)),
+        ),
+  );
+}

@@ -95,15 +95,66 @@ export function render(
   const build = (id: CardId): Desc => CARDS[id]?.(ctx) ?? placeholder(id);
   return {
     bar: bar(ctx),
-    left: LEFT_CARDS.filter((id) => gallery || id !== "target").map(build),
+    left: railOf(ctx, "left", LEFT_CARDS.filter((id) => gallery || id !== "target").map(build)),
     // **The drill's card is the TOP SLOT, not a member of `RIGHT_CARDS`.** It appears only while a
     // rung is open, where every other card is always present; putting it in the list would make the
     // list's contract "a card, or nothing" for one member's sake, and every `map` over it would grow
     // a case meaning "none of the above" — which is M7.1's own reason for not making Contrasts a mode.
-    right: [drillPanel(ctx), ...RIGHT_CARDS.map(build)].filter((d): d is Desc => d !== null),
+    right: railOf(
+      ctx,
+      "right",
+      [drillPanel(ctx), ...RIGHT_CARDS.map(build)].filter((d): d is Desc => d !== null),
+    ),
     rails: {
       left: session.rails.left ? "folded" : "open",
       right: session.rails.right ? "folded" : "open",
     },
   };
+}
+
+/** What each rail is called when it is folded to a strip. */
+const RAIL_NAME: Readonly<Record<"left" | "right", string>> = {
+  left: "What is being integrated",
+  right: "What it proves",
+};
+
+/**
+ * A rail: its toggle, and its cards — or its toggle ALONE when it is folded.
+ *
+ * **Two defects, both found by looking at step 3.1b's own screenshot**, and both older than it.
+ *
+ * *The fold had no control at all.* `setRail` existed, was typed, was implemented, and had **no
+ * caller anywhere in the app** — so the only thing that ever folded a rail was a worked-example
+ * link, and there was no way back from one. M8 step 3.1b folds the left rail on the mode BUTTON,
+ * which is what made an unreachable rail a state a reader can reach by pressing a control.
+ *
+ * *And a folded rail went on rendering its cards.* The grid shrinks the column to 38 px and the CSS
+ * comment beside it says the rail "shrinks to a labelled strip" — which was never built, so what a
+ * reader actually got was every card squeezed into 38 px: a column of one- and two-letter fragments
+ * down the left edge, with `.targetLine` an unreachable horizontal scroll region that `axe` flags
+ * `scrollable-region-focusable`. A folded rail draws its name and its control and nothing else.
+ */
+function railOf(ctx: CardContext, side: "left" | "right", cards: readonly Desc[]): Desc[] {
+  const folded = ctx.session.rails[side];
+  const toggle = h(
+    "button",
+    {
+      key: `fold:${side}`,
+      class: "railToggle",
+      type: "button",
+      "aria-expanded": !folded,
+      // The name says what is BEHIND it, not which way the arrow points: "expand left panel" tells
+      // a reader nothing about what they would be expanding.
+      "aria-label": `${folded ? "show" : "hide"} the panel: ${RAIL_NAME[side]}`,
+      onClick: () => ctx.actions.setRail(side, !folded),
+    },
+    folded ? (side === "left" ? "›" : "‹") : side === "left" ? "‹" : "›",
+  );
+  if (!folded) return [toggle, ...cards];
+  return [
+    toggle,
+    // The label the CSS comment promised. `aria-hidden`, because the button beside it already
+    // carries the same words in its own name and a screen reader should not read them twice.
+    h("p", { key: `name:${side}`, class: "railName", "aria-hidden": true }, RAIL_NAME[side]),
+  ];
 }

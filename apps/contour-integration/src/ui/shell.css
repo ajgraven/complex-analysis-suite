@@ -910,3 +910,84 @@
     padding: 0.5rem 0.65rem;
   }
 }
+
+/* ── the derivation stepper (M8 step 3.1b) ───────────────────────────────────────────────────
+   One row of controls above one step. The dots are BUTTONS, not decoration: each is the step it
+   names, so the shape of the argument is visible and also reachable — a reader who can see nine
+   dots can jump to the sixth, and a reader who cannot gets the same nine controls by name. */
+.shell2 .stepBar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin: 0.2rem 0 0.5rem;
+}
+.shell2 .stepBtn {
+  padding: 0.14rem 0.45rem;
+  font-size: var(--t-xs);
+}
+.shell2 .stepBtn[disabled] {
+  opacity: 0.4;
+  cursor: default;
+}
+.shell2 .stepDots {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+/* The dot is the button, so the hit target is the dot plus its padding rather than a 6 px circle:
+   `min-width`/`min-height` keep it pressable while the painted mark stays small. */
+.shell2 .stepDots > li > button.stepDot {
+  width: 0.5rem;
+  height: 0.5rem;
+  min-width: 0.5rem;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--g-border);
+  background: var(--g-panel-2);
+}
+.shell2 .stepDots > li > button.stepDot[aria-current="step"] {
+  background: var(--g-accent);
+  border-color: var(--g-accent);
+}
+/* A step that failed is marked BEFORE a reader opens it — the same product decision the disclosures
+   make by opening themselves, at the resolution a dot has. Colour is not the only channel: the
+   failed dot is also the one the ledger's own row names. */
+.shell2 .stepDots > li > button.stepDot[data-failed] {
+  border-color: var(--g-bad);
+  box-shadow: inset 0 0 0 2px var(--g-bad);
+}
+.shell2 .stepBody > h3 {
+  font-size: var(--t-m);
+  margin: 0 0 0.15rem;
+}
+
+/* ── the rail toggles (M8 step 3.1b) ─────────────────────────────────────────────────────────
+   A folded rail draws its name and its control and NOTHING else. Before this it went on drawing
+   every card into a 38 px column — a stripe of one-letter fragments, with the target's formula an
+   unreachable horizontal scroll region — while the comment above claimed a "labelled strip". */
+.shell2 .railToggle {
+  align-self: flex-end;
+  padding: 0.1rem 0.4rem;
+  font-size: var(--t-xs);
+  line-height: 1.1;
+}
+.shell2 > .rail2 > .railToggle {
+  flex: 0 0 auto;
+}
+.shell2[data-left="folded"] > .rail2.left > .railToggle,
+.shell2[data-right="folded"] > .rail2.right > .railToggle {
+  align-self: center;
+}
+/* Written down the strip, because 38 px is narrower than any of these names. */
+.shell2 .railName {
+  writing-mode: vertical-rl;
+  margin: 0.4rem auto 0;
+  font-size: var(--t-xs);
+  color: var(--g-muted);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}

@@ -93,6 +93,15 @@ export interface ShellActions {
    */
   readonly setOpen: (id: string, open: boolean) => void;
   /**
+   * Move the derivation stepper — M8 step 3.1b.
+   *
+   * Its own action rather than a write to `session.step` from the card, for the reason `undo` and
+   * `redo` are actions: the button and the arrow key are two ways of ASKING, and a test drives the
+   * ask rather than the button. Unlike {@link Actions.setOpen} it redraws, because a `<details>`
+   * has already opened itself by the time the handler runs and a step has not.
+   */
+  readonly setStep: (step: number | "all") => void;
+  /**
    * Put the permalink for the CURRENT state on the clipboard.
    *
    * The card asks `encodeShell` itself for the REFUSAL, because that is a pure question about the

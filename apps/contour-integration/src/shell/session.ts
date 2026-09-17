@@ -96,6 +96,20 @@ export interface Session {
   redo: ShellState[];
   /** Whether the drill's current rung has been graded — which unmasks the derivation (M7.4's bug). */
   drillGraded: boolean;
+  /**
+   * Which derivation step the stepper is on, or `"all"` for every step at once — M8 step 3.1b.
+   *
+   * **SESSION, not state**, by the rule that decides every field here: `ShellState` is the argument
+   * and this is where the reader's hands are. Two readers of the same permalink are looking at the
+   * same integral; which step of its derivation each has open is theirs.
+   *
+   * `"all"` is the default and is the Phase 1 form — every step expanded, the whole argument at
+   * once — so a reader who never touches the stepper sees exactly what they saw before it existed.
+   * Worked-example mode opens at step 0 instead, which is the plan's *open by default at step 1*.
+   * An out-of-range index is clamped where it is read rather than validated here, because the step
+   * count changes with the record and a stale index is the ordinary case rather than an error.
+   */
+  step: number | "all";
   rails: RailState;
   /** Which `<details>` are open, by id. Read from here and never from the DOM, so a patch cannot
    *  silently close one — the old shell's disclosures lost their state whenever a card rebuilt. */
@@ -177,6 +191,7 @@ export function defaultSession(): Session {
     undo: [],
     redo: [],
     drillGraded: false,
+    step: "all",
     rails: { left: false, right: false },
     open: {},
     notice: null,
@@ -212,6 +227,11 @@ export function resetTransient(session: Session): void {
   session.scrubbing = false;
   session.hover = NO_HOVER;
   session.drillGraded = false;
+  // **The step is the reader's place in an argument, and a new state is a new argument.** M7.4's
+  // finding, in its own shape: `drillGraded` outlived its rung because a shell local was not
+  // cleared here. A restored link, a contrast cell or a drill rung all arrive through `applyState`;
+  // holding step 4 of the previous record's derivation open over them would be the same defect.
+  session.step = "all";
   session.drillAnswers = {};
   session.drillDrawn = null;
   session.drillPicker = false;

@@ -369,6 +369,11 @@ export function mountShell2(root: Element): Shell2Handle {
       session.open = { ...session.open, [id]: open };
     },
 
+    setStep: (step) => {
+      session.step = step;
+      render2();
+    },
+
     copyLink: () => {
       const enc = encodeShell(state);
       if (!enc.ok) {
@@ -434,6 +439,16 @@ export function mountShell2(root: Element): Shell2Handle {
       // And leaving clears the chooser as well as the rung, so `Explore` means the same thing from
       // both — a list left standing after the reader said Explore is a menu outliving its mode.
       session.drillPicker = false;
+      // **Worked example opens the stepper at its first step** — M8 step 3.1b, the plan's *open by
+      // default at step 1*. Explore goes back to `"all"`, the whole argument at once, so the two
+      // modes differ in what they OFFER rather than in where a reader happens to have left off.
+      session.step = mode === "worked" ? 0 : "all";
+      // **And the rails follow the mode here too.** They did on a LINK (`applyStateNow`) and not on
+      // the button, so a worked example arrived with its left rail folded when someone sent it and
+      // open when the reader pressed the control — the same mode, two layouts, found by looking at
+      // 3.1b's own screenshot. The rule is the one `applyStateNow` states: the fold resets when the
+      // layout is part of what the mode MEANS, and this is the mode changing.
+      if (mode !== shellMode(state)) session.rails = railsFor(mode);
       commit({ ...state, drill: null, workedExample: mode === "worked" }, "edit");
     },
     setRail: (side, folded) => {
