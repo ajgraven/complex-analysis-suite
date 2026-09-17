@@ -133,6 +133,18 @@ describe("keyframes at depth interpolate in double-double", () => {
     expect(interpolateView(kfs, 1).centerDD).toEqual(b);
   });
 
+  it("interpolates TOWARDS b, not away from it — the direction is pinned", () => {
+    // ⚠ The midpoint test below cannot see a reversed lerp: at u = 0.5 the formula is symmetric, and
+    // every other dd assertion sits at an endpoint, which `interpolateView` short-circuits. Measured:
+    // mutating `a + (b − a)·u` to `b + (a − b)·u` — running the whole clip backwards between the
+    // captured views — left this file 13/13 green. An asymmetric u is all it takes.
+    // (Review follow-up C.)
+    const q = exactCenter(interpolateView(kfs, 0.25))[0][1];
+    const distToA = Math.abs(q - a[0][1]);
+    const distToB = Math.abs(q - b[0][1]);
+    expect(distToA, "a quarter of the way along is nearer the START").toBeLessThan(distToB);
+  });
+
   it("moves between them where f64 cannot", () => {
     const mid = interpolateView(kfs, 0.5);
     const lo = exactCenter(mid)[0][1];

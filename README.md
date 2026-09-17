@@ -14,7 +14,7 @@ It currently hosts **twelve** applications riding **thirteen** shared `@cas/*` p
 
 | App                                                | What it does                                                                                                                                                                                                                                                                                                  | Stack                   |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
-| **Complex Dynamics** (`apps/complex-dynamics`)     | GPU escape-time visualizer for parametrized families `f(z,c)` — Mandelbrot/multibrot, Julia sets, Tricorn/multicorn, rational & transcendental maps, Herman rings, Böttcher coordinates, external rays, df64 deep zoom                                                                                        | Vite + TypeScript       |
+| **Complex Dynamics** (`apps/complex-dynamics`)     | GPU escape-time visualizer for parametrized families `f(z,c)` — Mandelbrot/multibrot, Julia sets, Tricorn/multicorn, rational & transcendental maps, Herman rings, Böttcher coordinates, external rays, the **Schwarz-reflection σ peer view**, Thurston **matings**, Yoccoz puzzles and laminations, and **perturbation + BLA deep zoom to ≈10²⁸×** (df64 below it)                                                                                        | Vite + TypeScript       |
 | **Quadrature Domains** (`apps/quadrature-domains`) | Solver + visualizer for (log-weighted) quadrature domains in the inverse and direct directions, plus **single-valued Schwarz-reflection dynamics**, limit sets, a Riemann-sphere view, a symbolic-elimination Algebra workspace, and a parameter-slice sweep engine                                           | Vite + JavaScript (ESM) |
 | **Correspondences** (`apps/correspondences`)       | The new tool: **anti-holomorphic correspondences / Schwarz-reflection matings**. The deltoid Schwarz reflection σ (CPU + GPU), its deleted correspondence (branch engine + orbit trees + density render), a family parameter plane, a parabolic-Tricorn model space, and an interactive **mating visualizer** | Vite + TypeScript       |
 | **Complex Function Plotter** (`apps/complex-function-plotter`) | Domain-coloring plotter for complex functions `f(z)` — phase portraits with modulus/phase enhancements and the conformal grid, a 3D modulus surface and a Riemann-sphere view, a live expression editor with named parameters, hi-res PNG export                          | Vite + TypeScript       |
@@ -43,7 +43,7 @@ Quadrature-app-onto-Vite ESM-ification, and the shared-package extractions
 `@cas/dynamics`, and `@cas/export` on the ADR-0007 second-consumer rule, and `@cas/conformal`
 extracted *ahead* of its second consumer per [ADR-0018](docs/DECISIONS.md#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore))
 are all done; the Correspondences app exists through its parameter-space milestone plus a complete
-interactive mating visualizer. The whole workspace is green (**5623 Vitest tests** across 542
+interactive mating visualizer. The whole workspace is green (**5895 Vitest tests** across 560
 files, lint, typecheck, and per-app builds).
 
 What's **deferred / exploratory** (by design, not omission):
@@ -119,7 +119,7 @@ complex-analysis-suite/
 │   ├── export/               ← @cas/export      PNG text-chunk reproducibility metadata, `tEXt` + `iTXt` (CD + plotter + Riemann Map + Argument Principle + 2D Electrostatics + 2D Hydrodynamics + Contour Integration)
 │   ├── conformal/            ← @cas/conformal   the conformal-map builder: Vandermonde–Arnoldi + lightning + forward map + interior/exterior Schwarz–Christoffel (Riemann Map + Faber Transform + @cas/flow)
 │   ├── faber/                ← @cas/faber       the exterior Faber-transform engine: Faber-polynomial recurrence, exact rational images, exterior-map Laurent jets (Quadrature Domains + Faber Transform + Potential Theory)
-│   ├── ui/                   ← @cas/ui          the shared browser shell: accessible canvas, fatal-error boundary, off-thread compute, the suite nav header
+│   ├── ui/                   ← @cas/ui          the shared browser shell: accessible canvas, fatal-error boundary, off-thread compute, direction ticks, and the suite nav header (WITHDRAWN by ADR-0044 — still present, removal staged as N1–N6)
 │   ├── flow/                 ← @cas/flow        the conformal-transplant kernel: reference flows + flow-net + interior/exterior SC glue + closed-form exterior-map gallery + Net2D line-art (2D Electrostatics + 2D Hydrodynamics + Hele-Shaw Flow + Potential Theory)
 │   └── rigor/                ← @cas/rigor       the honest-labelling vocabulary: branded `Certificate` / `Verdict` values and their `meet`, so `=` cannot be written by hand (Contour Integration; QD keeps its own, ADR-0040)
 └── apps/                     ← thin applications; each a Vite build that consumes packages
@@ -144,7 +144,7 @@ complex-analysis-suite/
 > ([ADR-0007](docs/DECISIONS.md#adr-0007-incremental-extraction-driven-by-real-need)) — which is why the
 > `quadrature` package that [ARCHITECTURE.md](docs/ARCHITECTURE.md) sketches as a target never
 > fully materialized; the `ui` target split in two — its PNG-metadata half shipped as `@cas/export`, and the
-> browser-shell primitives (canvas a11y, fatal boundary, off-thread compute, nav header) were later extracted
+> browser-shell primitives (canvas a11y, fatal boundary, off-thread compute, nav header — since withdrawn by ADR-0044) were later extracted
 > as **`@cas/ui`** *ahead* of adoption ([ADR-0032](docs/DECISIONS.md#adr-0032-extract-casui-ahead-of-adoption-port-cds-product-shell)). And why
 > `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, and `@cas/export` appeared *later* than the phase plan:
 > each waited for its second consumer. The **one exception** is `@cas/conformal` — the lightning +

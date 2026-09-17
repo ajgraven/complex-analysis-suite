@@ -225,9 +225,14 @@ describe("createComputeClient — worker errors", () => {
     expect(results).toEqual([]);
   });
 
-  it("is unchanged for a caller that passes no handler — the other two consumers", async () => {
-    // The anti-regression clause: `createComputeClient` has three consumers and only this app's
-    // passes `onError`. Without one the failure is still dropped, exactly as before.
+  it("is unchanged for a caller that passes no handler", async () => {
+    // The anti-regression clause: `onError` is optional, so a caller that omits it still gets the
+    // pre-WP6 behaviour — the failure is dropped, exactly as before.
+    //
+    // ⚠ This used to say "`createComputeClient` has three consumers and only this app's passes
+    // `onError`", and the title said "the other two consumers". Grepped: there is exactly ONE
+    // consumer, Complex Dynamics' `juliaMetricsClient`. The contract is still worth pinning for the
+    // next one; the count was invented. (Review follow-up C.)
     const results: number[] = [];
     expect(() => make().request(21, (r) => results.push(r))).not.toThrow();
     await new Promise((r) => setTimeout(r, 0));

@@ -102,10 +102,18 @@ describe("the gradient editor is usable from the keyboard", () => {
   });
 
   it("the value follows the position, so a reader is told where it went", () => {
+    // ⚠ The third vacuous one in this file, and the same trap as the two the commit message says it
+    // fixed: the fixture ships a stop at t = 1, so a handle reading `aria-valuenow="100"` EXISTS
+    // before any key is pressed. Measured — disabling the whole keydown handler with an early
+    // `return` turned 4 of 6 red and left this one green. Count, don't find. (Review follow-up C.)
     const { host } = editor();
+    const at100 = (): HTMLElement[] =>
+      handles(host).filter((h) => h.getAttribute("aria-valuenow") === "100");
+    expect(at100(), "one stop starts at the end").toHaveLength(1);
+
     key(handles(host)[0], "End");
-    const moved = handles(host).find((h) => h.getAttribute("aria-valuenow") === "100");
-    expect(moved).toBeDefined();
-    expect(moved?.getAttribute("aria-valuetext")).toBe("100%");
+    const moved = at100();
+    expect(moved, "and now the moved handle is there too").toHaveLength(2);
+    for (const h of moved) expect(h.getAttribute("aria-valuetext")).toBe("100%");
   });
 });

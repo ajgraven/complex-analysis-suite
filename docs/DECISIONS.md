@@ -1509,7 +1509,7 @@ the `cvec`/`vec_` aliases it uses). Centralising the viewport map is load-bearin
        minted their own prefix before the package existed — `ap:url`, `2de:url`, `2dh:url`,
        `cdjs:state`. A reader wanting to open any figure in the suite therefore has four special cases.
        Deliberately not fixed from inside one app; it wants a suite-wide slice.
-5. [ ] **`mountNavHeader`'s reading order depends on CALL ORDER, silently** — found in the same pass,
+5. [~] **MOOT under [ADR-0044](#adr-0044-withdraw-the-in-app-suite-navigation-header-the-launcher-is-the-unified-menu)** (the primitive is withdrawn) — **`mountNavHeader`'s reading order depends on CALL ORDER, silently**, found in the same pass,
        and belonging to ADR-0032. It ends with `container.appendChild(nav)`, so the nav reads wherever the
        call happens to fall while `.cas-nav` is `position: fixed` and always draws at the top. Contour
        Integration mounted it _after_ filling its shell, so the nav was the last child: it looked first
@@ -2984,7 +2984,7 @@ when the picker consults the known map kinds. App ids/labels are **data** in `ap
        `@cas/interchange` dependency that nothing imported was dropped in the same pass; it returns with the
        `#vs=` permalink work.
 
-7. [ ] **U7:** wire the nav header's generic "Send to…" hand-off picker to `@cas/interchange`'s known map kinds
+7. [~] **U7 — WITHDRAWN by [ADR-0044](#adr-0044-withdraw-the-in-app-suite-navigation-header-the-launcher-is-the-unified-menu), not done:** wire the nav header's generic "Send to…" hand-off picker to `@cas/interchange`'s known map kinds
        (adds the `@cas/interchange` dependency), turning the 3 hard-coded deep-link buttons into discovery.
 8. [x] **U8 DONE — non-blocking `axe` CI job so a11y regressions are caught, not just introduced-once-and-forgotten.**
        `scripts/a11y-audit.mjs` stands up a static server over the real `apps/*/dist` bytes (the deploy layout,
@@ -4102,7 +4102,7 @@ finding: **no app in the suite gets an in-app header.** The reasons worth record
   Integration's one structural case.
 - **Docs:** ARCHITECTURE §11 item 2 and the `@cas/ui` blurbs (§3, §12), VISION §6, RISKS §146,
   CLAUDE.md decision 8 + the U7 line + the ADR-0036 Stage 3 sentence, the root README package tree,
-  and `packages/ui/README.md` are corrected in the same pass.
+  and `packages/ui/README.md` **will be** corrected by N4 (they are not yet).
 
 ### Alternatives considered
 
