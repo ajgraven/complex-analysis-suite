@@ -2791,6 +2791,24 @@ export class GLPlot {
    * output `gamma` (1 = unchanged). Applied on-screen as a final fullscreen pass;
    * a render-only change. Note: not yet applied to high-resolution exports.
    */
+  /**
+   * Is the on-screen grade ON, and therefore ABSENT from a high-resolution export?
+   *
+   * `renderExportStrips` draws straight into its own framebuffer and never runs the post pass, so
+   * an export is ungraded whatever the sliders say — a vignette of 0.9 darkens the corners on
+   * screen and not at all in the PNG. WP1/R1 fixed the other half of this (the accumulator used to
+   * grade the DEFAULT view while a plain render stayed ungraded) and its commit message describes
+   * the export asymmetry as the old behaviour; it is still the current one.
+   *
+   * Applying it per strip is not a one-liner and is deliberately not attempted here: the vignette
+   * is a function of position in the WHOLE frame, so a strip would need its offset as a new uniform
+   * and the result is only checkable by pixel parity against the screen, in the browser suite. Until
+   * then the export SAYS so rather than quietly differing from what the reader is looking at.
+   */
+  get gradeMissingFromExport(): boolean {
+    return this._post && (this._vignette > 0 || this._gamma !== 1);
+  }
+
   setPost(on: boolean, vignette: number, gamma: number): void {
     this._post = on;
     this._vignette = vignette;

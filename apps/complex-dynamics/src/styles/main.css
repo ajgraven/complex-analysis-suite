@@ -2226,6 +2226,19 @@ select.invalid {
     min-height: 40px;
     line-height: 1;
   }
+
+  /* Only ONE thing sticks to the top of the sheet, and it is the sheet's own header.
+     `.sheet-handle`, `.pane-strip` and `.pane-tabs` are all `position: sticky; top: 0` siblings in
+     the same scroll container here (`.controls-pane` is `max-height: 85dvh; overflow-y: auto` on a
+     phone), so all three pinned to the same edge and z-index decided who won: the strip (4) over
+     the tabs (3) over the header (1). That buried the sheet's own ✕ "Close controls", which is the
+     one control a reader needs to get out. Three stacked bars would eat most of an 85dvh sheet in
+     any case; the tabs and the strip scroll with the content here and the header stays put.
+     (Review follow-up.) */
+  .pane-strip,
+  .pane-tabs {
+    position: static;
+  }
 }
 
 /* Mobile (Phase C): shrink the orbit-preview inset so it doesn't dominate a narrow plot.
