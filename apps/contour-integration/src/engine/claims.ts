@@ -18,10 +18,13 @@
 // CERTIFICATE's claim rather than the row's. Restructuring those buys little: the new shell renders
 // such a string with `$…$` delimiters (step 0.5 introduces the convention), and the numbers in them
 // are already formatted by the module that knows their provenance. A row that displays one of those
-// carries it through {@link certificateClaim} — a single `text` argument, which is what "this
-// sentence is not ours to template" looks like in the type.
+// carries it through {@link certificateClaim} — one `head` argument holding the whole sentence,
+// which is what "this sentence is not ours to template" looks like in the type. Step 3.2 lifts the
+// PARAMETER out of it where the producer printed a plain decimal, and only that; see
+// {@link certificateClaimAt} for what it measured and what it leaves alone.
 import type { PieceRole } from "./contour/model.js";
 import { latexOf } from "../kernel/exprLatex.js";
+import { paramSymbol } from "./vocabulary.js";
 
 /**
  * One substitutable part of a claim.
@@ -48,6 +51,20 @@ export type ClaimArg =
     }
   /** A measured quantity. `digits` is `toPrecision`'s, absent meaning the plain decimal. */
   | { readonly kind: "number"; readonly value: number; readonly digits?: number }
+  /**
+   * A contour parameter's current value — the one thing in a claim a reader may SCRUB (step 3.2).
+   *
+   * It renders EXACTLY as `number` does, and that is the point: the sentence is unchanged to the
+   * character (`test/ledgerDump.test.ts` compares the whole corpus), and what the card gains is the
+   * parameter's NAME beside the number, so the scrub writes through `applyParam` instead of a
+   * renderer guessing which of a sentence's numerals is the one that moves.
+   */
+  | {
+      readonly kind: "param";
+      readonly name: string;
+      readonly value: number;
+      readonly digits?: number;
+    }
   /** Mathematics, already written the way the engine writes it. Step 0.4 adds `latex`. */
   | { readonly kind: "exact"; readonly text: string; readonly latex?: string }
   | { readonly kind: "cut"; readonly name: string }
@@ -138,8 +155,20 @@ const TEMPLATE = {
   "cover.none": "no target is designated; the closed-contour integral is reported",
 
   // ---- the boundary ------------------------------------------------------------------------
-  /** A certificate's own sentence, shown as the row's claim. See this module's header. */
-  certificate: "{text}",
+  /**
+   * A certificate's own sentence, shown as the row's claim. See this module's header.
+   *
+   * **Three slots rather than one, and still ONE template id.** Step 3.2 needs the parameter value
+   * inside a bound's sentence (`… at $R = 4$, and → 0 as R → ∞`) to reach the card as a number with
+   * a name on it, and an argument a template never mentions is refused by `claims.test.ts` — rightly,
+   * since a reader never sees one. A second id would have been the obvious move and is wrong here,
+   * measured: `test/helpers/claimsDoc.ts` collects a bound's sentence by testing
+   * `template === "certificate"` and `claimsDoc.test.ts` excludes exactly that id from the review
+   * document, so a sibling id would drop every bound sentence out of BOTH the document and the
+   * `$…$` balance check that reads it. So the split happens inside this one template, and
+   * {@link certificateClaim} fills the two extra slots with nothing at all.
+   */
+  certificate: "{head}{param}{tail}",
 } as const satisfies Readonly<Record<string, string>>;
 
 export type ClaimId = keyof typeof TEMPLATE;
@@ -152,9 +181,59 @@ export function claimOf(
   return { template, args };
 }
 
+/** Nothing, in the one slot a template has to name. */
+const NOTHING: ClaimArg = { kind: "text", text: "" };
+
 /** A sentence composed outside this module, carried through unchanged. */
 export function certificateClaim(text: string): Claim {
-  return claimOf("certificate", { text: { kind: "text", text } });
+  return claimOf("certificate", { head: { kind: "text", text }, param: NOTHING, tail: NOTHING });
+}
+
+/**
+ * The same sentence with its PARAMETER lifted out of it — step 3.2.
+ *
+ * `head + param + tail` is the original string character for character, so nothing a reader sees
+ * moves; what changes is that the card can find the one numeral in the sentence that a scrub is
+ * allowed to write to.
+ *
+ * **It splits only where the producer printed the plain decimal, and falls back silently
+ * otherwise.** Measured over `src/kernel/bounds/`: five of the nine `ArcBound` producers print the
+ * parameter as `String(value)` (`at $R = 4$`, `at $N = 3$`), and four print
+ * `toExponential(3)` or a formatted fraction (`at $\rho = 1.500e-1$`,
+ * `at $\operatorname{Re} z = -1$`), which a `param` argument — whose `digits` is `toPrecision`'s —
+ * cannot reproduce. Forcing those would edit the sentence, so they keep the opaque form and the
+ * scrub reads `ArcBound.evaluated` instead, which carries all nine.
+ *
+ * The locator is deliberately narrow: the value must sit in an `at $… = ‹value›$` group with no
+ * `$` between the opener and it, AND the left-hand side of that `=` must be the parameter's own
+ * symbol. Both halves are load-bearing. Without the first, a numeral that merely happens to read
+ * `= 4$` elsewhere in the sentence — a degree gap, an exponent — is mistaken for the parameter.
+ * Without the second, `gaussianSide`'s *at $\operatorname{Re} z = 6$* matched whenever the side's
+ * abscissa equalled `R`, which on E3 is always: measured over the corpus, **18 rows** took a scrub
+ * planted on the numeral in *Re z*, and only the RIGHT side of the rectangle did, because the left
+ * one prints `= -6$`. That is the asymmetry `ledger.ts` says must not happen — one reader finding
+ * the scrubbable number on some rows and not on others — and it made this doc's own list of the
+ * four producers that never split false.
+ */
+export function certificateClaimAt(
+  text: string,
+  param: { readonly name: string; readonly value: number },
+): Claim {
+  const printed = String(param.value);
+  const symbol = paramSymbol(param.name);
+  for (let i = text.indexOf(`= ${printed}$`); i >= 0; i = text.indexOf(`= ${printed}$`, i + 1)) {
+    const opener = text.lastIndexOf("at $", i);
+    if (opener < 0) continue;
+    const lhs = text.slice(opener + 4, i);
+    if (lhs.includes("$") || lhs.trim() !== symbol) continue;
+    const cut = i + 2;
+    return claimOf("certificate", {
+      head: { kind: "text", text: text.slice(0, cut) },
+      param: { kind: "param", name: param.name, value: param.value },
+      tail: { kind: "text", text: text.slice(cut + printed.length) },
+    });
+  }
+  return certificateClaim(text);
 }
 
 /**
@@ -192,6 +271,7 @@ export function renderArg(arg: ClaimArg): string {
       if (arg.noun === undefined) return String(arg.n);
       return `${arg.n} ${arg.n === 1 ? arg.noun : (arg.plural ?? `${arg.noun}s`)}`;
     case "number":
+    case "param":
       return arg.digits === undefined
         ? String(arg.value)
         : arg.value.toPrecision(arg.digits);

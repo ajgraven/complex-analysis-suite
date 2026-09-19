@@ -18,7 +18,8 @@ import { clampView } from "../kernel/camera.js";
 import { circleTemplate } from "../engine/contour/templates.js";
 import { reverseContour } from "../engine/contour/edit.js";
 import { TEMPLATES } from "./templates.js";
-import { coldStartState, compile, resolveState, shellMode, withParam, type Compiled, type ShellMode, type ShellState, type StateResolution } from "./state.js";
+import { coldStartState, compile, drawnContour, resolveState, shellMode, withParam, type Compiled, type ShellMode, type ShellState, type StateResolution } from "./state.js";
+import { converged } from "../engine/contour/integrate.js";
 import type { Family } from "../families/schema.js";
 import type { PoleReport } from "../kernel/poles.js";
 import type { StageDraw } from "./stageView.js";
@@ -37,7 +38,7 @@ import {
 import { decodeShell, encodeShell } from "./viewState.js";
 import { patch, h } from "./dom.js";
 import { render, type ShellActions } from "./render.js";
-import { defaultSession, resetTransient, type Session } from "./session.js";
+import { defaultSession, resetTransient, type Session, type SweepRow } from "./session.js";
 import { createStageController, type StageController } from "./stageController.js";
 import { createStageView, describeStage, type FigurePlate } from "./stageView.js";
 import { createUndo, type CommitReason } from "./undo.js";
@@ -45,6 +46,10 @@ import { createStripView, type StripDraw } from "./strip.js";
 import { createContrastsDialog } from "./contrasts.js";
 import { createFrontDoor } from "./frontDoor.js";
 import { thumbnailById } from "./thumbnails.js";
+import { createSweep, planSweep, type SweepDriver } from "./sweep.js";
+import { argumentOf } from "./argument.js";
+import type { Params } from "../engine/contour/model.js";
+import type { Cx } from "../kernel/geom.js";
 
 /** A mounted shell, from the outside — the same two functions the old shell exposes. */
 export interface Shell2Handle {
@@ -270,6 +275,157 @@ export function mountShell2(root: Element): Shell2Handle {
    * Every one goes through `commit` or through `scheduleDraw`, and the split is the plan's: a change
    * to the ARGUMENT recomputes, and a change to what the reader is merely pointing at does not.
    */
+  // ── the limit step's sweep — M8 step 3.2 ────────────────────────────────────────────────────
+  //
+  // The driver (`shell/sweep.ts`) is arithmetic with no clock; everything that needs one lives here.
+  // Three pieces of run state rather than one object, because they have three lifetimes: the frame
+  // handle is per animation, the driver per run, and the piece per ASK — the card names the piece
+  // the limit has to kill, and a sweep started from another step must not capture that one's.
+  let sweepFrame = 0;
+  let sweepDriver: SweepDriver | null = null;
+  let sweepPiece: string | null = null;
+
+  /** The parameters the sweep can move — the DRAWN contour's, which under a record is the run's. */
+  const paramsNow = (): Params =>
+    (resolution.kind === "gallery" ? (resolution.run?.contour.params ?? state.contour.params) : state.contour.params);
+
+  /**
+   * **Asked at every press rather than cached**, because a reader can change it while the page is
+   * open and the plan's rule is that the control BECOMES a step button — a cached answer would keep
+   * animating for someone who had just asked it not to. `matchMedia` is absent in jsdom, so the
+   * guard is a feature test and not an environment test.
+   */
+  const reducedMotion = (): boolean =>
+    typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function stopSweepFrame(): void {
+    if (sweepFrame !== 0) cancelAnimationFrame(sweepFrame);
+    sweepFrame = 0;
+  }
+
+  /**
+   * End a run completely — the frame, the driver, the piece and the draft flag.
+   *
+   * **`resetTransient` cannot do this and that is what made it a defect.** It nulls
+   * `session.sweep`, so `advanceSweep` returns at its own guard — but the rAF loop re-schedules
+   * itself from a closure the session cannot see, and `session.scrubbing` stays `true`. Measured by
+   * reading it: pressing Play and then Ctrl+Z, or opening a `#vs=` link, left a loop running for
+   * the rest of the session and every number in the app pinned at `DRAFT_EVALUATIONS` with nothing
+   * on screen to say why — exactly the failure `scrub.ts`'s `pointercancel` handler exists to
+   * prevent, one surface along. Without a `resetTransient` in the path it is worse in a different
+   * way: a sweep started on one record goes on calling `setParam` against the NEXT record's
+   * contour for the rest of its three seconds.
+   *
+   * It does not commit. The callers that need a settle make their own, and the ones that abandon
+   * the run are about to commit something else.
+   */
+  function endSweep(): void {
+    stopSweepFrame();
+    sweepDriver = null;
+    sweepPiece = null;
+    session.scrubbing = false;
+    if (session.sweep !== null) session.sweep = { ...session.sweep, running: false };
+  }
+
+  /**
+   * One tick: write the value, and capture a row if that tick passed a checkpoint.
+   *
+   * **The row is read AFTER the commit**, from the resolution the commit produced, so the three
+   * numbers in it are the three the same run computed. Reading them before would report the
+   * previous value's evidence against this value's label, which is the drift M6.3's caption rule
+   * exists to prevent, one surface along.
+   */
+  function advanceSweep(value: number | null | undefined): void {
+    const driver = sweepDriver;
+    const sweep = session.sweep;
+    if (driver === null || sweep === null) return;
+    // **A frame that moved nothing is not a commit.** Only a snapped parameter produces one
+    // (tier G's integer `N`), and committing it would re-resolve the state the app is already in.
+    if (value === undefined) return;
+    if (value === null) {
+      // The settle: the animation's last commit was a draft one, so the picture the reader is left
+      // looking at gets the full budget. The table needs nothing from here — every row was taken at
+      // the full budget as it was captured, below.
+      endSweep();
+      commit(state, "edit");
+      return;
+    }
+    // The draft budget, for a step as much as for a frame — and the sweep found out WHY by trying
+    // the other thing. A step is a deliberate jump rather than one of sixty commits a second, so
+    // the first draft gave it `"edit"`; the mutation sweep then could not kill the difference, and
+    // the reason is that the row below re-resolves at the full budget whenever a checkpoint passes,
+    // which under `stepOnce` is every press. So the conditional bought nothing and cost a resolve
+    // — 179 ms of one near the top of tier G's ladder — and the rule is the simpler one: the
+    // parameter moves at the draft budget, the ROW is taken at the full one.
+    commit(withParam(state, familyNow(), sweep.plan.param, value), "gesture");
+    // Re-read after the commit: `setParam` re-resolves, and a card rendered from the object this
+    // function closed over would show the previous value's rows.
+    const live = session.sweep;
+    if (live === null) return;
+    // **The rows are counted against the ROWS, not against the driver.** The first draft asked the
+    // driver how many checkpoints it had passed before the commit — but `advanceSweep(driver.
+    // advance(t))` evaluates the driver's call FIRST, so the checkpoint was always already in
+    // `passed()` and `before` always equalled `passed.length`: the table never gained a single row,
+    // on any record, under Play or Step alike. Nothing in the node suite could see it, because the
+    // suite drives the DRIVER and this is the seam between the driver and the app. Indexing
+    // `passed()` by the row count also pins each row to its own rung rather than to the newest one.
+    const passed = driver.passed();
+    if (passed.length <= live.rows.length) return;
+    const at = passed[live.rows.length] as number;
+    // **A ROW IS TAKEN AT THE FULL BUDGET, mid-animation included**, and this is the difference
+    // between a table and a picture of one. A sweep's frames commit at the draft budget on purpose
+    // — sixty a second — but a row is a rung's EVIDENCE, and the draft budget is precisely what
+    // cuts the quadrature the two `≈` columns come from. Measured on A6 under Play, before this:
+    // every one of the five rows read `—` in the target column, because the draft resolve's
+    // successive refinement does not converge on a segment of length `2R`, while the same rungs
+    // under `Step` — a full-budget commit — read 2.22144. Five extra resolves over a three-second
+    // sweep, at the five moments the reader is being asked to look at a number.
+    const wasScrubbing = session.scrubbing;
+    session.scrubbing = false;
+    commit(state, "edit");
+    session.scrubbing = wasScrubbing;
+    const settled = session.sweep;
+    if (settled === null) return;
+    session.sweep = { ...settled, rows: [...settled.rows, sweepRow(at)] };
+    render2();
+  }
+
+  /** What one checkpoint looked like, read off the live resolution. */
+  function sweepRow(at: number): SweepRow {
+    const integral =
+      resolution.kind === "gallery"
+        ? (resolution.run?.integral ?? null)
+        : resolution.kind === "plain" || resolution.kind === "declared"
+          ? resolution.analysis.integral
+          : null;
+    const pieces = drawnContour(state, resolution).pieces;
+    // **A cell the quadrature does not stand behind is left EMPTY.** The two `≈` columns are read
+    // off the same run that computed the `≤` one, and far out along the ladder a uniform rule over
+    // a segment of length `2R` stops resolving the integrand: A6's target reads 2.0766 at `R = 1e6`
+    // for a number that is 2.22144, and worse at the draft budget. `converged` is the piece's own
+    // successive-refinement test, so the table withholds exactly what `integratePiece` already
+    // declines to certify rather than applying a second rule of its own.
+    const valueOf = (id: string | null): Cx | null => {
+      if (id === null || integral === null) return null;
+      const k = pieces.findIndex((piece: { readonly id: string }) => piece.id === id);
+      const pi = k < 0 ? undefined : integral.pieces[k];
+      return pi === undefined || !converged(pi) ? null : pi.value;
+    };
+    const target = pieces.find((piece: { readonly role: string }) => piece.role === "target");
+    // The bound comes from the LEDGER rather than from the sweep, so the column that carries a `≤`
+    // is the one the engine certified and not one this file composed.
+    const rows = argumentOf({ state, resolution, poles: polesNow() }).derivation?.stages ?? [];
+    const line = rows
+      .flatMap((stage) => stage.lines)
+      .find((l) => l.evaluated !== undefined && l.pieceId === sweepPiece);
+    return {
+      at,
+      bound: line?.evaluated?.bound ?? null,
+      measured: valueOf(sweepPiece),
+      target: valueOf(target?.id ?? null),
+    };
+  }
+
   const actions: ShellActions = {
     fitContour: () => controller?.fitContour(),
     setExpr: (src) => commit({ ...state, expr: src }, "edit"),
@@ -280,6 +436,13 @@ export function mountShell2(root: Element): Shell2Handle {
     setFixture: (index) => commit({ ...state, fixture: index, bindings: {}, geometry: {} }, "edit"),
     setParam: (name, value) => commit(withParam(state, familyNow(), name, value), "gesture"),
     setScrubbing: (on) => {
+      // **A gesture the READER makes ends the one the app is making** — the plan's own sentence,
+      // *the sweep is a scrub, so dragging the number interrupts it*. Without this, both writers
+      // committed on every frame and the value visibly fought the drag; and the release then
+      // cleared `scrubbing` mid-run, so the rest of the sweep's commits went at the FULL budget
+      // (179 ms a resolve near the top of tier G's ladder) rather than the draft one it asked for.
+      // One place, so the stage's own handles interrupt it too.
+      if (on && sweepFrame !== 0) endSweep();
       session.scrubbing = on;
       // The full budget on release, unconditionally — the same settle the stage's `gesture-end` makes.
       if (!on) commit(state, "gesture-end");
@@ -379,6 +542,67 @@ export function mountShell2(root: Element): Shell2Handle {
     setStep: (step) => {
       session.step = step;
       repaint();
+    },
+
+    playSweep: (ask) => {
+      // A second press is a stop, which is the only sensible reading of one control that is both
+      // "play" and "playing": a reader who presses it again has changed their mind about watching.
+      if (sweepFrame !== 0 && session.sweep?.stepId === ask.stepId) {
+        actions.stopSweep();
+        return;
+      }
+      const param = paramsNow()[ask.param];
+      if (param === undefined) return;
+      // **A run in progress is RESUMED, not replanned** — and this is what makes the two controls
+      // walk one ladder rather than two. The first draft built a fresh plan and a fresh driver on
+      // every press; `Play` set `sweepFrame` and so was caught by the stop above, but `Step` never
+      // does, so each press planned again FROM THE VALUE THE LAST PRESS MOVED TO: from tier G's
+      // `N = 4` the presses gave 9, 18, 30, 49, … — a geometric walk converging on 256 and never
+      // arriving — while `rows` was emptied each time, so the table held one row whose rung was not
+      // any of the plan's. `planSweep`'s own doc says a shorter ladder would make the two controls
+      // report different tables; this is the code that had been making them do it.
+      const live = session.sweep;
+      const resuming =
+        live !== null &&
+        live.stepId === ask.stepId &&
+        live.plan.param === ask.param &&
+        sweepDriver !== null &&
+        sweepDriver.running();
+      const plan = resuming && live !== null ? live.plan : planSweep(param, { reducedMotion: reducedMotion() });
+      // A finished ladder plans afresh, and from the endpoint there is nothing to plan: `planSweep`
+      // returns null and the press is a no-op. That is the honest answer — the limit has been
+      // reached — rather than a second sweep from `to` to `to`.
+      if (plan === null) return;
+      stopSweepFrame();
+      const driver = resuming && sweepDriver !== null ? sweepDriver : createSweep(plan);
+      sweepDriver = driver;
+      sweepPiece = ask.pieceId;
+      if (!resuming) session.sweep = { stepId: ask.stepId, plan, rows: [], running: false };
+      if (ask.stepOnce === true || reducedMotion()) {
+        // **`running` stays false, because nothing is running.** It had been set true here, so the
+        // Play button read `Stop` after a step while no animation existed, and pressing it started
+        // one instead of stopping anything. A step is also a deliberate jump rather than a frame,
+        // so it takes the FULL budget: there is nothing to settle afterwards.
+        advanceSweep(driver.stepOnce());
+        return;
+      }
+      const started = session.sweep;
+      if (started !== null) session.sweep = { ...started, running: true };
+      // **The draft budget for the whole run, and the full one on the settle.** A sweep is a
+      // gesture the app is making on the reader's behalf, so it takes the same budget a finger on
+      // the slider takes — `session.scrubbing` is what the next commit reads (`app.ts`'s own rule).
+      session.scrubbing = true;
+      const t0 = performance.now();
+      const frame = (): void => {
+        sweepFrame = requestAnimationFrame(frame);
+        advanceSweep(driver.advance(performance.now() - t0));
+      };
+      sweepFrame = requestAnimationFrame(frame);
+    },
+
+    stopSweep: () => {
+      endSweep();
+      commit(state, "edit");
     },
 
     copyLink: () => {
@@ -717,6 +941,22 @@ export function mountShell2(root: Element): Shell2Handle {
     // all — a camera move is not, a drag's two-hundredth frame is not, and the tenth arrow nudge
     // inside 800 ms is the first one's entry rather than a tenth.
     undoStacks.record(state, next, why);
+    // **A sweep does not survive the argument changing under it.** `setStep`, `setFixture`,
+    // `setMode`, `toSandbox` and an edited expression are ordinary commits, so nothing stopped a
+    // run started on one record from going on calling `setParam` against the next one's contour for
+    // the rest of its three seconds — and its rows would then appear under whatever step happened
+    // to share the id `limit:R`. Decided HERE, on the state, rather than in each of the five
+    // actions, because a sixth would have to remember; `setParam`'s own commits change none of
+    // these fields, so a running sweep is untouched by its own writes.
+    if (
+      sweepFrame !== 0 &&
+      (next.record !== state.record ||
+        next.fixture !== state.fixture ||
+        next.mode !== state.mode ||
+        next.expr !== state.expr)
+    ) {
+      endSweep();
+    }
     if (next.expr !== state.expr) compiled = compile(next.expr);
     state = next;
     // A draft budget while a gesture is live and the full one on settle — the plan's rule. At 1.1

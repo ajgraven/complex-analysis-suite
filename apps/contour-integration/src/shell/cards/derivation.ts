@@ -20,21 +20,83 @@
 // carries, so the two cannot come to disagree about what the group is called.
 import type { DerivationLine, PoleRow, Statement } from "../../engine/derivation.js";
 import type { DerivationStep } from "../../engine/steps.js";
-import { constraintLabel, tagLabel } from "../../engine/vocabulary.js";
+import type { SweepRow } from "../session.js";
+import { constraintLabel, paramSymbol, tagLabel } from "../../engine/vocabulary.js";
 import { argumentOf, stepIndex } from "../argument.js";
 import { drillMask } from "../drillPanel.js";
 import { fmt, fmtCx } from "../../kernel/decimal.js";
 import { h, type Child, type Desc } from "../dom.js";
-import { mathText } from "../math.js";
+import { scrub } from "../scrub.js";
+import { planSweep } from "../sweep.js";
+import type { Param } from "../../engine/contour/model.js";
+import { math, mathPlain, mathText } from "../math.js";
 import { card, disclosure, nothing, type Card, type CardContext } from "./card.js";
 
 /** `=` / `≤` / `≈` / `⚠` as the square stamp `theme.css` draws. The Result card's own helper. */
 const badge = (level: string, key = "b"): Desc =>
   h("span", { key, class: "badge", "data-level": level }, level);
 
+/**
+ * The claim, with the one numeral in it a reader may SCRUB — M8 step 3.2.
+ *
+ * **The split lands INSIDE a `$…$` group, which is why this is not two `mathText` calls.**
+ * `certificateClaimAt` cuts the sentence at `at $R = ‹value›$`, so the head ends on an UNMATCHED
+ * `$` and the tail opens with its partner — and `splitMath`'s own rule for an odd number of
+ * delimiters is to re-join the tail as TEXT, which would print `at $R = ` on screen and leave the
+ * rest of the formula unset. So the fragment is reopened by hand: everything before the head's last
+ * `$` is an ordinary sentence, what follows it is LaTeX that KaTeX sets on its own (`R = `), the
+ * scrub goes after it, and the tail's leading `$` is dropped because the head already opened it.
+ *
+ * A line with no `param` arg falls straight through to the sentence it has always rendered, which
+ * is 15 of the corpus's 42 bounds — the four producers that print `toExponential(3)` or a formatted
+ * fraction, which no `{value, digits}` can reproduce without editing what the reader sees.
+ */
+function claimText(ctx: CardContext, line: DerivationLine, i: number): readonly Child[] {
+  const arg = line.claim?.args.param;
+  const param = arg?.kind === "param" ? paramOf(ctx, arg.name) : undefined;
+  const head = line.claim?.args.head;
+  const tail = line.claim?.args.tail;
+  if (
+    arg?.kind !== "param" ||
+    param === undefined ||
+    head?.kind !== "text" ||
+    tail?.kind !== "text"
+  ) {
+    return mathText(line.text, `lt${i}`);
+  }
+  const opener = head.text.lastIndexOf("$");
+  if (opener < 0 || tail.text[0] !== "$") return mathText(line.text, `lt${i}`);
+  return [
+    ...mathText(head.text.slice(0, opener), `lh${i}`),
+    math(head.text.slice(opener + 1), {
+      key: `lo${i}`,
+      label: head.text.slice(opener + 1),
+    }),
+    scrub({
+      param,
+      key: `ls${i}`,
+      onChange: (v) => ctx.actions.setParam(param.name, v),
+      onScrubbing: (on) => ctx.actions.setScrubbing(on),
+    }),
+    ...mathText(tail.text.slice(1), `lz${i}`),
+  ];
+}
+
+/** The live `Param` behind a claim's name — the record's under a record, the state's otherwise. */
+function paramOf(ctx: CardContext, name: string): Param | undefined {
+  const { state, resolution } = ctx;
+  const contour =
+    resolution.kind === "gallery"
+      ? (resolution.run?.contour ?? state.contour)
+      : state.contour;
+  return contour.params[name];
+}
 
 /** One `Step` of an audit trail: the mark comes from `ok`, never from the sentence. */
-function stepLine(step: { readonly ok: boolean; readonly text: string }, key: string): Desc {
+function stepLine(
+  step: { readonly ok: boolean; readonly text: string },
+  key: string,
+): Desc {
   return h(
     "p",
     // A ✗ step is the diagnostic, so it is coloured as one rather than left to be spotted among the
@@ -61,7 +123,11 @@ function lineItem(ctx: CardContext, stage: Block, line: DerivationLine, i: numbe
     // (`@cas/rigor`'s own words), so this is never behind a disclosure.
     line.restriction === undefined
       ? null
-      : h("p", { key: "rs", class: "restriction small" }, ...mathText(line.restriction, `lr${i}`)),
+      : h(
+          "p",
+          { key: "rs", class: "restriction small" },
+          ...mathText(line.restriction, `lr${i}`),
+        ),
     line.repair === undefined
       ? null
       : h("p", { key: "rp", class: "repair small" }, ...mathText(line.repair, `lf${i}`)),
@@ -102,7 +168,7 @@ function lineItem(ctx: CardContext, stage: Block, line: DerivationLine, i: numbe
           }),
     },
     badge(line.status === "failed" ? "⚠" : line.level),
-    h("span", { key: "c", class: "pieceName" }, ...mathText(line.text, `lt${i}`)),
+    h("span", { key: "c", class: "pieceName" }, ...claimText(ctx, line, i)),
     // **A piece's NAME is a `$…$` sentence too**, and this is where that was found: `Piece.name` for
     // the circle template is literally `the circle $|z - a| = R$`, so setting it as a text node put
     // two raw dollars and a run of LaTeX on screen beside a line whose own claim was typeset. Every
@@ -164,9 +230,15 @@ function poleTable(rows: readonly PoleRow[]): Desc {
               "td",
               { key: "o", class: "num" },
               String(row.order),
-              row.orderCertain ? null : h("span", { key: "u", class: "tag warn" }, tagLabel("order-uncertain")),
+              row.orderCertain
+                ? null
+                : h("span", { key: "u", class: "tag warn" }, tagLabel("order-uncertain")),
               row.possiblyRemovable
-                ? h("span", { key: "r", class: "tag warn" }, tagLabel("possibly-removable"))
+                ? h(
+                    "span",
+                    { key: "r", class: "tag warn" },
+                    tagLabel("possibly-removable"),
+                  )
                 : null,
             ),
             h(
@@ -187,7 +259,11 @@ function poleTable(rows: readonly PoleRow[]): Desc {
               { key: "i", class: "num" },
               row.windingDecided && row.winding !== undefined
                 ? fmt(row.winding)
-                : h("span", { key: "u", class: "tag warn" }, ...mathText(tagLabel("winding-undecided"), "wu")),
+                : h(
+                    "span",
+                    { key: "u", class: "tag warn" },
+                    ...mathText(tagLabel("winding-undecided"), "wu"),
+                  ),
             ),
           ),
         ),
@@ -227,7 +303,9 @@ function stageCount(stage: Block, failedLines: number): string {
   const plural = (n: number, one: string): string => `${n} ${one}${n === 1 ? "" : "s"}`;
   if (stage.lines.length > 0) return plural(stage.lines.length, "check");
   const rest = [
-    ...(stage.statements.length > 0 ? [plural(stage.statements.length, "statement")] : []),
+    ...(stage.statements.length > 0
+      ? [plural(stage.statements.length, "statement")]
+      : []),
     ...(stage.poles.length > 0 ? [plural(stage.poles.length, "pole")] : []),
   ];
   return rest.length > 0 ? rest.join(", ") : "nothing established";
@@ -316,7 +394,8 @@ export const derivationCard: Card = (ctx) => {
   // repeating it beneath step 2 would give away the ending of the argument the stepper exists to
   // walk, which is exactly what Worked-example mode is for. In `All` it stays where it has been
   // since step 1.5b, at the foot of the whole argument.
-  const showConclusion = conclusion !== undefined && (!stepping || shown[0]?.kind === "conclusion");
+  const showConclusion =
+    conclusion !== undefined && (!stepping || shown[0]?.kind === "conclusion");
 
   return card(
     "derivation",
@@ -367,7 +446,12 @@ export const derivationCard: Card = (ctx) => {
  * read as though the case were handled while letting it through. The guard arrives with its
  * consumer.
  */
-function onStepKey(ctx: CardContext, count: number, index: number, e: KeyboardEvent): void {
+function onStepKey(
+  ctx: CardContext,
+  count: number,
+  index: number,
+  e: KeyboardEvent,
+): void {
   if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
   if (ctx.session.step === "all" || count === 0) return;
   e.preventDefault();
@@ -396,7 +480,12 @@ function stepperControls(
       { key: "ctl", class: "stepBar" },
       h(
         "button",
-        { key: "enter", type: "button", class: "stepBtn", onClick: () => actions.setStep(0) },
+        {
+          key: "enter",
+          type: "button",
+          class: "stepBtn",
+          onClick: () => actions.setStep(0),
+        },
         `Step through — ${steps.length}`,
       ),
     );
@@ -430,7 +519,12 @@ function stepperControls(
             class: "stepDot",
             // The step a reader is ON, named for assistive tech the same way it is drawn.
             ...(i === index ? { "aria-current": "step" } : {}),
-            "aria-label": `step ${i + 1} of ${steps.length} — ${s.title}`,
+            // `mathPlain`, not the raw title: a step's title carries `$…$` (*Let $R \to \infty$*,
+            // *Boundary terms · the $R \to \infty$ semicircle*), and an `aria-label` is one of the
+            // places a fragment cannot go — so a screen-reader user heard the LaTeX source, dollars
+            // and backslashes included, for the two steps of every record that have a limit. Older
+            // than this step (3.1b), found by reading the accessible name in a browser.
+            "aria-label": `step ${i + 1} of ${steps.length} — ${mathPlain(s.title)}`,
             "data-failed": s.failed ? "1" : undefined,
             onClick: () => actions.setStep(i),
           }),
@@ -452,10 +546,19 @@ function stepperControls(
     h("span", { key: "of", class: "muted small" }, `${index + 1} / ${steps.length}`),
     h(
       "button",
-      { key: "all", type: "button", class: "stepBtn", onClick: () => actions.setStep("all") },
+      {
+        key: "all",
+        type: "button",
+        class: "stepBtn",
+        onClick: () => actions.setStep("all"),
+      },
       "All",
     ),
-    h("span", { key: "sr", class: "srOnly" }, `Step ${index + 1} of ${steps.length}: ${step.title}`),
+    h(
+      "span",
+      { key: "sr", class: "srOnly" },
+      `Step ${index + 1} of ${steps.length}: ${mathPlain(step.title)}`,
+    ),
   );
 }
 
@@ -483,5 +586,162 @@ function openBlock(ctx: CardContext, step: DerivationStep): Desc {
           { key: "lines", class: "pieces2" },
           ...step.lines.map((line, i) => lineItem(ctx, step, line, i)),
         ),
+    ...limitPlay(ctx, step),
+  );
+}
+
+/**
+ * The limit step's play control and its table — M8 step 3.2.
+ *
+ * **On the limit step alone, and only where the parameter can actually be swept.** A step whose
+ * parameter has no `limit` gets no control rather than a disabled one: there is nowhere for it to
+ * go, and a control that cannot act teaches a reader the app is broken (the `openFrontDoor`
+ * placeholder's own lesson, step 1.4).
+ *
+ * **But the TABLE is not part of that rule, and making it one was a defect.** A finished sweep
+ * leaves the parameter ON its endpoint, where `planSweep` has nothing to plan and returns null —
+ * so a single `return []` covering both took the table off the screen at the exact moment it was
+ * complete. Measured in a browser: four presses of `Step` filled four rows with the `≤` column
+ * falling 2.6e-5 → 1.5e-8 → 9.1e-12 → 5.3e-15, and the fifth press — the one that reaches the
+ * limit — left the card with no table at all. The buttons still come and go with the plan; the
+ * evidence stays.
+ */
+function limitPlay(ctx: CardContext, step: DerivationStep): readonly Child[] {
+  if (step.kind !== "limit" || step.focus.param === undefined) return [];
+  const param = paramOf(ctx, step.focus.param);
+  if (param === undefined) return [];
+  const sweep = ctx.session.sweep?.stepId === step.id ? ctx.session.sweep : null;
+  const plannable = planSweep(param) !== null;
+  if (!plannable && (sweep === null || sweep.rows.length === 0)) return [];
+  const running = sweep?.running === true;
+
+  // **Which piece the limit has to kill.** Every line whose certified bound names this parameter is
+  // a candidate; tier G declares FOUR (the square's four sides) and the binding one is the largest,
+  // because that is the one whose vanishing the limit is being taken to establish. Decided here
+  // because the card is the only reader that can see the whole step list.
+  const governed = boundsFor(ctx, step.focus.param);
+  const worst = governed.reduce<{ pieceId: string; bound: number } | null>(
+    (best, b) => (best === null || b.bound > best.bound ? b : best),
+    null,
+  );
+
+  return [
+    !plannable
+      ? null
+      : h(
+          "div",
+          { key: "play", class: "sweepBar" },
+          h(
+            "button",
+            {
+              key: "go",
+              type: "button",
+              class: "stepBtn",
+              // The label says what pressing it DOES now, which is the only thing a reader can act on:
+              // a control labelled "play" while it is playing is a lie about its own state.
+              onClick: () =>
+                ctx.actions.playSweep({
+                  stepId: step.id,
+                  param: param.name,
+                  pieceId: worst?.pieceId ?? null,
+                }),
+            },
+            running ? "Stop" : "Play the limit",
+          ),
+          // **The step button is offered ALWAYS, not only under `prefers-reduced-motion`.** The media
+          // query decides what `Play` does (the app asks it at every press); this is the same jump a
+          // reader may want without changing an operating-system setting to get it.
+          h(
+            "button",
+            {
+              key: "one",
+              type: "button",
+              class: "stepBtn",
+              onClick: () =>
+                ctx.actions.playSweep({
+                  stepId: step.id,
+                  param: param.name,
+                  pieceId: worst?.pieceId ?? null,
+                  stepOnce: true,
+                }),
+            },
+            "Step",
+          ),
+        ),
+    sweep === null || sweep.rows.length === 0
+      ? null
+      : sweepTable(sweep.rows, param.name, worst !== null),
+  ];
+}
+
+/** Every certified bound in the argument that names this parameter, with the piece it is about. */
+function boundsFor(
+  ctx: CardContext,
+  param: string,
+): { pieceId: string; bound: number }[] {
+  const stages = argumentOf(ctx).derivation?.stages ?? [];
+  return stages
+    .flatMap((stage) => stage.lines)
+    .flatMap((line) =>
+      line.evaluated?.param === param && line.pieceId !== undefined
+        ? [{ pieceId: line.pieceId, bound: line.evaluated.bound }]
+        : [],
+    );
+}
+
+/**
+ * What the sweep found, one row per checkpoint.
+ *
+ * Every cell is BADGED, and the three badges differ on purpose: the bound is what the engine
+ * certified (`≤`), the measured term and the target are quadrature (`≈`). A table that badged them
+ * alike would say the measured column had been proved, which is the inversion the honest-labelling
+ * guardrail exists to prevent — and this table's whole point is to let a reader watch a `≤` column
+ * shrink past an `≈` one.
+ */
+function sweepTable(rows: readonly SweepRow[], param: string, hasPiece: boolean): Desc {
+  return h(
+    "table",
+    { key: "sweep", class: "sweepTable" },
+    h(
+      "thead",
+      { key: "h" },
+      h(
+        "tr",
+        { key: "r" },
+        h("th", { key: "a", scope: "col" }, ...mathText(`$${paramSymbol(param)}$`, "sh")),
+        h("th", { key: "b", scope: "col" }, "bound"),
+        h("th", { key: "m", scope: "col" }, hasPiece ? "measured" : "—"),
+        h("th", { key: "t", scope: "col" }, "target"),
+      ),
+    ),
+    h(
+      "tbody",
+      { key: "b" },
+      ...rows.map((row, i) =>
+        h(
+          "tr",
+          { key: `r${i}` },
+          h("td", { key: "a", class: "num" }, fmt(row.at)),
+          h(
+            "td",
+            { key: "b", class: "num" },
+            row.bound === null ? "—" : badge("≤", "bb"),
+            row.bound === null ? null : ` ${row.bound.toExponential(3)}`,
+          ),
+          h(
+            "td",
+            { key: "m", class: "num" },
+            row.measured === null ? "—" : badge("≈", "mb"),
+            row.measured === null ? null : ` ${fmtCx(row.measured)}`,
+          ),
+          h(
+            "td",
+            { key: "t", class: "num" },
+            row.target === null ? "—" : badge("≈", "tb"),
+            row.target === null ? null : ` ${fmtCx(row.target)}`,
+          ),
+        ),
+      ),
+    ),
   );
 }

@@ -1296,3 +1296,20 @@ every session ends pushed.
 Work in small, reviewable commits. Pause at each phase/milestone gate for review before proceeding.
 When a command or path in the docs is marked `⚠ verify`, check it against the actual repo
 contents rather than assuming.
+
+## Replying: be brief
+
+**The code and the docs carry the detail; the reply does not.** Findings belong in
+`STATUS.md` and in the comment beside the code that caused them, which is where a reader
+will look for them later — repeating them in chat costs the owner's metered context and is
+read once.
+
+- **Report, do not re-narrate.** A finished step is a handful of lines: what was built, the
+  numbers the gate and the sweep came back with, where it is written down, and the one
+  decision the owner has to make. Never restate a finding the commit already carries.
+- **Never announce, never wait aloud.** No "I'll now…", no "waiting…", no progress ticks
+  while a background job runs. Say nothing until there is a result.
+- **A measurement, not a paragraph about a measurement.** `20.4% (2.03e6 → 1.62e6)` says
+  what three sentences would.
+- **Bold, bullets and headings are for a reply with real structure**, not decoration on a
+  two-line answer.

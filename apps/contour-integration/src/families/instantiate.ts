@@ -29,6 +29,41 @@ const LIMIT_RANGE = {
   "0+": [1e-6, 1],
 } as const;
 
+/**
+ * The range a limit parameter may be MOVED over — which is not always the range above.
+ *
+ * **A range is a claim about where the app will answer, and for tier G's `N` the default one is
+ * false.** Found at M8 step 3.2, when the sweep gave `N` a ladder running to the range's top.
+ * There are TWO walls above it and they are three and a half decades apart:
+ *
+ * 1. `analyse.ts` refuses a band wider than `MAX_KERNEL_BAND` (4096) rather than clamping it —
+ *    deliberately, since a clamped window would let LEGALITY call a contour clear of singularities
+ *    it runs straight through. That was the wall the first draft capped at.
+ * 2. **The one that actually binds is COST, and it is not linear.** A single resolve of
+ *    `series-cot-kernel` is 50 ms at `N = 128`, 179 ms at 256, 342 ms at 320, 700 ms at 384,
+ *    2.2 s at 512 and **25.6 s at 1024** — doubling about every 64 past 256, because the exact
+ *    residue sum's arithmetic grows with the number of poles AND with their digits. The draft
+ *    budget does not touch it (25.5 s against 25.8 s at 1024): this is the exact half, not the
+ *    quadrature. A ladder whose last rung is 4095 would take the better part of an hour in ONE
+ *    commit, and the scrub and the rail slider can reach the endpoint too — so this is not a
+ *    property of the new control. The rail slider has been able to hang the app at tier G since
+ *    the record landed; nothing had ever dragged it there.
+ *
+ * So the endpoint is the furthest the app will answer at IN A FRAME, not the furthest it could
+ * answer at given an hour. 256 is where the worst of the three records is still under 200 ms, which
+ * is a slow commit and not a hang; 320 is already a third of a second and 384 three quarters.
+ *
+ * Keyed on `admits` because that is the field that says the parameter counts something the cost is
+ * measured in; today that is exactly the kernel-band case and nothing else in the corpus sets it,
+ * so a second constrained parameter of another kind is where this needs a second look.
+ */
+const MAX_SERIES_N = 256;
+
+function limitRange(l: { readonly to: "inf" | "0+"; readonly through?: string }): readonly [number, number] {
+  const [lo, hi] = LIMIT_RANGE[l.to];
+  return l.through === "halfIntegers" ? [lo, Math.min(hi, MAX_SERIES_N)] : [lo, hi];
+}
+
 export interface InstantiateOptions {
   /** Override any parameter's starting value — the limit params included. */
   readonly values?: Readonly<Record<string, number>>;
@@ -83,9 +118,19 @@ function buildParams(family: Family, values: Readonly<Record<string, number>>): 
     params[l.name] = {
       name: l.name,
       value: values[l.name] ?? l.start ?? DEFAULT_LIMIT_VALUE[l.to],
-      range: LIMIT_RANGE[l.to],
+      range: limitRange(l),
       scale: "log",
       limit: { to: l.to },
+      // **The one place the record's vocabulary meets the engine's.** `through: "halfIntegers"` is
+      // a statement about tier G's CONTOUR — `Γ_N` has half-width `N + ½` — and `admits` is about
+      // the number a control moves, which is `N`. Translating here rather than carrying the
+      // record's word through is what keeps `squareTemplate`'s half out of every downstream reader.
+      //
+      // It was declared and DROPPED here until M8 step 3.2, which is when it started to matter:
+      // measured over all three tier-G records, the sweep's first rung as interpolated (9.19) and
+      // the scrub's first arrow press (4.03) both leave the lattice, and `kernel/bounds/squareSide.ts` refuses
+      // every one of the four sides at such a width.
+      ...(l.through === "halfIntegers" ? { admits: "integers" as const } : {}),
     };
   }
 

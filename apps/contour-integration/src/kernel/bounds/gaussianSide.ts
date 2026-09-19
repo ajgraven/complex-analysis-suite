@@ -38,6 +38,15 @@ export interface GaussianSide {
   /** The segment's `Im z` range. Order does not matter; `|∫| ≤ M·L` takes the length. */
   readonly y0: Frac;
   readonly y1: Frac;
+  /**
+   * The contour parameter the side's abscissa is bound to, for {@link ArcBound.evaluated}.
+   *
+   * **The claim's `at $\operatorname{Re} z = -1$` is NOT a parameter name**, which is why this is a
+   * separate field rather than a reading of the sentence: the side is signed and the limit is taken
+   * in `R = |c|`, so the value a scrub writes is `|c|` under whatever name the record's rectangle
+   * gives it.
+   */
+  readonly param?: string;
 }
 
 /** `Re Q(c + iy)` as `A y² + B y + C`, exactly. Only `q₀, q₁, q₂` enter — see the degree guard. */
@@ -131,6 +140,7 @@ export function gaussianSideBound(q: QiPoly, lambda: Gauss, s: GaussianSide): Ar
   const peak = maximumOn(A, B, C, lo, hi);
   const [lr, li] = lambda.toTuple();
   const value = Math.hypot(lr, li) * length.toNumber() * Math.exp(peak.value.toNumber());
+  const evaluated = { param: s.param ?? "R", at: R.toNumber(), bound: value };
   const at = `at $\\operatorname{Re} z = ${formatFrac(s.c)}$`;
   const claim = `the vertical side: $\\left|\\int f\\,dz\\right| \\le ${value.toExponential(3)}$ ${at}`;
   const provenance = [
@@ -153,6 +163,7 @@ export function gaussianSideBound(q: QiPoly, lambda: Gauss, s: GaussianSide): Ar
 
   return {
     R,
+    evaluated,
     asymptotics,
     exponent,
     certificate:

@@ -13,6 +13,34 @@
 import type { PenNode } from "../engine/contour/pen.js";
 import type { Cx } from "../kernel/geom.js";
 import type { ShellState } from "./state.js";
+import type { SweepPlan } from "./sweep.js";
+
+/**
+ * One row of the limit step's table — what the argument looked like at one checkpoint.
+ *
+ * Captured from the LIVE resolution at the moment the sweep passed the value, rather than
+ * recomputed afterwards from the value alone: the bound, the measured term and the target are three
+ * numbers the same run produced, and re-deriving any of them later would be a second computation
+ * that could disagree with the picture the reader was watching when the row appeared.
+ */
+export interface SweepRow {
+  readonly at: number;
+  /** The certified bound there (`≤`), or null where the piece's claim carries none. */
+  readonly bound: number | null;
+  /** The piece the limit has to kill, measured (`≈`). */
+  readonly measured: Cx | null;
+  /** The target piece's value there (`≈`). */
+  readonly target: Cx | null;
+}
+
+/** A sweep in progress or just finished. The card is a pure function of this. */
+export interface SweepState {
+  /** The step it belongs to, so stepping away does not show another step's table. */
+  readonly stepId: string;
+  readonly plan: SweepPlan;
+  readonly rows: readonly SweepRow[];
+  readonly running: boolean;
+}
 
 /** What the pointer is currently doing. `none` is not a gesture; it is the absence of one. */
 export type Gesture = "none" | "contour" | "handle" | "branch" | "view" | "pen";
@@ -110,6 +138,19 @@ export interface Session {
    * count changes with the record and a stale index is the ordinary case rather than an error.
    */
   step: number | "all";
+  /**
+   * The limit step's sweep, while one is running and after it has finished — M8 step 3.2.
+   *
+   * **In the session and not in the state**, for `step`'s own reason: a sweep is where a reader is
+   * in an argument, not what the argument IS, and a permalink that reopened mid-sweep would put a
+   * second reader at a parameter value the sharer was passing through rather than at the one they
+   * meant. `resetTransient` clears it with the rest.
+   *
+   * The ROWS outlive the run deliberately: the table is what the sweep was for, and a table that
+   * emptied the moment the parameter reached its limit would show its evidence only while the
+   * reader was watching the picture move.
+   */
+  sweep: SweepState | null;
   rails: RailState;
   /** Which `<details>` are open, by id. Read from here and never from the DOM, so a patch cannot
    *  silently close one — the old shell's disclosures lost their state whenever a card rebuilt. */
@@ -192,6 +233,7 @@ export function defaultSession(): Session {
     redo: [],
     drillGraded: false,
     step: "all",
+    sweep: null,
     rails: { left: false, right: false },
     open: {},
     notice: null,
@@ -232,6 +274,7 @@ export function resetTransient(session: Session): void {
   // cleared here. A restored link, a contrast cell or a drill rung all arrive through `applyState`;
   // holding step 4 of the previous record's derivation open over them would be the same defect.
   session.step = "all";
+  session.sweep = null;
   session.drillAnswers = {};
   session.drillDrawn = null;
   session.drillPicker = false;

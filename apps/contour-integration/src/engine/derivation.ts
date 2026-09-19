@@ -27,6 +27,7 @@ import {
   type Step,
   type Verdict,
 } from "@cas/rigor";
+import type { Claim } from "./claims.js";
 import type { Cx } from "../kernel/geom.js";
 import { formatPiExpSum } from "../kernel/expSum.js";
 import type { PoleReport } from "../kernel/poles.js";
@@ -104,6 +105,18 @@ export interface Statement {
 /** One claim, with the evidence for it. Every field is read off a certificate. */
 export interface DerivationLine {
   readonly text: string;
+  /**
+   * The same sentence as typed ARGUMENTS — M8 step 3.2.
+   *
+   * `text` is `renderClaim(claim)` and stays the line's display string; this is beside it so the
+   * Derivation card can typeset a piece name as a name and put a scrub on a parameter's value,
+   * instead of parsing a sentence back into its parts. Absent on the lines that come from a whole
+   * VERDICT rather than from a ledger row — `lineFromVerdict` composes its text here and has no
+   * claim to carry.
+   */
+  readonly claim?: Claim;
+  /** The bound this line reports, as three numbers — see `LedgerRow.evaluated`. What a scrub writes. */
+  readonly evaluated?: LedgerRow["evaluated"];
   readonly level: Level;
   readonly method: string;
   readonly status: "satisfied" | "failed" | "unknown";
@@ -205,6 +218,8 @@ function lineFromRow(row: LedgerRow, spec: readonly Piece[]): DerivationLine {
     row.pieceId === undefined ? undefined : spec.find((p) => p.id === row.pieceId);
   return {
     text: row.claim,
+    claim: row.claimData,
+    ...(row.evaluated === undefined ? {} : { evaluated: row.evaluated }),
     level: row.evidence.level,
     method: row.evidence.method,
     status: row.status,

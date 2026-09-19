@@ -24,6 +24,7 @@ import { Frac, SqrtExt } from "@cas/exact";
 import { HEADLINES, headlineFails, type ConstraintId } from "./vocabulary.js";
 import {
   certificateClaim,
+  certificateClaimAt,
   claimOf,
   pieceArg,
   renderClaim,
@@ -65,7 +66,7 @@ import { branchArcBound, dogboneArcBound } from "../kernel/bounds/branchArc.js";
 import { logArcBound } from "../kernel/bounds/logArc.js";
 import type { LogFactor } from "../kernel/logResidue.js";
 import type { MultiPowerFactor, PowerFactor } from "../kernel/branchResidue.js";
-import type { Piece } from "./contour/model.js";
+import type { Geom, Piece, Scalar } from "./contour/model.js";
 import type { ContourIntegral } from "./contour/integrate.js";
 import type { PoleReport } from "../kernel/poles.js";
 import { smallArcLimit } from "../kernel/bounds/smallArc.js";
@@ -92,6 +93,17 @@ export interface LedgerRow {
   /** The same assertion as data: a template id and its typed arguments. */
   readonly claimData: Claim;
   readonly evidence: Certificate;
+  /**
+   * The certified bound this row reports, as three numbers — M8 step 3.2.
+   *
+   * Only a KILL row that a `kernel/bounds/` module disposed of has one; see
+   * {@link ArcBound.evaluated}. It is carried BESIDE the claim rather than only inside it because
+   * `certificateClaimAt` can lift the parameter into the sentence for five of the nine producers
+   * and not for the four that print `toExponential(3)` or a formatted fraction — so a reader of the
+   * claim alone would find the scrubbable number on some rows and not on others, which is exactly
+   * the accident a card must not be built on.
+   */
+  readonly evaluated?: ArcBound["evaluated"];
   /** What to do about it, when it failed. */
   readonly repair?: string;
 }
@@ -232,6 +244,40 @@ function asExactRadius(r: number): Frac | null {
 }
 
 /**
+ * The contour parameter a piece's geometry is bound to — the name a scrub is allowed to write.
+ *
+ * Read off `Geom` rather than off the contour's parameter table, because the ledger never sees the
+ * table: `LedgerInput` carries the RESOLVED geometry and the piece specs, which is the right
+ * layering — a bound is about the picture rather than about a slider. An arc answers with its
+ * RADIUS's parameter and a segment with the one its endpoints share.
+ *
+ * **`mul` is deliberately not scanned.** F1's return ray is `R·wedgeX`, a product of two parameters,
+ * and only the first is live — a `derived` coefficient is computed once at instantiation and never
+ * moves under a drag (`model.ts`'s own note). Counting it would make the ray's name ambiguous and
+ * lose `R`, which is the one a reader scrubs.
+ *
+ * `undefined` where there is no parameter or where two differ; the producers then fall back to the
+ * symbol their own sentences print. Measured over the 28-record corpus: every bounded piece answers,
+ * so the fallback belongs to the sandbox's hand-drawn contours alone.
+ */
+function boundParam(geom: Geom): string | undefined {
+  const names = new Set<string>();
+  const scan = (x: Scalar): void => {
+    if (typeof x === "number") return;
+    names.add(x.param);
+    if (x.add !== undefined) scan(x.add);
+  };
+  if (geom.kind === "arc") scan(geom.radius);
+  else {
+    for (const point of [geom.from, geom.to]) {
+      scan(point.x);
+      scan(point.y);
+    }
+  }
+  return names.size === 1 ? [...names][0] : undefined;
+}
+
+/**
  * Dispose of one `vanish` piece: pick the lemma the integrand's *shape* calls for, and report what
  * the bound does in the limit.
  *
@@ -239,7 +285,7 @@ function asExactRadius(r: number): Frac | null {
  * rational integrand has no frequency and Jordan has nothing to say about it, while for `g·e^{iaz}`
  * the plain ML bound is off by the whole factor `|a|R` and fails on integrands that converge.
  */
-function disposeArc(ast: Node, g: Resolved): ArcBound | null {
+function disposeArc(ast: Node, g: Resolved, param?: string): ArcBound | null {
   if (g.kind !== "arc") return null; // only a circular arc has a certified bound of this shape
   const R = arcRadius(g);
   const extent = arcExtent(g);
@@ -250,7 +296,7 @@ function disposeArc(ast: Node, g: Resolved): ArcBound | null {
     // Which half the arc lies in decides everything; read it off the arc's own midpoint.
     const mid = (g.theta0 + g.theta1) / 2;
     const half = Math.sin(mid) >= 0 ? "upper" : "lower";
-    return jordanArcBound(exponential.num, exponential.den, exponential.a, half, R);
+    return jordanArcBound(exponential.num, exponential.den, exponential.a, half, R, param);
   }
 
   // A ZERO FREQUENCY MUST SWITCH LEMMAS, not report an infinite bound. Jordan's constant is π/|a|,
@@ -259,7 +305,7 @@ function disposeArc(ast: Node, g: Resolved): ArcBound | null {
   // plain ML bound discharges it whenever the degree gap allows. Gallery B1's `a = 0` fixture is
   // this case, and its trap is explicit that an engine treating π/0 as a failure "will paper over
   // exactly the case it was built to catch".
-  if (exponential) return mlArcBound(exponential.num, exponential.den, R, extent);
+  if (exponential) return mlArcBound(exponential.num, exponential.den, R, extent, param);
 
   // **L6 — the wedge lemma (M5.2).** Nothing above reaches `e^{±zⁿ}` for `n ≥ 2`: Jordan's reader
   // wants a LINEAR exponent and declines, and the exact rational reader declines a `call`, so until
@@ -272,12 +318,12 @@ function disposeArc(ast: Node, g: Resolved): ArcBound | null {
     const from = asPiMultiple(g.theta0);
     const to = asPiMultiple(g.theta1);
     if (from === null || to === null) return null;
-    return wedgeArcBound(wedge, R, { from, to });
+    return wedgeArcBound(wedge, R, { from, to }, param);
   }
 
   const rational = toExactRational(ast);
   if (!rational.ok) return null;
-  return mlArcBound(rational.value.num, rational.value.den, R, extent);
+  return mlArcBound(rational.value.num, rational.value.den, R, extent, param);
 }
 
 /**
@@ -288,7 +334,11 @@ function disposeArc(ast: Node, g: Resolved): ArcBound | null {
  * origin. The check is not bureaucracy — `sup|cot πz| = coth(π(N+½))` is a statement about that
  * geometry, and a side of some other rectangle gets the right formula on the wrong figure.
  */
-function disposeSquareSide(kernel: SummationKernel, g: Resolved): ArcBound | null {
+function disposeSquareSide(
+  kernel: SummationKernel,
+  g: Resolved,
+  param?: string,
+): ArcBound | null {
   if (g.kind !== "segment") return null;
   const [x0, y0] = g.from;
   const [x1, y1] = g.to;
@@ -307,7 +357,7 @@ function disposeSquareSide(kernel: SummationKernel, g: Resolved): ArcBound | nul
   if (!centred || Math.abs(span - 2 * offset) > 1e-9) return null;
   const halfWidth = asExactRadius(offset);
   if (halfWidth === null) return null;
-  return squareSideBound(kernel.kind, kernel.num, kernel.den, halfWidth);
+  return squareSideBound(kernel.kind, kernel.num, kernel.den, halfWidth, param);
 }
 
 /**
@@ -324,7 +374,7 @@ function disposeSquareSide(kernel: SummationKernel, g: Resolved): ArcBound | nul
  * E1's first trap: it is a translate of the bottom, so its ML bound is proportional to the length
  * `2R` and DIVERGES.
  */
-function disposeStripSide(ast: Node, g: Resolved): ArcBound | null {
+function disposeStripSide(ast: Node, g: Resolved, param?: string): ArcBound | null {
   if (g.kind !== "segment") return null;
   const [x0, y0] = g.from;
   const [x1, y1] = g.to;
@@ -337,6 +387,7 @@ function disposeStripSide(ast: Node, g: Resolved): ArcBound | null {
     R: Math.abs(x0),
     length: Math.abs(y1 - y0),
     imagRange: [Math.min(y0, y1), Math.max(y0, y1)],
+    ...(param === undefined ? {} : { param }),
   });
 }
 
@@ -352,7 +403,7 @@ function disposeStripSide(ast: Node, g: Resolved): ArcBound | null {
  * `Re z` with no `R → ∞` hidden in a lattice, so `Re z = 0` is a perfectly ordinary place for a
  * segment to be and the bound there is simply large.
  */
-function disposeGaussianSide(ast: Node, g: Resolved): ArcBound | null {
+function disposeGaussianSide(ast: Node, g: Resolved, param?: string): ArcBound | null {
   if (g.kind !== "segment") return null;
   const [x0, y0] = g.from;
   const [x1, y1] = g.to;
@@ -363,7 +414,12 @@ function disposeGaussianSide(ast: Node, g: Resolved): ArcBound | null {
   const a = asExactCoordinate(y0);
   const b = asExactCoordinate(y1);
   if (c === null || a === null || b === null) return null;
-  return gaussianSideBound(form.q, form.lambda, { c, y0: a, y1: b });
+  return gaussianSideBound(form.q, form.lambda, {
+    c,
+    y0: a,
+    y1: b,
+    ...(param === undefined ? {} : { param }),
+  });
 }
 
 /**
@@ -378,6 +434,7 @@ function disposeBranchArc(
   power: { readonly factor: PowerFactor; readonly rational: Node },
   g: Resolved,
   lemma: Piece["lemma"],
+  param?: string,
 ): ArcBound | null {
   if (g.kind !== "arc") return null;
   const R = arcRadius(g);
@@ -390,6 +447,7 @@ function disposeBranchArc(
   return branchArcBound(power.factor.alpha, rational.value.num, rational.value.den, R, {
     limit,
     piMultiple: extent,
+    ...(param === undefined ? {} : { param }),
   });
 }
 
@@ -404,6 +462,7 @@ function disposeLogArc(
   log: { readonly factor: LogFactor; readonly rational: Node },
   g: Resolved,
   lemma: Piece["lemma"],
+  param?: string,
 ): ArcBound | null {
   if (g.kind !== "arc") return null;
   const R = arcRadius(g);
@@ -417,6 +476,7 @@ function disposeLogArc(
     limit,
     piMultiple: extent,
     argRange: log.factor.argRange,
+    ...(param === undefined ? {} : { param }),
   });
 }
 
@@ -433,6 +493,7 @@ function disposeDogboneArc(
   multi: { readonly factor: MultiPowerFactor; readonly rational: Node },
   g: Resolved,
   lemma: Piece["lemma"],
+  param?: string,
 ): ArcBound | null {
   if (g.kind !== "arc" || lemma !== "L1") return null;
   const radius = g.radius;
@@ -487,6 +548,7 @@ function disposeDogboneArc(
     den: rational.value.den.shift(centre),
     eta,
     piMultiple: extent,
+    ...(param === undefined ? {} : { param }),
   });
 }
 
@@ -505,6 +567,7 @@ export const rowFrom = (
   evidence: Certificate,
   pieceId?: string,
   repair?: string,
+  evaluated?: ArcBound["evaluated"],
 ): LedgerRow => ({
   constraint,
   status,
@@ -513,6 +576,7 @@ export const rowFrom = (
   evidence,
   pieceId,
   repair,
+  evaluated,
 });
 
 export interface LedgerInput {
@@ -1330,19 +1394,20 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
       continue;
     }
 
+    const scrub = boundParam(piece.geom);
     const disposal =
       input.multi !== undefined
-        ? disposeDogboneArc(input.multi, geom, piece.lemma)
+        ? disposeDogboneArc(input.multi, geom, piece.lemma, scrub)
         : input.log !== undefined
-          ? disposeLogArc(input.log, geom, piece.lemma)
+          ? disposeLogArc(input.log, geom, piece.lemma, scrub)
           : input.power === undefined
-            ? (disposeArc(ast, geom) ??
+            ? (disposeArc(ast, geom, scrub) ??
               (input.summation === undefined
                 ? null
-                : disposeSquareSide(input.summation.kernel, geom)) ??
-              disposeStripSide(ast, geom) ??
-              disposeGaussianSide(ast, geom))
-            : disposeBranchArc(input.power, geom, piece.lemma);
+                : disposeSquareSide(input.summation.kernel, geom, scrub)) ??
+              disposeStripSide(ast, geom, scrub) ??
+              disposeGaussianSide(ast, geom, scrub))
+            : disposeBranchArc(input.power, geom, piece.lemma, scrub);
     if (!disposal) {
       killFailed = true;
       // **WHICH OF THE TWO FAILED, THE INTEGRAND OR THE GEOMETRY?** Until M5.4b this row said "no
@@ -1383,7 +1448,15 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
       rowFrom(
         "KILL",
         ok ? "satisfied" : "failed",
-        certificateClaim(disposal.certificate.claim),
+        // The sentence is the bound module's, unchanged; what the row adds is the ONE numeral in it
+        // a reader may drag. `certificateClaimAt` refuses to split where the printed form is not the
+        // plain decimal, so nothing here can move a character of it.
+        disposal.evaluated === undefined
+          ? certificateClaim(disposal.certificate.claim)
+          : certificateClaimAt(disposal.certificate.claim, {
+              name: disposal.evaluated.param,
+              value: disposal.evaluated.at,
+            }),
         disposal.certificate,
         piece.id,
         ok
@@ -1391,6 +1464,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
           : disposal.asymptotics === "diverges"
             ? "close the contour through the other half-plane"
             : "The ML-estimate does not vanish; Jordan's lemma or an indentation may still apply.",
+        disposal.evaluated,
       ),
     );
   }

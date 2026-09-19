@@ -102,6 +102,26 @@ export interface ShellActions {
    */
   readonly setStep: (step: number | "all") => void;
   /**
+   * Play the limit step's parameter to its limit, filling the step's table — M8 step 3.2.
+   *
+   * The card supplies what only the card knows: which step is asking, and which piece the limit has
+   * to kill (the one whose certified bound names this parameter — tier G declares four and the
+   * binding one is the largest, which is decided there rather than here). `null` for that piece is
+   * legitimate: a limit can govern a step whose own claim carries no numeric bound.
+   *
+   * **No autoplay anywhere** (the plan's own words), so there is no "start on open" variant: this
+   * is only ever called from a control a reader pressed.
+   */
+  readonly playSweep: (ask: {
+    readonly stepId: string;
+    readonly param: string;
+    readonly pieceId: string | null;
+    /** Jump one checkpoint instead of animating — what `prefers-reduced-motion` gets. */
+    readonly stepOnce?: boolean;
+  }) => void;
+  /** Stop a running sweep where it is. The table keeps the rows it filled. */
+  readonly stopSweep: () => void;
+  /**
    * Put the permalink for the CURRENT state on the clipboard.
    *
    * The card asks `encodeShell` itself for the REFUSAL, because that is a pure question about the

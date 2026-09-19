@@ -80,8 +80,17 @@ changed.
   handle it is taken on, that last one announcing itself once. `shell/argument.ts` is extracted so
   the card and the stage build the SAME step list, which is what makes `session.step` mean one
   thing on both.
-  **Next execution action: step 3.2** (scrubbable numbers and the limit as a scrubbed animation —
-  `ArcBound.evaluated`, `shell/scrub.ts`, the limit step's play control and its checkpoint table).
+  **3.2 is done.** `ArcBound.evaluated` on all nine bound producers (42 certified bounds over 28
+  records), `shell/scrub.ts` (the number with a dashed underline, `role="slider"`, drag / ← → / ↑ ↓),
+  `shell/sweep.ts` (the ladder, the ease-out in log space, the driver), `Param.admits` carrying tier
+  G's integer lattice from the record to both controls, and the limit step's **Play** / **Step**
+  controls with the checkpoint table that fills as the sweep passes each rung — `≤` for the certified
+  bound, `≈` for the two quadrature columns, and a cell left EMPTY where the quadrature's own
+  refinement does not stand behind it. Twelve defects, eleven of them invisible to the node suite
+  (see **Findings**); the biggest is that the table could not gain a single row, on any record, under
+  either control, while four test files were green over it.
+  **Next execution action: step 3.3** (the amplitwist detail — two arrows and an angle arc as an
+  `InkOptions.stepDetail`, the strip highlighting segment `k`, and a **Show step** toggle).
   **Step 1.12 is done — THE CUTOVER.** `main.ts` stops choosing, the old `src/shell/app.ts` (3,700
   lines), `src/ui/app.css` and four of its test files are deleted, and `src/shell2/` has BECOME
   `src/shell/`. [`parity.md`](parity.md) is complete. The parity sweep found two capabilities the new
@@ -129,6 +138,7 @@ changed.
 
 | 2026-09-15 | **0.5b-i** | 597697d | the five decisions applied to the ledger's 72 own sentences; `shell/math.ts` + KaTeX; 43 wording-pinned tests re-keyed on templates; new `ledger-dump.txt` baseline |
 
+| 2026-09-19 | **3.2** | (this commit) | **SCRUBBABLE NUMBERS, AND THE LIMIT AS A SWEPT LADDER.** `ArcBound.evaluated` on all nine bound producers (42 certified bounds over 28 records), so a claim can name its parameter as a typed argument rather than as a numeral in a sentence; `engine/claims.ts` gains a `param` `ClaimArg` and `certificateClaimAt`, which splits a certificate at `at $R = ‹4›$` and falls back silently everywhere else. `shell/scrub.ts` is the inline control — the number with a dashed underline, `role="slider"`, drag mapped through the parameter's own range, ← → ↑ ↓ by one step, and `Param.admits` carrying tier G's integer lattice so a press moves `N` by 1 rather than by a thousandth of six decades. `shell/sweep.ts` is the ladder and the driver: five rungs even in the parameter's scale, an ease-out in LOG space, and `advance` with three answers — a value, `null` for finished, and `undefined` for *this frame moved nothing*, which only a snapped parameter produces. The limit step gains **Play** and **Step** and the checkpoint table, badged `≤` for the engine's certified bound and `≈` for the two quadrature columns. **TWELVE DEFECTS, ELEVEN OF THEM INVISIBLE TO THE NODE SUITE.** The headline: **the table could never gain a single row** — `advanceSweep(driver.advance(t))` evaluates the driver first, so its "how many had we passed" snapshot always already included the crossing — while four test files were green over it, because each tests a part and the defect lived in the seam none of them looks at. `Step` planned a NEW ladder on every press (the reuse guard was `sweepFrame !== 0`, which a stepped run never sets), so tier G's `N` walked 9, 18, 30, 49, … converging on its limit without reaching it. A running sweep survived undo, a permalink, a record change and a drag, leaving a rAF loop re-scheduling from a closure the session cannot see and `session.scrubbing` pinned true, which holds the WHOLE APP at the draft budget for the rest of the session. One arrow press scrubbed the number AND advanced the stepper, destroying the focused node so a keyboard reader could not press the key twice. The table VANISHED at the moment it was complete. And it printed a target of `1.4e-7` for a number that is 2.22144, fixed by `converged()` — `integratePiece`'s own successive-refinement test, lifted out on the second-consumer rule so the table withholds exactly the cells the engine declines to certify. **The step's hardest measurement is that the wall above tier G's `N` is COST, not legality**: capping the range at `MAX_KERNEL_BAND` hung the gate for 37 minutes, and a resolve is 179 ms at `N = 256`, 2.2 s at 512 and **25.6 s at 1024**, doubling about every 64 — the exact residue sum, untouched by the draft budget. The range is 256, asserted with its timing. Two defects older than the step: the stepper spoke its own LaTeX source into every `aria-label` (3.1b), and `certificateClaimAt` planted a scrub inside *Re z* on 18 rows, right-hand side only, while its doc and its test both said that producer never splits. Look: [`3.2-scrub-A6-1440x950.png`](screens/3.2-scrub-A6-1440x950.png) · [`3.2-sweep-table-A6-1440x950.png`](screens/3.2-sweep-table-A6-1440x950.png). Sweep **31/33, two recorded equivalents and one mutant REMOVED rather than recorded** — the first pass was 14 of 34, and every survivor was the same gap, that twelve fixes had their measurement in a comment and nothing asserting it. `test/sweepApp.test.ts` is the seam's first test, mounting the real shell over a stubbed `requestAnimationFrame` and clock; its own first draft measured a working sweep as a dead one, by flushing ONE queued callback per tick where the shell schedules its draws through the same rAF. Full gate green: **580 files / 6,221 tests**, lint, typecheck and build silent; browser suite 17 files / 209 tests; both contour pages audit clean and the four new states (the scrub, the play control, the table part-filled, the ladder done) audit clean by hand |
 | 2026-09-19 | **3.1c** | (this commit) | **THE STAGE READS THE STEP — AND STEP 3.1 IS COMPLETE.** `shell/stepFocus.ts` turns a `DerivationStep`'s `focus` into things on the plane: the pieces it is about drawn emphasised and the others dimmed (`InkOptions.focus`, a SET rather than an index, and deliberately not merged with `highlight` — hover is where the POINTER is, one piece and transient, and this is what the ARGUMENT is about, which survives a pointer that has left the stage and dims everything it does not name); the pole it is about ringed OUTSIDE its glyph, so the marker keeps its own two meanings; and one callout on the plane carrying the step's own claim — the vanishing arc's bound at the arc's midpoint, the residue at its pole, the answer at the target piece, the limit at the handle it is taken on. Callouts are DOM in the overlay because they are typeset and because the overlay's whole contract is *what must NOT be in a figure*. **`shell/argument.ts` is extracted on the second-consumer rule, and it is not tidying: `session.step` is an INDEX**, and `buildSteps` drops a step with nothing in it — so a stage that assembled the derivation without the card's problem statements would get a list one shorter and every index off by one from the card's. One set of arguments, one list, one clamp (`stepIndex`). The derivation is rebuilt on the draw path rather than cached, measured first: 0.016–0.135 ms per record, median 0.030 over the 28, which is 0.2% of a 16.7 ms frame. `derivationCard.test.ts` is UNCHANGED across the move, which is the no-op proof. **THREE CORPUS MEASUREMENTS, EACH OF WHICH CHANGED THE STEP.** (i) **A step can be about TWO pieces and `StepFocus` can only say one** — C1 and C3 split the real axis at the indentation and both halves are the target, so `[...targetIds][0]` would dim half of C1's own target, on one of the plan's five gate records. The set is `focus.pieceId` together with every piece the step's own LINES name; over 237 steps in 28 records that widens **exactly 2**, and both are that one shape. (ii) **A limit parameter need not have anything on the plane**: `handlesOf` makes a handle for a parameter-bound ARC radius and nothing else, so E1/E2/E3's `R` and G1/G2/G3's `N` have none — **6 limit steps** with nothing to pulse, and there is no chip there rather than a chip at an invented place. (iii) **Three boundary steps carry no bound**, because their piece reproduces the target (*the lower edge of the cut: a constant multiple of the target*) — 54 of 57 get a callout and those three get none. The callout is the FIRST `$…$` of the claim, because the KILL line is a paragraph; swept, that fragment is the bound for a vanishing piece, the relation for a reproducing one and the known limit for an indentation. **SIX DEFECTS, FOUR OF THEM OLDER THAN THIS STEP.** (a) **`setStep` redrew the chrome and not the stage** — with the stage reading the step, a `render2` alone left the emphasis, the ring and the callout showing the PREVIOUS step; no node test could see it, and the browser suite found it on its first run. (b) **Dimming the strokes and leaving the halos is worse than not dimming**: a 6.5 px dark halo under a faded 2.5 px stroke is a cord, more conspicuous than the piece was. Measured on A6: the ink layer's total alpha falls **0.17%** with the halos left alone and **20.4%** with them dimmed (2,028,695 → 1,615,064). (c) **The limit step printed a parameter's ID as mathematics** — `$eps \to 0^+$` sets as the product *e·p·s*, and `$R_lim$` subscripts the `l` alone — beside a piece the record calls *the ε→0 circle* and a bound that already writes `\varepsilon`. `vocabulary.ts` gains `paramSymbol`; four of the corpus's six limit parameters needed an entry, and `R_lim` maps to `R` because B1's own KILL line already states its bound *at $R = 4$*. (d) **`StepFocus.poleIndex`'s doc was false** — it indexes the DERIVATION's catch rows, not the step's own `poles` (A6's second residue step is `poleIndex: 3` over an array of length 1), and `steps.test.ts` had always resolved it the right way, so nothing could go red on the sentence. (e) **The callouts were computed with a position and rendered without one**, so every chip would have stacked at the overlay's corner with the right text; the jsdom test that reads the `style` attribute caught it immediately. (f) **A figure must not carry the reader's step**: `figureBytes` draws through the same path with the live session and the permalink it stamps does not carry the step, so a dimmed plate would be a picture its own link cannot reopen — suppressed for every plate. **The app's FIRST motion lands here**, which is what finally gives M6.4's vacuous `prefers-reduced-motion` something to act on — and it is an ANIMATION rather than the plan's "300 ms CSS transition", because a transition fires on a property CHANGE and the chip is created already in its final state; the keyed builder is what makes *once* true. One defect is recorded and NOT fixed: `4.928e-2` inside `$…$` typesets as *4.928e − 2*, in fifteen bound producers, predating M8 and only now on the picture — the repair belongs to every bound claim, not to the callout. Look: [`3.1c-step-bound-A6-1280x900.png`](screens/3.1c-step-bound-A6-1280x900.png) · [`3.1c-step-target-C1-1280x900.png`](screens/3.1c-step-target-C1-1280x900.png) · [`3.1c-step-residue-D1-1280x900.png`](screens/3.1c-step-residue-D1-1280x900.png). Sweep **23/24, one recorded equivalent — and TWO mutants removed rather than recorded**, which is the sweep's own finding: `stageFocus` asked whether a piece id was in the spec and then dropped an unknown id through `findIndex >= 0`, and `focusOf` returned early for `step === "all"` and then returned `NO_FOCUS` for the undefined step `stepIndex` hands back for it — one rule spelled twice in each case, and neither mutant could die because the second reader was doing the first one's job. Re-aimed at the surviving spelling, the filter needed a test (an id the drawn contour does not carry gives −1, and −1 in the focus set dims the WHOLE contour) and the clamp is the equivalent one, because `steps[0]` is always the problem step and its focus is `{}` by construction. The two real survivors each bought a test: nothing asserted that a boundary step emphasises its piece when NO claim was made about it (unreachable from the corpus, and not cosmetic — the step's heading names the piece), and nothing read the POLE pixels at all, so ringing every singularity at every residue step passed everything. Full gate green: **574 files / 6,119 tests**, lint, typecheck and build silent; the browser suite is 17 files / 209 tests; both contour pages audit clean and the stepper's nine states audit clean by hand (A6 at five steps, D1 at four — 0 rules and 0 nodes each) |
 | 2026-09-17 | **3.1b** | (this commit) | **THE STEPPER.** The Derivation card walks `buildSteps`'s order: `‹` / dots / `›` / `All`, ← → on the whole stepped region, `session.step` (`number \| "all"`), and Worked-example mode opening at step 1. **`"all"` is the default and is the Phase 1 form** — every step expanded, the whole argument at once — so a reader who never touches the control sees what they saw before it existed; the stepper is an OFFER, not a mode the app puts them in. **The step is SESSION, not state**, by the rule that decides every field there: two readers of one permalink are looking at the same integral, and which step each has open is theirs — and `resetTransient` clears it, so a link, a contrast cell and a drill rung are covered by construction rather than by three callers remembering (M7.4's defect in its own shape). A stale index is **clamped where it is read**, because the step count changes with the record and a reader on step 6 of a keyhole who opens a unit-circle record has asked for a step that does not exist. The dots are BUTTONS — each is the step it names, so the shape of the argument is reachable as well as visible, and a reader who cannot see them gets the same controls named `step 4 of 8 — Residues`. `stageBlock` renders both forms, so `All` is the same picture it always was rather than a second renderer that drifts. **Four findings, three of them from looking at it in a browser.** (i) **A step's title can carry a FORMULA and the summary was plain text** — `Boundary terms · the $R \to \infty$ semicircle` is the piece's own name — so raw delimiters reached the screen, which step 2.1's rendered denylist catches. Typeset now, and `limitArrow` is split out of `limitTag` so the limit step's title is ONE formula rather than `Let $R$ $\to \infty$`. (ii) **One word, two things, on one card**: the head read `10 steps` (the ledger's LINES) above a stepper reading `4 / 8` (the argument's steps). A line is a CHECK — the Result card's own disclosure already says *What was checked* — so the head is `8 steps · 10 checks, each with its evidence` and a block counts checks. (iii) **The answer is not printed under every step**: it has its own step, and repeating it beneath step 2 gives away the ending of the argument the stepper exists to walk. (iv) **THE FOLD WAS BROKEN IN TWO WAYS, BOTH OLDER THAN THIS STEP, AND FOLDING ON THE MODE BUTTON IS WHAT MADE THEM REACHABLE.** `setRail` had **no caller anywhere in the app** — the only thing that ever folded a rail was a worked-example link, and there was no way back from one. And a folded rail went on rendering its cards into the 38 px column the grid leaves it: a stripe of one- and two-letter fragments down the left edge, with `.targetLine` an unreachable horizontal scroll region that `axe` flags `scrollable-region-focusable` — while the CSS comment beside it claimed the rail "shrinks to a labelled strip", which was never built. Each rail now carries its own toggle, named for what is BEHIND it, and a folded one draws that name and nothing else. Sweep **12/13** over the stepper (and 11/12 on the first pass): the survivor was a real hole — nothing asserted that `Prev` is DISABLED at step 0, which is a control that looks pressable and does nothing, the clamp having swallowed the −1. **One mutant was REMOVED rather than recorded equivalent**: the key handler's `INPUT`/`SELECT`/`TEXTAREA` guard is unreachable today, and measuring what will need it showed it would not have helped — step 3.2's inline scrub is a `role="slider"` span, not an input, so the guard read as though the case were handled. It arrives with its consumer. Look: [`3.1b-stepper-worked-1280x900.png`](screens/3.1b-stepper-worked-1280x900.png) · [`3.1b-stepper-step4-1280x900.png`](screens/3.1b-stepper-step4-1280x900.png). Full gate green: **572 files / 6,096 tests**, lint, typecheck and build silent; both contour pages audit clean, and the stepper's two states audit clean by hand |
 
@@ -183,6 +193,172 @@ changed.
 | 2026-09-15 | **0.5b-ii** | 573fb8c | the five rules through `kernel/bounds/*`, the three theorem identities, `derivation.ts`'s solve stage and `solveTarget.ts`; `latex` on the solved value; 65 wording-pinned tests updated; 191 → 152 flagged |
 
 ## Findings (things learned while executing; each names its step)
+
+- **(3.2) The checkpoint table could never gain a single row, and four test files were green over
+  it.** `advanceSweep(driver.advance(t))` evaluates the driver's call FIRST, so by the time
+  `advanceSweep` took its "how many checkpoints had we passed" snapshot from `driver.passed()`, the
+  crossing was already in it — `passed.length <= before` was true on every tick, under Play and
+  Step alike, on every record. The settle's limit row was gated on `rows.length === 5` and so never
+  fired either, and `sweepTable` renders only when `rows.length > 0`, so the step's headline
+  feature was **the control doing nothing visible at all**. `scrub.test.ts` pins the element,
+  `sweep.test.ts` the driver's arithmetic and `limitSweep.test.ts` the card's rendering with rows
+  INJECTED by hand: the defect lived in the seam none of the three looks at, and it took pressing
+  the button in a browser to see it. `test/sweepApp.test.ts` is that seam's first test — it mounts
+  the real shell and presses the real action — and the row count is now kept against the ROWS
+  rather than against the driver, which also pins each row to its own rung instead of to the newest.
+
+- **(3.2) `Step` planned a new ladder on every press, so it converged on the limit without ever
+  reaching it.** The reuse guard was `sweepFrame !== 0`, which a stepped run never sets — so each
+  press built a fresh `planSweep` from the value the previous press had moved to. From tier G's
+  `N = 4` that gives 9, 18, 30, 49, … , a geometric walk whose rungs are not the plan's, with
+  `rows` emptied each time so the table could hold exactly one. `planSweep`'s own doc says a
+  shorter ladder would make the two controls report DIFFERENT tables; this was the code making
+  them do it. A run is resumed now whenever the ask names the same step and parameter and the
+  driver has rungs left. It also set `running: true` for a stepped run, so the Play button read
+  `Stop` while nothing was running.
+
+- **(3.2) THE WALL ABOVE TIER G'S `N` IS COST, NOT LEGALITY, AND IT IS NOT LINEAR.** `analyse.ts`
+  refuses a kernel band wider than `MAX_KERNEL_BAND` (4096), so the first draft capped the sweep
+  there — and the gate HUNG, a worker at 99% for 37 minutes with `halfIntegerParam.test.ts`
+  running the real ledger at the top of its own ladder. Measured on `series-cot-kernel`: a resolve
+  is 50 ms at `N = 128`, 179 ms at 256, 342 ms at 320, 700 ms at 384, **2.2 s at 512 and 25.6 s at
+  1024**, doubling about every 64 past 256 — the exact residue sum's arithmetic growing with the
+  number of poles AND with their digits. The draft budget does not touch it (25.5 s against 25.8 s
+  at 1024), so it is the exact half rather than the quadrature. A ladder ending at 4095 is the
+  better part of an hour in ONE commit. The range is 256, where the worst of the three records is
+  still under 200 ms; and the test asserts both the number and the TIME, because a change that
+  keeps the cap and moves the arithmetic is the same defect. **This was never only the sweep's
+  problem**: the rail's slider has been able to drag `N` to 1e6 since the record landed, and
+  nothing had ever dragged it there.
+
+- **(3.2) A frame that crosses a rung commits the RUNG, and that turned out to be a contract rather
+  than a nicety.** The row is labelled with the checkpoint and its three numbers are read off the
+  resolution the commit produced, so committing the eased value 4.07 and labelling the row `4`
+  prints one value's evidence under another's name. Clamping to the rung also makes at most ONE
+  checkpoint pass per frame, which is what lets the caller append rows in step with `passed()`
+  instead of guessing how many it missed — and it forced the driver to answer the case where the
+  clock is spent but the ladder is not (a backgrounded tab, a slow commit): the remaining rungs are
+  walked one call each rather than filled from the endpoint's numbers, so the sweep runs a little
+  past `durationMs`, which is the honest direction.
+
+- **(3.2) A row is taken at the FULL budget, mid-animation included — otherwise the table is a
+  picture of a table.** A sweep's frames commit at the draft budget on purpose, sixty a second, but
+  a row is a rung's EVIDENCE and the draft budget is exactly what cuts the quadrature the two `≈`
+  columns come from. Measured on A6 under Play: every one of the five rows read `—` in the target
+  column, where the same rungs under `Step` read 2.22144. Five extra resolves over a three-second
+  sweep, at the five moments the reader is being asked to look at a number. `Step` is a full-budget
+  commit for the same reason — it is a deliberate jump, not a frame, and `setParam`'s own
+  `why: "gesture"` had been making it a draft one.
+
+- **(3.2) The table printed a target of `1.4e-7` for a number that is 2.22144, and the fix was the
+  quadrature's own verdict rather than a rule of the table's.** Far out along the ladder a uniform
+  rule over a segment of length `2R` stops resolving the integrand: A6's target reads 2.0766 at
+  `R = 1e6` at the full budget, and collapses three rungs earlier at the draft one. `integratePiece`
+  already decides this — `errorEstimate` against `1e-10·max(1,|value|)`, plus `capped`, which says
+  the budget bound the resolution so the spacing rule was never met — so the threshold moved into
+  `converged()` on the second-consumer rule and the table withholds exactly the cells the engine
+  declines to certify. A6's target column now reads 2.22144, 2.22144, —, —, — beside a bound column
+  falling 2.8e-5 → 3.1e-18, which is the honest-labelling guardrail applied to a number nobody had
+  thought of as a claim.
+
+- **(3.2) The table vanished at the moment it was complete.** `limitPlay` returned `[]` when
+  `planSweep` was null, and a finished sweep leaves the parameter ON its endpoint, where there is
+  nothing left to plan — so four presses of `Step` filled four rows with the `≤` column falling
+  2.6e-5 → 5.3e-15 and the fifth took the whole table off the screen. The buttons still come and go
+  with the plan (a control that cannot act teaches a reader the app is broken, step 1.4's lesson);
+  the evidence stays.
+
+- **(3.2) One arrow press scrubbed the number AND advanced the stepper, and the second press had
+  nowhere to land.** The scrub is a `role="slider"` span inside the Derivation card's `.stepper`,
+  whose own `keydown` moves the argument on ← / →. Without `stopPropagation` both fired, `repaint`
+  replaced the step body, the focused node was destroyed and focus fell to `<body>` — so a keyboard
+  reader could not press the key twice. `onStepKey`'s own doc had named this span as the case a tag
+  test would miss and concluded "the guard arrives with its consumer"; the consumer arrived and the
+  guard did not. Two more from the same read: ARIA's slider pattern wants Up/Down as well as
+  Left/Right, and there was no `aria-valuetext`, so with `digits` set the element showed `0.333`
+  while announcing `0.3333333333333333`.
+
+- **(3.2) A sweep outlived everything, and one path leaked a loop plus a permanent draft budget.**
+  `resetTransient` nulls `session.sweep`, so `advanceSweep` returned at its own guard — but the rAF
+  loop re-schedules itself from a closure the session cannot see, and `session.scrubbing` stayed
+  `true`, pinning every number in the app at the draft budget for the rest of the session with
+  nothing on screen to say why. Press Play, then Ctrl+Z or open a `#vs=` link. Without a
+  `resetTransient` in the path it is worse in a different way: `setStep`, `setFixture`, `setMode`
+  and `toSandbox` are ordinary commits, so a run started on one record went on calling `setParam`
+  against the next one's contour for its remaining three seconds. `endSweep()` is the one place
+  that ends a run completely, and the decision to call it is taken in `commit` from the STATE —
+  record, fixture, mode or expression — rather than in each of five actions, because a sixth would
+  have to remember.
+
+- **(3.2) Dragging the number did not interrupt the sweep, and releasing it took the sweep off the
+  draft budget.** The plan's sentence is *the sweep is a scrub, so dragging the number interrupts
+  it*, and `sweep.ts`'s own header asserted it; nothing implemented it. Both writers committed on
+  every frame so the value visibly fought the drag, and `pointerup` cleared `scrubbing` mid-run so
+  the rest of the sweep ran at the full budget. It is `setScrubbing`'s job now, which is one place
+  and covers the stage's handles too.
+
+- **(3.2) `certificateClaimAt` planted a scrub inside *Re z*, on 18 rows, and only ever on the
+  right-hand side.** The locator required the value to sit in an `at $… = ‹value›$` group; E3's
+  vertical side prints `at $\operatorname{Re} z = 6$` and its abscissa IS `R`, so the match
+  succeeded — while the mirror side prints `= -6$` and fell through, which is precisely the
+  asymmetry `ledger.ts` says must not happen. Both the function's doc and
+  `arcBoundEvaluated.test.ts` listed `gaussianSide` among the four producers that never split, and
+  both were false; the `split >= 27` floor could not see it, and had in fact been RAISED by it. The
+  `=`'s left-hand side must now be the parameter's own symbol, the floor is 26, and the test asserts
+  the reason rather than the count.
+
+- **(3.2) `limitPlay` guarded an `"all"` case that cannot occur.** It is reached from `openBlock`
+  alone, which the card calls only while it is STEPPING, and `stepIndex` returns null for `"all"` —
+  so the branch was dead and implied a control rendering with no piece. Removed rather than
+  recorded, the sweep's own rule.
+
+- **(3.2, older than this step — 3.1b) A screen reader heard the step's LaTeX source.** The
+  stepper's dots carry `aria-label` and the open step an `srOnly` span, both built from
+  `step.title` raw — and two steps of every record with a limit are titled *Let $R \to \infty$* and
+  *Boundary terms · the $R \to \infty$ semicircle*. `mathPlain` is the app's own convention for the
+  places a typeset fragment cannot go; it was simply not applied here. Found by reading the
+  accessible name in a browser, which is the instrument M6.4 recorded twice.
+
+- **(3.2) `dc-worst-min` is unkillable on tier G, and the reason is worth keeping.** The card picks
+  the piece the limit has to kill as the one with the LARGEST certified bound. Tier G declares four
+  — the square's four sides — and measured across all three records × every fixture × `N` at 3, 9
+  and 21, **all four certify the same number to the last bit** (1.5659 on `series-cot-kernel`), so
+  `>` and `<` name the same piece. The corpus's two records where they differ are E1
+  (`strip-exponential-quasiperiod`, right 3.892e-1 against left 1.928e+0) and D6
+  (`dogbone-two-fractional-powers`), and E1 is the one where the largest is also the SECOND in
+  argument order, so a "take the first" reducer falls there too.
+
+- **(3.2) Two mutants are equivalent, and one was REMOVED rather than recorded.** The equivalents:
+  indexing the new row by `passed()[passed.length - 1]` instead of by `passed()[rows.length]` cannot
+  differ, because the rung clamp guarantees at most one checkpoint passes per call — the clamp is
+  what makes the simpler indexing safe, so the guard is kept for the invariant rather than for a
+  case; and the `$`-between-opener-and-match half of `certificateClaimAt`'s guard is subsumed by the
+  symbol half, since `trim` removes whitespace only and no `paramSymbol` output contains a `$`
+  (brute-forced over 111,110 generated sentences from an atom grammar aimed at exactly that case,
+  zero disagreements). The guard predates the symbol clause and is about the group's shape, so it
+  stays. **The removed one is the interesting one**: `advanceSweep` committed a STEP at the full
+  budget and a frame at the draft one, on the reasoning that a step is a deliberate jump. The sweep
+  could not kill the difference, and the reason is that the row re-resolves at the full budget
+  whenever a checkpoint passes — which under `stepOnce` is every press. So the conditional bought
+  nothing and cost a resolve, 179 ms of one near the top of tier G's ladder. The rule is simpler
+  than the first draft's: **the parameter moves at the draft budget, the ROW is taken at the full
+  one**, for both controls.
+
+- **(3.2) The sweep's first mutation pass was 14 of 34, and every survivor was the same gap: the
+  fixes had no tests.** Twelve defects were found by pressing the control in a browser and by a
+  read of the diff, and each fix went in with the measurement in its comment and nothing asserting
+  it. The survivors clustered in three places — the seam between the driver and the app (ten of
+  them), the accessible names (four), and the two convergence clauses — which is the same shape as
+  the headline defect: `scrub.test.ts` tests the element, `sweep.test.ts` the arithmetic,
+  `limitSweep.test.ts` the card with rows injected by hand, and NOTHING tested what happens when
+  the control is pressed. `test/sweepApp.test.ts` now mounts the real shell over a **stubbed
+  `requestAnimationFrame` and clock**, so the animated path is assertable at all — and the first
+  draft of that harness measured a working sweep as a dead one, because it flushed ONE queued
+  callback per tick while the shell schedules its own draw and its strip redraw through the same
+  rAF, so most ticks went to those. A frame drains the queue as it stood; that is what a frame is.
+  For the same reason the leak assertions are by EFFECT — twenty more frames at a moving clock must
+  change no number — rather than by counting callbacks, which says nothing about whose callbacks
+  they are.
 
 - **(3.1c) A step can be about TWO pieces, and `StepFocus` can only say one.** `buildSteps` fills
   the target step's focus with `[...targetIds][0]`; C1 and C3 split the real axis at the
