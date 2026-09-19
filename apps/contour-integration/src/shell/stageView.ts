@@ -38,6 +38,8 @@ import { readout } from "./readout.js";
 import { mathPlain, mathText } from "./math.js";
 import type { Session } from "./session.js";
 import { stableKey } from "./stableKey.js";
+import { argumentOf, stepIndex } from "./argument.js";
+import { NO_FOCUS, stageFocus, type StageFocus } from "./stepFocus.js";
 
 /** What the stage needs to know that it cannot read off the state. */
 export interface StageDraw {
@@ -294,11 +296,37 @@ export function createStageView(host: HTMLElement): StageView {
    * export composites the two canvases, so a marker in the DOM was a marker missing from every
    * shared picture of the argument.
    */
-  function drawPoles(ctx: CanvasRenderingContext2D, d: StageDraw, view: View, vp: Viewport, t: InkTheme): void {
+  function drawPoles(
+    ctx: CanvasRenderingContext2D,
+    d: StageDraw,
+    view: View,
+    vp: Viewport,
+    t: InkTheme,
+    focused: Cx | null,
+  ): void {
     for (const pole of d.poles?.poles ?? []) {
       const [x, y] = plotToScreen(pole.at[0], pole.at[1], view, vp);
       if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
       const hot = d.session.hover.piece === `pole:${pole.at[0]},${pole.at[1]}`;
+      // **The step's pole gets a RING around the glyph, not a change to the glyph** — M8 step 3.1c.
+      // A pole marker already says two things (there is a singularity here; its order is n) and a
+      // third meaning packed into the same mark would make them compete. The ring is outside it,
+      // drawn before it so the marker keeps its own halo, and it is the same accent the focused
+      // piece is emphasised in — one mark for "this is what the step is about".
+      //
+      // **Compared by VALUE.** The pole rows come from `buildDerivation` and the glyphs from the
+      // `PoleReport`, which are two objects describing the same singularity: identity would never
+      // match and every step would ring nothing.
+      if (focused !== null && focused[0] === pole.at[0] && focused[1] === pole.at[1]) {
+        ctx.beginPath();
+        ctx.arc(x, y, POLE_R + 5, 0, Math.PI * 2);
+        ctx.strokeStyle = t.haloStrong;
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        ctx.strokeStyle = t.handleGrabbed;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
       // **⊗ on the textbook plate, a ring everywhere else.** Not decoration: on a plate with no
       // portrait behind it the singularities are the only thing marking where the function is not
       // defined, and a bare ring there is indistinguishable from a grabbable handle — which
@@ -375,12 +403,15 @@ export function createStageView(host: HTMLElement): StageView {
     const t = inkTheme(d);
     const view = d.state.view;
     const textbook = drawMode(d) === "textbook";
+    // Once per draw, and read by the ink layer, the pole rings and the overlay alike — three
+    // surfaces on one identifier, the rule the hover highlight has followed since step 1.10.
+    const focus = focusOf(d);
 
     // **The overlay first, and unconditionally.** It is DOM, and the two returns below are both
     // about CANVAS — an absent 2D context, and an empty resolution. Drawing it at the end made a
     // reader's snap chip depend on whether the ink layer could get a context, which is two unrelated
     // facts tied together by nothing but statement order.
-    drawOverlay(d, view, vp);
+    drawOverlay(d, view, vp, focus);
 
     // **A parse failure clears the portrait.** Leaving the last good one up is the worst of both:
     // the reader is told the expression is broken while looking at a picture of something else.
@@ -446,6 +477,7 @@ export function createStageView(host: HTMLElement): StageView {
     drawContour(ctx, pieces, view, vp, {
       theme: t,
       highlight: drawnPieces.findIndex((p) => p.id === d.session.hover.piece),
+      focus: hidden ? [] : focus.pieces,
       colours: drawnPieces.map((p) => p.colour),
       handles: radius.map((handle, i) => ({
         at: handle.at,
@@ -479,7 +511,7 @@ export function createStageView(host: HTMLElement): StageView {
       vp,
       t,
     );
-    drawPoles(ctx, d, view, vp, t);
+    drawPoles(ctx, d, view, vp, t, focus.pole);
 
     // **The pen's path so far, over everything else**, because it is the thing the reader is making
     // and the contour underneath is the thing they are making it beside. Drawn last for that reason
@@ -515,6 +547,40 @@ export function createStageView(host: HTMLElement): StageView {
     }
   }
 
+  /**
+   * What the step in hand puts on the plane — M8 step 3.1c, and `NO_FOCUS` whenever there is none.
+   *
+   * **Suppressed for an export plate, which is the one decision here.** `figureBytes` draws through
+   * this with the live session, so a figure taken while stepping would be dimmed to one step — and
+   * the permalink stamped into that same PNG does NOT carry the step (it is the session's, which is
+   * 3.1b's own decision: which step of an argument a reader has open is theirs). A picture the link
+   * beside it cannot reopen is M6.3's verdict-drift in another register, so the plate is the whole
+   * contour.
+   *
+   * The argument is rebuilt here rather than handed in: measured at 0.016–0.135 ms per record, and
+   * `argument.ts` is the ONE place it is built, so the stage and the card cannot come to disagree
+   * about which step index means which step.
+   */
+  function focusOf(d: StageDraw): StageFocus {
+    // **The plate arm only.** The first draft also returned early for `step === "all"`; the sweep
+    // found that mutant alive, because `stepIndex` already answers `"all"` with `null` and the
+    // undefined step two lines down returns `NO_FOCUS` anyway. The clamp is the one place the step
+    // index is read, and this was a second reader of the same rule.
+    if (d.plate !== undefined) return NO_FOCUS;
+    const { derivation, steps } = argumentOf(d);
+    const at = stepIndex(steps, d.session.step);
+    const step = at === null ? undefined : steps[at];
+    if (derivation === null || step === undefined) return NO_FOCUS;
+    const contour = drawnContour(d.state, d.resolution);
+    return stageFocus({
+      step,
+      derivation,
+      pieces: contour.pieces,
+      resolved: resolvedPieces(d.state, d.resolution),
+      handles: handles(d.state, d.resolution).radius,
+    });
+  }
+
   let pending = 0;
   /**
    * The overlay: two chips and a host, and nothing else.
@@ -528,7 +594,7 @@ export function createStageView(host: HTMLElement): StageView {
    * pointer move would restart its transition and, more to the point, would be a fresh node for the
    * accessibility tree to announce sixty times a second.
    */
-  function drawOverlay(d: StageDraw, view: View, vp: Viewport): void {
+  function drawOverlay(d: StageDraw, view: View, vp: Viewport, focus: StageFocus): void {
     const chips: ReturnType<typeof h>[] = [];
     // A style STRING rather than an object: `dom.ts` writes anything that is not a listener, `html`
     // or a form property as an attribute, and teaching it about style objects for one call site
@@ -584,6 +650,40 @@ export function createStageView(host: HTMLElement): StageView {
       pieceName: named?.name ?? null,
     });
     if (block !== null) chips.push(block);
+
+    // **The step's callouts — M8 step 3.1c — and they are DOM rather than ink for two reasons.**
+    // They are typeset (`$…$` through KaTeX, which has no canvas form), and they are about where
+    // the reader is in the argument rather than about the argument, so they belong with the snap
+    // chip and the held-handle label: this overlay's whole contract is *what must NOT be in a
+    // figure*. `focusOf` already returns nothing for an export plate, so the two agree.
+    //
+    // **Hidden while a gesture is running**, which the plan asks for and the geometry demands: a
+    // chip pinned to a piece's midpoint would be dragged across the plane a frame behind the curve
+    // it names, and a chip at a handle would sit under the pointer that is moving it.
+    if (d.session.gesture === "none") {
+      for (const callout of focus.callouts) {
+        const box = place(callout.at);
+        if (box === null) continue;
+        chips.push(
+          h(
+            "span",
+            {
+              // The key is the callout's, so a chip that stays put keeps its node — which is what
+              // makes the limit chip's pulse fire ONCE, on the step it belongs to, rather than on
+              // every pointer move over the stage.
+              key: callout.key,
+              class: callout.pulse === true ? "stageChip callout pulse" : "stageChip callout",
+              style: box,
+              "aria-label": mathPlain(callout.text),
+            },
+            callout.level === null
+              ? null
+              : h("span", { key: "b", class: "badge", "data-level": callout.level }, callout.level),
+            ...mathText(callout.text, callout.key),
+          ),
+        );
+      }
+    }
     patch(overlay, chips);
   }
 

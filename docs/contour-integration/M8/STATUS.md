@@ -73,9 +73,15 @@ changed.
   — on the pattern 1.4, 0.5b and M5.1 used, because the step as written is three separable pieces
   and the owner's usage is metered. **3.1a is done.**
   **3.1b is done.**
-  **Next execution action: step 3.1c** (the stage's focus and callouts: the focused piece
-  emphasised and the others dimmed, the focused pole ringed, the focused parameter's handle, and a
-  callout on the plane carrying the step's own number).
+  **3.1c is done — STEP 3.1 IS COMPLETE.** The stage reads the step: the pieces it is about are
+  emphasised and the others dimmed (`InkOptions.focus`, a set rather than an index), the pole it is
+  about is ringed, and one callout carries the step's own claim on the plane — the vanishing arc's
+  bound at the arc, the residue at its pole, the answer at the target piece, the limit at the
+  handle it is taken on, that last one announcing itself once. `shell/argument.ts` is extracted so
+  the card and the stage build the SAME step list, which is what makes `session.step` mean one
+  thing on both.
+  **Next execution action: step 3.2** (scrubbable numbers and the limit as a scrubbed animation —
+  `ArcBound.evaluated`, `shell/scrub.ts`, the limit step's play control and its checkpoint table).
   **Step 1.12 is done — THE CUTOVER.** `main.ts` stops choosing, the old `src/shell/app.ts` (3,700
   lines), `src/ui/app.css` and four of its test files are deleted, and `src/shell2/` has BECOME
   `src/shell/`. [`parity.md`](parity.md) is complete. The parity sweep found two capabilities the new
@@ -123,6 +129,7 @@ changed.
 
 | 2026-09-15 | **0.5b-i** | 597697d | the five decisions applied to the ledger's 72 own sentences; `shell/math.ts` + KaTeX; 43 wording-pinned tests re-keyed on templates; new `ledger-dump.txt` baseline |
 
+| 2026-09-19 | **3.1c** | (this commit) | **THE STAGE READS THE STEP — AND STEP 3.1 IS COMPLETE.** `shell/stepFocus.ts` turns a `DerivationStep`'s `focus` into things on the plane: the pieces it is about drawn emphasised and the others dimmed (`InkOptions.focus`, a SET rather than an index, and deliberately not merged with `highlight` — hover is where the POINTER is, one piece and transient, and this is what the ARGUMENT is about, which survives a pointer that has left the stage and dims everything it does not name); the pole it is about ringed OUTSIDE its glyph, so the marker keeps its own two meanings; and one callout on the plane carrying the step's own claim — the vanishing arc's bound at the arc's midpoint, the residue at its pole, the answer at the target piece, the limit at the handle it is taken on. Callouts are DOM in the overlay because they are typeset and because the overlay's whole contract is *what must NOT be in a figure*. **`shell/argument.ts` is extracted on the second-consumer rule, and it is not tidying: `session.step` is an INDEX**, and `buildSteps` drops a step with nothing in it — so a stage that assembled the derivation without the card's problem statements would get a list one shorter and every index off by one from the card's. One set of arguments, one list, one clamp (`stepIndex`). The derivation is rebuilt on the draw path rather than cached, measured first: 0.016–0.135 ms per record, median 0.030 over the 28, which is 0.2% of a 16.7 ms frame. `derivationCard.test.ts` is UNCHANGED across the move, which is the no-op proof. **THREE CORPUS MEASUREMENTS, EACH OF WHICH CHANGED THE STEP.** (i) **A step can be about TWO pieces and `StepFocus` can only say one** — C1 and C3 split the real axis at the indentation and both halves are the target, so `[...targetIds][0]` would dim half of C1's own target, on one of the plan's five gate records. The set is `focus.pieceId` together with every piece the step's own LINES name; over 237 steps in 28 records that widens **exactly 2**, and both are that one shape. (ii) **A limit parameter need not have anything on the plane**: `handlesOf` makes a handle for a parameter-bound ARC radius and nothing else, so E1/E2/E3's `R` and G1/G2/G3's `N` have none — **6 limit steps** with nothing to pulse, and there is no chip there rather than a chip at an invented place. (iii) **Three boundary steps carry no bound**, because their piece reproduces the target (*the lower edge of the cut: a constant multiple of the target*) — 54 of 57 get a callout and those three get none. The callout is the FIRST `$…$` of the claim, because the KILL line is a paragraph; swept, that fragment is the bound for a vanishing piece, the relation for a reproducing one and the known limit for an indentation. **SIX DEFECTS, FOUR OF THEM OLDER THAN THIS STEP.** (a) **`setStep` redrew the chrome and not the stage** — with the stage reading the step, a `render2` alone left the emphasis, the ring and the callout showing the PREVIOUS step; no node test could see it, and the browser suite found it on its first run. (b) **Dimming the strokes and leaving the halos is worse than not dimming**: a 6.5 px dark halo under a faded 2.5 px stroke is a cord, more conspicuous than the piece was. Measured on A6: the ink layer's total alpha falls **0.17%** with the halos left alone and **20.4%** with them dimmed (2,028,695 → 1,615,064). (c) **The limit step printed a parameter's ID as mathematics** — `$eps \to 0^+$` sets as the product *e·p·s*, and `$R_lim$` subscripts the `l` alone — beside a piece the record calls *the ε→0 circle* and a bound that already writes `\varepsilon`. `vocabulary.ts` gains `paramSymbol`; four of the corpus's six limit parameters needed an entry, and `R_lim` maps to `R` because B1's own KILL line already states its bound *at $R = 4$*. (d) **`StepFocus.poleIndex`'s doc was false** — it indexes the DERIVATION's catch rows, not the step's own `poles` (A6's second residue step is `poleIndex: 3` over an array of length 1), and `steps.test.ts` had always resolved it the right way, so nothing could go red on the sentence. (e) **The callouts were computed with a position and rendered without one**, so every chip would have stacked at the overlay's corner with the right text; the jsdom test that reads the `style` attribute caught it immediately. (f) **A figure must not carry the reader's step**: `figureBytes` draws through the same path with the live session and the permalink it stamps does not carry the step, so a dimmed plate would be a picture its own link cannot reopen — suppressed for every plate. **The app's FIRST motion lands here**, which is what finally gives M6.4's vacuous `prefers-reduced-motion` something to act on — and it is an ANIMATION rather than the plan's "300 ms CSS transition", because a transition fires on a property CHANGE and the chip is created already in its final state; the keyed builder is what makes *once* true. One defect is recorded and NOT fixed: `4.928e-2` inside `$…$` typesets as *4.928e − 2*, in fifteen bound producers, predating M8 and only now on the picture — the repair belongs to every bound claim, not to the callout. Look: [`3.1c-step-bound-A6-1280x900.png`](screens/3.1c-step-bound-A6-1280x900.png) · [`3.1c-step-target-C1-1280x900.png`](screens/3.1c-step-target-C1-1280x900.png) · [`3.1c-step-residue-D1-1280x900.png`](screens/3.1c-step-residue-D1-1280x900.png). Sweep **23/24, one recorded equivalent — and TWO mutants removed rather than recorded**, which is the sweep's own finding: `stageFocus` asked whether a piece id was in the spec and then dropped an unknown id through `findIndex >= 0`, and `focusOf` returned early for `step === "all"` and then returned `NO_FOCUS` for the undefined step `stepIndex` hands back for it — one rule spelled twice in each case, and neither mutant could die because the second reader was doing the first one's job. Re-aimed at the surviving spelling, the filter needed a test (an id the drawn contour does not carry gives −1, and −1 in the focus set dims the WHOLE contour) and the clamp is the equivalent one, because `steps[0]` is always the problem step and its focus is `{}` by construction. The two real survivors each bought a test: nothing asserted that a boundary step emphasises its piece when NO claim was made about it (unreachable from the corpus, and not cosmetic — the step's heading names the piece), and nothing read the POLE pixels at all, so ringing every singularity at every residue step passed everything. Full gate green: **574 files / 6,119 tests**, lint, typecheck and build silent; the browser suite is 17 files / 209 tests; both contour pages audit clean and the stepper's nine states audit clean by hand (A6 at five steps, D1 at four — 0 rules and 0 nodes each) |
 | 2026-09-17 | **3.1b** | (this commit) | **THE STEPPER.** The Derivation card walks `buildSteps`'s order: `‹` / dots / `›` / `All`, ← → on the whole stepped region, `session.step` (`number \| "all"`), and Worked-example mode opening at step 1. **`"all"` is the default and is the Phase 1 form** — every step expanded, the whole argument at once — so a reader who never touches the control sees what they saw before it existed; the stepper is an OFFER, not a mode the app puts them in. **The step is SESSION, not state**, by the rule that decides every field there: two readers of one permalink are looking at the same integral, and which step each has open is theirs — and `resetTransient` clears it, so a link, a contrast cell and a drill rung are covered by construction rather than by three callers remembering (M7.4's defect in its own shape). A stale index is **clamped where it is read**, because the step count changes with the record and a reader on step 6 of a keyhole who opens a unit-circle record has asked for a step that does not exist. The dots are BUTTONS — each is the step it names, so the shape of the argument is reachable as well as visible, and a reader who cannot see them gets the same controls named `step 4 of 8 — Residues`. `stageBlock` renders both forms, so `All` is the same picture it always was rather than a second renderer that drifts. **Four findings, three of them from looking at it in a browser.** (i) **A step's title can carry a FORMULA and the summary was plain text** — `Boundary terms · the $R \to \infty$ semicircle` is the piece's own name — so raw delimiters reached the screen, which step 2.1's rendered denylist catches. Typeset now, and `limitArrow` is split out of `limitTag` so the limit step's title is ONE formula rather than `Let $R$ $\to \infty$`. (ii) **One word, two things, on one card**: the head read `10 steps` (the ledger's LINES) above a stepper reading `4 / 8` (the argument's steps). A line is a CHECK — the Result card's own disclosure already says *What was checked* — so the head is `8 steps · 10 checks, each with its evidence` and a block counts checks. (iii) **The answer is not printed under every step**: it has its own step, and repeating it beneath step 2 gives away the ending of the argument the stepper exists to walk. (iv) **THE FOLD WAS BROKEN IN TWO WAYS, BOTH OLDER THAN THIS STEP, AND FOLDING ON THE MODE BUTTON IS WHAT MADE THEM REACHABLE.** `setRail` had **no caller anywhere in the app** — the only thing that ever folded a rail was a worked-example link, and there was no way back from one. And a folded rail went on rendering its cards into the 38 px column the grid leaves it: a stripe of one- and two-letter fragments down the left edge, with `.targetLine` an unreachable horizontal scroll region that `axe` flags `scrollable-region-focusable` — while the CSS comment beside it claimed the rail "shrinks to a labelled strip", which was never built. Each rail now carries its own toggle, named for what is BEHIND it, and a folded one draws that name and nothing else. Sweep **12/13** over the stepper (and 11/12 on the first pass): the survivor was a real hole — nothing asserted that `Prev` is DISABLED at step 0, which is a control that looks pressable and does nothing, the clamp having swallowed the −1. **One mutant was REMOVED rather than recorded equivalent**: the key handler's `INPUT`/`SELECT`/`TEXTAREA` guard is unreachable today, and measuring what will need it showed it would not have helped — step 3.2's inline scrub is a `role="slider"` span, not an input, so the guard read as though the case were handled. It arrives with its consumer. Look: [`3.1b-stepper-worked-1280x900.png`](screens/3.1b-stepper-worked-1280x900.png) · [`3.1b-stepper-step4-1280x900.png`](screens/3.1b-stepper-step4-1280x900.png). Full gate green: **572 files / 6,096 tests**, lint, typecheck and build silent; both contour pages audit clean, and the stepper's two states audit clean by hand |
 
 | 2026-09-17 | **3.1a** | (this commit) | **THE ARGUMENT IN THE ORDER A LECTURER GIVES IT.** New `src/engine/steps.ts`: `buildSteps(derivation, {spec, params})` regroups `buildDerivation`'s four ledger passes into the plan's order — the problem · the hypotheses · the residues · one step per boundary term · the limit · the target · the conclusion — with a `focus` naming the piece, pole, cut or parameter each step is about, and `action: "limit"` marking the step step 3.2 gives a play control to. **It computes nothing**: every line, statement, pole row and level is the object `buildDerivation` produced, moved into a different bucket, which is what makes the invariant meaningful and why a step carries no verdict of its own. `test/steps.test.ts` asserts the plan's three — every derivation line in EXACTLY one step (by identity, not deep equality, so a step that rebuilt a line with a different level fails rather than reads plausibly); the problem first and the conclusion last; one boundary step per non-target piece, in contour order — over all 28 records, with the anti-vacuity clause that the corpus really does vary in piece count. **Two shapes were MEASURED rather than assumed, over 28 records × 94 fixtures.** (i) **The residues split per pole, except where the corpus says otherwise**: 24 records have every enclosed pole's residue individually expressible at every fixture, and the other case is the corpus's own — D3 at `n = 5` and `n = 7` encloses five and seven poles of which ONE is exact, because `ℚ(ζ₁₀)` has degree 4 over `ℚ` and the cyclotomic route computes the SUM without naming a root; F1 at the same `n` is the same fact on a wedge. So: one step per pole when each is expressible, one step for the sum when they are not. (ii) **One limit step per limit PARAMETER**, not one per record as the plan's singular wording implies: a record has 0, 1 or 2, never more, and 2 is always a keyhole's `R → ∞` with its `ε → 0⁺`, which a lecturer takes as two limits with two bounds. The four unit-circle records get no limit step at all, which is right — nothing is taken to a limit there. **Three findings, all from running it.** (i) **Fifteen pole rows across seven records reached NO step**: the per-pole branch dropped every pole the contour does not enclose, and A5's own prose is *the sum over all four residues is 0* — an argument that never mentions the other two has lost the reason the half-plane matters. They ride the first residue step now, with the CATCH lines that are about the singular set as a whole. (ii) **A step's rationale must come from `DERIVATION_STAGES`, not from the emitted stage**, because `buildDerivation` DROPS a stage that came out empty — so a caller who supplied no problem statements got a step whose "why this is in the argument" was the empty string. (iii) **A step with nothing in it is not a step** and is filtered out, which is the same cause seen from the other side. Sweep **10/11**, one recorded equivalent: `windingDecided` in the enclosure test is unobservable, because `poleRows` sets `winding` only when the winding was decided — M6.4's equivalent mutant again, kept for its reason, that a focus should not depend on an invariant established in another module. Both other first-pass survivors were real and unreachable from the corpus, and each bought a hand-built test: a boundary line naming a piece the spec does not carry (it rides the target step rather than vanishing), and the empty-step filter. Not yet wired to anything — the card is 3.1b, the stage 3.1c. Full gate green: **572 files / 6,088 tests**, lint, typecheck and build silent |
@@ -176,6 +183,104 @@ changed.
 | 2026-09-15 | **0.5b-ii** | 573fb8c | the five rules through `kernel/bounds/*`, the three theorem identities, `derivation.ts`'s solve stage and `solveTarget.ts`; `latex` on the solved value; 65 wording-pinned tests updated; 191 → 152 flagged |
 
 ## Findings (things learned while executing; each names its step)
+
+- **(3.1c) A step can be about TWO pieces, and `StepFocus` can only say one.** `buildSteps` fills
+  the target step's focus with `[...targetIds][0]`; C1 and C3 split the real axis at the
+  indentation and BOTH halves are the target, so emphasising `left` and dimming `right` says the
+  argument is about half of its own target — on C1, which is one of the plan's own five gate
+  records. The stage's emphasis set is therefore `focus.pieceId` together with every piece the
+  step's own LINES name, read from the data rather than re-derived from the roles. Measured over
+  237 steps in 28 records, that widens **exactly 2** — and both are that one shape, so the rule is
+  a strict widening where it is needed and a no-op everywhere else.
+- **(3.1c) `StepFocus.poleIndex`'s own doc was false, and no test could go red on it.** It said
+  *an index into the step's own `poles`, which is also an index into `Derivation`'s pole rows*; the
+  first residue step carries `[its row, ...the unenclosed ones]` and every later one carries a
+  single row, so A6's second residue step has `poleIndex: 3` over a `poles` array of length 1.
+  `test/steps.test.ts` had always resolved it against the derivation's rows — the right thing — so
+  the sentence sat beside working code until a second reader came to implement from it.
+- **(3.1c) A limit parameter need not have anything on the plane.** `handlesOf` makes a handle for a
+  parameter-bound ARC radius and for nothing else, so E1/E2/E3's `R` (a rectangle's width) and
+  G1/G2/G3's `N` (a square's half-width) have none — **6 limit steps** with nothing to pulse. The
+  plan's *"the focused parameter's handle pulsing once"* assumes one exists. There is no chip there,
+  rather than a chip at an invented place.
+- **(3.1c) Three boundary steps carry no bound, because their piece reproduces the target.** *The
+  lower edge of the cut: a constant multiple of the target* (D1, D3, D6) is a sentence with no
+  formula in it. 54 of the corpus's 57 boundary steps get a callout and those three get none:
+  there is no number to show, and a chip would have to invent one.
+- **(3.1c) The callout is the first `$…$` of the claim, and that fragment is the right one in every
+  case.** The KILL line is a paragraph — *"the arc: ⟨bound⟩ at R = 4, and → 0 as R → ∞, since
+  deg Q − deg P = 4 ≥ 2 makes the bound O(R⁻³)"* — and the plan's example chip is its first formula
+  alone. Swept: a vanishing piece gives its bound, a reproducing piece its relation (`$\arg z =
+  2\pi^-$`, `$\log z = \log x + 2\pi i$`), an indentation its known limit
+  (`$i\alpha\operatorname{Res} = \pi(-i)$`).
+- **(3.1c) `setStep` redrew the chrome and not the stage, which this step turned into a defect.**
+  Until the step had a consequence outside the card, `render2()` was the whole job; with the stage
+  reading the step, a `render2` alone left the emphasis, the ring and the callout showing the
+  PREVIOUS step — the card saying one thing and the picture beside it another, which is the one
+  failure a stepper linked to a stage must not have. **No node test could see it**: jsdom has no
+  canvas, and the jsdom stage test calls `drawNow` itself rather than going through an action. The
+  browser suite found it on its first run.
+- **(3.1c) Dimming the strokes and leaving the halos is worse than not dimming at all.** Each piece
+  is drawn as a 6.5 px dark halo under a 2.5 px coloured stroke; fading only the stroke leaves a
+  dark cord with a faint colour down the middle, MORE conspicuous than the piece was. Measured on
+  A6 at the cold-start camera: the ink layer's total alpha falls **0.17%** with the halos left
+  alone and **20.4%** with them dimmed too (2,028,695 → 1,615,064). It is not the 72% the alpha
+  removes from a dimmed piece, and should not be — the focused piece is thickened from 2.5 px to 4,
+  and the poles, handles, cuts and marker are not pieces of the contour.
+- **(3.1c) A parameter's id is an identifier and its symbol is a letter.** The limit step printed
+  `$eps \to 0^+$` — which KaTeX sets as the product *e·p·s* — and headed its card `Let eps→0+`,
+  beside a piece the record itself calls *the ε→0 circle* and beside a bound that already writes
+  `\varepsilon`. `R_lim` is the same defect the other way: it subscripts the `l` alone. Measured:
+  the corpus's twenty parameter names include six that carry a limit, of which **four** typeset
+  wrongly. `vocabulary.ts` gains `paramSymbol`, and `R_lim` maps to `R` because B1's own KILL line
+  already states its bound *at $R = 4$* — two names for one quantity, side by side, is what the map
+  removes. Anything multi-character and unmapped is set upright, which is the general form of the
+  same defect (`wedgeAngle` is a name, not nine factors).
+- **(3.1c) The callouts were computed with a position and rendered without one.** Every chip would
+  have stacked at the overlay's top-left corner — "positioned from the camera" not happening, with
+  the right text. The jsdom test that asserts the `style` attribute found it on its first run;
+  nothing that only read the text could have.
+- **(3.1c) A figure must not carry the reader's step.** `figureBytes` draws through the same path
+  with the live session, and the permalink stamped into that same PNG does NOT carry the step —
+  which is 3.1b's own decision, that where a reader is in an argument is theirs. A plate dimmed to
+  one step would be a picture the link beside it cannot reopen, which is M6.3's verdict-drift in
+  another register. The focus is suppressed for every plate.
+- **(3.1c) The app's first motion is what finally gives `prefers-reduced-motion` something to act
+  on.** M6.4 measured zero `transition`, `animation` and `@keyframes` rules and recorded that
+  research 07 rule 7 was satisfied VACUOUSLY. The limit chip's pulse is the first, and it is an
+  **animation rather than the plan's "300 ms CSS transition"**, because a transition fires on a
+  property CHANGE and this node is created already in its final state — there is nothing to
+  transition from. The keyed builder is what makes *once* true: a chip that stays put keeps its
+  node, so the pulse runs when the step changes and not on every pointer move over the stage.
+- **(3.1c) TWO MUTANTS WERE REMOVED RATHER THAN RECORDED EQUIVALENT, and both were the same
+  mistake: a rule spelled twice.** `stageFocus` asked `pieces.some(p => p.id === id)` before adding
+  an id AND then dropped an unknown id through `findIndex(...) >= 0`; `focusOf` returned early for
+  `session.step === "all"` AND then returned `NO_FOCUS` for the undefined step `stepIndex` hands
+  back for `"all"`. Neither mutant could die, because in each case the second reader was doing the
+  first one's job. The membership test that survives is the one that produces the INDEX, and the
+  clamp is the one place a step index is read — which is the reason `stepIndex` exists.
+- **(3.1c) The other two survivors were real, and each bought a test.** Nothing asserted that a
+  boundary step emphasises its piece when no claim was made about it — unreachable from the corpus
+  (all 57 have their line) and not cosmetic, since the step's heading NAMES the piece, so a stage
+  that dimmed it would contradict the card beside it. And nothing read the POLE pixels at all, so
+  ringing every singularity at every residue step passed everything; the test that kills it asks
+  where the ink moved, because A6's residue step focuses no piece and the ring is therefore the
+  whole difference from `All` — one ring is a box under 80 device pixels, four are the square the
+  poles sit on.
+- **(3.1c) One recorded equivalent, and it is equivalent because of a literal in another module.**
+  Re-aimed at the clamp, `d.session.step === "all" ? 0 : stepIndex(...)` changes nothing a test can
+  see — `steps[0]` is always the PROBLEM step and `buildSteps` gives it `focus: {}` unconditionally,
+  so focusing it and focusing nothing draw the same picture. The rule itself is tested directly
+  (`stepIndex(steps, "all")` is `null`) and the card reads it too; what is unobservable is this one
+  consumer's view of it. Kept, for M6.4's reason: a focus should not depend on an invariant
+  established somewhere else.
+- **(3.1c, NOT FIXED — for the owner) `4.928e-2` inside `$…$` typesets as *4.928e − 2*.** Fifteen
+  bound producers in `kernel/bounds/` write `toExponential(3)` straight into LaTeX math mode, where
+  `e` is a letter and `-2` is a subtraction: a reader sees Euler's number minus two. It predates
+  M8 — the Derivation card has printed it this way since 1.5b — and 3.1c only moved it onto the
+  picture, at the one place a reader is looking. It is left alone deliberately: the repair belongs
+  to every bound claim in the app (a LaTeX-safe `4.928 \times 10^{-2}`), not to the callout, and
+  fixing it at the chip alone would make the chip and the card print one number two ways.
 
 - **(3.1b) A control with no caller is not a feature, and the state it reaches is not a state.**
   `setRail` was typed, implemented, exercised by a permalink and pressable from nowhere — so the

@@ -312,3 +312,44 @@ export function limitTag(to: string): string {
 export function limitArrow(to: string): string {
   return `\\to ${to === "inf" ? "\\infty" : to === "0+" ? "0^+" : to}`;
 }
+
+/**
+ * A contour parameter's NAME as mathematics — M8 step 3.1c.
+ *
+ * **A parameter's id is an identifier and its symbol is a letter, and putting the id in `$…$` prints
+ * neither.** Found on the stage: the limit step's callout read `eps \to 0^+`, which KaTeX sets as
+ * the product *e·p·s*, and its heading read `Let eps→0+` — beside a piece the record itself calls
+ * *the ε→0 circle*, and beside a bound that calls the same parameter `\varepsilon`. `R_lim` is the
+ * same defect in the other direction: `R_lim` subscripts the `l` alone and leaves `im` upright.
+ *
+ * Measured over the corpus, which is what makes this a short map rather than a guess. The
+ * parameters carrying a limit are `R`, `R_lim`, `N`, `eps`, `eta` and `rho` — the same six
+ * {@link limitTag}'s note records — of which FOUR need an entry; the twenty names in all add
+ * `alpha`, `mu`, `xi` (entries too, because step 3.2 typesets a parameter that is not a limit),
+ * `saddle`, `sgnA`, `wedgeAngle`, `wedgeX`, `wedgeY` and eight single ASCII letters, which the
+ * rule below covers without naming them.
+ *
+ * **`R_lim` is `R`, and that is not a shortening.** Tier B renames its radius `R_lim` so a record's
+ * limit parameter cannot collide with a template's `R` — an internal disambiguation — and B1's own
+ * KILL line already states its bound *at $R = 4$, and $\to 0$ as $R \to \infty$*. Printing
+ * `R_{\mathrm{lim}}` on the step beside it would introduce a second name for one quantity at the
+ * one place the two are read together.
+ *
+ * Anything else with more than one character is set UPRIGHT rather than as a product of italics,
+ * which is the general form of the same defect: `wedgeAngle` is a name, not nine factors.
+ */
+const PARAM_SYMBOL: Readonly<Record<string, string>> = {
+  R_lim: "R",
+  eps: "\\varepsilon",
+  eta: "\\eta",
+  rho: "\\rho",
+  alpha: "\\alpha",
+  mu: "\\mu",
+  xi: "\\xi",
+};
+
+export function paramSymbol(name: string): string {
+  const known = PARAM_SYMBOL[name];
+  if (known !== undefined) return known;
+  return name.length === 1 ? name : `\\mathrm{${name}}`;
+}

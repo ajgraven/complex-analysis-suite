@@ -991,3 +991,55 @@
   letter-spacing: 0.02em;
   white-space: nowrap;
 }
+
+/* ── the step's callouts, and the app's FIRST motion (M8 step 3.1c) ──────────────────────────
+   A callout is the claim of the step in hand, on the plane, at the thing the claim is about: the
+   bound at the vanishing arc's midpoint, the residue at its pole, the value at the target piece.
+   It rides `.stageChip`'s ground and offset — a chip is a chip — and differs in carrying a badge,
+   because the number on it was established at a LEVEL and a bound shown without its `≤` is the
+   honest-labelling guardrail dropped at the one place a reader is looking. */
+.shell2 .overlay2 .stageChip.callout {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: 22rem;
+  border-color: var(--g-accent);
+}
+.shell2 .overlay2 .stageChip.callout > .badge {
+  flex: 0 0 auto;
+}
+
+/* **This is the first `@keyframes` in the app, and therefore the first `prefers-reduced-motion`
+   query with anything to act on.** M6.4 measured that `app.css` carried zero transition, animation
+   and keyframe rules and recorded that rule 7 of research 07 was satisfied VACUOUSLY — a media
+   query with nothing inside it would have claimed to address something that was never there. Step
+   3.1c is what gives it something: the limit step's chip announces the handle it is about, once.
+
+   ONCE, and by ANIMATION rather than by a transition, which is the mechanism the plan's "300 ms
+   CSS transition" needs to be to work at all: a transition fires on a property CHANGE, and this
+   node is created already in its final state — there is nothing to transition from. The keyed
+   builder is what makes "once" true: a chip that stays put keeps its node (`dom.ts` rule 1), so
+   the animation runs when the step CHANGES and not on every pointer move over the stage. */
+@keyframes stepPulse {
+  0% {
+    transform: translate(0.6rem, -1.6rem) scale(1);
+    border-color: var(--g-accent);
+  }
+  45% {
+    transform: translate(0.6rem, -1.6rem) scale(1.12);
+    border-color: var(--g-accent);
+  }
+  100% {
+    transform: translate(0.6rem, -1.6rem) scale(1);
+    border-color: var(--g-accent);
+  }
+}
+.shell2 .overlay2 .stageChip.callout.pulse {
+  animation: stepPulse 300ms ease-out 1;
+}
+/* The chip still appears and still says what it says; it simply does not move to say it. */
+@media (prefers-reduced-motion: reduce) {
+  .shell2 .overlay2 .stageChip.callout.pulse {
+    animation: none;
+  }
+}

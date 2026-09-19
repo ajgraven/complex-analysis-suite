@@ -35,13 +35,21 @@ import {
   type StageId,
   type Statement,
 } from "./derivation.js";
-import { limitArrow, stageTitle } from "./vocabulary.js";
+import { limitArrow, paramSymbol, stageTitle } from "./vocabulary.js";
 
 /** What a step is about, for the stage to emphasise. Every field names something the app can find. */
 export interface StepFocus {
   /** A piece of the contour, by `Piece.id` — the key the piece list, the stage and the strip share. */
   readonly pieceId?: string;
-  /** An index into the step's own `poles`, which is also an index into `Derivation`'s pole rows. */
+  /**
+   * An index into the **derivation's** CATCH pole rows — not into the step's own `poles`.
+   *
+   * **The doc said "the step's own `poles`, which is also …" and that is false**, found at step
+   * 3.1c when the stage came to resolve it. The first residue step carries `[its row, ...the
+   * unenclosed ones]` and every later one carries a single row, so A6's second residue step has
+   * `poleIndex: 3` over a `poles` array of length 1. `test/steps.test.ts` has always resolved it
+   * against the derivation's rows, which is why the wrong sentence never went red.
+   */
   readonly poleIndex?: number;
   readonly cutId?: string;
   /** A contour parameter, by name — the one the limit step takes to its limit. */
@@ -197,12 +205,16 @@ function limitSteps(params: Params): DerivationStep[] {
     .map((p) => ({
       id: `limit:${p.name}`,
       kind: "limit" as const,
-      title: `Let $${p.name} ${limitArrow(String(p.limit?.to ?? ""))}$`,
+      // **The parameter's SYMBOL, not its id** — M8 step 3.1c, found on the stage. `$eps \to 0^+$`
+      // sets as the product *e·p·s* and `$R_lim$` subscripts the `l` alone; `vocabulary.ts` is
+      // where a name becomes a word, here as where an identifier becomes a letter. The `label`
+      // keeps the id, because a label is what the app calls the field.
+      title: `Let $${paramSymbol(p.name)} ${limitArrow(String(p.limit?.to ?? ""))}$`,
       why: "The bounds above hold at every finite value; the argument needs the limit.",
       statements: [
         {
           label: p.name,
-          text: `$${p.name} ${limitArrow(String(p.limit?.to ?? ""))}$, from $${p.name} = ${p.value}$`,
+          text: `$${paramSymbol(p.name)} ${limitArrow(String(p.limit?.to ?? ""))}$, from $${paramSymbol(p.name)} = ${p.value}$`,
         },
       ],
       lines: [],

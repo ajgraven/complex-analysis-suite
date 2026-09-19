@@ -17,9 +17,13 @@ import { describe, expect, it } from "vitest";
 
 import { buildDerivation, DERIVATION_STAGES } from "../src/engine/derivation.js";
 import { ledgerHeadline } from "../src/engine/ledger.js";
+import { argumentOf } from "../src/shell/argument.js";
+import { circleTemplate } from "../src/engine/contour/templates.js";
+import { compile, defaultState, resolveState } from "../src/shell/state.js";
 import {
   constraintLabel,
   headlineFails,
+  paramSymbol,
   roleLabel,
   stageTitle,
   type ConstraintId,
@@ -129,5 +133,58 @@ describe("nothing the engine composes for a reader carries an id", () => {
   it("does carry the labels, so the sweep above is not passing on an empty screen", () => {
     const everything = sampled.flatMap((s) => s.strings).join("\n");
     for (const id of IDS) expect(everything, id).toContain(constraintLabel(id));
+  });
+});
+
+/**
+ * **A parameter's id is an identifier and its symbol is a letter** — M8 step 3.1c.
+ *
+ * The same rule as the block above, one level down: an id may key a field and may not be printed.
+ * It is here rather than in `steps.test.ts` because the map is `vocabulary.ts`'s, and the sweep is
+ * over the corpus's real parameters rather than over the map's own keys — which a test of the map
+ * would be, and would pass on a map that named nothing the app has.
+ */
+describe("a parameter's name, as mathematics", () => {
+  it("gives each corpus parameter a symbol that typesets as ONE thing", () => {
+    // Every name in the corpus, measured (20 of them) — not the map's keys, which would make this
+    // a test of itself.
+    const NAMES = [
+      "N", "R", "R_lim", "a", "alpha", "b", "c", "eps", "eta", "mu",
+      "n", "p", "q", "rho", "s", "saddle", "sgnA", "wedgeAngle", "wedgeX", "wedgeY", "xi",
+    ];
+    for (const name of NAMES) {
+      const sym = paramSymbol(name);
+      // A bare multi-character ASCII run in math mode is a PRODUCT of italic letters, which is
+      // what `eps` and `wedgeAngle` were being set as. Either it is one command, or it is upright.
+      const bare = /^[A-Za-z][A-Za-z_]+$/.test(sym);
+      expect(bare, `${name} sets as a product of italics: ${sym}`).toBe(false);
+    }
+  });
+
+  it("is exact where the corpus already names the letter, and identity where it does not", () => {
+    expect(paramSymbol("eps")).toBe("\\varepsilon");
+    expect(paramSymbol("rho")).toBe("\\rho");
+    expect(paramSymbol("eta")).toBe("\\eta");
+    // **`R_lim` is `R`** — an internal disambiguation against a template's `R`, and B1's own KILL
+    // line already states the bound *at $R = 4$*. Two names for one quantity, side by side, is
+    // what the map removes here.
+    expect(paramSymbol("R_lim")).toBe("R");
+    expect(paramSymbol("R")).toBe("R");
+    expect(paramSymbol("N")).toBe("N");
+    expect(paramSymbol("wedgeAngle")).toBe("\\mathrm{wedgeAngle}");
+  });
+
+  it("puts the symbol on the limit STEP, which is where the defect was seen", () => {
+    // D1's is `eps`; before this it read `Let $eps \to 0^+$` on the card's heading and on the
+    // stage's callout, beside a piece the record calls *the ε→0 circle*.
+    const base = defaultState(circleTemplate([0, 0], 1.5));
+    const state = { ...base, mode: "gallery" as const, record: "mellin-keyhole", fixture: 0 };
+    const { steps } = argumentOf({ state, resolution: resolveState(state, compile(state.expr)), poles: null });
+    const limits = steps.filter((s) => s.kind === "limit");
+    expect(limits.length, "D1 takes two limits").toBe(2);
+    const texts = limits.flatMap((s) => [s.title, ...s.statements.map((x) => x.text)]);
+    expect(texts.some((t) => t.includes("\\varepsilon")), "the symbol is absent").toBe(true);
+    for (const t of texts) expect(t, "the id reached the reader").not.toContain("eps ");
+    for (const t of texts) expect(t).not.toContain("eps =");
   });
 });

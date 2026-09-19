@@ -20,6 +20,23 @@ import { DARK_INK, type InkTheme } from "../inkTheme.js";
  */
 export const PIECE_COLOURS = DARK_INK.pieces;
 
+/**
+ * How much of a piece is left when the step in hand is not about it.
+ *
+ * A dimmed piece must stay READABLE as a piece: the contour's shape is what makes the focused piece
+ * make sense, and a step that erased the rest would be a picture of one arc rather than of an
+ * argument. So this is a fade, not a hide. Measured in Chromium against the phase portrait, on A6
+ * at the cold-start camera and on D1's keyhole, whose four pieces are the corpus's busiest: the
+ * whole ink layer's alpha falls 20.4% at this value (2,028,695 → 1,615,064 on A6), the dimmed
+ * pieces stay legible as curves at every hue the portrait puts behind them, and the focused piece
+ * — thickened from 2.5 px to 4 — is the only thing on the plane competing for the eye.
+ */
+const DIM_ALPHA = 0.28;
+
+/** Whether piece `k` is what the step in hand is about. No focus at all means every piece is. */
+const isFocused = (opts: InkOptions, k: number): boolean =>
+  opts.focus === undefined || opts.focus.length === 0 || opts.focus.includes(k);
+
 export interface InkOptions {
   /**
    * The palette. **Required, and deliberately not defaulted** — a default would be a second place
@@ -29,6 +46,20 @@ export interface InkOptions {
   readonly colours: readonly number[];
   /** Index of the piece to emphasise, or −1. */
   readonly highlight?: number;
+  /**
+   * The pieces the current derivation step is ABOUT — M8 step 3.1c.
+   *
+   * **A different question from {@link highlight}, and they are deliberately not merged.** `highlight`
+   * is where the POINTER is: one piece, transient, and it lights that piece without saying anything
+   * about the others. This is what the ARGUMENT is about at the step the reader is on: it can be two
+   * pieces (C1 and C3 split the real axis at the indentation and both halves are the target), it
+   * survives a pointer that has left the stage, and it dims everything it does not name — which is
+   * the half that carries the meaning, because *this piece and not those* is what a lecturer's
+   * finger does.
+   *
+   * Empty or absent is no focus at all: nothing is dimmed and the picture is the whole contour.
+   */
+  readonly focus?: readonly number[];
   /** Position of the integration marker along the whole contour, in [0, 1]; omit to hide it. */
   readonly marker?: number;
   readonly refused?: boolean;
@@ -400,11 +431,21 @@ export function drawContour(
   // Halo first, under every piece, so a piece drawn later cannot sit on top of its neighbour's halo.
   // Dark rather than light: the phase map is mid-lightness by construction, so a dark outline is the
   // one that separates from it at every hue.
-  for (const pts of paths) {
+  //
+  // **The halo takes the focus alpha too, which the first draft of step 3.1c forgot** — and the
+  // browser suite measured what it cost: with the halo left at full strength a "dimmed" piece is a
+  // 6.5 px dark cord with a faint colour down the middle of it, which is more conspicuous than the
+  // piece was before it was dimmed. Measured on A6 at the cold-start camera: the whole ink layer's
+  // alpha fell 0.17% with the halos left alone and falls 20.4% with them dimmed. It is still a
+  // separate pass, for the reason above; it is the ALPHA that is per piece.
+  for (const [k, pts] of paths.entries()) {
+    ctx.save();
+    if (!isFocused(opts, k)) ctx.globalAlpha = DIM_ALPHA;
     tracePath(ctx, pts);
     ctx.strokeStyle = t.halo;
     ctx.lineWidth = 6.5;
     ctx.stroke();
+    ctx.restore();
   }
 
   for (let k = 0; k < paths.length; k++) {
@@ -418,9 +459,16 @@ export function drawContour(
     const palette = t.pieces;
     const colour = palette[(opts.colours[k] ?? k) % palette.length];
     const emphasised = opts.highlight === k;
+    // **Dimmed by ALPHA, not by a second palette.** A dimmed piece is the same curve seen less of;
+    // giving it its own colour would make "not this step's" a fifth thing the six hues mean, and
+    // `inkTheme.ts` exists so the palette has one home. The arrowheads below take the same alpha,
+    // because a dim curve under bright arrows reads as a curve behind a row of marks.
+    const focused = isFocused(opts, k);
+    ctx.save();
+    if (!focused) ctx.globalAlpha = DIM_ALPHA;
     tracePath(ctx, paths[k]);
     ctx.strokeStyle = opts.refused === true ? t.refusedInk : colour;
-    ctx.lineWidth = emphasised ? 4 : 2.5;
+    ctx.lineWidth = emphasised || (focused && opts.focus !== undefined && opts.focus.length > 0) ? 4 : 2.5;
     if (opts.refused === true) ctx.setLineDash([7, 5]);
     ctx.stroke();
     ctx.setLineDash([]);
@@ -443,6 +491,7 @@ export function drawContour(
       ctx.restore();
       arrowHead(ctx, at.x, at.y, at.dx, at.dy, 6);
     }
+    ctx.restore();
   }
 
   for (const handle of opts.handles ?? []) {

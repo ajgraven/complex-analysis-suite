@@ -369,9 +369,16 @@ export function mountShell2(root: Element): Shell2Handle {
       session.open = { ...session.open, [id]: open };
     },
 
+    // **`repaint`, not `render2` — and that was a REAL defect, found by the browser suite at step
+    // 3.1c.** Until this step the stepper had no consequence outside the card, so re-rendering the
+    // chrome was the whole job; now the step decides which piece the stage emphasises, which pole it
+    // rings and what is on the callout, and a `render2` alone left all three showing the PREVIOUS
+    // step — the card saying one thing and the picture beside it another, which is the one failure
+    // a stepper linked to a stage must not have. No node test could see it: jsdom has no canvas, and
+    // `stepStage.test.ts` calls `drawNow` itself rather than going through an action.
     setStep: (step) => {
       session.step = step;
-      render2();
+      repaint();
     },
 
     copyLink: () => {
