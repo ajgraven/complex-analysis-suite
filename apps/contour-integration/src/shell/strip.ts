@@ -32,6 +32,7 @@ import type { Resolved } from "../kernel/geom.js";
 import { CONTRAST_LABELS, drawAccumulator, stepNear, type ContrastMode } from "../ui/accumulator.js";
 import { DARK_INK, type InkTheme } from "../ui/inkTheme.js";
 import { drawnContour, showStepDetail } from "./state.js";
+import { drillMask } from "./drillPanel.js";
 import { degrees, stepDetail } from "./stepDetail.js";
 import type { ShellState, StateResolution } from "./state.js";
 import { h, patch } from "./dom.js";
@@ -555,8 +556,23 @@ export function createStripView(host: HTMLElement, input: StripInput): StripView
   function drawNow(d: StripDraw): void {
     last = d;
     const got = inputsOf(d.state, d.resolution);
-    const acc = accumulate(d, got);
-    const withheld = got.ok ? (acc === null ? withheldBecause(got.integral) : null) : got.refusal;
+    // **THE STRIP IS A PICTURE OF THE CONTOUR, and rung iii masks the contour** — M8 step 3.4,
+    // found by opening the rung in a browser. The stage draws an empty piece list there and the
+    // ledger, the derivation and the value all say "hidden", while this canvas went on drawing the
+    // record's own walk — a semicircle, unmistakably — with `1.15565557035` printed beside it,
+    // which is `π/e` to eleven figures. The rung's question is which contour, and the answer was
+    // being drawn and totalled at the foot of the page.
+    //
+    // Through the SAME path a refusal takes, rather than a second branch: `acc === null` already
+    // clears the canvas and prints one sentence, and a mask that cleared it some other way would be
+    // the omission `drillPanel.ts`'s header warns about.
+    const masked = drillMask(d) === "argument";
+    const acc = masked ? null : accumulate(d, got);
+    const withheld = masked
+      ? "the contour is the question"
+      : got.ok
+        ? (acc === null ? withheldBecause(got.integral) : null)
+        : got.refusal;
 
     // **The panel first, and unconditionally** — `stageView.ts`'s rule, for the same reason: the
     // canvas may have no 2-D context (jsdom, a lost context) and that is not a fact about the

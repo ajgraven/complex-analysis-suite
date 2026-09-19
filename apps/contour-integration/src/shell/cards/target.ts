@@ -12,6 +12,7 @@ import { identityLatex, identityText, targetLatex } from "../../families/latex.j
 import { h } from "../dom.js";
 import { math, mathText } from "../math.js";
 import { card, disclosure, nothing, type Card } from "./card.js";
+import { drillMask } from "../drillPanel.js";
 
 export const targetCard: Card = (ctx) => {
   const { state, resolution, actions } = ctx;
@@ -23,11 +24,25 @@ export const targetCard: Card = (ctx) => {
   // The picker already says what a variant is; the line below says the integral alone.
   const variant = isVariant(family, golden);
 
+  // **AT RUNG iii THE LEFT RAIL WAS PRINTING THE ANSWER, and the menu's own sentence said it was
+  // not** — M8 step 3.4, found by opening the rung in a browser. *"Only the integral is given"* is
+  // what the drill card says while choosing a contour; what this card was giving was the closed
+  // form (`= π/e`), the record's TITLE naming the lemma (*by Jordan's lemma*), the strategy line
+  // (*closed by $\Gamma_R$ in the half-plane $a\operatorname{Im} z \ge 0$* — literally the
+  // prediction's answer), the point of the argument, eight citations and the method behind the
+  // value. Older than this step, and the step is what made it acute: 3.4 puts a forced choice on
+  // that rung, and a prediction whose answer is three inches to the left is a reading exercise.
+  //
+  // What stays is the INTEGRAL — through the branch that already exists for a variant fixture,
+  // which prints the target alone for its own reason — and the fixture picker, because the rung is
+  // about this fixture and a reader who cannot see which one they are on cannot reason about it.
+  const masked = drillMask(ctx) === "argument";
+
   return card(
     "target",
     // The typeset title, because every other formula in the rail is typeset and a Unicode one beside
     // them is the inconsistency step 0.5b removed.
-    h("p", { key: "title", class: "muted small" }, ...mathText(family.titleLatex, "ti")),
+    masked ? null : h("p", { key: "title", class: "muted small" }, ...mathText(family.titleLatex, "ti")),
 
     // **Each unknown AT THIS FIXTURE.** `targetLatex(t, { at })` substitutes the bindings, so the
     // reader sees the integral they are looking at rather than the family's symbols — which is the
@@ -36,7 +51,7 @@ export const targetCard: Card = (ctx) => {
       h(
         "div",
         { key: `t${i}`, class: "targetLine" },
-        i === 0 && !variant
+        i === 0 && !variant && !masked
           ? math(identityLatex(family, golden), { display: true, key: "m", label: identityText(family, golden) })
           : math(targetLatex(t, { at: golden.params }), { display: true, key: "m" }),
         t.convergence === "absolute"
@@ -76,10 +91,12 @@ export const targetCard: Card = (ctx) => {
       ),
     ),
 
-    h("p", { key: "contour", class: "small" }, ...mathText(family.description.contour, "dc")),
+    masked ? null : h("p", { key: "contour", class: "small" }, ...mathText(family.description.contour, "dc")),
     // What the argument turns ON — the record's own one line, and the front door's second line.
-    h("p", { key: "point", class: "muted small" }, ...mathText(family.description.point, "dp")),
-    h(
+    masked ? null : h("p", { key: "point", class: "muted small" }, ...mathText(family.description.point, "dp")),
+    masked
+      ? h("p", { key: "masked", class: "muted small" }, "Hidden: the contour is the question.")
+      : h(
       "ul",
       { key: "cites", class: "cites" },
       ...family.description.citations.map((c, i) =>
@@ -95,12 +112,14 @@ export const targetCard: Card = (ctx) => {
     // nowhere, so a reader had the record's answer and no way to ask what stands behind it. A value
     // with no method is an assertion, which is the whole reason the field is required; it is still
     // not what a reader needs first, so it folds.
-    disclosure(
-      ctx,
-      "target:method",
-      false,
-      "How the value was checked",
-      h("p", { key: "m", class: "muted small" }, ...mathText(golden.method, "gm")),
-    ),
+    masked
+      ? null
+      : disclosure(
+          ctx,
+          "target:method",
+          false,
+          "How the value was checked",
+          h("p", { key: "m", class: "muted small" }, ...mathText(golden.method, "gm")),
+        ),
   );
 };

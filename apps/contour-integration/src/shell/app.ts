@@ -45,6 +45,7 @@ import { createUndo, type CommitReason } from "./undo.js";
 import { createStripView, type StripDraw } from "./strip.js";
 import { createContrastsDialog } from "./contrasts.js";
 import { createFrontDoor } from "./frontDoor.js";
+import { taskState } from "./drill.js";
 import { thumbnailById } from "./thumbnails.js";
 import { createSweep, planSweep, type SweepDriver } from "./sweep.js";
 import { argumentOf } from "./argument.js";
@@ -275,6 +276,21 @@ export function mountShell2(root: Element): Shell2Handle {
       render2();
     },
     thumbnail: (id) => thumbnailById(id),
+    // **The same store the rung card writes to**, reached the same guarded way: `localStorage` can
+    // throw on the getter alone in a private window, which is `drillProgress.ts`'s rule 2 arriving
+    // as a `try` rather than as a `?.`.
+    progressStore: () => {
+      try {
+        return typeof window === "undefined" ? null : window.localStorage;
+      } catch {
+        return null;
+      }
+    },
+    // A task opens like a record: through `applyState`, which resets the session — so a rung never
+    // arrives carrying the previous one's answer sheet or prediction. It does NOT fit the contour,
+    // unlike `apply` above, because a rung's state names a record whose contour the rung is about
+    // and rung iv's blank plane is deliberately the default view.
+    openTask: (task, stage) => applyStateNow(taskState(task, stage)),
   });
 
   const scheduleDraw = (): void => stageView.schedule(drawState);
@@ -665,25 +681,23 @@ export function mountShell2(root: Element): Shell2Handle {
     setMode: (mode) => {
       // Whichever field the derivation reads, and only that one.
       //
-      // **Pressing Drill with no rung open OFFERS THE TASKS**, and it used to refuse — with the
-      // sentence "Choose a drill task from the panel", about a panel nothing built. A refusal naming
-      // an action the app does not offer is the defect M4.7d found in the ledger's own repair line,
-      // and here it was the only door: `DRILL_TASKS` was reachable from a permalink and from nowhere
-      // a reader could press. The chooser is a SESSION flag rather than a mode, because a reader who
-      // is picking a task is not in the drill yet — `shellMode` says Drill when a RUNG is open — and
-      // picking one is an `applyState`, which puts the list away through `resetTransient`.
+      // **Pressing Drill with no rung open opens the front door's Practice tab** — M8 step 3.4.
+      //
+      // It used to refuse, with a sentence about a panel nothing built; step 1.7 answered that with
+      // a chooser in the rail's top slot; and this step moves that list to the front door, where the
+      // app's other "which one shall I open?" already lives. **One door rather than two is the
+      // whole change**: a rail card that was sometimes a menu and sometimes a rung had two shapes
+      // and one id, so every reader of the drill card had to know which it was looking at, and the
+      // session carried a flag whose only job was to say so. A task now opens the way a record does.
       if (mode === "drill") {
         if (state.drill === null) {
-          session.drillPicker = true;
-          render2();
+          session.frontDoorOpen = true;
+          frontDoor.open("practice");
           return;
         }
         commit({ ...state, workedExample: false }, "edit");
         return;
       }
-      // And leaving clears the chooser as well as the rung, so `Explore` means the same thing from
-      // both — a list left standing after the reader said Explore is a menu outliving its mode.
-      session.drillPicker = false;
       // **Worked example opens the stepper at its first step** — M8 step 3.1b, the plan's *open by
       // default at step 1*. Explore goes back to `"all"`, the whole argument at once, so the two
       // modes differ in what they OFFER rather than in where a reader happens to have left off.

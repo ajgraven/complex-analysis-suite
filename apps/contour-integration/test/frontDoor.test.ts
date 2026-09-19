@@ -17,7 +17,9 @@ import { TAXONOMY_SECTIONS } from "../src/families/schema.js";
 import { createFrontDoor, frontDoorState, FRONT_DOOR_GROUPS, FRONT_ROW, type FrontDoorDialog } from "../src/shell/frontDoor.js";
 import { defaultState, resolveState, type ShellState } from "../src/shell/state.js";
 import { circleTemplate } from "../src/engine/contour/templates.js";
-import { splitMath } from "../src/shell/math.js";
+import { mathPlain, splitMath } from "../src/shell/math.js";
+import { DRILL_TASKS, type DrillTask } from "../src/shell/drill.js";
+import { PROGRESS_KEY, stageFor, type DrillProgress, type KeyStore } from "../src/shell/drillProgress.js";
 
 interface Harness {
   readonly dialog: FrontDoorDialog;
@@ -28,6 +30,10 @@ interface Harness {
   /** Which records were asked for a thumbnail, in order. The laziness measurement. */
   readonly thumbed: string[];
   readonly base: ShellState;
+  /** Which drill tasks were handed to the shell, and at which rung. */
+  readonly opened: { readonly task: DrillTask; readonly stage: number }[];
+  /** Every key the progress store was asked for — the read-it-ONCE measurement. */
+  readonly reads: string[];
 }
 
 let live: FrontDoorDialog | null = null;
@@ -39,6 +45,25 @@ afterEach(() => {
 });
 
 /**
+ * A progress store carrying exactly the given progress.
+ *
+ * An object rather than `localStorage`: `drillProgress.ts` takes the store as a parameter precisely
+ * so a test can hand it one, and a shared `localStorage` would leak one case's rungs into the next.
+ * Every `getItem` is recorded, which is what makes "read once for the whole list" measurable rather
+ * than a sentence in a comment.
+ */
+function fakeStore(progress: DrillProgress, reads: string[]): KeyStore {
+  const data = new Map<string, string>([[PROGRESS_KEY, JSON.stringify(progress)]]);
+  return {
+    getItem: (key) => {
+      reads.push(key);
+      return data.get(key) ?? null;
+    },
+    setItem: (key, value) => void data.set(key, value),
+  };
+}
+
+/**
  * A mounted dialog, with a stub thumbnail.
  *
  * **The stub returns a FRESH canvas on every call**, which is the contract `frontDoor.ts` states and
@@ -46,7 +71,7 @@ afterEach(() => {
  * two places. A stub that returned one cached element per record would make the front row lose its
  * picture the moment a group was expanded, and the test below would not see it.
  */
-function mount(state?: ShellState): Harness {
+function mount(opts: { readonly state?: ShellState; readonly progress?: DrillProgress } = {}): Harness {
   const page = document.createElement("main");
   const opener = document.createElement("button");
   opener.textContent = "Choose a record";
@@ -54,10 +79,13 @@ function mount(state?: ShellState): Harness {
   const host = document.createElement("div");
   document.body.append(page, host);
 
-  const base = state ?? defaultState(circleTemplate([0, 0], 2));
+  const base = opts.state ?? defaultState(circleTemplate([0, 0], 2));
   const calls: string[] = [];
   const applied: ShellState[] = [];
   const thumbed: string[] = [];
+  const opened: { task: DrillTask; stage: number }[] = [];
+  const reads: string[] = [];
+  const progress = opts.progress ?? {};
   const dialog = createFrontDoor(host, page, {
     state: () => base,
     apply: (next) => {
@@ -69,9 +97,14 @@ function mount(state?: ShellState): Harness {
       thumbed.push(id);
       return document.createElement("canvas");
     },
+    progressStore: () => fakeStore(progress, reads),
+    openTask: (task, stage) => {
+      calls.push("openTask");
+      opened.push({ task, stage });
+    },
   });
   live = dialog;
-  return { dialog, opener, calls, applied, thumbed, base };
+  return { dialog, opener, calls, applied, thumbed, base, opened, reads };
 }
 
 const dialogOf = (): HTMLElement | null => document.querySelector<HTMLElement>('[role="dialog"]');
@@ -460,7 +493,10 @@ describe("the front door — what it announces itself as", () => {
     const id = d?.getAttribute("aria-labelledby") ?? "";
     const label = document.getElementById(id);
     expect(label, `aria-labelledby names '${id}', which is in no document`).not.toBeNull();
-    expect((label?.textContent ?? "").trim()).toBe("Worked examples");
+    // **One name covering BOTH tabs**, which is what the strip cost the heading: the dialog is
+    // announced by this text when focus lands on it, and that happens before any tab switch, so a
+    // per-tab name would describe whichever half was up rather than what the reader opened.
+    expect((label?.textContent ?? "").trim()).toBe("Worked examples and practice");
     expect(d?.contains(label)).toBe(true);
   });
 
@@ -476,5 +512,211 @@ describe("the front door — what it announces itself as", () => {
     for (const section of TAXONOMY_SECTIONS) {
       expect(disclosure(section).closest("h3"), `'${section}' is a button outside any heading`).not.toBeNull();
     }
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+// The strip and the practice list — M8 step 3.4.
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+
+/** One tab of the strip, by the id it carries for the arrow keys and the click handler. */
+function tab(id: string): HTMLElement {
+  const found = dialogOf()?.querySelector<HTMLElement>(`[role="tab"][data-tab="${id}"]`) ?? null;
+  expect(found, `no '${id}' tab`).not.toBeNull();
+  return found as HTMLElement;
+}
+
+/** The panel a tab's `aria-controls` names — dereferenced, never guessed from a class. */
+function panelFor(id: string): HTMLElement {
+  const owner = tab(id);
+  const panel = document.getElementById(owner.getAttribute("aria-controls") ?? "");
+  expect(panel, `the '${id}' tab controls nothing in any document`).not.toBeNull();
+  return panel as HTMLElement;
+}
+
+/** The practice list's rows, in order. */
+const taskRows = (): HTMLElement[] => [...(dialogOf()?.querySelectorAll<HTMLElement>("li[data-task]") ?? [])];
+
+/** One row's `tag` text — "stage n of 4", and the `complete` tag where there is one. */
+const tagsOf = (row: HTMLElement): string[] => [...row.querySelectorAll(".tag")].map((t) => t.textContent ?? "");
+
+describe("the front door — the two tabs", () => {
+  it("is a tab strip, with each tab controlling the panel that names it back", () => {
+    // The ARIA tabs pattern, dereferenced in BOTH directions. A tab whose `aria-controls` names a
+    // panel that in turn is labelled by some other tab is the defect this catches, and it is
+    // invisible on screen and in every screenshot: the picture is right and the panel has the wrong
+    // name. The ids are generated per mounted dialog, so they are read off the DOM rather than
+    // written down here.
+    const { dialog } = mount();
+    dialog.open();
+    const strip = dialogOf()?.querySelector('[role="tablist"]') ?? null;
+    expect(strip, "the dialog has no tablist").not.toBeNull();
+    expect([...(strip?.querySelectorAll('[role="tab"]') ?? [])].map((t) => t.getAttribute("data-tab"))).toEqual([
+      "records",
+      "practice",
+    ]);
+    for (const id of ["records", "practice"]) {
+      const panel = panelFor(id);
+      expect(panel.getAttribute("role"), `'${id}' controls something that is not a tabpanel`).toBe("tabpanel");
+      expect(panel.getAttribute("aria-labelledby"), `the '${id}' panel is not labelled by its own tab`).toBe(
+        tab(id).id,
+      );
+    }
+    // Exactly one panel is up, and the ROVING tabindex says which — `aria-selected` alone is a
+    // claim about the strip that the tab order does not back.
+    expect(`records: ${tab("records").getAttribute("aria-selected")}`).toBe("records: true");
+    expect(`practice: ${tab("practice").getAttribute("aria-selected")}`).toBe("practice: false");
+    expect(tab("records").getAttribute("tabindex")).toBe("0");
+    expect(tab("practice").getAttribute("tabindex")).toBe("-1");
+    expect(`records hidden: ${panelFor("records").hasAttribute("hidden")}`).toBe("records hidden: false");
+    expect(`practice hidden: ${panelFor("practice").hasAttribute("hidden")}`).toBe("practice hidden: true");
+    // And the records panel is the dialog's existing content rather than a new empty box beside it.
+    expect(panelFor("records").querySelectorAll("button[data-door]").length).toBe(8);
+  });
+
+  it("moves between tabs with Left and Right, wrapping, and takes the key", () => {
+    // The strip WRAPS where the card grid clamps, and the reason is the grid's read the other way:
+    // a grid's Right at the end of a row could only land on the next ROW, which is one gesture
+    // meaning two things, while a strip is one row and a dead key on a two-item list is the only
+    // other option. Selection follows focus, so the panel is asserted alongside the tab — a strip
+    // whose `aria-selected` moved and whose panels did not is the defect that looks right.
+    const { dialog } = mount();
+    dialog.open();
+    tab("records").focus();
+    expect(press("ArrowRight"), "the strip left the key to the browser").toBe(false);
+    expect(document.activeElement).toBe(tab("practice"));
+    expect(`selected: ${tab("practice").getAttribute("aria-selected")}`).toBe("selected: true");
+    expect(`practice hidden: ${panelFor("practice").hasAttribute("hidden")}`).toBe("practice hidden: false");
+    expect(`records hidden: ${panelFor("records").hasAttribute("hidden")}`).toBe("records hidden: true");
+
+    // Right again wraps back to the first: two tabs, so this is also Left's move, and asserting it
+    // from the other end is what keeps the wrap from being a modulo that happens to be an identity.
+    press("ArrowRight");
+    expect(document.activeElement).toBe(tab("records"));
+    press("ArrowLeft");
+    expect(document.activeElement, "Left did not wrap onto the last tab").toBe(tab("practice"));
+    // A key that is not a strip move is left alone, so the modal's own Escape and Tab still arrive.
+    expect(press("Escape"), "the strip swallowed a key that is not its own").toBe(true);
+  });
+
+  it("opens on the tab the caller names, and on Records with no argument", () => {
+    // The bar's two segments name the tab they want. The no-argument call is the one that existed
+    // before the strip did, so it must still be the records list — and the PAIRING is the second
+    // open: a dialog that simply remembered the last tab would pass the first assertion and fail
+    // here, which is the whole difference between "the caller decides" and "the dialog remembers".
+    const { dialog } = mount();
+    dialog.open("practice");
+    expect(`selected: ${tab("practice").getAttribute("aria-selected")}`).toBe("selected: true");
+    expect(taskRows().length, "the practice panel is empty on a direct open").toBe(DRILL_TASKS.length);
+    dialog.close();
+
+    dialog.open();
+    expect(`selected: ${tab("records").getAttribute("aria-selected")}`).toBe("selected: true");
+    expect(`practice: ${tab("practice").getAttribute("aria-selected")}`).toBe("practice: false");
+  });
+
+  it("asks for no thumbnail at all when the tabs are switched", () => {
+    // **The measurement, and the defect it prevents.** `patch` recurses into a node whose
+    // description has no children and removes what is there, so a switch that re-rendered the
+    // dialog would take the adopted canvases with it and the next `fillThumbnails` would ask for
+    // all eight again — `toggleGroup`'s 19-requests-for-11-cards, reached by a second route, and
+    // measured at 16 against 8 on the first switch alone. The
+    // count alone is not evidence (a panel that drew no cards at all would also ask for nothing),
+    // so the same canvas NODES are required to still be there afterwards.
+    const { dialog, thumbed } = mount();
+    dialog.open();
+    expect(thumbed.length, "the front row did not draw").toBe(8);
+    const before = [...(dialogOf()?.querySelectorAll("[data-thumb] canvas") ?? [])];
+    expect(before.length).toBe(8);
+
+    tab("practice").click();
+    expect(thumbed.length, "switching to Practice re-asked for the records' thumbnails").toBe(8);
+    tab("records").click();
+    expect(thumbed.length, "switching back re-asked for the records' thumbnails").toBe(8);
+    const after = [...(dialogOf()?.querySelectorAll("[data-thumb] canvas") ?? [])];
+    expect(after.length, "the records panel lost its pictures across the switch").toBe(8);
+    // IDENTITY, not equality: two freshly created canvases are deeply equal and are exactly what a
+    // re-render would have produced, so `toEqual` would pass on the defect this test is about.
+    expect(
+      `same nodes: ${after.every((n, i) => n === before[i])}`,
+      "the canvases were re-created rather than left alone",
+    ).toBe("same nodes: true");
+  });
+});
+
+describe("the front door — the practice tab", () => {
+  it("lists the four tasks, each at the rung it has REACHED", () => {
+    // The PAIRING that makes the stage a measurement rather than a constant: one task carries
+    // progress and the other three do not, so a panel that printed `stage 1 of 4` everywhere — or
+    // read `LAST_STAGE` for both numbers — shows the two rows agreeing where they must differ.
+    const { dialog } = mount({ progress: { rational: { stage: 2 } } });
+    dialog.open("practice");
+    const rows = taskRows();
+    expect(rows.map((r) => r.getAttribute("data-task"))).toEqual(DRILL_TASKS.map((t) => t.id));
+
+    const withProgress = rows[0];
+    const without = rows[1];
+    expect(`${withProgress.getAttribute("data-task")}: ${tagsOf(withProgress)[0]}`).toBe("rational: stage 3 of 4");
+    expect(`${without.getAttribute("data-task")}: ${tagsOf(without)[0]}`).toBe("oscillatory: stage 1 of 4");
+    const shown = (row: HTMLElement): number => Number(row.querySelector(".tag")?.getAttribute("data-stage"));
+    expect(
+      `cleared two rungs is later than cleared none: ${shown(withProgress) > shown(without)}`,
+      "the rung a task has reached is not on screen",
+    ).toBe("cleared two rungs is later than cleared none: true");
+
+    // The label is TYPESET, and the control's name is the spoken twin rather than the source — a
+    // `$…$` in an `aria-label` is read out in the app's own syntax.
+    expect(withProgress.querySelector(".katex-mathml"), "the task's integral is not typeset").not.toBeNull();
+    const go = withProgress.querySelector("button[data-open-task]");
+    expect(go?.getAttribute("aria-label")).toBe(`open ${mathPlain(DRILL_TASKS[0].labelText)} at stage 3`);
+    expect(go?.getAttribute("aria-label") ?? "", "raw LaTeX reached an accessible name").not.toContain("$");
+  });
+
+  it("says `complete` where the stage number no longer can", () => {
+    // `stageFor` CAPS at the last rung, so a task that has cleared three and one that has cleared
+    // all four both read "stage 4 of 4" — which is the whole reason `isComplete` is drawn beside
+    // it. Both rows are asserted, because the claim is precisely that the numbers AGREE and the
+    // tags do not.
+    const { dialog } = mount({ progress: { rational: { stage: 4 }, oscillatory: { stage: 3 } } });
+    dialog.open("practice");
+    const [done, nearly] = taskRows();
+    expect(`${tagsOf(done)[0]} / ${tagsOf(nearly)[0]}`, "the two stages are distinguishable after all").toBe(
+      "stage 4 of 4 / stage 4 of 4",
+    );
+    expect(`finished: ${tagsOf(done).includes("complete")}`).toBe("finished: true");
+    expect(`one rung short: ${tagsOf(nearly).includes("complete")}`).toBe("one rung short: false");
+  });
+
+  it("reads the progress store ONCE for the whole list", () => {
+    // `drillPanel.ts`'s own rule for the list it draws in the rail: four rows that each read the
+    // store are four rows that can describe four different moments, and how far along they are is
+    // the one thing a reader compares them on. A per-row read measures four; the row count is
+    // asserted beside it, because a list that drew nothing would also read once — or none.
+    const { dialog, reads } = mount({ progress: { rational: { stage: 2 } } });
+    dialog.open("practice");
+    expect(taskRows().length).toBe(4);
+    expect(reads, "the store was read more than once for one list").toEqual([PROGRESS_KEY]);
+  });
+
+  it("opens a task at its reached rung, shutting the dialog first", () => {
+    // Two claims, and the ORDER is `openCard`'s and its reason: `applyState` clears the shell's own
+    // open flag and re-renders, so handing the task over first would leave this dialog standing
+    // over a page the shell had already decided was uncovered. The rung is computed here from the
+    // same progress through `stageFor` and checked to DIFFER from the default, so a handler that
+    // passed a hardcoded 1 — or the last rung — cannot pass.
+    const progress: DrillProgress = { rational: { stage: 2 } };
+    const { dialog, calls, opened } = mount({ progress });
+    dialog.open("practice");
+    taskRows()[0].querySelector<HTMLElement>("button[data-open-task]")?.click();
+
+    expect(calls, "the dialog handed the task over before it shut").toEqual(["close", "openTask"]);
+    expect(dialog.isOpen).toBe(false);
+    expect(opened.length).toBe(1);
+    expect(opened[0].task.id).toBe(DRILL_TASKS[0].id);
+    const want = stageFor(progress, DRILL_TASKS[0].id);
+    expect(`${opened[0].task.id} at ${opened[0].stage}`).toBe(`${DRILL_TASKS[0].id} at ${want}`);
+    expect(`${want} is past the first rung: ${want > 1}`, "the expected rung is the default after all").toBe(
+      `${want} is past the first rung: true`,
+    );
   });
 });

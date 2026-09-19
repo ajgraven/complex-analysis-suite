@@ -16,6 +16,7 @@ import { tagLabel } from "../../engine/vocabulary.js";
 import { h, type Desc } from "../dom.js";
 import { math, mathText } from "../math.js";
 import { card, nothing, type Card } from "./card.js";
+import { drillMask } from "../drillPanel.js";
 
 /** How close two points must be to be the same pole. `residueTheorem.ts`'s own tolerance. */
 const SAME = 1e-6;
@@ -26,7 +27,8 @@ type Windings = ContourIntegral["windings"];
 const windingAt = (windings: Windings, at: readonly [number, number]): Windings[number] | undefined =>
   windings.find((w) => Math.hypot(w.at[0] - at[0], w.at[1] - at[1]) < SAME);
 
-export const singularitiesCard: Card = ({ state, resolution, session, poles, actions }) => {
+export const singularitiesCard: Card = (ctx) => {
+  const { state, resolution, session, poles, actions } = ctx;
   if (poles === null) return card("singularities", nothing("There is no integrand to read."));
 
   // With a factor declared these are the poles of `R(z)` and not of the integrand: a branch point is
@@ -52,8 +54,16 @@ export const singularitiesCard: Card = ({ state, resolution, session, poles, act
   }
   if (poles.poles.length === 0) return card("singularities", nothing("f was read, and it has no poles."));
 
-  const windings: Windings =
-    resolution.kind === "gallery"
+  // **The WINDING column is about the contour, so it goes with the contour** — M8 step 3.4. The
+  // poles stay, for the reason `stageView.ts` gives for still drawing them at this rung: at the
+  // rung whose question is "which contour?" the singularities are the question's DATA. Which of
+  // them the record's own contour encloses is its answer, and `Ind(γ, 0 + 1i) = 1` beside
+  // `Ind(γ, 0 - 1i) = 0` says "the upper half-plane" as plainly as the prose this step removed from
+  // the Target card.
+  const masked = drillMask(ctx) === "argument";
+  const windings: Windings = masked
+    ? []
+    : resolution.kind === "gallery"
       ? (resolution.run?.integral.windings ?? [])
       : resolution.kind === "plain" || resolution.kind === "declared"
         ? resolution.analysis.integral.windings

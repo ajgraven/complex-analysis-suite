@@ -193,15 +193,15 @@ export interface Session {
   /** Rung iv's last enclosure check, or null. Same reasoning as {@link Session.drillAnswers}. */
   drillDrawn: unknown;
   /**
-   * Whether the drill's TASK LIST is showing in the right rail's top slot.
+   * Rung iii's forced choice, as the option id the reader picked, or null — M8 step 3.4.
    *
-   * SESSION, for {@link Session.contrastsOpen}'s reason and one of its own: a reader who is choosing
-   * a task is not in the drill yet — `shellMode` says Drill when a RUNG is open — so this is where
-   * their hands are rather than part of the argument, and a permalink that reopened the chooser
-   * would hand someone else a menu over the thing they came to look at. Picking a task is an
-   * `applyState`, so `resetTransient` puts the list away without anyone remembering to.
+   * The session, for {@link Session.drillAnswers}' reason: it is the reader's hand on this rung and
+   * nothing about the argument. The OUTCOME goes to `drillProgress` (the `v2` key), because a
+   * prediction is a thing a reader did once and should not be asked to redo on a revisit; this is
+   * only what they have picked in front of them now, so `resetTransient` clears it and a link
+   * cannot arrive with someone else's answer already given.
    */
-  drillPicker: boolean;
+  drillPredicted: string | null;
   /**
    * Why the link this page was opened with could not be honoured, or null.
    *
@@ -240,8 +240,8 @@ export function defaultSession(): Session {
     contrastsOpen: false,
     frontDoorOpen: false,
     drillAnswers: {},
+    drillPredicted: null,
     drillDrawn: null,
-    drillPicker: false,
     linkRefusal: null,
   };
 }
@@ -277,7 +277,7 @@ export function resetTransient(session: Session): void {
   session.sweep = null;
   session.drillAnswers = {};
   session.drillDrawn = null;
-  session.drillPicker = false;
+  session.drillPredicted = null;
   session.notice = null;
   session.contrastsOpen = false;
   session.frontDoorOpen = false;

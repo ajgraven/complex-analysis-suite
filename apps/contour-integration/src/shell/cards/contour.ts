@@ -12,12 +12,13 @@
 // would leave a worked example whose pieces no longer match the argument it is making.
 import { fmtCx } from "../../kernel/decimal.js";
 import { roleLabel, tagLabel, templateLabel } from "../../engine/vocabulary.js";
+import { drillMask } from "../drillPanel.js";
 import { penPath } from "../../engine/contour/pen.js";
 import { TEMPLATES } from "../../shell/templates.js";
 import type { ContourIntegral } from "../../engine/contour/integrate.js";
 import { h, type Child } from "../dom.js";
 import { mathText } from "../math.js";
-import { card, type Card } from "./card.js";
+import { card, nothing, type Card } from "./card.js";
 
 /** The integral the current resolution computed, or null — the source of each piece's own value. */
 function integralOf(ctx: Parameters<Card>[0]): ContourIntegral | null {
@@ -29,6 +30,15 @@ function integralOf(ctx: Parameters<Card>[0]): ContourIntegral | null {
 
 export const contourCard: Card = (ctx) => {
   const { state, resolution, session, actions } = ctx;
+  // **The PIECE LIST is the record's contour, written out** — M8 step 3.4. At rung iii the stage
+  // already draws an empty piece list, because the record's contour is the answer to the rung's
+  // question; this card was printing the same contour in words, *the $R \to \infty$ semicircle
+  // (upper when $a > 0$)* and all, one card below the question asking which half-plane. Masking the
+  // drawing and leaving the caption is masking nothing, which is the lesson `drillMask`'s own
+  // header records about the ledger and the derivation.
+  if (drillMask(ctx) === "argument") {
+    return card("contour", nothing("Hidden: the contour is the question."));
+  }
   const sandbox = state.mode === "sandbox";
   // In gallery mode the contour is the RECORD's output, rebuilt on every run (M6.1's finding).
   const contour =

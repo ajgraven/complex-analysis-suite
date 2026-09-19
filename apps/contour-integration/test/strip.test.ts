@@ -17,6 +17,7 @@ import type { Contour } from "../src/engine/contour/model.js";
 import { compile, defaultState, resolveState, type ShellState } from "../src/shell/state.js";
 import type { Cx } from "../src/kernel/geom.js";
 import { defaultSession } from "../src/shell/session.js";
+import { taskById, taskState, type DrillTask } from "../src/shell/drill.js";
 import { createStripView, stepIndex, type StripDraw, type StripInput, type StripView } from "../src/shell/strip.js";
 import type { ContrastMode } from "../src/ui/accumulator.js";
 
@@ -256,6 +257,41 @@ describe("when there is nothing to accumulate", () => {
     // Not the generic fallback: the engine said why, and the panel repeated it.
     expect(none).toContain("lies on the contour");
     expect(none).not.toContain("there is nothing to accumulate");
+  });
+
+  it("and at the drill's rung iii, where the contour is the QUESTION — M8 step 3.4", () => {
+    // **The strip is a picture of the contour**, and rung iii masks the contour: the stage draws an
+    // empty piece list there, the ledger, the derivation and the value all say "hidden", and this
+    // canvas went on drawing the record's own walk — a semicircle, unmistakably — with
+    // `1.15565557035` printed beside it, which is `π/e` to eleven figures. Found by opening the
+    // rung in a browser, at the step that put a forced choice on it.
+    //
+    // Through the SAME path a refusal takes rather than a second branch, which is what this test
+    // pins: the canvas is cleared by `acc === null` and the sentence is the panel's one sentence,
+    // so a mask that cleared it some other way would be the masking-by-omission `drillPanel.ts`'s
+    // header warns about.
+    const { host, view } = mount();
+    const record = taskState(taskById("oscillatory") as DrillTask, 3);
+    const masked: StripDraw = {
+      state: record,
+      resolution: resolveState(record, compile(record.expr)),
+      session: defaultSession(),
+    };
+    view.drawNow(masked);
+    expect(text(host, "[data-testid=acc-none]")).toBe("Nothing is plotted — the contour is the question.");
+    // **`accumulation()` is NOT masked, and that is right rather than a gap.** It is the accessor
+    // the STAGE reads for the amplitwist step, which `stageView` gates on the same `drillMask`
+    // answer — so masking it here would be the second reader of one decision that `drillMask`'s own
+    // header exists to prevent. What is masked is the DRAWING, which is what a reader sees.
+    expect(view.accumulation(masked), "the walk is still computable, and not drawn").not.toBeNull();
+    expect(q(host, "[data-testid=acc-value]"), "and no partial sum, which is π/e at the end").toBe(null);
+
+    // **The pairing**: the same record at a rung that masks nothing draws the whole walk. Without
+    // it, "nothing is plotted" could be a record this strip cannot accumulate at all.
+    const open = { ...masked, state: taskState(taskById("oscillatory") as DrillTask, 1) };
+    view.drawNow(open);
+    expect(q(host, "[data-testid=acc-none]")).toBe(null);
+    expect(text(host, "[data-testid=acc-value]").length).toBeGreaterThan(3);
   });
 });
 

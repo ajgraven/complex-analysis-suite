@@ -25,15 +25,17 @@
 import type { FamilyRun } from "../families/runFamily.js";
 import {
   LAST_STAGE,
+  predictionOf,
   readProgress,
-  stageFor,
   withCleared,
+  withPrediction,
   writeProgress,
   type KeyStore,
 } from "./drillProgress.js";
 import {
   DISPOSALS,
-  DRILL_TASKS,
+  predictionFor,
+  type Prediction,
   VERIFIED_ROLE_TEMPLATES,
   allCorrect,
   checkDrawing,
@@ -192,10 +194,11 @@ function windingsNow(ctx: CardContext): readonly WindingRow[] {
  */
 export function drillPanel(ctx: CardContext): Desc | null {
   const rung = ctx.state.drill;
-  // The chooser, when the reader has pressed Drill and no rung is open. It is the drill's only door:
-  // before it existed `DRILL_TASKS` was reachable from a permalink and from nothing a reader could
-  // press, while the bar's own refusal named a panel nothing built.
-  if (rung === null) return ctx.session.drillPicker ? taskList(ctx) : null;
+  // **No rung, no card.** The chooser lived here between steps 1.7 and 3.4 and has moved to the
+  // front door's Practice tab, where the app's other "which one shall I open?" already is — so this
+  // card has ONE shape again. A card that was sometimes a menu and sometimes a rung shared an id
+  // between two things, and every reader of it had to know which.
+  if (rung === null) return null;
   const task = taskById(rung.task);
   // A link naming a task this build does not have. No card rather than an empty one: there is no
   // rung open, and a heading over nothing claims otherwise.
@@ -213,51 +216,6 @@ export function drillPanel(ctx: CardContext): Desc | null {
     footer(ctx, task, stage),
   ];
   return card("drill", ...body);
-}
-
-/**
- * The four tasks, each at the rung it has REACHED.
- *
- * The rung comes from `stageFor`, which reads the store — so a reader who cleared rung ii yesterday
- * is offered rung iii today, and a store that is absent, blocked or garbage reads as no progress
- * rather than throwing (`drillProgress.ts`'s own rule). The store is read ONCE here rather than per
- * task, so the four rows cannot describe different moments.
- */
-function taskList(ctx: CardContext): Desc {
-  const progress = readProgress(store());
-  return card(
-    "drill",
-    h(
-      "p",
-      { key: "ask", class: "muted small" },
-      "Four stages: the worked argument; the boundary terms to fill in; a choice of contour; a " +
-        "blank plane. Where you start is where you left off.",
-    ),
-    h(
-      "ul",
-      { key: "tasks", class: "pieces2" },
-      ...DRILL_TASKS.map((task) => {
-        const stage = stageFor(progress, task.id);
-        return h(
-          "li",
-          { key: task.id, class: "pickRow" },
-          h("span", { key: "n", class: "pieceName" }, ...mathText(task.label, `tl${task.id}`)),
-          h("span", { key: "r", class: "tag" }, `stage ${stage} of ${LAST_STAGE}`),
-          h(
-            "button",
-            {
-              key: "go",
-              // The SPOKEN twin, for the reason the rung-ii selects give: an accessible name
-              // carrying raw LaTeX is read aloud in the app's own source syntax.
-              "aria-label": `open ${task.labelText} at stage ${stage}`,
-              onClick: () => ctx.actions.applyState(taskState(task, stage)),
-            },
-            "Open",
-          ),
-        );
-      }),
-    ),
-  );
 }
 
 /** The rung's own question and controls. Exactly one of the four, by construction. */
@@ -425,6 +383,97 @@ function rungMenu(ctx: CardContext, task: DrillTask): readonly Child[] {
   const picked =
     ctx.state.mode === "sandbox" ? (task.menu.find((m) => m === ctx.state.contourSource?.template) ?? null) : null;
   const offered = task.menu.filter((m) => VERIFIED_ROLE_TEMPLATES.includes(m));
+
+  // **The prediction comes FIRST, and the menu does not exist until it is answered** — M8 step 3.4,
+  // research 02 §7. Committing to an answer and then being shown the argument is the whole device;
+  // a menu on screen beside the question would let a reader read the options for the answer, which
+  // is the one thing the ordering is for.
+  const prediction = run === null ? null : predictionFor(run);
+  if (prediction !== null) {
+    const rows = predictionRows(ctx, task, prediction);
+    // Answered or already on the record: the menu opens under the reveal. Unanswered: the question
+    // and nothing else.
+    if (!predictionAnswered(ctx, task)) return rows;
+    return [...rows, ...menuRows(ctx, task, run, picked, offered)];
+  }
+  return menuRows(ctx, task, run, picked, offered);
+}
+
+/** Has this rung's prediction been answered — now, or on a previous visit? */
+function predictionAnswered(ctx: CardContext, task: DrillTask): boolean {
+  return ctx.session.drillPredicted !== null || predictionOf(readProgress(store()), task.id) !== null;
+}
+
+/**
+ * The question, or the reveal once it has been answered.
+ *
+ * **The reveal is the LEDGER's row**, which is `drill.ts`'s job and not this file's: `predictionFor`
+ * reads both closures' verdicts and hands back the losing side's own sentence, so the reason a
+ * reader is shown here is the corpus's words rather than a gloss written beside the control.
+ *
+ * **A returning reader is not asked again.** `withPrediction` is first-answer-wins, so a second
+ * visit would either re-record the visit or refuse the click with no explanation; showing the
+ * reveal straight away says what happened and lets them get on. Their own pick is in the session
+ * when they have just made it and gone when they arrive by link, which is why the outcome — not
+ * the pick — is what the store keeps.
+ */
+function predictionRows(ctx: CardContext, task: DrillTask, prediction: Prediction): readonly Child[] {
+  const chosen = ctx.session.drillPredicted;
+  const before = predictionOf(readProgress(store()), task.id);
+  const answered = chosen !== null || before !== null;
+  const ok = chosen !== null ? chosen === prediction.answer : before === true;
+  const rows: Child[] = [
+    h(
+      "p",
+      { key: "pq", class: "muted small", "data-predict": prediction.kind },
+      ...mathText(prediction.question, `pq:${task.id}`),
+    ),
+    h(
+      "div",
+      { key: "po", class: "segmented", role: "group", "aria-label": mathPlain(prediction.question) },
+      ...prediction.options.map((option) =>
+        h(
+          "button",
+          {
+            key: option.id,
+            type: "button",
+            "data-predict-option": option.id,
+            "aria-pressed": chosen === option.id,
+            disabled: answered,
+            onClick: () => {
+              ctx.session.drillPredicted = option.id;
+              const s = store();
+              writeProgress(s, withPrediction(readProgress(s), task.id, option.id === prediction.answer));
+              ctx.actions.redraw();
+            },
+          },
+          option.label,
+        ),
+      ),
+    ),
+  ];
+  if (!answered) return rows;
+  rows.push(
+    h(
+      "p",
+      { key: "pv", class: "verdict", "data-predict-verdict": ok ? "right" : "wrong" },
+      h("span", { key: "t", class: ok ? "tag" : "tag warn" }, ok ? "right" : "wrong"),
+      // The ANSWER is named whether or not the reader had it, because a reader who was right still
+      // has to know which option the app agreed with — an unnamed "right" is a mark, not a reason.
+      ` — ${prediction.options.find((o) => o.id === prediction.answer)?.label ?? prediction.answer}: `,
+      ...mathText(prediction.because, `pb:${task.id}`),
+    ),
+  );
+  return rows;
+}
+
+function menuRows(
+  ctx: CardContext,
+  task: DrillTask,
+  run: FamilyRun | null,
+  picked: TemplateId | null,
+  offered: readonly TemplateId[],
+): readonly Child[] {
   const out: Child[] = [
     h(
       "p",

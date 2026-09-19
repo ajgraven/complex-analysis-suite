@@ -97,8 +97,18 @@ changed.
   is stated on the plane beside the arrows. Six defects, five of them found only by looking at a
   frame (see **Findings**) — including the arrows coming out `60/s²` px long because
   `camera.scale` is units-per-pixel and the engine wants pixels-per-unit.
-  **Next execution action: step 3.4** (the drill rehoused, with one prediction — a **Practice** tab
-  on the front door, `drill.ts`'s question data and a new `drillProgress` key version).
+  **3.4 is done.** The drill's task chooser is now a **Practice** tab on the front door (the rail
+  card has ONE shape again, and `session.drillPicker` is gone with it), and rung iii asks a
+  **prediction** before it offers its menu — the half-plane where the arc must lie, or, where no
+  half-plane closes, whether the contour encloses anything at all. Which question is asked is
+  DERIVED (both semicircles are run over the task's own integrand) rather than declared, the reason
+  is the losing side's own ledger row, and the answer is written once into a `ci.drill.v2` key that
+  reads `v1` as stages only. Eight defects (see **Findings**); the one that matters is that the rung
+  whose question is *which contour?* was printing the answer in FIVE places, and the whole app suite
+  stayed green through the repair.
+  **Next execution action: step 3.5** (contrasts rehoused — the five cells become a collapsible
+  strip of cards above the stage, applying state and highlighting the changed row; the 1.7 modal
+  removed).
   **Step 1.12 is done — THE CUTOVER.** `main.ts` stops choosing, the old `src/shell/app.ts` (3,700
   lines), `src/ui/app.css` and four of its test files are deleted, and `src/shell2/` has BECOME
   `src/shell/`. [`parity.md`](parity.md) is complete. The parity sweep found two capabilities the new
@@ -129,6 +139,8 @@ changed.
 
 | date | step | commit | notes |
 |---|---|---|---|
+| 2026-09-19 | **3.4** | (this commit) | **THE DRILL REHOUSED, AND RUNG iii ASKS BEFORE IT OFFERS.** The task chooser leaves the rail for a **Practice** tab on the front door (`DoorTab`, `openTask`, a stage mark and a complete mark per task), so the drill card has ONE shape again and `session.drillPicker` is deleted; and rung iii now puts a forced choice before its menu — `drill.ts`'s `predictionFor`, an option list, a reveal and a reason. **Which question is asked is DERIVED, not declared**: both semicircles are run over the task's own integrand, so a half-plane is offered exactly when one exists. Measured over the four tasks — `rational` closes BOTH ways (π either way: with no kernel nothing forces the side), `oscillatory` upper only, `forced-downward` lower only, and `indented` NEITHER, because its pole sits on the real axis and both semicircles fail LEGALITY before any limit is taken, which is what routes it to the enclosure question rather than a flag saying so. The reason on reveal is the losing side's own ledger row (`the lower semicircle diverges for $a = 1$`), or, where both sides answer, the two VALUES — the only form in which *either* is a claim. `drillProgress` goes to **`ci.drill.v2`**: `predicted` is tri-state on the wire, first-answer-wins, and `v1` is read as STAGES ONLY and never written, which is rule 1's exception rather than a lapse from it (the field `v1` lacks defaults to *not answered*, which is what a reader who has never seen the question already has). **AND THE RUNG WHOSE QUESTION IS *WHICH CONTOUR?* WAS PRINTING THE ANSWER IN FIVE PLACES** — the Target card's `= π/e`, the record's title naming Jordan's lemma, its strategy line giving the prediction's answer in words, the Contour card's *(upper when $a > 0$)*, the Singularities table's `Ind` column, and the accumulator drawing the record's own semicircle with `1.15565557035` under it. `drillMask("argument")` gains four readers, the strip going through the SAME path a refusal takes; **the whole app suite stayed green through the repair**, so each reader arrives with its own assertion and a pairing that shows the same record unmasked outside the drill. Look: [`3.4-practice-tab-1440x950.png`](screens/3.4-practice-tab-1440x950.png) · [`3.4-prediction-1440x950.png`](screens/3.4-prediction-1440x950.png) · [`3.4-prediction-revealed-1440x950.png`](screens/3.4-prediction-revealed-1440x950.png). Sweep **20/21, one recorded equivalent** (dropping the `decided` guard from the enclosure count is unobservable — all four `decided: false` returns in `kernel/winding.ts` carry `n: 0`, checked rather than recalled; M6.4's equivalent in a new reader). Full gate green: **582 files / 6,258 tests**, lint, typecheck and build silent; app suite re-run green after the sweep restored the tree (131 files / 2,467 tests); a11y roster clean with a new `contour-integration-predict` entry, and four non-default states hand-audited clean |
+
 | 2026-09-14 | review | 3f3c9da | review published; working materials under `review-inputs/` |
 | 2026-09-15 | plan Part 1 | 5efe5b9 | §0–§3, ADR-0043, CLAUDE.md pointer; the brief's "even" sentence corrected |
 | 2026-09-15 | plan Part 2 | a50b5ed | §4, Phase 1 in full: architecture, thirteen steps, ten suggested sessions |
@@ -202,6 +214,83 @@ changed.
 | 2026-09-15 | **0.5b-ii** | 573fb8c | the five rules through `kernel/bounds/*`, the three theorem identities, `derivation.ts`'s solve stage and `solveTarget.ts`; `latex` on the solved value; 65 wording-pinned tests updated; 191 → 152 flagged |
 
 ## Findings (things learned while executing; each names its step)
+
+- **(3.4) THE RUNG WHOSE QUESTION IS "WHICH CONTOUR?" WAS PRINTING THE ANSWER, IN FIVE PLACES.** The
+  drill card's own sentence at rung iii is *"Only the integral is given"*, and what was given — read
+  off a browser, not off the code — was the Target card's closed form (`= π/e`), the record's TITLE
+  naming the lemma (*by Jordan's lemma*), its strategy line (*closed by $\Gamma_R$ in the half-plane
+  $a\operatorname{Im} z \ge 0$*, which is the prediction's answer in words), the Contour card's piece
+  list (*the $R \to \infty$ semicircle (upper when $a > 0$)*), the Singularities table's
+  `Ind(γ, z₀)` column (1 beside the upper pole, 0 beside the lower), and the **accumulator drawing
+  the record's own semicircle with `1.15565557035` under it — `π/e` to eleven figures**. All of it
+  older than this step, and the step is what made it acute: a forced choice whose answer is three
+  inches to the left is a reading exercise. `drillMask` gains four readers, and each takes the form
+  the mask already had — the strip goes through the SAME path a refusal takes (`acc === null` clears
+  the canvas and prints one sentence), because a mask that cleared it some other way would be the
+  masking-by-omission `drillPanel.ts`'s own header warns about. **The whole app suite stayed green
+  through the repair**, which is the finding under the finding: nothing asserted any of it, so the
+  mask's four new readers arrived with their own assertions and the pairing that makes them claims —
+  the same record outside the drill shows all of it back.
+
+- **(3.4) The prediction's QUESTION is derived from the ledgers, not declared — and so is which
+  question gets asked.** The plan named the two ("the half-plane one, except the indented task gets
+  the enclosure one"), and declaring that would be a fifth thing to keep in step with the corpus.
+  `predictionFor` runs both semicircles over the task's own integrand instead: if either closes with
+  the target on it there is a half-plane to choose, and if neither does there is no side to ask
+  about. Measured over the four tasks — `rational` answers in BOTH (π either way; nothing forces the
+  side without a kernel), `oscillatory` upper only, `forced-downward` lower only, and `indented`
+  neither, because its pole sits ON the real axis so both semicircles fail LEGALITY before any limit
+  is taken. That last case is the routing, not a special case for it.
+
+- **(3.4) And the REASON is the ledger's own row, except where there is no losing row to quote.**
+  `oscillatory`'s reveal says *"the lower semicircle diverges for $a = 1$"* — the corpus's sentence,
+  not a gloss written beside the control. Where both sides answer there is no failing row at all,
+  and the honest reason is then the two VALUES, which is also the only form in which "either" is a
+  claim rather than a shrug. The right option is named whether or not the reader had it, because an
+  unnamed "right" is a mark and not a reason.
+
+- **(3.4) `v1` IS read, and that is the exception its own rule permits rather than a lapse from it.**
+  `drillProgress.ts` rule 1 says a schema change takes a new key rather than a migration, and its
+  reason is the clause after the colon — *a half-read stale shape that silently un-fades a rung*.
+  Reading `v1` cannot un-fade anything: the stage is exactly what `v1` carries, and the field it does
+  not carry (`predicted`) defaults to "not answered", which is what a reader who has never seen the
+  question already has. The half the rule does forbid is still not done — every write goes to `v2` —
+  and `v1` is a FALLBACK rather than a merge: a readable `v2` wins outright, so an old value can
+  never reach back into a reader who has started under the new shape. `predicted` is tri-state on the
+  wire too (`predicted: "yes"` is not evidence either way), and first-answer-wins, because a store
+  that flipped on a revisit would be recording the visit rather than the prediction.
+
+- **(3.4) The chooser moved to the front door, and the card has ONE shape again.** It was a rail card
+  that was sometimes a menu and sometimes a rung, sharing an id between two things, with a session
+  flag whose only job was to say which — so every reader of the drill card had to know. The Practice
+  tab puts it where the app's other *which one shall I open?* already lives, and a task now opens the
+  way a record does. `session.drillPicker` is gone with it.
+
+- **(3.4) The test that guarded `drillPicker` could not survive the move, and saying why is the
+  point.** It drove "press Drill, then press Explore" to prove the chooser was put away. The dialog
+  is MODAL and `inert`s the page behind it, so that sequence is one only a test can perform — a
+  reader cannot reach the bar while the list is up. What replaces it is the two claims that are now
+  load-bearing: the bar's Drill segment opens the door on the right TAB, and dismissing it leaves no
+  flag set.
+
+- **(3.4) Two verdicts on one card, and the selector could not tell them apart.** `drillPanel.test`'s
+  `.verdict .tag` had been the menu's mark; the prediction's reveal is also a `.verdict` carrying a
+  `.tag`, and it comes first — so the assertion went from `answers` to `right`, which is the
+  prediction's word. Found by the assertion failing rather than by reading, and the repair is a
+  selector that names which verdict it means.
+
+- **(3.4) The accumulator's mask had to be asserted in `strip.test.ts`, not at the shell.** The strip
+  draws on a COALESCED frame (`schedule`, not `drawNow`), so in jsdom it has drawn nothing at all by
+  the time a shell test reads it — and an assertion that passes because a canvas is empty for an
+  unrelated reason is exactly the vacuity these files forbid. The shell test says so where the
+  assertion would have gone.
+
+- **(3.4) The sweep's one survivor is M6.4's equivalent again, in a new reader.** Dropping the
+  `decided` guard from `predictionFor`'s enclosure count changes nothing, because every
+  `decided: false` return in `kernel/winding.ts` carries `n: 0` — checked, all four of them, rather
+  than taken from the note that recorded it the first time. The guard stays for the reason M6.4 kept
+  its own: a question put to a reader should not rest on an invariant established in another module,
+  and a synthetic `{ decided: false, n: 1 }` would be a run the engine cannot produce. **20/21.**
 
 - **(3.3) THE MAGNIFICATION WAS OFF BY `s²`, AND THE TYPE SYSTEM COULD NOT SAY SO.**
   `kernel/camera.ts`'s `scale(view, vp)` is plot units per PIXEL; `stepDetail` takes pixels per

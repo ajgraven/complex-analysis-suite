@@ -86,7 +86,21 @@ const task = (id: string): DrillTask => {
 };
 
 /** Press the bar's Drill segment, which is the drill's only door for a reader. */
+/**
+ * Press Drill with no rung open — which since M8 step 3.4 opens the FRONT DOOR's Practice tab.
+ *
+ * The chooser was a rail card between steps 1.7 and 3.4 and is now a tab in the dialog the app's
+ * other "which one shall I open?" already lives in, so these tests read the dialog. The helper is
+ * the only thing that knows that, which is why the assertions below did not have to change with it.
+ */
 const openPicker = (app: Shell2Handle): void => app.actions().setMode("drill");
+
+/** The Practice list, wherever the dialog mounted it — it is a sibling of the shell, not a child. */
+const practicePanel = (): HTMLElement => {
+  const el = document.querySelector<HTMLElement>(".doorTasks");
+  if (el === null) throw new Error("the Practice list is not on screen");
+  return el;
+};
 
 /**
  * The chooser's row for a task, found by the words on its own button.
@@ -95,8 +109,8 @@ const openPicker = (app: Shell2Handle): void => app.actions().setMode("drill");
  * `oscillatory`'s (`∫ cos x/(x²+1) dx, a < 0`) — a `textContent.includes` matches both, and the row
  * a test then reads is whichever came first.
  */
-function taskRow(root: ParentNode, label: string): { row: HTMLElement; open: HTMLButtonElement } {
-  const open = [...root.querySelectorAll<HTMLButtonElement>('[data-card="drill"] button')].find((b) =>
+function taskRow(_root: ParentNode, label: string): { row: HTMLElement; open: HTMLButtonElement } {
+  const open = [...document.querySelectorAll<HTMLButtonElement>(".doorTasks button")].find((b) =>
     (b.getAttribute("aria-label") ?? "").startsWith(`open ${label} at stage `),
   );
   const row = open?.closest("li");
@@ -140,13 +154,15 @@ describe("the drill's own surface", () => {
     const { root, app } = mount();
     expect(drillCard(root), "nothing is offered until the reader asks").toBeNull();
     openPicker(app);
-    const card = theDrillCard(root);
-    const rows = [...card.querySelectorAll("li")];
+    const rows = [...practicePanel().querySelectorAll("li")];
     expect(rows).toHaveLength(DRILL_TASKS.length);
     // Nothing cleared yet, so every task opens at stage 1 — the worked example.
     for (const li of rows) expect(textOf(li)).toContain("stage 1 of 4");
-    // **Still not IN the drill**: the chooser is a session flag and `shellMode` says Drill when a
-    // RUNG is open, so a reader picking a task has nothing masked and nothing to leave.
+    // **The rail card is still absent**, which is the shape of the change: the drill's card has one
+    // meaning again (a rung is open) rather than two (a rung, or a menu) sharing an id.
+    expect(drillCard(root), "the chooser is the dialog's, not the rail's").toBeNull();
+    // **Still not IN the drill**: `shellMode` says Drill when a RUNG is open, so a reader picking a
+    // task has nothing masked and nothing to leave.
     expect(app.currentState().drill).toBeNull();
   });
 
@@ -255,9 +271,188 @@ describe("rung iii — the whole argument is masked", () => {
     expect(constraints(root)).toHaveLength(0);
     expect(textOf(q(root, '[data-card="result"]'))).toContain("Hidden");
     expect(textOf(q(root, '[data-card="derivation"]'))).toContain("Hidden");
+
+    // **THE LEFT RAIL WAS GIVING THE ANSWER AWAY, in four places** — M8 step 3.4, found by opening
+    // the rung in a browser and reading the page rather than the card. The drill's own sentence at
+    // this rung is *"Only the integral is given"*, and what was given was: the closed form
+    // (`= π/e`) on the Target card, its strategy line (*closed by $\Gamma_R$ in the half-plane
+    // $a\operatorname{Im} z \ge 0$*, which is the prediction's answer in words), the Contour
+    // card's piece list (*the $R \to \infty$ semicircle (upper when $a > 0$)*), the Singularities
+    // table's `Ind(γ, z₀)` column (1 beside the upper pole, 0 beside the lower), and the
+    // accumulator drawing the record's own semicircle with `1.15565557035` under it — `π/e` to
+    // eleven figures. Older than this step; the step is what made it acute, because a forced choice
+    // whose answer is three inches to the left is a reading exercise.
+    //
+    // The accumulator's half is asserted in `strip.test.ts` rather than here: the strip draws on a
+    // COALESCED frame (`schedule`, not `drawNow`), so in jsdom it has drawn nothing at all by the
+    // time this runs — and an assertion that passes because a canvas is empty for an unrelated
+    // reason is the vacuity this file's own style forbids.
+    const target = textOf(q(root, '[data-card="target"]'));
+    expect(target, "the integral IS the question and stays").toContain("cos");
+    for (const given of ["Jordan", "half-plane", "pi/e"]) {
+      expect(target, `the target card still says '${given}'`).not.toContain(given);
+    }
+    expect(textOf(q(root, '[data-card="contour"]'))).toContain("Hidden");
+    // The poles STAY — at the rung whose question is "which contour?" they are the question's data,
+    // which is `stageView.ts`'s own reason for still drawing them — and the winding column goes,
+    // because which of them the record's contour encloses is its answer.
+    const sing = q(root, '[data-card="singularities"]');
+    const winding = (): string[] =>
+      [...sing.querySelectorAll("tbody tr")].map((tr) => (tr.querySelector("td:last-child")?.textContent ?? "").trim());
+    expect(sing.querySelectorAll("tbody tr").length, "the poles are the question's data").toBeGreaterThan(0);
+    // The em-dash `integrateContour` already prints for a winding nobody decided — the same cell,
+    // rather than a second empty state that could come to differ from it.
+    expect(winding().every((w) => w === "—"), `windings read ${winding().join("/")}`).toBe(true);
+
     // The rung's own question is still on screen — a masked page with nothing asking anything is
-    // just a broken one.
-    expect(theDrillCard(root).querySelectorAll('[aria-label^="close over"]').length).toBeGreaterThan(0);
+    // just a broken one. Since M8 step 3.4 that question is the PREDICTION, and the contour menu
+    // does not exist until it is answered, so the assertion is the prediction's options and the
+    // menu's appearance afterwards.
+    expect(theDrillCard(root).querySelectorAll("[data-predict-option]").length).toBeGreaterThan(0);
+
+    // **The pairing, and it is what makes every line above a claim about the RUNG**: the same
+    // record outside the drill shows all of it. Asserted LAST, because leaving the drill takes the
+    // card with it.
+    app.applyState({ ...app.currentState(), drill: null });
+    // In jsdom KaTeX does not typeset, so what a card's `textContent` carries is the LaTeX SOURCE
+    // and the `label` beside it — which is why the closed form reads `pi/e` here and `π/e` on
+    // screen. Asserted in the form this environment actually produces rather than the one a browser
+    // would, because a test that asserted the rendered glyph would pass by never finding it.
+    const open = textOf(q(root, '[data-card="target"]'));
+    expect(open, "the closed form is back").toContain("pi/e");
+    expect(open, "and so is the strategy line the prediction asks about").toContain("half-plane");
+    expect(winding(), "and the windings are back — 1 about the enclosed pole").toContain("1");
+    expect(textOf(q(root, '[data-card="contour"]')), "the piece list is back").not.toContain("Hidden");
+    expect(drillCard(root), "and the drill card goes with the rung").toBeNull();
+  });
+});
+
+describe("rung iii's PREDICTION — M8 step 3.4", () => {
+  /** The prediction's option buttons, and the reveal once there is one. */
+  const options = (root: ParentNode): HTMLButtonElement[] =>
+    [...theDrillCard(root).querySelectorAll<HTMLButtonElement>("[data-predict-option]")];
+  const menu = (root: ParentNode): Element[] => [...theDrillCard(root).querySelectorAll('[aria-label^="close over"]')];
+  const reveal = (root: ParentNode): HTMLElement | null =>
+    theDrillCard(root).querySelector<HTMLElement>("[data-predict-verdict]");
+  /** The reveal, or a refusal — so a missing one names itself rather than reading as empty text. */
+  function said(root: ParentNode): HTMLElement {
+    const el = reveal(root);
+    if (el === null) throw new Error("the prediction was answered and there is no reveal");
+    return el;
+  }
+
+  it("asks BEFORE the menu exists, which is the whole ordering", () => {
+    // Research 02 §7: commit to an answer, then be shown the argument. A menu on screen beside the
+    // question would let a reader read the options for the answer — which is the one thing the
+    // ordering is for — so the assertion is that the menu is ABSENT and not merely below it.
+    const { root, app } = mount();
+    app.applyState(taskState(task("oscillatory"), 3));
+    expect(`options ${options(root).length}, menu ${menu(root).length}`).toBe("options 3, menu 0");
+    options(root)[0].click();
+    expect(`after answering — menu ${menu(root).length > 0}`).toBe("after answering — menu true");
+  });
+
+  it("routes the QUESTION off the ledgers, not off a declared field", () => {
+    // The three kernel tasks get the half-plane question because at least one semicircle closes with
+    // the target on it; `indented` gets the enclosure question because NEITHER does — its pole sits
+    // on the real axis, so both semicircles fail LEGALITY before any limit is taken. Measured over
+    // the four, which is the pairing: a router that asked one question everywhere would fail here.
+    const seen: string[] = [];
+    for (const id of ["rational", "oscillatory", "forced-downward", "indented"]) {
+      const { root, app } = mount();
+      app.applyState(taskState(task(id), 3));
+      const ask = theDrillCard(root).querySelector("[data-predict]");
+      seen.push(`${id}:${ask?.getAttribute("data-predict") ?? "none"}/${options(root).length}`);
+    }
+    expect(seen).toEqual([
+      "rational:half-plane/3",
+      "oscillatory:half-plane/3",
+      "forced-downward:half-plane/3",
+      "indented:encloses/2",
+    ]);
+  });
+
+  it("grades against the two closures, and gives the LEDGER's row as the reason", () => {
+    // `oscillatory` is `e^{iz}/(z²+1)`: the upper semicircle closes and the lower diverges, so the
+    // right answer is `upper` and the reason is the lower side's own failing row. Nothing here
+    // compares strings against a declared answer — `predictionFor` runs both templates.
+    const { root, app } = mount();
+    app.applyState(taskState(task("oscillatory"), 3));
+    const lower = options(root).find((b) => b.getAttribute("data-predict-option") === "lower");
+    expect(lower).toBeDefined();
+    lower?.click();
+    const shown = said(root);
+    expect(`verdict ${shown.getAttribute("data-predict-verdict") ?? "none"}`).toBe("verdict wrong");
+    // The ledger's own sentence, which is what makes this a reason rather than a mark.
+    expect(textOf(shown)).toContain("the lower semicircle diverges");
+    // And the right option is NAMED even on a wrong answer, so a reader knows what the app agreed
+    // with rather than only that they did not.
+    expect(textOf(shown)).toContain("the upper half-plane");
+  });
+
+  it("says `either` where the ledgers do, with both values rather than a shrug", () => {
+    // Measured: `1/(z²+1)` closes in BOTH half-planes and reports π either way — nothing forces the
+    // side without a kernel. There is then no failing row to quote, so the reason is the two values,
+    // which is the only form in which "either" is a claim.
+    const { root, app } = mount();
+    app.applyState(taskState(task("rational"), 3));
+    options(root).find((b) => b.getAttribute("data-predict-option") === "either")?.click();
+    const shown = said(root);
+    expect(`verdict ${shown.getAttribute("data-predict-verdict") ?? "none"}`).toBe("verdict right");
+    expect(textOf(shown)).toContain("Both close");
+  });
+
+  it("answers the enclosure question from the record's own windings", () => {
+    // `indented` is `e^{iz}/z`: the closed contour encloses NOTHING, and its whole value comes from
+    // the limit the indentation takes. A reader who expects a residue is exactly the reader this
+    // record is for, so `yes` is the interesting wrong answer.
+    const { root, app } = mount();
+    app.applyState(taskState(task("indented"), 3));
+    options(root).find((b) => b.getAttribute("data-predict-option") === "yes")?.click();
+    const shown = said(root);
+    expect(`verdict ${shown.getAttribute("data-predict-verdict") ?? "none"}`).toBe("verdict wrong");
+    expect(textOf(shown)).toContain("No singularity is enclosed");
+  });
+
+  it("is recorded ONCE and not asked again on a revisit", () => {
+    // `withPrediction` is first-answer-wins, so a second visit would either re-record the visit or
+    // refuse the click with no explanation. The rung shows the reveal straight away instead — and
+    // the SESSION's own pick is gone (a link carries no answer), so what is being read is the store.
+    const first = mount();
+    first.app.applyState(taskState(task("oscillatory"), 3));
+    options(first.root).find((b) => b.getAttribute("data-predict-option") === "upper")?.click();
+    expect(readProgress(window.localStorage).oscillatory?.predicted).toBe(true);
+
+    const second = mount();
+    second.app.applyState(taskState(task("oscillatory"), 3));
+    expect(`revisit — reveal ${reveal(second.root) !== null}, menu ${menu(second.root).length > 0}`).toBe(
+      "revisit — reveal true, menu true",
+    );
+    // Every option is disabled, so the question cannot be answered twice — and the pairing is the
+    // FIRST visit above, where they were live.
+    expect(options(second.root).every((b) => b.disabled)).toBe(true);
+    // A wrong first answer is still an answer: it is not re-offered until it is right.
+    const third = mount();
+    third.app.applyState(taskState(task("rational"), 3));
+    options(third.root).find((b) => b.getAttribute("data-predict-option") === "upper")?.click();
+    expect(readProgress(window.localStorage).rational?.predicted).toBe(false);
+    const fourth = mount();
+    fourth.app.applyState(taskState(task("rational"), 3));
+    expect(options(fourth.root).every((b) => b.disabled)).toBe(true);
+  });
+
+  it("does not carry a pick into another rung or another task", () => {
+    // M7.4's finding in its own shape: `drillGraded` outlived its rung because a shell local was not
+    // cleared on `applyState`. `drillPredicted` is in the session for exactly that reason, so the
+    // claim is that leaving the rung takes the pick with it.
+    const { root, app } = mount();
+    app.applyState(taskState(task("oscillatory"), 3));
+    options(root).find((b) => b.getAttribute("data-predict-option") === "upper")?.click();
+    expect(app.session().drillPredicted).toBe("upper");
+    app.applyState(taskState(task("forced-downward"), 3));
+    expect(app.session().drillPredicted).toBeNull();
+    // And the new task's question is live, because its own outcome is not on the record yet.
+    expect(options(root).every((b) => !b.disabled)).toBe(true);
   });
 });
 
@@ -346,7 +541,7 @@ describe("the fade", () => {
     taskRow(first.root, "∫ cos x/(x²+1) dx").open.click();
     // Reading the worked argument IS rung i's task, so moving off it clears it.
     clickExact(theDrillCard(first.root), "Next stage");
-    expect(readProgress(window.localStorage).oscillatory).toBe(1);
+    expect(readProgress(window.localStorage).oscillatory).toEqual({ stage: 1 });
 
     // A FRESH app, which knows nothing of the above: the store is the only thing carried over.
     const second = mount();
@@ -367,11 +562,11 @@ describe("the fade", () => {
     window.localStorage.setItem(PROGRESS_KEY, "{not json");
     const { root, app } = mount();
     expect(() => openPicker(app)).not.toThrow();
-    for (const li of theDrillCard(root).querySelectorAll("li")) expect(textOf(li)).toContain("stage 1 of 4");
+    for (const li of practicePanel().querySelectorAll("li")) expect(textOf(li)).toContain("stage 1 of 4");
 
     taskRow(root, "∫ cos x/(x²+1) dx").open.click();
     clickExact(theDrillCard(root), "Next stage");
-    expect(readProgress(window.localStorage)).toEqual({ oscillatory: 1 });
+    expect(readProgress(window.localStorage)).toEqual({ oscillatory: { stage: 1 } });
   });
 
   it("does not carry a GRADING into another rung, however the rung changes", () => {
@@ -421,22 +616,35 @@ describe("the fade", () => {
     expect(textOf(q(root, '[data-card="derivation"]'))).not.toContain("Hidden");
   });
 
-  it("puts the CHOOSER away on Explore, not only the rung", () => {
-    // **The mutant this kills**: `setMode`'s `session.drillPicker = false`, the line before its final
-    // `commit`, removed. Pressing Drill with no rung open is the chooser's only door and the only
-    // thing that raises the flag, so it is also the only route on which clearing it is observable —
-    // reaching a rung by `applyState` or by a link never sets it, which is why the test above claims
-    // the property and passes without it. A list left standing after the reader said Explore is a
-    // menu outliving its mode, over the page they asked to be given back.
-    const { root } = mount();
+  it("opens the chooser on the front door's PRACTICE tab, and leaves nothing behind", () => {
+    // **The test this replaces guarded `session.drillPicker = false` in `setMode`**, and that flag
+    // is gone with the rail chooser: pressing Drill with no rung open now opens the front door on
+    // its Practice tab, which is where the app's other "which one shall I open?" already lives.
+    //
+    // The old defect cannot recur in its old shape, and measuring is how that was established
+    // rather than assumed: the dialog is MODAL and `inert`s the page behind it, so a reader cannot
+    // reach the bar to press Explore while the list is up — the sequence the old test drove is one
+    // only a test can perform. What replaces it is the two claims that are now load-bearing: the
+    // door opens on the right TAB (a bar segment naming Practice that showed Records would be one
+    // control opening the wrong panel), and dismissing it leaves no flag set.
+    const { root, app } = mount();
     const press = (label: string): void => clickExact(q(root, '[data-testid="mode"]'), label);
 
     press("Drill");
-    expect(theDrillCard(root).querySelectorAll("li"), "the chooser is on screen to be put away").toHaveLength(
+    expect(practicePanel().querySelectorAll("li"), "the tasks are on screen to be chosen").toHaveLength(
       DRILL_TASKS.length,
     );
+    const selected = [...document.querySelectorAll('[role="tab"]')].filter((t) => t.getAttribute("aria-selected") === "true");
+    expect(selected.map((t) => t.getAttribute("data-tab"))).toEqual(["practice"]);
+    expect(app.currentState().drill, "choosing is not yet being IN the drill").toBeNull();
 
-    press("Explore");
-    expect(drillCard(root), "Explore means the same thing from the chooser as from a rung").toBeNull();
+    // Dismissing is the reader's own Escape, and it must leave the shell's flag down — the dialog
+    // and the session agreeing is what `close` exists for. Dispatched on the dialog rather than on
+    // the document, which is where `modal.ts` listens and deliberately so: it stops the event
+    // there, because the stage's own Escape abandons a half-drawn pen path and a reader shutting a
+    // dialog over the stage did not ask for that.
+    practicePanel().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(app.session().frontDoorOpen).toBe(false);
+    expect(drillCard(root), "no rung was opened, so no card").toBeNull();
   });
 });

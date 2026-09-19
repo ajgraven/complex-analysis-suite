@@ -32,14 +32,18 @@ import {
   type WindingRow,
 } from "../src/shell/drill.js";
 import {
+  LEGACY_KEY,
   clearedOf,
   isComplete,
   NO_PROGRESS,
   PROGRESS_KEY,
+  predictionOf,
   readProgress,
   stageFor,
   withCleared,
+  withPrediction,
   writeProgress,
+  type DrillProgress,
   type KeyStore,
 } from "../src/shell/drillProgress.js";
 import { CONTRAST_CELLS } from "../src/shell/contrastGrid.js";
@@ -543,9 +547,10 @@ describe("every rung is ADDRESSABLE — M7's gate clause 2", () => {
 });
 
 describe("progress — the fade", () => {
-  const store = (value?: string): KeyStore => {
+  const store = (value?: string, legacy?: string): KeyStore => {
     const map = new Map<string, string>();
     if (value !== undefined) map.set(PROGRESS_KEY, value);
+    if (legacy !== undefined) map.set(LEGACY_KEY, legacy);
     return {
       getItem: (k) => map.get(k) ?? null,
       setItem: (k, v) => {
@@ -561,10 +566,61 @@ describe("progress — the fade", () => {
     expect(readProgress(store("[1,2,3]"))).toEqual(NO_PROGRESS);
     expect(readProgress(store("null"))).toEqual(NO_PROGRESS);
     expect(readProgress(store("42"))).toEqual(NO_PROGRESS);
-    // A single bad entry is dropped; its neighbours are not evidence about it.
-    expect(readProgress(store('{"rational":2,"oscillatory":"lots","indented":9,"forced-downward":-1}'))).toEqual({
-      rational: 2,
-    });
+    // A single bad entry is dropped; its neighbours are not evidence about it. Under `v2` an entry
+    // is an OBJECT, so a bare number is now one of the shapes that goes — and `predicted` is
+    // tri-state on the wire too, because `predicted: "yes"` is not evidence about the prediction
+    // either way and reading it as `true` would invent one.
+    expect(
+      readProgress(
+        store(
+          '{"rational":{"stage":2},"oscillatory":{"stage":"lots"},"indented":9,' +
+            '"forced-downward":{"stage":1,"predicted":"yes"},"wedge":{"stage":3,"predicted":false}}',
+        ),
+      ),
+    ).toEqual({ rational: { stage: 2 }, "forced-downward": { stage: 1 }, wedge: { stage: 3, predicted: false } });
+  });
+
+  it("reads a `v1` value as STAGES ONLY, and never writes one back — M8 step 3.4", () => {
+    // The module's rule 1 says a schema change takes a new key rather than a migration, and its
+    // reason is the clause after the colon: a half-read stale shape that silently UN-FADES a rung.
+    // Reading `v1` cannot un-fade anything — the stage is exactly what `v1` carries, and the field
+    // it does not carry defaults to "not answered", which is what a reader who has never seen the
+    // question already has. So this is the exception the rule's own reason permits, and the half it
+    // does not permit is asserted below: the write goes to `v2`.
+    const s = store(undefined, '{"rational":3,"indented":1}');
+    expect(readProgress(s)).toEqual({ rational: { stage: 3 }, indented: { stage: 1 } });
+    expect(predictionOf(readProgress(s), "rational")).toBeNull();
+
+    // **A fallback, not a merge**: a readable `v2` wins outright, so an old value can never reach
+    // back into a reader who has started under the new shape.
+    const both = store('{"rational":{"stage":1,"predicted":true}}', '{"rational":3,"indented":1}');
+    expect(readProgress(both)).toEqual({ rational: { stage: 1, predicted: true } });
+
+    // And the write is `v2`'s. Asserted on the STORE rather than on a round trip, because a round
+    // trip through a module that read and wrote `v1` would pass.
+    const keys = new Map<string, string>();
+    const spy: KeyStore = { getItem: (k) => keys.get(k) ?? null, setItem: (k, v) => void keys.set(k, v) };
+    writeProgress(spy, { rational: { stage: 2, predicted: false } });
+    expect([...keys.keys()]).toEqual([PROGRESS_KEY]);
+    expect(keys.get(LEGACY_KEY)).toBeUndefined();
+  });
+
+  it("records the prediction once, and does not confuse `false` with unanswered", () => {
+    let p: DrillProgress = NO_PROGRESS;
+    expect(predictionOf(p, "rational")).toBeNull();
+    p = withPrediction(p, "rational", false);
+    // `false` is an ANSWER. A reader who got it wrong has answered, and offering the question again
+    // would be asking them to guess until they hit it.
+    expect(predictionOf(p, "rational")).toBe(false);
+    p = withPrediction(p, "rational", true);
+    expect(`first answer wins: ${String(predictionOf(p, "rational"))}`).toBe("first answer wins: false");
+    // Clearing a rung is not evidence about the prediction, and the spread keeps it.
+    p = withCleared(p, "rational", 3);
+    expect(p.rational).toEqual({ stage: 3, predicted: false });
+    // And a prediction on a task with no stage yet leaves the stage at 0 rather than inventing one.
+    const fresh = withPrediction(NO_PROGRESS, "indented", true);
+    expect(fresh.indented).toEqual({ stage: 0, predicted: true });
+    expect(stageFor(fresh, "indented")).toBe(1);
   });
 
   it("survives a store that THROWS, on read and on write", () => {
@@ -578,10 +634,10 @@ describe("progress — the fade", () => {
     };
     expect(readProgress(hostile)).toEqual(NO_PROGRESS);
     expect(() => {
-      writeProgress(hostile, { rational: 1 });
+      writeProgress(hostile, { rational: { stage: 1 } });
     }).not.toThrow();
     expect(() => {
-      writeProgress(null, { rational: 1 });
+      writeProgress(null, { rational: { stage: 1 } });
     }).not.toThrow();
   });
 
@@ -605,8 +661,8 @@ describe("progress — the fade", () => {
 
   it("round-trips through a store", () => {
     const s = store();
-    writeProgress(s, { rational: 2, indented: 4 });
-    expect(readProgress(s)).toEqual({ rational: 2, indented: 4 });
+    writeProgress(s, { rational: { stage: 2 }, indented: { stage: 4, predicted: true } });
+    expect(readProgress(s)).toEqual({ rational: { stage: 2 }, indented: { stage: 4, predicted: true } });
   });
 
   it("uses a VERSIONED key, so a future shape cannot be half-read", () => {

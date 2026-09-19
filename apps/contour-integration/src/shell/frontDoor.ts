@@ -17,7 +17,9 @@ import { identityLatex, identityText } from "../families/latex.js";
 import { TAXONOMY_SECTIONS, type Family, type TaxonomySection } from "../families/schema.js";
 import type { ShellState } from "./state.js";
 import { h, patch, type Child, type Desc } from "./dom.js";
-import { math, mathText } from "./math.js";
+import { DRILL_TASKS, type DrillTask } from "./drill.js";
+import { LAST_STAGE, isComplete, readProgress, stageFor, type KeyStore } from "./drillProgress.js";
+import { math, mathPlain, mathText } from "./math.js";
 import { createModal } from "./modal.js";
 
 /**
@@ -57,11 +59,39 @@ export interface FrontDoorInput {
    * the pixels, not the element.
    */
   readonly thumbnail: (recordId: string) => HTMLCanvasElement | null;
+  /** The drill's progress store, or null where there is none (a private window, a test). */
+  readonly progressStore: () => KeyStore | null;
+  /** Open a drill task at the rung it has reached. The shell's `applyState`. */
+  readonly openTask: (task: DrillTask, stage: 1 | 2 | 3 | 4) => void;
 }
 
+/**
+ * Which half of the dialog is on screen.
+ *
+ * Two tabs rather than two dialogs, because both are the same gesture — *show me something to
+ * work on* — and a reader who opened the wrong one would otherwise have to shut a modal, find a
+ * different control in the bar and open another. The bar's two segments name the tab they want;
+ * see {@link FrontDoorDialog.open}.
+ */
+export type DoorTab = "records" | "practice";
+
+/** The tabs, in strip order. The ARROW keys move along this list, so it is the one order. */
+const TABS: readonly { readonly id: DoorTab; readonly label: string }[] = [
+  { id: "records", label: "Records" },
+  { id: "practice", label: "Practice" },
+];
+
 export interface FrontDoorDialog {
-  /** Show it. Traps focus, makes the rest of the page `inert`, remembers what to return focus to. */
-  open(): void;
+  /**
+   * Show it, on the named tab. Traps focus, makes the rest of the page `inert`, remembers what to
+   * return focus to.
+   *
+   * **No argument is `"records"`, not "whatever was selected last time".** Every caller is a bar
+   * segment naming what it wants, so a remembered tab would make one control open two different
+   * panels depending on a gesture the reader made minutes ago — and the no-argument call then
+   * shows exactly what this dialog showed before the strip existed.
+   */
+  open(tab?: DoorTab): void;
   /** Hide it, restore `inert`, and put focus back where it was. Idempotent. */
   close(): void;
   readonly isOpen: boolean;
@@ -189,6 +219,16 @@ function cardOf(family: Family, onOpen: (id: string) => void, keyPrefix: string)
 /** The id a disclosure's `aria-controls` names, and the one its own region carries. One spelling. */
 const regionId = (index: number): string => `door-group-${index}`;
 
+/**
+ * Distinguishes one mounted dialog's tab ids from another's — `modal.ts`'s `SEQ` and its reason.
+ *
+ * `aria-controls` and `aria-labelledby` are resolved by `getElementById`, which returns the FIRST
+ * match in the document: two front doors mounted at once (which is what a test file that mounts
+ * per case does) would have the second dialog's tabs naming the first dialog's panels, and the
+ * defect is invisible on screen because the CSS and the click handlers never go through an id.
+ */
+let DOOR_SEQ = 0;
+
 /** A grid of cards. `data-columns` is the number the arrow keys move by — see {@link COLUMNS}. */
 function gridOf(families: readonly Family[], onOpen: (id: string) => void, keyPrefix: string): Desc {
   return h(
@@ -201,6 +241,13 @@ function gridOf(families: readonly Family[], onOpen: (id: string) => void, keyPr
 export function createFrontDoor(host: HTMLElement, page: HTMLElement, input: FrontDoorInput): FrontDoorDialog {
   /** Which groups the reader has opened. Empty on the first open — see {@link groupSection}. */
   const expanded = new Set<TaxonomySection>();
+
+  const seq = ++DOOR_SEQ;
+  const tabId = (tab: DoorTab): string => `door-tab-${tab}-${seq}`;
+  const panelId = (tab: DoorTab): string => `door-panel-${tab}-${seq}`;
+
+  /** Which tab is up. Written by {@link openDoor} before the first render, so nothing flashes. */
+  let selected: DoorTab = "records";
 
   const modal = createModal({
     host,
@@ -363,41 +410,251 @@ export function createFrontDoor(host: HTMLElement, page: HTMLElement, input: Fro
     }
   }
 
+  // ────────────────────────────────────────────────────────────────────────────────────────────
+  // The strip — M8 step 3.4.
+  //
+  // **The two panels are SIBLINGS, and switching between them writes attributes rather than
+  // re-rendering.** The records half adopts a canvas per card ({@link fillThumbnails}), and
+  // `patch` recurses into a node whose description has no children and removes what is there — so
+  // a switch that re-rendered the dialog would take every adopted canvas with it and the next
+  // `fillThumbnails` would ask for all of them again. That is {@link toggleGroup}'s measurement
+  // (19 requests for 11 cards) reached by a second route — measured here at **8 requests against
+  // 16** for a single switch to Practice and back, which is why the test counts the thumbnail calls
+  // across one. Only the selected panel is `hidden`-free, so only one
+  // is on screen, in the accessibility tree, or in a browser's tab order.
+  //
+  // The practice list is the other way round: it is rebuilt on every selection, because it reports
+  // a store that a rung cleared in this same session can have moved under it.
+  // ────────────────────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Open a drill task at the rung it has reached.
+   *
+   * **Shut BEFORE handing over**, {@link openCard}'s order and its reason: `applyState` clears the
+   * shell's own open flag and re-renders, so opening first would leave this dialog's DOM standing
+   * over an `inert` page the shell had already decided was uncovered.
+   */
+  function openDrillTask(task: DrillTask, stage: 1 | 2 | 3 | 4): void {
+    modal.dismiss();
+    input.openTask(task, stage);
+  }
+
+  /**
+   * The four drill tasks, each at the rung it has REACHED.
+   *
+   * **The store is read ONCE for the whole list**, which is `drillPanel.ts`'s own rule for the
+   * list it draws in the rail: four rows that each read the store are four rows that can describe
+   * four different moments, and the one thing a reader compares them on is how far along they are.
+   *
+   * `stageFor` CAPS at the last rung, so a task that has cleared three rungs and one that has
+   * cleared all four both read "stage 4 of 4" — which is why `isComplete` is shown beside it
+   * rather than left for a reader to infer from a number that cannot go any higher.
+   */
+  function practiceList(): readonly Child[] {
+    const progress = readProgress(input.progressStore());
+    return [
+      h(
+        "p",
+        { key: "legend", class: "muted small" },
+        "Four stages: the worked argument; the boundary terms to fill in; a choice of contour; a " +
+          "blank plane. Where you start is where you left off.",
+      ),
+      h(
+        "ul",
+        { key: "tasks", class: "doorTasks" },
+        ...DRILL_TASKS.map((task) => {
+          const stage = stageFor(progress, task.id);
+          const done = isComplete(progress, task.id);
+          return h(
+            "li",
+            { key: task.id, class: "pickRow", "data-task": task.id },
+            h("span", { key: "n", class: "pieceName" }, ...mathText(task.label, `dt${task.id}`)),
+            h("span", { key: "s", class: "tag", "data-stage": String(stage) }, `stage ${stage} of ${LAST_STAGE}`),
+            done ? h("span", { key: "c", class: "tag", "data-complete": "true" }, "complete") : null,
+            h(
+              "button",
+              {
+                key: "go",
+                type: "button",
+                "data-open-task": task.id,
+                // **The SPOKEN twin, through `mathPlain`**, which is the rail list's rule and the
+                // bar's argument: a raw `$…$` in an accessible name is read out in the app's own
+                // source syntax ("dollar R backslash to"). Measured: none of the four labels
+                // carries a delimiter today, so `mathPlain` is the identity on all four — it is
+                // here so that the day one does, the name is a sentence rather than source.
+                "aria-label": `open ${mathPlain(task.labelText)} at stage ${stage}`,
+                onClick: () => openDrillTask(task, stage),
+              },
+              "Open",
+            ),
+          );
+        }),
+      ),
+    ];
+  }
+
+  /**
+   * The tab strip.
+   *
+   * The ARIA tabs pattern, spelled out: `role="tablist"`, a `role="tab"` carrying `aria-selected`
+   * and `aria-controls`, and a roving `tabindex` so Tab reaches the strip once and the arrows move
+   * within it. **The roving half is markup that this gate cannot observe and a browser can**:
+   * `modal.ts`'s focus trap matches `button:not([disabled])`, which is true of a tab whatever its
+   * `tabindex`, so in jsdom Tab visits both — the attribute is still what an assistive technology
+   * and a real browser's own tab order read, and changing the trap's selector is that file's
+   * business rather than this one's.
+   */
+  function tabStrip(): Desc {
+    return h(
+      "div",
+      {
+        key: "tabs",
+        class: "doorTabs",
+        role: "tablist",
+        "aria-label": "worked examples or practice",
+        onKeydown: (e: Event) => onTabKey(e as KeyboardEvent),
+      },
+      ...TABS.map((tab) =>
+        h(
+          "button",
+          {
+            key: tab.id,
+            type: "button",
+            class: "doorTab",
+            id: tabId(tab.id),
+            role: "tab",
+            "data-tab": tab.id,
+            "aria-selected": tab.id === selected,
+            "aria-controls": panelId(tab.id),
+            tabindex: tab.id === selected ? "0" : "-1",
+            onClick: () => selectTab(tab.id, false),
+          },
+          tab.label,
+        ),
+      ),
+    );
+  }
+
+  /**
+   * Left and Right along the strip, and they WRAP.
+   *
+   * The opposite of {@link onGridKey}, deliberately and for that function's own reason read the
+   * other way: a grid's Right at the end of a row could only wrap onto the next ROW, which is one
+   * gesture meaning two things — a strip is one row and there is nowhere else to land, so the
+   * pattern's cyclic move is the only one that is not a dead key on a two-tab list.
+   *
+   * **Selection follows focus**, which the pattern admits where switching costs nothing: the
+   * records panel is already built and the practice list is four rows off a store read.
+   */
+  function onTabKey(event: KeyboardEvent): void {
+    const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+    if (step === 0) return;
+    event.preventDefault();
+    const at = TABS.findIndex((t) => t.id === selected);
+    selectTab(TABS[(at + step + TABS.length) % TABS.length].id, true);
+  }
+
+  /** Put the DOM in step with {@link selected}. The ONLY thing a tab switch writes. */
+  function syncTabs(): void {
+    for (const tab of TABS) {
+      const button = modal.dialog.querySelector<HTMLElement>(`#${tabId(tab.id)}`);
+      const panel = modal.dialog.querySelector<HTMLElement>(`#${panelId(tab.id)}`);
+      if (button === null || panel === null) return;
+      const on = tab.id === selected;
+      button.setAttribute("aria-selected", String(on));
+      button.setAttribute("tabindex", on ? "0" : "-1");
+      if (on) panel.removeAttribute("hidden");
+      else panel.setAttribute("hidden", "");
+      // The practice list reports a store, so it is built on SELECTION rather than once — a rung
+      // cleared while the dialog was shut, or on a rail card behind it, must not leave four rows
+      // describing a moment that has passed.
+      if (on && tab.id === "practice") patch(panel, practiceList());
+    }
+  }
+
+  function selectTab(tab: DoorTab, focus: boolean): void {
+    selected = tab;
+    syncTabs();
+    if (focus) modal.dialog.querySelector<HTMLElement>(`#${tabId(tab)}`)?.focus();
+  }
+
   function render(dialog: HTMLElement, titleId: string): void {
     patch(dialog, [
       h(
         "div",
         { key: "bar", class: "btnRow" },
-        h("h2", { key: "t", id: titleId }, "Worked examples"),
+        // **One name for both tabs.** The dialog is announced by this heading when focus lands on
+        // it, and a name that changed under the reader would describe whichever half happened to
+        // be up rather than what they opened.
+        h("h2", { key: "t", id: titleId }, "Worked examples and practice"),
         h(
           "button",
           { key: "x", type: "button", "aria-label": "close the worked examples", onClick: () => modal.dismiss() },
           "Close",
         ),
       ),
-      h(
-        "p",
-        { key: "legend", class: "muted small" },
-        "Eight classics, one from each group. Every record in the gallery is below, filed under the " +
-          "group it belongs to. Arrow keys move between cards; Enter opens one.",
-      ),
-      h(
-        "section",
-        { key: "front", class: "doorFront", onKeydown: (e: Event) => onGridKey(e as KeyboardEvent) },
-        h("h3", { key: "h" }, "Start here"),
-        gridOf(FRONT_ROW, openCard, "front"),
-      ),
+      tabStrip(),
       h(
         "div",
-        { key: "groups", class: "doorGroups", onKeydown: (e: Event) => onGridKey(e as KeyboardEvent) },
-        ...FRONT_DOOR_GROUPS.map(groupSection),
+        {
+          key: "p-records",
+          class: "doorPanel",
+          id: panelId("records"),
+          role: "tabpanel",
+          "aria-labelledby": tabId("records"),
+          hidden: selected !== "records",
+        },
+        h(
+          "p",
+          { key: "legend", class: "muted small" },
+          "Eight classics, one from each group. Every record in the gallery is below, filed under the " +
+            "group it belongs to. Arrow keys move between cards; Enter opens one.",
+        ),
+        h(
+          "section",
+          { key: "front", class: "doorFront", onKeydown: (e: Event) => onGridKey(e as KeyboardEvent) },
+          h("h3", { key: "h" }, "Start here"),
+          gridOf(FRONT_ROW, openCard, "front"),
+        ),
+        h(
+          "div",
+          { key: "groups", class: "doorGroups", onKeydown: (e: Event) => onGridKey(e as KeyboardEvent) },
+          ...FRONT_DOOR_GROUPS.map(groupSection),
+        ),
+      ),
+      // Empty here, always, and filled by {@link syncTabs} — `groupSection`'s shape and its reason:
+      // building it during the render would put a second place in the file that reads the store.
+      h(
+        "div",
+        {
+          key: "p-practice",
+          class: "doorPanel",
+          id: panelId("practice"),
+          role: "tabpanel",
+          "aria-labelledby": tabId("practice"),
+          hidden: selected !== "practice",
+        },
       ),
     ]);
     fillThumbnails(dialog);
   }
 
+  /**
+   * Show it, on the named tab.
+   *
+   * The tab is written BEFORE `modal.open()`, which is what builds the panel on the first open —
+   * so a dialog opened straight onto Practice never draws the records half visible first.
+   * `syncTabs` afterwards is for every LATER open, where the build has already happened and the
+   * practice list has a store to re-read.
+   */
+  function openDoor(tab?: DoorTab): void {
+    selected = tab ?? "records";
+    modal.open();
+    syncTabs();
+  }
+
   return {
-    open: modal.open,
+    open: openDoor,
     close: modal.close,
     get isOpen(): boolean {
       return modal.isOpen;

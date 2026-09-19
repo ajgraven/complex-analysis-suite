@@ -28,7 +28,7 @@ import {
   type DrillStage,
   type DrillTask,
 } from "../src/shell/drill.js";
-import { PROGRESS_KEY, readProgress } from "../src/shell/drillProgress.js";
+import { PROGRESS_KEY, clearedOf, readProgress } from "../src/shell/drillProgress.js";
 import { compile, defaultState, resolveState, type ShellState } from "../src/shell/state.js";
 import { patch } from "../src/shell/dom.js";
 import { defaultSession, resetTransient, type Session } from "../src/shell/session.js";
@@ -131,6 +131,19 @@ function harness(state: ShellState): {
 
 const drillState = (task: string, stage: DrillStage): ShellState => taskState(taskById(task) as DrillTask, stage);
 
+/**
+ * Put rung iii's prediction on the record, so the tests below can reach the MENU.
+ *
+ * M8 step 3.4 puts a forced choice before the contour menu — research 02 §7's prediction step —
+ * and the menu does not exist until it is answered, because a menu beside the question would let a
+ * reader read the options for the answer. The tests in this block are about the menu's own
+ * judgement, so they arrive as a reader who has already answered; the prediction's OWN behaviour
+ * is asserted in `shell2Drill.test.ts`, at the shell, where the store round trip is real.
+ */
+function predicted(task: string, ok = true): void {
+  window.localStorage.setItem(PROGRESS_KEY, JSON.stringify({ [task]: { stage: 0, predicted: ok } }));
+}
+
 const q = <T extends HTMLElement = HTMLElement>(root: ParentNode, sel: string): T => {
   const e = root.querySelector<T>(sel);
   if (e === null) throw new Error(`no ${sel}`);
@@ -231,9 +244,19 @@ describe("the card itself", () => {
     expect(two.querySelector('[aria-label^="close over"]'), "no menu at stage ii").toBeNull();
     expect(buttons(two).map((b) => b.textContent)).toContain("Check");
 
+    // **Rung iii asks the PREDICTION first and the menu does not exist yet** — M8 step 3.4, and it
+    // is the same claim this test makes about every other rung: the controls on screen are the
+    // question being asked and no other question's.
     const three = at(3);
     expect(three.querySelectorAll("select"), "no answer sheet at stage iii").toHaveLength(0);
-    expect(three.querySelectorAll('[aria-label^="close over"]').length).toBeGreaterThan(0);
+    expect(three.querySelectorAll("[data-predict-option]").length, "the prediction is asked").toBeGreaterThan(0);
+    expect(three.querySelector('[aria-label^="close over"]'), "and the menu is not offered beside it").toBeNull();
+    // With the prediction on the record the menu is there — the pairing, so "no menu" above is the
+    // ordering rather than a menu this rung never has.
+    predicted("oscillatory");
+    const threeAfter = at(3);
+    expect(threeAfter.querySelectorAll('[aria-label^="close over"]').length).toBeGreaterThan(0);
+    window.localStorage.clear();
 
     const four = at(4);
     expect(four.querySelectorAll("select")).toHaveLength(0);
@@ -429,7 +452,7 @@ describe("rung ii — the KILL column", () => {
       s.dispatchEvent(new Event("change", { bubbles: true }));
     }
     clickExact(wrong.host, "Check");
-    expect(readProgress(window.localStorage).indented ?? 0).toBeLessThan(2);
+    expect(clearedOf(readProgress(window.localStorage), "indented")).toBeLessThan(2);
 
     const right = harness(drillState("indented", 2));
     const questions = pieceQuestions(runTask(taskById("indented") as DrillTask) as NonNullable<ReturnType<typeof runTask>>);
@@ -438,7 +461,7 @@ describe("rung ii — the KILL column", () => {
       s.dispatchEvent(new Event("change", { bubbles: true }));
     });
     clickExact(right.host, "Check");
-    expect(readProgress(window.localStorage).indented).toBe(2);
+    expect(clearedOf(readProgress(window.localStorage), "indented")).toBe(2);
     window.localStorage.removeItem(PROGRESS_KEY);
   });
 });
@@ -458,6 +481,7 @@ describe("rung iii — the menu", () => {
     expect(menuVerdict(run, "wedge").answers, "the wedge no longer answers — the rule needs re-measuring").toBe(true);
     expect(VERIFIED_ROLE_TEMPLATES).not.toContain("wedge");
 
+    predicted("rational");
     const { host } = harness(drillState("rational", 3));
     const offered = [...host.querySelectorAll('[aria-label^="close over"]')].map((b) => (b.textContent ?? "").trim());
     expect(offered.length).toBeGreaterThan(0);
@@ -477,6 +501,7 @@ describe("rung iii — the menu", () => {
     // The pair differs by the kernel and by nothing else, which is what makes it evidence that the
     // card reads `menuVerdict` rather than comparing the pick against `task.intended`: at `a = 0`
     // the lower semicircle answers, and with `e^{iz}` over it the same contour diverges.
+    predicted("rational");
     const good = harness(drillState("rational", 3));
     clickExact(good.host, "lower semicircle");
     const applied = last(good.actions.applied);
@@ -489,10 +514,15 @@ describe("rung iii — the menu", () => {
     // **The MARK and the sentence must be the same verdict** — a sweep survivor, and the E2 defect
     // in miniature: a card that always marked a pick `answers` still prints the ledger's refusal
     // underneath, so the two disagree and the mark is the half a reader reads first.
-    expect(q(after.host, ".verdict .tag").textContent).toBe("answers");
-    expect(after.host.querySelector(".verdict .tag.warn")).toBeNull();
+    // **Scoped past the PREDICTION's reveal**, which is also a `.verdict` carrying a `.tag` since
+    // M8 step 3.4 — so an unscoped `.verdict .tag` reads the prediction's mark and calls it the
+    // menu's. Found by this assertion going from `answers` to `right`, which is the prediction's
+    // word: two verdicts on one card, and the selector could not tell them apart.
+    expect(q(after.host, ".verdict:not([data-predict-verdict]) .tag").textContent).toBe("answers");
+    expect(after.host.querySelector(".verdict:not([data-predict-verdict]) .tag.warn")).toBeNull();
     expect(after.host.textContent ?? "", "a declared second answer is named as one").toContain("nothing to force the half-plane");
 
+    predicted("oscillatory");
     const bad = harness(drillState("oscillatory", 3));
     clickExact(bad.host, "lower semicircle");
     const wrongPick = harness(last(bad.actions.applied));
@@ -500,13 +530,14 @@ describe("rung iii — the menu", () => {
     for (const m of clone.querySelectorAll(".katex-mathml")) m.remove();
     expect(clone.textContent ?? "").toContain("diverges");
     expect(clone.textContent ?? "").toContain("incomplete (boundary terms)");
-    expect(q(wrongPick.host, ".verdict .tag").textContent).toBe("does not answer");
-    expect(q(wrongPick.host, ".verdict .tag").classList.contains("warn")).toBe(true);
+    expect(q(wrongPick.host, ".verdict:not([data-predict-verdict]) .tag").textContent).toBe("does not answer");
+    expect(q(wrongPick.host, ".verdict:not([data-predict-verdict]) .tag").classList.contains("warn")).toBe(true);
   });
 
   it("says COVER's refusal for the circle, which CLOSES", () => {
     // The one option that fails for a different reason from all the others. "It does not close" would
     // be false about it, and would teach the wrong lesson about the one case worth the rung.
+    predicted("oscillatory");
     const { host, actions } = harness(drillState("oscillatory", 3));
     clickExact(host, "circle");
     const after = harness(last(actions.applied));
@@ -515,11 +546,12 @@ describe("rung iii — the menu", () => {
 
   it("clears the rung on a pick that ANSWERS, and not on one that does not", () => {
     window.localStorage.clear();
+    predicted("oscillatory");
     const bad = harness(drillState("oscillatory", 3));
     clickExact(bad.host, "circle");
-    expect(readProgress(window.localStorage).oscillatory ?? 0).toBeLessThan(3);
+    expect(clearedOf(readProgress(window.localStorage), "oscillatory")).toBeLessThan(3);
     clickExact(bad.host, "upper semicircle");
-    expect(readProgress(window.localStorage).oscillatory).toBe(3);
+    expect(clearedOf(readProgress(window.localStorage), "oscillatory")).toBe(3);
     window.localStorage.removeItem(PROGRESS_KEY);
   });
 });
@@ -582,10 +614,10 @@ describe("rung iv — the enclosure", () => {
     window.localStorage.clear();
     const bad = harness(drillState("oscillatory", 4));
     clickExact(bad.host, "Check the enclosure");
-    expect(readProgress(window.localStorage).oscillatory ?? 0).toBeLessThan(4);
+    expect(clearedOf(readProgress(window.localStorage), "oscillatory")).toBeLessThan(4);
     const good = harness(drawn("oscillatory", semicircleTemplate(3, "upper")));
     clickExact(good.host, "Check the enclosure");
-    expect(readProgress(window.localStorage).oscillatory).toBe(4);
+    expect(clearedOf(readProgress(window.localStorage), "oscillatory")).toBe(4);
     window.localStorage.removeItem(PROGRESS_KEY);
   });
 });
@@ -622,11 +654,11 @@ describe("moving between rungs", () => {
     window.localStorage.clear();
     const { host } = harness(drillState("rational", 1));
     clickExact(host, "Next stage");
-    expect(readProgress(window.localStorage).rational).toBe(1);
+    expect(clearedOf(readProgress(window.localStorage), "rational")).toBe(1);
     // And no other rung is cleared merely by moving off it.
     const two = harness(drillState("rational", 2));
     clickExact(two.host, "Next stage");
-    expect(readProgress(window.localStorage).rational).toBe(1);
+    expect(clearedOf(readProgress(window.localStorage), "rational")).toBe(1);
     window.localStorage.removeItem(PROGRESS_KEY);
   });
 

@@ -1105,3 +1105,44 @@
 .shell2 .stepBody > .sweepTable .badge {
   margin-right: 0.15rem;
 }
+
+/* ── the front door's tab strip and practice list (M8 step 3.4) ──────────────────────────────
+   The strip sits under the dialog's own heading, so the heading names the dialog and the strip
+   names which half of it is up — a reader who lands on the dialog hears the one and then reaches
+   the other, rather than meeting a choice before being told what the choice is about. */
+.doorTabs {
+  display: flex;
+  gap: 0.3rem;
+  border-bottom: 1px solid var(--g-border);
+}
+/* The selected tab is joined to the panel beneath it: the border it sits on is erased under it,
+   which is what makes `aria-selected` legible to a reader who is not being read to. Colour alone
+   would not — the two tabs are both controls and both blue-on-panel in the accent theme. */
+.doorTab[aria-selected="true"] {
+  border-color: var(--g-accent);
+  border-bottom-color: transparent;
+  color: var(--g-text);
+  margin-bottom: -1px;
+}
+/* The hidden panel is `hidden` in the DOM; this is only so a panel that is up fills the dialog's
+   column rather than sitting at its natural height with the groups list scrolling beside it. */
+.doorPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.doorPanel[hidden] {
+  display: none;
+}
+.doorTasks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.doorTasks > .pickRow > .pieceName {
+  flex: 1 1 auto;
+  min-width: 0;
+}

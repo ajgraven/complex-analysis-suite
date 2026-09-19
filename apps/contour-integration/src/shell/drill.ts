@@ -230,6 +230,96 @@ export function menuVerdict(run: FamilyRun, template: TemplateId): MenuVerdict {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────────────────────
+// Rung iii's PREDICTION — M8 step 3.4.
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * One forced choice, asked before the contour menu opens.
+ *
+ * Research 02 §7's prediction step: commit to an answer, then be shown the argument. One question,
+ * three options at most, no free text — a reader who has to compose a sentence is being asked to
+ * write rather than to decide, and what the rung is for is the decision.
+ *
+ * **Everything here is DERIVED from ledgers, including which question is asked.** The plan named
+ * the two questions per task ("the half-plane one, except the indented task gets the enclosure
+ * one"), and declaring that would be a fifth thing to keep in step with the corpus. Instead both
+ * semicircles are run over the task's own integrand and the answer is read off the two verdicts:
+ * if either closes with the target on it there is a half-plane to choose, and if neither does there
+ * is no side to ask about — which is exactly the indented task, whose pole sits ON the real axis so
+ * both semicircles fail LEGALITY before any limit is taken. Measured over the four tasks: `rational`
+ * answers in BOTH (π either way — nothing forces the side without a kernel), `oscillatory` upper
+ * only, `forced-downward` lower only, `indented` neither.
+ *
+ * **And the reason is the ledger's own row**, never a sentence composed here, wherever the ledger
+ * has one: the losing side's failure is *"the lower semicircle diverges for $a = 1$"* in the
+ * corpus's own words. Where both sides answer there IS no failing row, and the honest reason is
+ * then the two values — which is also the only form in which "either" is a claim rather than a
+ * shrug.
+ */
+export interface Prediction {
+  /** Which question — for the panel's `data-` hook and for the test that pins the routing. */
+  readonly kind: "half-plane" | "encloses";
+  /** The question, typeset. */
+  readonly question: string;
+  readonly options: readonly { readonly id: string; readonly label: string }[];
+  /** The option id that is right, decided by the ledgers below. */
+  readonly answer: string;
+  /** Why, in the ledger's own words where it has them. Typeset. */
+  readonly because: string;
+}
+
+const HALF_PLANE_OPTIONS = [
+  { id: "upper", label: "the upper half-plane" },
+  { id: "lower", label: "the lower half-plane" },
+  { id: "either", label: "either — nothing forces it" },
+] as const;
+
+const ENCLOSES_OPTIONS = [
+  { id: "yes", label: "yes" },
+  { id: "no", label: "no" },
+] as const;
+
+export function predictionFor(run: FamilyRun): Prediction {
+  const up = menuVerdict(run, "semicircle");
+  const down = menuVerdict(run, "semicircleDown");
+  if (up.answers || down.answers) {
+    const answer = up.answers && down.answers ? "either" : up.answers ? "upper" : "lower";
+    // The losing side's own row, or — where there is no loser — both values, which is what makes
+    // "either" a measurement. `up.value`/`down.value` are the ledger's formatted closed forms.
+    const because =
+      answer === "either"
+        ? `Both close, and both report $${up.value ?? "?"}$: with no kernel there is nothing to force the side.`
+        : ((answer === "upper" ? down.why : up.why) ?? "the other side does not close");
+    return {
+      kind: "half-plane",
+      question: "In which half-plane must the arc lie for the boundary term to vanish?",
+      options: HALF_PLANE_OPTIONS,
+      answer,
+      because,
+    };
+  }
+  // **No side closes, so there is no side to ask about.** What is worth predicting here is the
+  // thing this task exists to deny: a contour whose whole value comes from an indentation encloses
+  // NOTHING, and a reader who expects a residue is exactly the reader the record is for. Decided
+  // from the record's own winding numbers rather than from a field, and an UNDECIDED winding is not
+  // a zero — it is a contour passing through its own singularity, which is a different answer from
+  // "it encloses none".
+  const wound = run.integral.windings.filter((w) => w.decided && w.n !== 0).length;
+  const undecided = run.integral.windings.some((w) => !w.decided);
+  return {
+    kind: "encloses",
+    question: "Does the closed contour enclose a pole?",
+    options: ENCLOSES_OPTIONS,
+    answer: wound > 0 ? "yes" : "no",
+    because: undecided
+      ? "A winding number could not be decided: the contour passes through a singularity."
+      : wound > 0
+        ? `The contour winds about ${wound === 1 ? "one singularity" : `${wound} singularities`}.`
+        : "No singularity is enclosed: the whole value comes from the limit the indentation takes.",
+  };
+}
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────
 // Rung iv — the enclosure.
 // ──────────────────────────────────────────────────────────────────────────────────────────────
 

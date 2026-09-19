@@ -175,6 +175,23 @@ const PAGES = [
     expect: '[data-card="drill"] .pickRow select',
   },
   {
+    // **Rung iii's PREDICTION** — M8 step 3.4, and it is here for M7.1's reason: the roster audits
+    // every page in its LANDING state, so a control that appears only after a reader has pressed
+    // something is a control nobody audits. The prediction is stricter than that even — it is
+    // replaced by its own reveal the moment it is answered, so it exists only in the state this
+    // link opens. `expect` is what keeps it honest: a build that stopped asking the question would
+    // fail by name here rather than quietly auditing the menu under a label claiming otherwise.
+    //
+    // `rational` rather than `oscillatory`: both get the half-plane question, and this one's answer
+    // is `either`, so the roster's entry does not turn into a hint about the interesting task.
+    id: "contour-integration-predict",
+    mount: "contour-integration",
+    dist: "apps/contour-integration/dist",
+    file: "index.html",
+    hash: viewState("ci", { m: "g", r: "jordan-cosine-kernel", bi: { a: 0, b: 1 }, dr: ["rational", 3] }),
+    expect: "[data-card=\"drill\"] [data-predict-option]",
+  },
+  {
     id: "correspondences",
     mount: "correspondences",
     dist: "apps/correspondences/dist",
