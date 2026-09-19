@@ -716,6 +716,38 @@ describe("the Result card", () => {
     expect(value.querySelector(".badge")?.getAttribute("data-level")).toBe("=");
   });
 
+  it("leads with the SANDBOX's own target value, where a record would lead with Pass 5's", () => {
+    // M8 step 4.1. A sandbox contour with one `target` piece and every other piece certified
+    // determines its target's integral by reading `∮ = Σ pieces` backwards — the app's first real
+    // answer outside the gallery. The circle the sandbox boots on has no target piece, so this is
+    // the semicircle, which is also the shape the plan names.
+    const { host } = right(sandbox({ expr: "1/(1+z^2)", contour: semicircleTemplate(200) }));
+    const values = [...host.querySelectorAll('[data-card="result"] .resultValue')];
+    const named = host.textContent ?? "";
+    expect(named).toContain("the integral over the target piece, in the limit");
+    // It LEADS: the exact `∮` is the machinery and comes after.
+    expect(values[0]?.querySelector(".katex")).not.toBeNull();
+    expect(values[0]?.textContent ?? "").toContain("π");
+    // **The badge is the ledger's meet**, not the residue theorem's own level — the answer rests on
+    // the arc's `≤` bound as much as on the residues, so a `=` here would be the guardrail broken
+    // at the one place a reader reads a number.
+    expect(values[0]?.querySelector(".badge")?.getAttribute("data-level")).toBe("≤");
+  });
+
+  it("shows no target value where a piece is left free, and the card says so", () => {
+    // The pairing: the same contour and integrand with the arc undisposed. Nothing is reported, and
+    // the check list carries the reason — which is what stops the line above passing because the
+    // card happens to print π somewhere.
+    const base = semicircleTemplate(200);
+    const freed = {
+      ...base,
+      pieces: base.pieces.map((p) => (p.id === "arc" ? { ...p, role: "free" as const } : p)),
+    };
+    const { host } = right(sandbox({ expr: "1/(1+z^2)", contour: freed }));
+    expect(host.textContent ?? "").not.toContain("the integral over the target piece, in the limit");
+    expect(host.textContent ?? "").toContain("neither bounded by a lemma nor carrying a known limit");
+  });
+
   it("opens the hypothesis table BY DEFAULT when a row has failed, and not otherwise", () => {
     const fine = q(right(sandbox({ expr: "1/(1+z^2)" })).host, '[data-card="result"] details');
     expect((fine as HTMLDetailsElement).open, "the hypotheses opened with nothing wrong").toBe(false);

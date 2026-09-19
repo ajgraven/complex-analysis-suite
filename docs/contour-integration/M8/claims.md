@@ -30,7 +30,7 @@ sentence that will ship.
 **How to reply.** Anything: a line-by-line edit, a sweep of "these are fine, change only the flagged
 ones", or a rule you want applied that is not in the list.
 
-**Status:** 60 of 72 proposed in the ledger's own
+**Status:** 60 of 75 proposed in the ledger's own
 sentences; 0 sentences across the whole document still break at least one rule.
 
 ---
@@ -105,10 +105,13 @@ count, a measured number — so the wording is everything around it.
 | `kill.computed` | {piece}: evaluated numerically (length {length}) | *(applied)* |  |
 | `kill.sweep-unreadable` | {piece}: no bound is available — the arc's angle is not a rational multiple of $\pi$ with denominator at most 12 | *(applied)* |  |
 | `kill.no-lemma` | {piece}: no bound is available for this integrand | *(applied)* |  |
+| `kill.lemma-refused` | {piece}: declared to vanish by {lemma}; not certified — {why} | **—** |  |
 | `cover.on-contour` | the target is a piece of the contour | *(applied)* |  |
 | `cover.in-sum` | the target is the sum of the residues at the integers, not a piece of the contour | *(applied)* |  |
 | `cover.in-sum-weighted` | the target is the sum of the residues at the integers, not a piece of the contour (weight {weight}) | *(applied)* |  |
 | `cover.none` | no target is designated; the closed-contour integral is reported | *(applied)* |  |
+| `cover.undisposed` | {piece} is neither bounded by a lemma nor carrying a known limit, so the target's value is not determined | **—** |  |
+| `cover.undisposed-many` | {n} are neither bounded by a lemma nor carrying a known limit, so the target's value is not determined | **—** |  |
 
 ## 2. Repairs
 
@@ -496,7 +499,7 @@ The ✓/✗ audit trail inside a row's evidence, shown when a row is expanded.
 | `provenance 85` <br>*(26 records)* | established by: Jordan's inequality $\sin\psi \ge 2\psi/\pi$ on $[0, \pi/2]$, extended to $[0, \pi]$ by $\sin\psi = \sin(\pi - \psi)$ | **—** |  |
 | `provenance 86` <br>*(18 records)* | every pole is simple and Gaussian, which is what makes $e^{2\pi i z_0}$ representable and $K(z_0)\operatorname{Res}(f, z_0)$ the whole residue | **—** |  |
 | `provenance 87` <br>*(9 records)* | every pole of the cofactor was asked for its winding number and is enclosed once — checked rather than assumed | **—** |  |
-| `provenance 88` <br>*(4 records)* | f = O(z^(0)) at infinity, which is NOT enough to make the residue vanish — 1/z is regular there and has Res = −1 | **—** |  |
+| `provenance 88` <br>*(4 records)* | f = O(z^(0)) at infinity, which is not enough to make the residue vanish — 1/z is regular there and has Res = −1 | **—** |  |
 | `provenance 89` <br>*(4 records)* | f(0) = —, and no cofactor pole lies on an integer in the band | **—** |  |
 | `provenance 90` <br>*(2 records)* | f(0) = 1, and no cofactor pole lies on an integer in the band | **—** |  |
 | `provenance 91` <br>*(3 records)* | f(0) = 16/9, and no cofactor pole lies on an integer in the band | **—** |  |
@@ -510,8 +513,8 @@ The ✓/✗ audit trail inside a row's evidence, shown when a row is expanded.
 | `provenance 99` <br>*(4 records)* | the bound is $O(R^{-1})$, and $1 - n < 0$ exactly when $n > 1$ | **—** |  |
 | `provenance 100` <br>*(26 records)* | the bound is independent of $R$ | **—** |  |
 | `provenance 101` <br>*(4 records)* | the branch constant is $c\,e^{i\pi\cdot-\frac{1}{4}}$, derived along the direction $\arg z = \frac{1}{2}\pi$ where the declared windows give $\frac{1}{2}\pi$ at z = 0, $-\frac{1}{2}\pi$ at z = b — every one an exact rational, so the constant is a root of unity and not a fit | **—** |  |
-| `provenance 102` <br>*(4 records)* | the branch point at the origin is NOT a pole: there is no Laurent series at it and no residue to take | **—** |  |
-| `provenance 103` <br>*(7 records)* | the branch point is NOT a pole: there is no Laurent series at it and no residue to take | **—** |  |
+| `provenance 102` <br>*(4 records)* | the branch point at the origin is not a pole: there is no Laurent series at it and no residue to take | **—** |  |
+| `provenance 103` <br>*(7 records)* | the branch point is not a pole: there is no Laurent series at it and no residue to take | **—** |  |
 | `provenance 104` <br>*(4 records)* | the cofactor is even, decided exactly over $\mathbb{Q}(i)$, which is what makes $\sum_{n \ne 0} = 2\sum_{n \ge 1}$; $f(0)$ is not asked about, because n = 0 is excluded from the target's own terms | **—** |  |
 | `provenance 105` <br>*(32 records)* | the cofactor is shifted to the cap's own centre by exact synthetic division over $\mathbb{Q}(i)$, so the bound is the one this file already states, read about $w = z - b$ | **—** |  |
 | `provenance 106` <br>*(3 records)* | the cosh is carried, never evaluated: the form is exact and only its decimal is an estimate | **—** |  |

@@ -694,7 +694,7 @@ describe("the keyhole is LEGAL — the contour tier D is built on", () => {
 // one integrand the wedge lemma exists for fell through to "no lemma here applies". The wedge
 // TEMPLATE is M5.4; these contours are built by hand so the routing is exercised now rather than
 // shipped as code nothing calls.
-function sector(from: number, to: number, R = 4): Contour {
+function sector(from: number, to: number, R = 4, lemma?: "L6"): Contour {
   return {
     pieces: [
       {
@@ -719,7 +719,13 @@ function sector(from: number, to: number, R = 4): Contour {
           theta1: to,
         },
         role: "vanish",
-        lemma: "L6",
+        // **The lemma is a PARAMETER of the fixture since M8 step 4.1**, because the ledger now
+        // honours a declaration instead of re-deriving it from the shape. The wedge tests below
+        // declare `L6` and mean it; the SWEEP-reader tests share this geometry with a rational
+        // integrand, where `L6` would be a declaration its own integrand does not satisfy — and the
+        // engine refuses that by name, which is exactly what the step added. They declare nothing
+        // and get the shape-driven pick, which is what a sandbox contour has anyway.
+        ...(lemma === undefined ? {} : { lemma }),
         colour: 1,
       },
       {
@@ -739,7 +745,7 @@ function sector(from: number, to: number, R = 4): Contour {
 }
 
 /** The `π/over` wedge, measured from the positive real axis — what L6 is stated on. */
-const wedge = (over: number, R = 4): Contour => sector(0, Math.PI / over, R);
+const wedge = (over: number, R = 4): Contour => sector(0, Math.PI / over, R, "L6");
 
 const arcRow = (r: ReturnType<typeof run>) => rowsFor(r, "KILL").find((x) => x.pieceId === "arc");
 
@@ -806,12 +812,22 @@ describe("L6 — the wedge lemma, routed and certified", () => {
     expect(row?.status).toBe("unknown");
   });
 
-  it("still reports no lemma for a shape none of them covers", () => {
-    // `z·e^{−z²}` has a cofactor the wedge bound declines by name, so the honest answer is the
-    // fallthrough — not a bound computed as though the cofactor were not there.
+  it("refuses BY NAME for a shape the declared lemma does not cover", () => {
+    // `z·e^{−z²}` has a cofactor the wedge bound declines by name. The claim has not changed — no
+    // bound is computed as though the cofactor were not there — but the ANSWER has, at M8 step 4.1:
+    // the piece declares `L6`, so the honest report is that the chosen lemma does not apply, which
+    // is strictly more than the old fallthrough's "no bound is available for this integrand". That
+    // sentence blamed the integrand for a choice the reader made.
     const row = arcRow(run("z*exp(-z^2)", wedge(4)));
-    expect(row?.status).toBe("unknown");
-    expect(row?.evidence.method).toMatch(/λ·e\{?\^?\{?w z/);
+    expect(row?.status).toBe("failed");
+    expect(row?.claimData.template).toBe("kill.lemma-refused");
+    expect(row?.claim).toContain("the wedge bound");
+    expect(row?.claim).toContain("not of that form");
+    // And with NO lemma declared the same arc falls through as it always did, which is the pairing
+    // that makes the line above a claim about the declaration rather than about the integrand.
+    const bare = arcRow(run("z*exp(-z^2)", sector(0, Math.PI / 4)));
+    expect(bare?.status).toBe("unknown");
+    expect(bare?.evidence.method).toMatch(/λ·e\{?\^?\{?w z/);
   });
 });
 

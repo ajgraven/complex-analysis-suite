@@ -108,6 +108,28 @@ const EXPECTED: Partial<
   ],
   "kill.no-lemma": [{ piece }, "the large arc: no bound is available for this integrand"],
   "cover.none": [{}, "no target is designated; the closed-contour integral is reported"],
+  // **The three the SANDBOX reaches and no record can** — M8 step 4.1. A declared lemma that does
+  // not apply cannot occur in the corpus, because every record's declaration is the one its own
+  // integrand satisfies (measured: all 28 agree with what the shape-driven chain picks, which is
+  // what made reading the declaration a no-op there and a check everywhere else). An undisposed
+  // piece cannot occur either: the corpus's only two `free` pieces are E3's and F2's, and both are
+  // ADR-0042 imports, which the KILL pass discharges with an `=`.
+  "cover.undisposed": [
+    { piece: { kind: "piece", id: "arc", name: "the arc", role: "free" } },
+    "the arc is neither bounded by a lemma nor carrying a known limit, so the target's value is not determined",
+  ],
+  "cover.undisposed-many": [
+    { n: { kind: "count", n: 2, noun: "piece" } },
+    "2 pieces are neither bounded by a lemma nor carrying a known limit, so the target's value is not determined",
+  ],
+  "kill.lemma-refused": [
+    {
+      piece: { kind: "piece", id: "arc", name: "the arc", role: "vanish" },
+      lemma: { kind: "text", text: "Jordan's lemma" },
+      why: { kind: "text", text: "this integrand carries no such factor" },
+    },
+    "the arc: declared to vanish by Jordan's lemma; not certified — this integrand carries no such factor",
+  ],
 };
 
 /** Every template the gallery actually produces, and the rows it produced them on. */

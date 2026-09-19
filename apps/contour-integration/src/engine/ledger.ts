@@ -21,7 +21,7 @@ import {
   type Verdict,
 } from "@cas/rigor";
 import { Frac, SqrtExt } from "@cas/exact";
-import { HEADLINES, headlineFails, type ConstraintId } from "./vocabulary.js";
+import { HEADLINES, headlineFails, lemmaLabel, type ConstraintId } from "./vocabulary.js";
 import {
   certificateClaim,
   certificateClaimAt,
@@ -71,7 +71,7 @@ import type { ContourIntegral } from "./contour/integrate.js";
 import type { PoleReport } from "../kernel/poles.js";
 import { smallArcLimit } from "../kernel/bounds/smallArc.js";
 import { largeArcLimit } from "../kernel/bounds/largeArcLimit.js";
-import type { ExpSum } from "../kernel/expSum.js";
+import { formatPiExpSum, type ExpSum } from "../kernel/expSum.js";
 import type { ResidueTheoremResult } from "./residueTheorem.js";
 
 // Declared in `vocabulary.ts` (M8 step 0.2) so the ids and their labels sit together, and
@@ -136,6 +136,30 @@ export interface LedgerResult {
     readonly pieceId: string;
     readonly contribution: ExpSum;
   }[];
+  /**
+   * What the TARGET piece comes to in the limit — the sandbox's first real-integral answer (M8 4.1).
+   *
+   * `∮ f dz` is the sum over the pieces, so with exactly one `target` and every other piece
+   * certified the identity reads backwards: the target's integral is `∮` minus the limits the other
+   * pieces carry. That is one subtraction in units of π, where `∮/π` is the theorem's `piUnits` and
+   * each known limit is already in those units — so nothing here evaluates π and the answer is
+   * exact wherever the residues are.
+   *
+   * **Present only when every clause of that sentence holds**, which is what makes it an answer
+   * rather than a number: one target, no `free` piece (an undisposed piece is a term nobody has
+   * bounded), no `reproduces` piece (its coefficient needs a solve, which is the family loader's —
+   * the plan's own recorded scope limit for Phase 4), KILL did not fail, and the theorem's value is
+   * exact. A gallery record has Pass 5 for this and does not need it; it is computed for both
+   * anyway, because the two agreeing on every record it applies to is the check that it is right.
+   */
+  readonly target?: {
+    readonly pieceId: string;
+    /** In units of π, like {@link pieceLimits} — the caller formats, so no π is ever evaluated. */
+    readonly piUnits: ExpSum;
+    readonly text: string;
+    readonly latex: string;
+    readonly numeric: Cx;
+  };
 }
 
 /**
@@ -278,20 +302,123 @@ function boundParam(geom: Geom): string | undefined {
 }
 
 /**
- * Dispose of one `vanish` piece: pick the lemma the integrand's *shape* calls for, and report what
- * the bound does in the limit.
+ * A DECLARED lemma whose hypothesis does not hold — M8 step 4.1.
  *
- * Jordan when there is an `e^{iaz}` factor, plain ML otherwise. That is not a preference — a
- * rational integrand has no frequency and Jordan has nothing to say about it, while for `g·e^{iaz}`
- * the plain ML bound is off by the whole factor `|a|R` and fails on integrands that converge.
+ * Distinct from `null`, which means *this reader has nothing to say about this piece* and lets the
+ * next one try. A refusal is a finding: the reader CHOSE this lemma, and the engine has looked at
+ * the integrand in front of it and can name which hypothesis fails.
  */
-function disposeArc(ast: Node, g: Resolved, param?: string): ArcBound | null {
+export interface LemmaRefusal {
+  readonly missing: string;
+}
+
+const isRefusal = (x: ArcBound | LemmaRefusal | null): x is LemmaRefusal =>
+  x !== null && (x as LemmaRefusal).missing !== undefined;
+
+/**
+ * Dispose of one `vanish` piece: honour the DECLARED lemma, or pick the one the integrand's *shape*
+ * calls for, and report what the bound does in the limit.
+ *
+ * **THE CORPUS HAS DECLARED ITS LEMMA SINCE M3, AND THIS FILE HAS BEEN GUESSING ANYWAY.** Measured
+ * over all 28 records: every vanishing piece carries a `lemma`, and every one of them agrees with
+ * what the shape-driven chain below picks — A6's arc says `L2` and gets the ML estimate, B1's says
+ * `L3` and gets Jordan, `wedge-fresnel`'s says `L6` and gets the wedge bound. The agreement was
+ * never checked, so it held by the guess happening to be right, which is the shape of *true by
+ * accident* this project keeps finding. Reading the declaration makes it a CHECK, and gives the
+ * sandbox the thing step 4.1 is for: a reader may choose a lemma, and be told by name when the one
+ * they chose does not apply.
+ *
+ * **Jordan at zero frequency is not a failed hypothesis — it is a degenerate one.** B1's family
+ * runs through `a = 0`, where `e^{iaz} = 1` and what is left is an ordinary rational integrand;
+ * Jordan's constant `π/|a|` is then `∞` and says nothing, while the plain ML bound discharges the
+ * arc perfectly. The record's own trap says an engine treating `π/0` as a failure *"will paper over
+ * exactly the case it was built to catch"*. So `L3` with a zero frequency falls through to the ML
+ * estimate rather than refusing — and it is distinguishable from the case the plan asks be refused,
+ * *Jordan declared on a rational integrand*, because `asExponentialTimesRational` returns **null**
+ * for `1/(1+z^2)` and a form with `a = 0` for `e^{i\cdot 0\cdot z}/(1+z^2)`. Measured, not assumed:
+ * the factor being PRESENT with frequency zero and the factor being ABSENT are two different facts.
+ */
+function disposeArc(
+  ast: Node,
+  g: Resolved,
+  param?: string,
+  declared?: Piece["lemma"],
+): ArcBound | LemmaRefusal | null {
   if (g.kind !== "arc") return null; // only a circular arc has a certified bound of this shape
   const R = arcRadius(g);
   const extent = arcExtent(g);
   if (!R || !extent) return null;
 
   const exponential = asExponentialTimesRational(ast);
+
+  // ---- the declared routes -----------------------------------------------------------------
+  // Only the lemmas a reader can CHOOSE between are routed here. `L4` and `L5` are handled above
+  // (they do not vanish), and `L7` and `L8` are not vanishing lemmas at all — refused by name in
+  // the KILL pass rather than here, because the refusal is about the ROLE and not about the arc.
+  if (declared === "L3") {
+    if (exponential === null) {
+      return {
+        missing:
+          "Jordan's lemma is about $g(z)e^{iaz}$, and this integrand carries no such factor — the ML estimate is the bound for a rational one",
+      };
+    }
+    if (!exponential.a.isZero()) {
+      const mid = (g.theta0 + g.theta1) / 2;
+      const half = Math.sin(mid) >= 0 ? "upper" : "lower";
+      return jordanArcBound(exponential.num, exponential.den, exponential.a, half, R, param);
+    }
+    // The degenerate case above: the factor is there and its frequency is zero, so the hypothesis
+    // `a > 0` is vacuous rather than violated and what remains is the ML estimate.
+    return mlArcBound(exponential.num, exponential.den, R, extent, param);
+  }
+  if (declared === "L6") {
+    const declaredWedge = asExponentialOfPower(ast);
+    if (declaredWedge === null) {
+      // **And it names the one that DOES apply where there is one**, which is what makes a refusal
+      // a repair rather than a dead end: on a rational integrand the plain ML estimate discharges
+      // the same arc, and a reader who has chosen the wedge bound because the contour is a wedge
+      // has confused the SHAPE with the integrand.
+      const insteadRational = toExactRational(ast).ok;
+      return {
+        missing:
+          "the wedge bound is about $\\lambda e^{w z^n}$, and this integrand is not of that form" +
+          (insteadRational ? " — the ML estimate is the one that applies to a rational integrand" : ""),
+      };
+    }
+    const from = asPiMultiple(g.theta0);
+    const to = asPiMultiple(g.theta1);
+    if (from === null || to === null) {
+      return {
+        missing: `the wedge bound is stated on a sector measured from the positive real axis, and this arc's angles are not exact multiples of $\\pi$ with denominator at most ${MAX_PI_DENOMINATOR}`,
+      };
+    }
+    return wedgeArcBound(declaredWedge, R, { from, to }, param);
+  }
+  if (declared === "L1" || declared === "L2") {
+    // **The ML estimate refuses a live frequency, and that is the plan's own test.** On B1's
+    // sandbox twin `e^{iz}/(1+z^2)` the ML bound is off by the whole factor `|a|R`: `max|f|` on the
+    // upper arc is `O(R^{-2})` only because `|e^{iz}| \le 1` there, and on the lower arc it is
+    // `e^{R}`. A reader who picks it has picked a bound that either fails or is true for the wrong
+    // reason. No record does this — every one declaring `L1`/`L2` on an arc is rational or goes
+    // through the branch and log seats below — so the refusal is the sandbox's alone.
+    if (exponential !== null && !exponential.a.isZero()) {
+      return {
+        missing:
+          "the ML estimate bounds $\\max|f|$ on the whole arc, and this integrand carries a factor $e^{iaz}$, which is bounded on one half-plane and grows on the other — Jordan's lemma is the one that applies",
+      };
+    }
+    if (exponential !== null) return mlArcBound(exponential.num, exponential.den, R, extent, param);
+    const declaredRational = toExactRational(ast);
+    if (!declaredRational.ok) {
+      return {
+        missing:
+          "the ML estimate reasons on a rational integrand's degree gap, and this integrand is not rational",
+      };
+    }
+    return mlArcBound(declaredRational.value.num, declaredRational.value.den, R, extent, param);
+  }
+
+  // ---- the shape-driven chain, unchanged ---------------------------------------------------
   if (exponential && !exponential.a.isZero()) {
     // Which half the arc lies in decides everything; read it off the arc's own midpoint.
     const mid = (g.theta0 + g.theta1) / 2;
@@ -1395,19 +1522,52 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
     }
 
     const scrub = boundParam(piece.geom);
-    const disposal =
-      input.multi !== undefined
+    // **A lemma that does not VANISH, declared on a piece that must** — M8 step 4.1. `L7` is the
+    // periodic-side cancellation, which makes a piece reproduce the target, and `L8` is
+    // Sokhotski–Plemelj, a statement about the whole integral; neither is a bound on a piece, so
+    // neither can be tried and failed. Refused here rather than inside `disposeArc`, because what
+    // is wrong is the pairing of the lemma with the ROLE and not anything about the geometry.
+    const wrongKind = piece.lemma === "L7" || piece.lemma === "L8";
+    const disposal: ArcBound | LemmaRefusal | null = wrongKind
+      ? {
+          missing:
+            piece.lemma === "L7"
+              ? "the periodic-side cancellation does not make a piece vanish — it makes it a multiple of the target, which is the `reproduces` role"
+              : "Sokhotski–Plemelj is a distributional identity about the whole integral, not a bound on one piece",
+        }
+      : input.multi !== undefined
         ? disposeDogboneArc(input.multi, geom, piece.lemma, scrub)
         : input.log !== undefined
           ? disposeLogArc(input.log, geom, piece.lemma, scrub)
           : input.power === undefined
-            ? (disposeArc(ast, geom, scrub) ??
+            ? (disposeArc(ast, geom, scrub, piece.lemma) ??
               (input.summation === undefined
                 ? null
                 : disposeSquareSide(input.summation.kernel, geom, scrub)) ??
               disposeStripSide(ast, geom, scrub) ??
               disposeGaussianSide(ast, geom, scrub))
             : disposeBranchArc(input.power, geom, piece.lemma, scrub);
+    if (isRefusal(disposal)) {
+      // A declared lemma that does not apply is a FAILED row, not an unknown one: the argument as
+      // written does not close, and the repair is the reader's own — choose the lemma that does,
+      // or change the integrand. `killFailed` follows, so no target value is reported off it.
+      killFailed = true;
+      push(
+        rowFrom(
+          "KILL",
+          "failed",
+          claimOf("kill.lemma-refused", {
+            piece: pieceArg(piece),
+            lemma: { kind: "text", text: lemmaLabel(piece.lemma ?? "L1") },
+            why: { kind: "text", text: disposal.missing },
+          }),
+          refuse(piece.name, disposal.missing),
+          piece.id,
+          "choose the lemma this piece's integrand satisfies, or change the integrand",
+        ),
+      );
+      continue;
+    }
     if (!disposal) {
       killFailed = true;
       // **WHICH OF THE TWO FAILED, THE INTEGRAND OR THE GEOMETRY?** Until M5.4b this row said "no
@@ -1508,6 +1668,36 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
     ),
   );
 
+  // **A TERM NOBODY HAS BOUNDED** — M8 step 4.1, and only where an unknown was actually named.
+  //
+  // An `imported` free piece is NOT undisposed: ADR-0042's value is exactly known and comes from
+  // outside the argument, which the KILL pass has already said with an `=`. E3 and F2 are the
+  // corpus's only free pieces and both are imports, so this row is the sandbox's alone — measured
+  // rather than assumed, and `test/ledgerDump.test.ts` is byte-identical across the whole corpus
+  // because of it.
+  const undisposedFree = spec.filter(
+    (p) => p.role === "free" && input.imported?.some((x) => x.pieceId === p.id) !== true,
+  );
+  if (onContour && undisposedFree.length > 0) {
+    push(
+      rowFrom(
+        "COVER",
+        "unknown",
+        undisposedFree.length === 1
+          ? claimOf("cover.undisposed", { piece: pieceArg(undisposedFree[0]) })
+          : claimOf("cover.undisposed-many", {
+              n: { kind: "count", n: undisposedFree.length, noun: "piece" },
+            }),
+        unknown(
+          undisposedFree.map((p) => p.name).join(", "),
+          "give each piece a role: a lemma that kills it, or the indentation limit it carries",
+        ),
+        undisposedFree.length === 1 ? undisposedFree[0].id : undefined,
+        "assign a vanishing lemma to the piece, or make it the target",
+      ),
+    );
+  }
+
   // ---- SOLVE + VERDICT ----------------------------------------------------------------------
   const closes =
     !killFailed &&
@@ -1522,9 +1712,37 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
 
   certificates.push(...theorem.verdict.certificates);
 
+  // ---- the target's own value ---------------------------------------------------------------
+  // Every clause is a reason, and the reasons are on the field's doc above. `free` is checked over
+  // the SPEC rather than over the rows, because a free piece produces a satisfied KILL row saying
+  // it was evaluated numerically — which is true, and is not a bound.
+  const targets = spec.filter((p) => p.role === "target");
+  const undisposed = spec.filter((p) => p.role === "free" || p.role === "reproduces");
+  // **No `!killFailed` here, and the sweep is why.** It was in the first draft and it is dead: the
+  // value is handed out as `closes ? target : undefined` below, and `closes` already requires
+  // `!killFailed` AND no failed row AND an exact `∮`. A condition that cannot be observed is a
+  // second statement of a rule, and the two would drift.
+  const target =
+    targets.length === 1 && undisposed.length === 0 && theorem.piUnits !== undefined
+      ? (() => {
+          const only = targets[0];
+          let piUnits = theorem.piUnits;
+          for (const limit of pieceLimits) piUnits = piUnits.sub(limit.contribution);
+          const [re, im] = piUnits.toTuple();
+          return {
+            pieceId: only.id,
+            piUnits,
+            text: formatPiExpSum(piUnits),
+            latex: formatPiExpSum(piUnits, LATEX),
+            numeric: [re * Math.PI, im * Math.PI] as Cx,
+          };
+        })()
+      : undefined;
+
   return {
     rows,
     closes,
+    target: closes ? target : undefined,
     value: closes ? value : undefined,
     verdict: assembleVerdict(certificates),
     failedAt:

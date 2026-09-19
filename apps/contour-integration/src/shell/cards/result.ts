@@ -135,6 +135,30 @@ export const resultCard: Card = (ctx) => {
         h("p", { key: "solvedName", class: "muted small" }, "the integral this contour determines"),
       );
     }
+    // **The SANDBOX's own answer** — M8 step 4.1. A record has Pass 5 above and needs nothing here;
+    // a sandbox contour with one `target` piece and every other piece certified determines its
+    // target's integral anyway, by reading `∮ = Σ pieces` backwards. It leads for the same reason
+    // Pass 5's value does: it is what the argument is FOR, where `∮` below is the machinery.
+    //
+    // **The badge is the ledger's verdict**, which is the meet over every certificate the argument
+    // rests on — so an arc discharged by a `≤` bound cannot leave the answer reading `=`. Nothing
+    // is derived here: `honestLevel` is the guardrail's own function and the row it labels is the
+    // one the ledger assembled.
+    if (solved === null && ledger.target !== undefined) {
+      head.push(
+        h(
+          "div",
+          { key: "target", class: "resultValue" },
+          badge(ledger.verdict.level),
+          math(ledger.target.latex, { key: "m", display: true, label: ledger.target.text }),
+        ),
+        h(
+          "p",
+          { key: "targetName", class: "muted small" },
+          "the integral over the target piece, in the limit",
+        ),
+      );
+    }
     // The exact `∮`, when the residue theorem could supply one: it comes from a FORMULA rather than
     // from integrating, and the quadrature below is the corroboration rather than the source.
     if (theorem?.exactValue !== undefined) {

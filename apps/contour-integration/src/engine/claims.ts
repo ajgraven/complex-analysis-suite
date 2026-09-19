@@ -145,6 +145,11 @@ const TEMPLATE = {
   "kill.sweep-unreadable":
     "{piece}: no bound is available — the arc's angle is not a rational multiple of $\\pi$ with denominator at most 12",
   "kill.no-lemma": "{piece}: no bound is available for this integrand",
+  // **A DECLARED lemma that does not apply** — M8 step 4.1. The two halves are deliberately
+  // separate: which lemma was CHOSEN, which is the reader's own act, and which hypothesis of it
+  // fails, which is the engine's finding about the integrand in front of it. A row saying only
+  // "no bound is available" would answer neither.
+  "kill.lemma-refused": "{piece}: declared to vanish by {lemma}; not certified — {why}",
 
   // ---- COVER -------------------------------------------------------------------------------
   "cover.on-contour": "the target is a piece of the contour",
@@ -153,6 +158,15 @@ const TEMPLATE = {
   "cover.in-sum-weighted":
     "the target is the sum of the residues at the integers, not a piece of the contour (weight {weight})",
   "cover.none": "no target is designated; the closed-contour integral is reported",
+  // **A target named, and a term nobody has bounded** — M8 step 4.1. Distinct from `cover.none`,
+  // which is the sandbox having designated nothing at all: here the argument DOES name an unknown,
+  // and what stops it being solved for is one piece that is neither killed by a lemma nor carrying
+  // a known limit. The piece is named because "the argument does not close" sends a reader to look
+  // at all of it.
+  "cover.undisposed":
+    "{piece} is neither bounded by a lemma nor carrying a known limit, so the target's value is not determined",
+  "cover.undisposed-many":
+    "{n} are neither bounded by a lemma nor carrying a known limit, so the target's value is not determined",
 
   // ---- the boundary ------------------------------------------------------------------------
   /**

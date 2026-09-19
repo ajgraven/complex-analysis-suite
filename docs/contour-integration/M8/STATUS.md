@@ -122,8 +122,16 @@ changed.
   reader's place in the argument, which made the stepper's step bodies, its callouts and 3.2's Play
   controls reachable by the roster at all. And measuring the accessible names at 1440 px found the
   stepper announcing its LaTeX source, under a comment recording that defect as fixed.
-  **Next execution action: PHASE 4, step 4.1** (the contour as an editable piece list with roles —
-  see [`M8-plan.md`](../M8-plan.md) §7).
+  **PHASE 4 HAS BEGUN. Step 4.1 is done** — the editable contour model and disposal by DECLARED
+  lemma. Seven pure operations in `engine/contour/edit.ts` (`reversePiece`, `reorderPieces`,
+  `deletePiece`, `insertPiece`, `renamePiece`, `setRole`, and `endpointSpec` beneath them), and a
+  ledger that honours each vanishing piece's own `lemma` instead of re-deriving it from the
+  integrand's shape — refusing by name, with the lemma that DOES apply, when the chosen one does
+  not. Plus `LedgerResult.target`: with one `target` piece and every other certified, `∮ = Σ pieces`
+  read backwards is the sandbox's first real-integral answer, which the Result card leads with. Ten
+  findings; the one that matters is that **four of the drill's false friends disappeared**, because
+  the templates that answered B1 do so on arcs declaring a lemma B1's integrand does not satisfy.
+  **Next execution action: step 4.2** (the pen's pieces carry roles, and a drawn argument closes).
   **Step 1.12 is done — THE CUTOVER.** `main.ts` stops choosing, the old `src/shell/app.ts` (3,700
   lines), `src/ui/app.css` and four of its test files are deleted, and `src/shell2/` has BECOME
   `src/shell/`. [`parity.md`](parity.md) is complete. The parity sweep found two capabilities the new
@@ -154,6 +162,8 @@ changed.
 
 | date | step | commit | notes |
 |---|---|---|---|
+| 2026-09-19 | **4.1** | (this commit) | **THE EDITABLE CONTOUR MODEL, AND A LEMMA THE READER CHOOSES.** Seven pure operations on `Contour` (`reversePiece` — which refuses any piece whose endpoints differ, since reversal swaps them and only a full turn survives; `reorderPieces`, `deletePiece`, `insertPiece`, `renamePiece`, `setRole`, and `endpointSpec` beneath them), every refusal returning the contour by reference so the operations compose. **The joining problem is solved symbolically where it can be**: an arc's endpoints `center + radius·(cos θ, sin θ)` stay inside the affine `Scalar` language for all ten arcs in the ten templates, and a centre bound to a different parameter than the radius does too — so a join stays closed as the parameter MOVES (measured: the indented semicircle's join survives `R` 8→40 and `rho` 0.05→0.3 with a worst seam of 4.9e-15, which is the template's own `sin(π)` noise). The literal fallback is honest about being one (a parameter-bound ANGLE is not expressible; moving that parameter opens the contour by 1.9177 = 4·sin(½)). **And the ledger stops guessing which lemma kills a piece.** All 28 records have declared one since M3; all 28 agree with what the shape-driven chain picks, so the agreement held because the guess happened to be right — `test/ledgerDump.test.ts` is byte-identical, which is the no-op proof. A declared lemma now routes to its own reader and refuses by name (`kill.lemma-refused`, `lemmaLabel` in `vocabulary.ts`), naming the lemma that applies instead; `L7` and `L8` are refused by what they ARE, since neither is a vanishing lemma. **Jordan at zero frequency is a hypothesis that DEGENERATES, not one that fails** — measured, `asExponentialTimesRational` returns null for a rational integrand and a form with `a = 0` for `e^{i·0·z}/(1+z²)`, which is what lets the plan's *refuse Jordan on a rational integrand* coexist with B1's own `a = 0` fixture. `LedgerResult.target` is the target piece's integral in the limit, `∮` minus the known limits, exact in units of π; the Result card leads with it in the sandbox with the ledger's MEET as its badge. **Four false friends disappeared**: M7.3 measured that strip, wedge, keyhole and dogbone all close and report `π/e` for B1 at `a = 1`; honouring the declaration removes all four (their arcs declare the ML estimate, and a live `e^{iaz}` refuses it), so exactly one template now answers `oscillatory`. Sweeps: **45/45 on the edit operations** (three first-pass survivors, each a real gap) and **15 mutants, 14 killed, one removed as dead code** on the ledger half. Full gate green: **584 files / 6,391 tests**, lint, typecheck and build silent |
+
 | 2026-09-19 | **3.6** | (this commit) | **THE PHASE 3 GATE — AND ITS OWN CLAUSE NAMED A LINK THAT COULD NOT EXIST.** *A Worked-example permalink at step 5 of A6*: the codec carried no step, because the reader's place in an argument is SESSION state (M6.1) and `resetTransient` clears it (M7.4) — so the stepper's step BODIES, its callouts and step 3.2's Play controls and checkpoint table were a surface the roster could never reach, it auditing a page in the state a link opens it in. `Wire.st` is one field on `dr`'s precedent, and M7.4's reason is untouched: the reset still runs and the link writes its step back afterwards, through step 3.5's `then` hook. The SHAPE is refused and the range is not (`stepIndex` already lands a stale index on the last step), and `setStep` becomes **the one caller of `syncHash` that is not `commit`** — the step is not `ShellState`, so `commit`'s *one place to say the link changed* no longer covers the whole wire. **And reading the accessibility tree at 1440 px found the stepper announcing its LaTeX SOURCE** — `step 5 of 8 — Boundary terms · the R \to \infty semicircle` — under a comment from 3.1b recording that defect as closed: `mathPlain` strips `$` and nothing else. M6.4's lesson for the third time in this app. `mathSpoken` is a NINE-macro map measured over all 28 records (`\to \infty \rho \varepsilon \arg \pi \log \eta \operatorname`), deliberately for names and not formulas, guarded by `test/spoken.test.ts`'s corpus sweep; the stage's callout chips go `aria-hidden` instead, on the measurement that all four kinds are drawn from something the Derivation card renders on the SAME step. **The app-wide leak took THREE changes and each one alone changed nothing, measured**: `mathText` passed the LaTeX as its span's `aria-label` (65 of 66 formulas on the landing page) and KaTeX's `<annotation>` held the same source in the MathML — remove either alone and the tree is identical; all three and it reads **zero** backslash-bearing names, from six. `data-tex` replaces the `aria-label`'s second job (telling a TEST which formula a node holds) and is not in the tree at all. `test/limitSweep.test.ts` had a test *speaks a step's title as words, never as its LaTeX source* **asserting `mathPlain`** — the defect pinned as intended behaviour. Look: [`phase3/`](screens/phase3/) (the worked example at the limit step, the amplitwist detail, the drill's prediction, the contrast ladder). Sweep **19 mutants, 19 killed, no equivalents** — one had to be rewritten because it ADDED a no-op beside the call it meant to remove, which the driver's own changed-file guard cannot catch. Full gate green: **583 files / 6,283 tests**, lint, typecheck and build silent; app browser suite 19 files / 218 tests; `pnpm a11y` clean across the whole roster with the new `contour-integration-worked` entry |
 
 | 2026-09-19 | **3.5** | (this commit) | **THE LADDER STOPS BEING A MODAL.** Five cases in a strip above the stage (`contrastStrip` → `Rendered.ladder` → its own `auto` grid row, `hidden` and EMPTY when shut, so a closed ladder costs the stage nothing), the bar's Contrasts button a **disclosure** with `aria-expanded`, and each case a single `<button class="ladderCard">` carrying the typeset integral, the step's own sentence, the check(s) it declares **in words** with what each one did (`now holds` / `now fails`), and the record's ANSWER. `session.contrast` records which case is open and which `RowKey`s it declares; `resetTransient` no longer clears `contrastsOpen` (a strip is not a dialog — walking the ladder is five `applyState` calls in a row) and `commit` drops the highlight on the same four fields a running sweep dies on. The Result card marks those rows `data-change="declared"`, says so in `srOnly` text, and the action WRITES the check list open rather than leaning on a computed default. `ContrastsInput`, `createContrastsDialog`, `gridOf`/`entryCell`/`columnHead` and `session.drillPicker`'s neighbour `contrastsOpen`-as-modal all deleted; `contrastGrid.ts` untouched. **Ten findings**, four of them measurements: the stage column loses to the full width **335 px of panel against a 328 px stage** (vs 231/433, and 1,413 px of content in 1,413 px of box against 789 in 725); the denylist caught `rung` — the DRILL's word — in six class names and the panel's legend before a reader could; deleting the dialog would have deleted `modal.ts`'s only tests of its focus trap, Tab cycle, `inert` and Escape, which moved onto `createModal` directly (sweep 12/13) and found a **dead clause** in `cycle` that its own comment presented as the mechanism; and **the app's browser suite had been red since step 3.4** — the chooser left the drill card for the front door and the prediction now stands between rung iii and its menu — which bought the assertion that file did not have: answering the prediction leaves the contour masked (0 ink pixels before the pick, >1000 after). Look: [`3.5-ladder-1440x950.png`](screens/3.5-ladder-1440x950.png) · [`3.5-ladder-opened-1440x950.png`](screens/3.5-ladder-opened-1440x950.png) · [`3.5-ladder-indented-1440x950.png`](screens/3.5-ladder-indented-1440x950.png). Sweep **22 mutants, 21 killed, one recorded equivalent** — keying the check list over the filtered rows is equivalent PROVABLY rather than by luck (a `RowKey`'s ordinal counts within its `(constraint, role)` bucket and the one filter removes a whole constraint), and both first-pass survivors were real and bought a test. Full gate green: **582 files / 6,264 tests**, lint, typecheck and build silent; app browser suite 19 files / 218 tests; a11y roster clean on all three contour ids, and the open ladder plus both opened cases hand-audited clean (0 rules, 48 interactive nodes, 0 unnamed) |
@@ -233,6 +243,101 @@ changed.
 | 2026-09-15 | **0.5b-ii** | 573fb8c | the five rules through `kernel/bounds/*`, the three theorem identities, `derivation.ts`'s solve stage and `solveTarget.ts`; `latex` on the solved value; 65 wording-pinned tests updated; 191 → 152 flagged |
 
 ## Findings (things learned while executing; each names its step)
+
+- **(4.1) THE CORPUS HAS DECLARED ITS LEMMA SINCE M3, AND THE LEDGER HAS BEEN GUESSING ANYWAY.**
+  Measured over all 28 records: every vanishing piece carries a `lemma`, and every one agrees with
+  what the shape-driven chain picks — A6's arc says `L2` and gets the ML estimate, B1's says `L3`
+  and gets Jordan, F2's says `L6` and gets the wedge bound. The agreement was never checked, so it
+  held because the guess happened to be right, which is *true by accident* in its purest form.
+  Reading the declaration turns it into a CHECK, and `test/ledgerDump.test.ts` is **byte-identical
+  across the whole corpus** — the no-op proof for the half that was already right, which is what
+  makes the refusals the step adds mean something.
+
+- **(4.1) "Jordan declared on a rational integrand" and "B1 at `a = 0`" look like one case and are
+  two, and the plan's own test needs the distinction.** The plan asks that Jordan on a rational
+  integrand refuse by name; B1's family runs through `a = 0`, where `e^{iaz} = 1` and what is left
+  IS a rational integrand — and the record's own trap says an engine treating `π/0` as a failure
+  *"will paper over exactly the case it was built to catch"*. Measured rather than reasoned:
+  `asExponentialTimesRational` returns **null** for `1/(1+z^2)` and a form with `a = 0` for
+  `e^{i\cdot 0\cdot z}/(1+z^2)`. The factor being ABSENT and the factor being PRESENT with zero
+  frequency are different facts, so the first refuses and the second falls through to the ML
+  estimate — a hypothesis that degenerates rather than one that fails.
+
+- **(4.1) FOUR FALSE FRIENDS DISAPPEARED, AND THAT IS THE STEP'S REAL RESULT.** M7.3 measured that
+  four templates — strip, wedge, keyhole and dogbone — close and report `π/e` for B1 at `a = 1`,
+  because each carries a `reproduces` piece and the ledger takes that role on faith. Honouring the
+  declared lemma removes all four at once for a different and better reason: their arcs declare the
+  ML estimate, and at `a ≠ 0` the integrand carries a live `e^{iaz}`, which the ML estimate refuses
+  by name. Measured after the change: on `oscillatory` **exactly one** template answers, and it is
+  the intended one. The drill's exclusion rule is still needed and its demonstration MOVED — at
+  `a = 0` the integrand is rational, the ML estimate genuinely applies, and the unchecked
+  `reproduces` claim is all that holds the wedge up.
+
+- **(4.1) The ledger's `target` and Pass 5's answer are NOT the same quantity.** `target` is the
+  integral over the TARGET PIECE in the limit — `∮ = Σ pieces` read backwards. Pass 5 solves for
+  the unknown the RECORD declares, which may be a real part, a half by evenness, or a weighted
+  combination. On 31 of the 37 fixtures where both exist they agree to the character; on the other
+  six the record declares a reduction (`jordan-strict`'s imaginary part, `removable-one-minus-cos`'s
+  `∫₀^∞`). Declared apart and checked in BOTH directions — and the second direction earned its place
+  immediately: the first draft declared `jordan-quartic` a reduction too, on a measurement taken
+  through `resolveState` where Pass 5 reports no value, and through `solveFamily` it reports one and
+  agrees. The over-declaration failed rather than passing quietly.
+
+- **(4.1) The arithmetic is checked against a route that shares no machinery with it.** `target`
+  comes from `2πi Σ Res` minus the known limits, exactly, in units of π. The quadrature knows
+  nothing of residues: it measures each piece at the finite `R` the contour is drawn at. So the gap
+  between the target's LIMIT and the target piece's measured value must be exactly what the ARC
+  measures — the tail the limit discards. On `1/(1+z²)` at `R = 200` the diameter reads 3.1315927,
+  the arc reads 0.0099999, and they sum to π to twelve places.
+
+- **(4.1) `L7` and `L8` are in the catalogue and are not vanishing lemmas at all.** Research 03 §14:
+  L7 is the periodic-side cancellation — which is the `reproduces` ROLE, a piece returning a
+  multiple of the target — and L8 is Sokhotski–Plemelj, a distributional identity about the whole
+  integral. Step 4.3's role menu would otherwise offer eight lemmas of which two cannot bound
+  anything, so both are refused by what they ARE rather than by falling through to *no bound is
+  available for this integrand*, which blames the integrand for a choice the reader made. The plan's
+  own list for this step named *the wedge and strip and square side bounds* as if they were
+  declarable lemmas; they are `L1`/`L2` applied to a SEGMENT, dispatched by geometry, and the
+  declared routing deliberately leaves segments to that dispatch.
+
+- **(4.1) The app's own test fixtures carried a declaration their integrand did not satisfy, and
+  nothing noticed because nothing read it.** `ledger.test.ts`'s `sector` helper declares `L6` on
+  every arc, and the sweep-reader tests use it with `1/(z²−6z+10)` — a rational integrand on a
+  wedge-shaped contour. The shape chain quietly gave them the ML bound. The helper takes its lemma
+  as a parameter now: the wedge tests declare `L6` and mean it, the sweep tests declare nothing and
+  get the shape-driven pick, which is what a sandbox contour has anyway.
+
+- **(4.1) A refusal that names no alternative is a dead end.** Both the ML and the wedge refusals
+  name the lemma that DOES apply where there is one — *Jordan's lemma is the one that applies*, *the
+  ML estimate is the one that applies to a rational integrand* — which is what turns the row's
+  repair from "choose something else" into a specific next action. `vocabulary.ts` gains
+  `lemmaLabel`, because a menu of `L1 … L8` would be a menu of this program's filing system: step
+  0.2's decision, reaching the last family of ids the app still spelled out loud.
+
+- **(4.1) The joining problem, and where a join stays live** (the edit operations' half). A piece's
+  geometry is symbolic, and an arc's endpoints — `center + radius·(cos θ, sin θ)` — stay inside the
+  affine `Scalar` language far more often than expected: **all ten arcs in the ten templates are
+  expressible**, and a centre bound to a DIFFERENT parameter than the radius is too, because
+  `Scalar.add` may itself be a `Scalar` and `resolveScalar` already recurses. What cannot be
+  expressed is an angle bound to a parameter (cos of a parameter is not affine). Measured: deleting
+  the indented semicircle's right segment gives a join of `{param: "rho"} → {param: "R"}`, and
+  driving `R` from 8 to 40 and `rho` from 0.05 to 0.3 leaves the contour closed with a worst seam of
+  **4.9e-15** — which is the template's own `sin(π) = 1.22e-16` scaled by `R`, not the join's. The
+  literal fallback is honest about being one: on a fan whose arc sweeps `0 → φ` the join is minted
+  from numbers, closed at `φ = 1`, and moving `φ` to 2 opens the contour by **1.9177 = 4 sin(½)`.
+
+- **(4.1) "Delete is −1" is not reachable, and the geometry says why.** Removing a piece from a
+  CLOSED chain opens exactly one seam, and the plan's own joining rule fills it — so the count
+  returns to `n` unless the removed piece was a full turn, which is true for four of the thirty-two
+  pieces in the ten templates (the keyhole's two circles, the dogbone's two caps). Every count
+  assertion derives its expectation from how many seams the edit really opens rather than
+  hardcoding a delta.
+
+- **(4.1) Two writers in one working tree is a race, and it looked like a flake.** A full-suite run
+  reported one failure in `contourEdit.test.ts` that did not reproduce; the cause is specific rather
+  than mysterious — a subagent was mid-write on `src/engine/contour/edit.ts` while the run collected
+  it. Worth recording because "did not reproduce" is exactly the answer this project refuses
+  elsewhere: the root cause here is known, and it is the parallelism rather than the code.
 
 - **(3.6) THE PLAN'S OWN GATE CLAUSE NAMED A LINK THAT COULD NOT EXIST.** *A Worked-example
   permalink at step 5 of A6* — and the codec carried no step: the reader's place in an argument is

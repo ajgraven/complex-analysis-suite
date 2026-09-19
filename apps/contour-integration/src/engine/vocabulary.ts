@@ -12,7 +12,7 @@
 // modules need the labels and a type-only import back would be a cycle (`.dependency-cruiser.cjs`'s
 // `no-circular` runs over type-only edges too). Each re-exports its own id type, so no consumer
 // changed.
-import type { PieceRole } from "./contour/model.js";
+import type { LemmaId, PieceRole } from "./contour/model.js";
 
 /** One of the Closing Ledger's four constraints. A DATA KEY: see {@link constraintLabel}. */
 export type ConstraintId = "LEGALITY" | "CATCH" | "KILL" | "COVER";
@@ -352,4 +352,34 @@ export function paramSymbol(name: string): string {
   const known = PARAM_SYMBOL[name];
   if (known !== undefined) return known;
   return name.length === 1 ? name : `\\mathrm{${name}}`;
+}
+
+/**
+ * The eight lemmas of research 03 §14, by the names a reader knows them by — M8 step 4.1.
+ *
+ * **Step 0.2's decision, applied to the last family of ids the app still spelled out loud.** `L3`
+ * is an identifier; *Jordan's lemma* is what a reader calls it, and until this step the only place
+ * either appeared on screen was inside a sentence a bound module had written by hand — so the two
+ * vocabularies were kept in step by nobody. A declared lemma is now something the reader CHOOSES
+ * (step 4.3's role menu), and a menu of `L1 … L8` would be a menu of this program's filing system.
+ *
+ * **L7 and L8 are in the catalogue and are NOT vanishing lemmas**, which is worth saying here
+ * rather than discovering at the menu: L7 is the periodic-side cancellation — the `reproduces`
+ * role, where the piece returns a multiple of the target instead of dying — and L8 is
+ * Sokhotski–Plemelj, a distributional identity about the whole integral rather than a bound on a
+ * piece. They are named so a declaration carrying one can be refused BY NAME.
+ */
+const LEMMA_LABEL: Readonly<Record<LemmaId, string>> = {
+  L1: "the ML estimate",
+  L2: "the large-arc decay lemma",
+  L3: "Jordan's lemma",
+  L4: "the indentation lemma",
+  L5: "the large-arc residue lemma",
+  L6: "the wedge bound",
+  L7: "the periodic-side cancellation",
+  L8: "Sokhotski–Plemelj",
+};
+
+export function lemmaLabel(id: LemmaId): string {
+  return LEMMA_LABEL[id];
 }

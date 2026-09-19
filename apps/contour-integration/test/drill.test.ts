@@ -299,16 +299,40 @@ describe("rung iii — the menu", () => {
     for (const task of DRILL_TASKS) expect(VERIFIED_ROLE_TEMPLATES).toEqual(expect.arrayContaining([...task.menu]));
   });
 
-  it("and the wedge really is a FALSE FRIEND — it answers B1, on a claim nothing checked", () => {
-    // `f(ωz) = μ f(z)` is false for `e^{iz}/(1+z²)`, and the ledger never asks: a `reproduces` row
-    // is satisfied "by its role". Without the exclusion rule the menu would mark this correct.
-    const task = taskById("oscillatory");
+  it("and the wedge really is a FALSE FRIEND — it answers the rational task, on a claim nothing checked", () => {
+    // `f(ωz) = μ f(z)` is false for `1/(1+z²)`, and the ledger never asks: a `reproduces` row is
+    // satisfied "by its role". Without the exclusion rule the menu would mark this correct.
+    //
+    // **The demonstration MOVED at M8 step 4.1, and the move is the finding.** It used to be the
+    // `oscillatory` task, where four templates — strip, wedge, keyhole and dogbone — closed and
+    // reported `π/e` for B1 (M7.3's own measurement). Honouring each piece's DECLARED lemma removed
+    // all four at once: their arcs declare the ML estimate, and at `a = 1` the integrand carries a
+    // live `e^{iaz}`, which the ML estimate refuses by name. So `oscillatory` now has exactly one
+    // template that answers it. At `a = 0` the integrand is rational, the ML estimate genuinely
+    // applies, and the unchecked `reproduces` claim is all that is left holding the wedge up —
+    // which is why the rule still needs excluding and why this is where it shows.
+    const task = taskById("rational");
     const run = task === null ? null : runTask(task);
     if (run === null) throw new Error("no run");
     const wedge = menuVerdict(run, "wedge");
     expect(wedge.answers).toBe(true);
-    expect(wedge.value).toBe("π/e");
+    expect(wedge.value).toBe("π");
     expect(TEMPLATES.find((t) => t.id === "wedge")?.build().pieces.find((p) => p.role === "reproduces")).toBeDefined();
+  });
+
+  it("and the four that were false friends at a live frequency are not any more", () => {
+    // The other half of the move, so it is a measurement rather than a remark: on `oscillatory`
+    // exactly one template answers, and it is the intended one. A declaration honoured is worth
+    // more here than the menu's own exclusion rule, because it refuses with the ledger's reason
+    // rather than by not being offered.
+    const task = taskById("oscillatory");
+    const run = task === null ? null : runTask(task);
+    if (run === null) throw new Error("no run");
+    const answering = TEMPLATES.filter((t) => menuVerdict(run, t.id).answers).map((t) => t.id);
+    expect(answering).toEqual(["semicircle"]);
+    for (const id of ["strip", "wedge", "keyhole", "dogbone"] as const) {
+      expect(menuVerdict(run, id).failedAt, `${id} should now fail at a boundary term`).toBe("KILL");
+    }
   });
 
   it("has exactly one intended option, and the others FAIL with the ledger's own reason", () => {
