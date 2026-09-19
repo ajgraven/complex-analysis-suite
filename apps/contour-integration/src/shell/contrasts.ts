@@ -1,4 +1,4 @@
-// The contrast ladder, as a MODAL — M8 step 1.7, plan §4.0.
+// The contrast ladder, as a STRIP OF CARDS above the stage — M8 step 3.5, plan §6.
 //
 // M7.1 built the ladder itself: five arguments in an order where each differs from the one above it
 // in a declared, verified set of ledger rows. `shell/contrastGrid.ts` computes the whole table and
@@ -6,56 +6,39 @@
 // directions. **Nothing here recomputes any of that.** This file is the presentation, and the only
 // judgement it makes is about the reader's hands.
 //
-// **The dialog MECHANICS moved to `modal.ts` at step 1.8**, on the second-consumer rule: the front
-// door needs the same focus trap, the same `inert`, the same Escape and the same focus return, and
-// two copies of a forty-line trap is how two dialogs come to disagree about what Escape does. What
-// is left here is what has an opinion about the ladder — its grid, its heading, and the order in
-// which a cell shuts the panel and applies its state. The reasons the mechanics are shaped as they
-// are went with them, including why this is a `<div role="dialog">` rather than `<dialog>`.
+// **IT WAS A MODAL UNTIL THIS STEP, AND THE SHAPE WAS THE DEFECT.** A dialog over the stage had to
+// shut before it applied a cell, because it covered the thing it was about to change — so the
+// ladder could only ever be walked one rung at a time, each rung costing a reopen, and the panel
+// was never on screen beside the argument it was making a claim about. A ladder whose whole content
+// is *this differs from that in one row* is a comparison, and a comparison that cannot be seen next
+// to what it compares is a list. The strip stays open while the reader steps along it
+// (`resetTransient` no longer clears `contrastsOpen`), marks the rung that is showing, and puts the
+// declared row under a highlight in the Result card's own check list.
 //
-// **Sweep at 1.7: 38 mutants, 33 killed, five equivalents kept with their reasons.** Three were
-// about the mechanics and are recorded in `modal.ts` now. The two that are this file's: the
-// `cell === undefined` guard in `openCell` is unreachable, because the only ids that reach it come
-// out of `CONTRAST_CELLS`, and it exists because `find` returns `| undefined`; and the {@link ladder}
-// memo is a cost rather than a behaviour, since dropping it changes nothing a test can see and
-// asserting it would mean asserting how many times a pure function was called.
-import { CONTRAST_CELLS, contrastTable, type ContrastTable, type ContrastTableCell, type ContrastTableRow } from "./contrastGrid.js";
+// **The grid went with it.** Five columns × nine rows of glyphs was a table a reader had to decode
+// before it said anything, and four fifths of its cells were `✓` against `✓` — the agreement that
+// makes the ladder work, drawn as the bulk of the picture. What a rung has to say is which row
+// moved, and that is one sentence and one row label. `contrastTable` still computes every cell,
+// because the row LABELS and the changed row's new STATUS come out of it, and because the table is
+// what `contrastGrid.test.ts` checks the declarations against.
+import { CONTRAST_CELLS, contrastTable, type ContrastTable, type ContrastTableCell } from "./contrastGrid.js";
 import { constraintLabel, type ConstraintId } from "../engine/vocabulary.js";
-import type { ShellState } from "./state.js";
-import { h, patch, type Child, type Desc } from "./dom.js";
-import { createModal } from "./modal.js";
-import { mathPlain, mathText } from "./math.js";
-
-/** What the dialog needs the shell to do. Two functions, and no reach into the shell's closure. */
-export interface ContrastsInput {
-  /** Open the cell's state. The shell's `applyState`, which resets the session and recomputes. */
-  readonly apply: (next: ShellState) => void;
-  /** Shut the dialog. The shell clears `session.contrastsOpen` and re-renders. */
-  readonly close: () => void;
-}
-
-export interface ContrastsDialog {
-  /** Show it. Traps focus, makes the rest of the page `inert`, remembers what to return focus to. */
-  open(): void;
-  /** Hide it, restore `inert`, and put focus back where it was. Idempotent. */
-  close(): void;
-  readonly isOpen: boolean;
-  destroy(): void;
-}
+import type { CardContext } from "./cards/card.js";
+import { h, type Child, type Desc } from "./dom.js";
+import { mathText } from "./math.js";
 
 /**
  * The ladder, computed once for the whole module.
  *
  * Five full solves, four of them gallery records — the old shell built the panel on first open for
- * exactly that reason, and then never rebuilt it. **The cache is at module scope rather than per
- * dialog** because the stronger fact is available: `CONTRAST_CELLS` are five fixed `ShellState`s and
- * `contrastSideOf` resolves them through `resolveState`, so nothing a reader does to the app can
- * change what they resolve to. A per-instance cache would pay the five solves again every time the
- * shell is re-mounted, which in the suite is once per test.
+ * exactly that reason, and then never rebuilt it. **The cache is at module scope** because the
+ * stronger fact is available: `CONTRAST_CELLS` are five fixed `ShellState`s and `contrastSideOf`
+ * resolves them through `resolveState`, so nothing a reader does to the app can change what they
+ * resolve to. Kept from the dialog, where the alternative was paying five solves per re-mount.
  */
 let LADDER: ContrastTable | null = null;
 
-function ladder(): ContrastTable {
+export function ladder(): ContrastTable {
   if (LADDER === null) LADDER = contrastTable();
   return LADDER;
 }
@@ -64,221 +47,180 @@ function ladder(): ContrastTable {
 const badge = (level: string, key = "b"): Desc =>
   h("span", { key, class: "badge", "data-level": level }, level);
 
-/**
- * One ledger row in one column.
- *
- * A GLYPH with its word beside it in `srOnly`, which is the old shell's shape and is kept for its
- * reason: five columns of "satisfied" spelled out is a wall of text where the contrast is supposed
- * to be readable at a glance, and a glyph alone names nothing at all. `tag` / `tag warn` carry the
- * colour, so the status is not conveyed by a shape the stylesheet has to know about.
- *
- * **`data-change` rather than a class**, because the two states it marks — the step's DECLARED
- * difference, and a row whose wording moved without the argument doing so — are data the grid is
- * about, and M7.1's finding is that the second must never be drawn as the first. The `srOnly`
- * sentence says which it is, so the distinction survives a stylesheet that has not been written yet
- * and a reader who cannot see an outline.
- */
-function entryCell(row: ContrastTableRow, index: number): Desc {
-  const entry = row.cells[index];
-  const key = `c:${index}`;
-  if (entry === null || entry === undefined) {
-    return h(
-      "td",
-      { key, "data-status": "absent" },
-      h("span", { key: "g", class: "muted", "aria-hidden": "true" }, "—"),
-      h("span", { key: "s", class: "srOnly" }, "this argument has no such row"),
-    );
-  }
-  const declared = row.highlight.includes(index);
-  const reworded = !declared && row.muted.includes(index);
-  // **`"true"`, spelled out.** `dom.ts` writes a boolean `true` prop as an EMPTY attribute value,
-  // and `aria-hidden=""` is not `aria-hidden="true"` — an empty string is invalid and the element is
-  // exposed, so the glyph would be announced beside the word it is standing in for. Found by the
-  // test below rather than by reading, which is the only way this one is ever found.
-  const glyph = entry.status === "satisfied" ? "✓" : entry.status === "failed" ? "✗" : "?";
-  return h(
-    "td",
-    {
-      key,
-      "data-status": entry.status,
-      ...(declared ? { "data-change": "declared" } : reworded ? { "data-change": "wording" } : {}),
-      // The claim itself, for a pointer. It is NOT the accessible name — a `title` is announced by
-      // some readers and not others — which is why the status word below is real text.
-      title: mathPlain(entry.claim),
-    },
-    h("span", { key: "g", class: entry.status === "failed" ? "tag warn" : "tag", "aria-hidden": "true" }, glyph),
-    h(
-      "span",
-      { key: "s", class: "srOnly" },
-      declared
-        ? `${entry.status}, and this is the step's declared change`
-        : reworded
-          ? `${entry.status}, reworded`
-          : entry.status,
-    ),
-  );
+/** One rung's declared difference: the rows it moves, with the status each one lands on. */
+export interface LadderChange {
+  readonly key: string;
+  readonly label: string;
+  readonly status: "satisfied" | "failed" | "unknown" | "absent";
 }
 
 /**
- * A column's heading: what the argument is, what the step isolates, and what it comes to.
+ * What the step into column `index` declares, read off the table rather than off the datum.
  *
- * **The ANSWER, not `∮`.** C1's contour encloses nothing, so its `∮` is exactly 0 while the integral
- * it determines is π/2 — which is the cell's whole lesson, and the reason `ContrastTableCell.answer`
- * is the record's solved value rather than the ledger's. Printing the ledger's number here would
- * make the last rung of the ladder read as a mistake.
- *
- * **No level beside it.** `ContrastTableCell` carries `answer`, `closes` and `failedAt` and no
- * certificate, so there is nothing here from which an `=` or a `≈` could honestly be derived, and
- * writing one would be the guardrail broken in its plainest form. The one badge drawn is `⚠` on a
- * column that does NOT close, and that comes from `ledger.closes` — a verdict — rather than from a
- * literal choice made here.
+ * Through `ContrastTableRow.highlight`, which is where `contrastGrid` already put the declaration —
+ * so a row this names is a row the grid's own test has checked against the engine, and a second
+ * reader of `differsAbove.rows` cannot drift from the first.
  */
-function columnHead(cell: ContrastTableCell, onOpen: (id: string) => void): Desc {
+export function changesAt(table: ContrastTable, index: number): readonly LadderChange[] {
+  return table.rows
+    .filter((row) => row.highlight.includes(index))
+    .map((row) => ({
+      key: row.key,
+      label: row.label,
+      status: row.cells[index]?.status ?? "absent",
+    }));
+}
+
+/** Past-tense, for a sentence rather than a column heading: what the row DID at this rung. */
+function became(status: LadderChange["status"]): string {
+  if (status === "failed") return "now fails";
+  if (status === "satisfied") return "now holds";
+  if (status === "unknown") return "is now undecided";
+  return "is gone";
+}
+
+/**
+ * One rung.
+ *
+ * **The whole card is the button**, not a card with an Open button in it. The grid had the second
+ * shape because a `<th>` cannot be pressed; here the card IS the control, so its accessible name is
+ * the column's spoken twin and there is no second target to explain. Its children are `<span>`s
+ * rather than `<div>`s for one reason: a `<button>`'s content model is phrasing content, and a
+ * `<div>` inside one is invalid HTML that happens to render.
+ *
+ * **One sentence, not two.** `note` says what the cell IS and `because` says what the step
+ * ISOLATES; the first is the only thing to say about the first rung, which has no step into it, and
+ * the second is the only thing worth saying about the other four. A card carrying both is a
+ * paragraph in a strip 5 cards wide.
+ */
+function caseCard(
+  cell: ContrastTableCell,
+  changes: readonly LadderChange[],
+  current: boolean,
+  onOpen: (id: string) => void,
+): Desc {
   const failed = cell.failedAt === null ? null : constraintLabel(cell.failedAt as ConstraintId);
   const body: Child[] = [
     // Through `mathText` like every other engine-produced sentence in the app: a cell's label is a
     // sentence in the `$…$` convention, and a label that grows a formula must not start printing
-    // its own delimiters on screen. Today none of the five carry one, which is precisely why a
-    // plain-text set would look right and fail the first time one did.
-    h("div", { key: "label" }, ...mathText(cell.label, `l:${cell.id}`)),
-    h("div", { key: "note", class: "muted small" }, ...mathText(cell.note, `n:${cell.id}`)),
+    // its own delimiters on screen.
+    h("span", { key: "label", class: "caseLabel" }, ...mathText(cell.label, `l:${cell.id}`)),
+    h(
+      "span",
+      { key: "why", class: "muted small caseWhy" },
+      ...mathText(cell.because ?? cell.note, `w:${cell.id}`),
+    ),
   ];
-  // The step's own sentence — what this column changes about the one before it. Absent on the first
-  // column, which changes nothing because there is nothing above it.
-  if (cell.because !== null) {
-    body.push(h("div", { key: "because", class: "small" }, "↑ ", ...mathText(cell.because, `b:${cell.id}`)));
+  if (changes.length > 0) {
+    body.push(
+      h(
+        "span",
+        { key: "chg", class: "small caseChange" },
+        // **The COUNT is said out loud when it is not one**, because the plan's sentence for this
+        // card is "the one row that changed" and for the last rung that is false: C1 declares five.
+        // M7.1 measured it and the datum says so; a card that printed the first of five would be
+        // the plan's sentence made true by hiding the other four.
+        changes.length === 1
+          ? `${changes[0].label} ${became(changes[0].status)}`
+          : `${changes.length} checks change: ${changes.map((c) => c.label).join(", ")}`,
+      ),
+    );
   }
   body.push(
+    // **The ANSWER, not `∮`.** C1's contour encloses nothing, so its `∮` is exactly 0 while the
+    // integral it determines is π/2 — which is the cell's whole lesson, and the reason
+    // `ContrastTableCell.answer` is the record's solved value rather than the ledger's.
+    //
+    // **No level beside it.** `ContrastTableCell` carries `answer`, `closes` and `failedAt` and no
+    // certificate, so there is nothing here from which an `=` or a `≈` could honestly be derived.
+    // The one badge drawn is `⚠` on a column that does NOT close, and that comes from
+    // `ledger.closes` — a verdict — rather than from a literal choice made here.
     cell.answer !== null
-      ? h("div", { key: "answer", class: "num" }, ...mathText(cell.answer, `a:${cell.id}`))
+      ? h("span", { key: "answer", class: "num caseAnswer" }, ...mathText(cell.answer, `a:${cell.id}`))
       : cell.closes
-        ? h("div", { key: "answer", class: "muted" }, "—")
+        ? h("span", { key: "answer", class: "muted caseAnswer" }, "—")
         : h(
-            "div",
-            { key: "answer", class: "verdict" },
+            "span",
+            { key: "answer", class: "verdict caseAnswer" },
             badge("⚠", `w:${cell.id}`),
             ` incomplete (${failed === null ? "?" : failed.toLowerCase()})`,
           ),
   );
-  body.push(
-    h(
-      "div",
-      { key: "open", class: "btnRow" },
-      h(
-        "button",
-        {
-          key: "b",
-          type: "button",
-          // The label names the column, because five buttons all reading "Open" name nothing — and
-          // it is the cell's SPOKEN twin, not `mathPlain` of the typeset one, which since step 2.1
-          // would be the LaTeX source read out backslash by backslash.
-          "aria-label": `open ${cell.labelText} in the app`,
-          onClick: () => onOpen(cell.id),
-        },
-        "Open",
-      ),
-    ),
-  );
-  return h("th", { key: `h:${cell.id}`, scope: "col" }, ...body);
-}
-
-/** The grid. Rows in `mergedRowOrder`'s order, which is every column's own argument's order. */
-function gridOf(table: ContrastTable, onOpen: (id: string) => void): Desc {
   return h(
-    "table",
-    // **Not `numTable`, which it wore until step 2.1 and should never have.** That class is for a
-    // table of NUMBERS — tabular figures, and `white-space: nowrap` on every heading — and this is a
-    // table of sentences. The nowrap is why the column heads never wrapped and why the fourth and
-    // fifth columns had been drawn off the edge of the dialog since the panel was built.
-    { key: "grid", class: "contrastGrid" },
-    h(
-      "thead",
-      { key: "h" },
-      h(
-        "tr",
-        { key: "r" },
-        // **NOT EMPTY.** axe's `empty-table-header` fired on exactly this corner cell when M7.1 ran
-        // it against the OPEN panel, and it is also the one place to say what the row headings are.
-        // The a11y roster audits a page in its DEFAULT state, so a panel nothing opens is never
-        // audited — which is why the emptiness survived to be found by hand.
-        h("th", { key: "corner", scope: "col" }, "Check"),
-        ...table.cells.map((cell) => columnHead(cell, onOpen)),
-      ),
-    ),
-    h(
-      "tbody",
-      { key: "b" },
-      ...table.rows.map((row) =>
-        h(
-          "tr",
-          { key: `r:${row.key}` },
-          // The bucket's name from `vocabulary.ts`, through `contrastGrid`'s own label —
-          // `Boundary terms · vanishing piece 2`, never `KILL/vanish#1`. Step 0.2: the ids are data
-          // and the labels are display, and neither is spelled from the other.
-          h("th", { key: "rh", scope: "row" }, row.label),
-          ...table.cells.map((_, i) => entryCell(row, i)),
-        ),
-      ),
-    ),
+    "button",
+    {
+      key: `case:${cell.id}`,
+      type: "button",
+      class: "ladderCard",
+      "data-cell": cell.id,
+      // **`aria-current`, not `aria-pressed`.** The rungs are not five independent toggles; one of
+      // them is the argument on screen, and that is what `current` means everywhere else on the web.
+      ...(current ? { "aria-current": "true" } : {}),
+      // The cell's SPOKEN twin, not `mathPlain` of the typeset one, which since step 2.1 would be
+      // the LaTeX source read out backslash by backslash.
+      "aria-label": `open ${cell.labelText} in the app`,
+      onClick: () => onOpen(cell.id),
+    },
+    ...body,
   );
 }
 
-export function createContrastsDialog(host: HTMLElement, page: HTMLElement, input: ContrastsInput): ContrastsDialog {
-  // **`shell2` on the BACKDROP, and it is load-bearing.** Every class this dialog reuses — `card2`,
-  // `muted`, `badge`, `verdict`, `numTable` — is scoped `.shell2 …` in `theme.css`, and the dialog
-  // cannot be a DESCENDANT of the shell: `inert` is not defeasible from CSS, so a modal inside the
-  // element it makes inert is a modal nobody can reach. Wearing the class rather than living under
-  // it gets the visual system without the containment; `shell.css` cancels the grid on
-  // `.shell2.modalBackdrop`.
-  const modal = createModal({
-    host,
-    page,
-    backdropClass: "shell2 modalBackdrop",
-    dialogClass: "modalDialog card2",
-    onClose: input.close,
-    build: (dialog, titleId) => {
-      patch(dialog, [
-        h(
-          "div",
-          { key: "bar", class: "btnRow" },
-          h("h2", { key: "t", id: titleId }, "Contrasting arguments"),
-          h(
-            "button",
-            { key: "x", type: "button", "aria-label": "close the contrasts dialog", onClick: () => modal.dismiss() },
-            "Close",
-          ),
-        ),
+/**
+ * The strip, or nothing at all.
+ *
+ * **Nothing rather than a hidden element**, so the grid row collapses and a closed ladder costs the
+ * stage no height — and so the five solves are not paid on a mount that never opens it, `ladder()`
+ * being called only from here.
+ */
+export function contrastStrip(ctx: CardContext): readonly Desc[] {
+  if (!ctx.session.contrastsOpen) return [];
+  const table = ladder();
+  const current = ctx.session.contrast?.cell ?? null;
+  return [
+    h(
+      "section",
+      { key: "ladder", class: "ladder2", "aria-labelledby": "ladderTitle" },
+      h(
+        "div",
+        { key: "head", class: "ladderHead" },
+        h("h2", { key: "t", id: "ladderTitle" }, "Contrasting arguments"),
         h(
           "p",
           { key: "legend", class: "muted small" },
-          "Each column differs from the one on its left in the highlighted row, and in nothing else. " +
-            "A dotted cell is the same claim about a differently-named piece.",
+          // **NOT "rung".** That is this program's word for a step of the drill (`denylist.test.ts`
+          // polices it), and the word for one of these on screen is the research's own:
+          // contrasting CASES. Two panels using one word for two things is how a reader comes to
+          // think the ladder is a fifth rung of the drill.
+          "Each case differs from the one before it in the named check, and in nothing else. " +
+            "Open one and that check is highlighted under What was checked.",
         ),
-        gridOf(ladder(), openCell),
-      ]);
-    },
-  });
+        h(
+          "button",
+          {
+            key: "x",
+            type: "button",
+            "aria-label": "close the contrast ladder",
+            onClick: () => ctx.actions.setContrastsOpen(false),
+          },
+          "Close",
+        ),
+      ),
+      h(
+        "ol",
+        { key: "ladderList", class: "ladderList" },
+        ...table.cells.map((cell, i) =>
+          h(
+            "li",
+            { key: `c:${cell.id}` },
+            caseCard(cell, changesAt(table, i), cell.id === current, (id) => ctx.actions.openContrast(id)),
+          ),
+        ),
+      ),
+    ),
+  ];
+}
 
-  function openCell(id: string): void {
-    const cell = CONTRAST_CELLS.find((c) => c.id === id);
-    if (cell === undefined) return;
-    // **Shut BEFORE applying, and the order is not cosmetic.** `applyState` runs `resetTransient`,
-    // which clears `session.contrastsOpen` itself and re-renders — so applying first would have the
-    // shell decide the dialog is closed while this dialog's DOM is still up and the page is still
-    // `inert`, with focus inside a panel the shell has stopped drawing. Shutting first leaves one
-    // order: the dialog goes away, focus lands back on the control that opened it (which is still
-    // in the document, because nothing has re-rendered yet), and only then does what is behind it
-    // change. It is also the old shell's order, which is worth keeping where nothing argues against.
-    modal.dismiss();
-    input.apply(cell.state());
-  }
-
-  return {
-    open: modal.open,
-    close: modal.close,
-    get isOpen(): boolean {
-      return modal.isOpen;
-    },
-    destroy: modal.destroy,
-  };
+/** The cell a rung names, for the shell's action. `undefined` for an id that is not one. */
+export function contrastCell(id: string): (typeof CONTRAST_CELLS)[number] | undefined {
+  return CONTRAST_CELLS.find((c) => c.id === id);
 }

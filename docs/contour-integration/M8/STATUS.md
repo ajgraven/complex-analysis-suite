@@ -106,9 +106,17 @@ changed.
   reads `v1` as stages only. Eight defects (see **Findings**); the one that matters is that the rung
   whose question is *which contour?* was printing the answer in FIVE places, and the whole app suite
   stayed green through the repair.
-  **Next execution action: step 3.5** (contrasts rehoused — the five cells become a collapsible
-  strip of cards above the stage, applying state and highlighting the changed row; the 1.7 modal
-  removed).
+  **3.5 is done.** The contrast ladder stops being a modal and becomes a **strip of cases above the
+  stage**, opened from the bar as a disclosure and closed by default: each case carries its typeset
+  integral, the one sentence the step isolates, the check(s) it moves in words, and its answer —
+  and pressing one applies its state, marks itself `aria-current`, and **highlights that check in
+  the Result card's own list**, which it opens for the purpose. The grid, the dialog and
+  `ContrastsInput` are gone; `contrastGrid.ts` is untouched. Ten findings (see **Findings**); the
+  two that matter are that a comparison which cannot be seen beside what it compares is a list —
+  which is what the modal made it — and that the app's **browser suite had been red since step
+  3.4**, in two places the node gate structurally cannot see.
+  **Next execution action: step 3.6** (the Phase 3 gate — full gate, browser suite, `pnpm a11y`
+  with two new roster entries, screenshots under `M8/screens/phase3/`, STATUS.md: Phase 4 next).
   **Step 1.12 is done — THE CUTOVER.** `main.ts` stops choosing, the old `src/shell/app.ts` (3,700
   lines), `src/ui/app.css` and four of its test files are deleted, and `src/shell2/` has BECOME
   `src/shell/`. [`parity.md`](parity.md) is complete. The parity sweep found two capabilities the new
@@ -139,6 +147,8 @@ changed.
 
 | date | step | commit | notes |
 |---|---|---|---|
+| 2026-09-19 | **3.5** | (this commit) | **THE LADDER STOPS BEING A MODAL.** Five cases in a strip above the stage (`contrastStrip` → `Rendered.ladder` → its own `auto` grid row, `hidden` and EMPTY when shut, so a closed ladder costs the stage nothing), the bar's Contrasts button a **disclosure** with `aria-expanded`, and each case a single `<button class="ladderCard">` carrying the typeset integral, the step's own sentence, the check(s) it declares **in words** with what each one did (`now holds` / `now fails`), and the record's ANSWER. `session.contrast` records which case is open and which `RowKey`s it declares; `resetTransient` no longer clears `contrastsOpen` (a strip is not a dialog — walking the ladder is five `applyState` calls in a row) and `commit` drops the highlight on the same four fields a running sweep dies on. The Result card marks those rows `data-change="declared"`, says so in `srOnly` text, and the action WRITES the check list open rather than leaning on a computed default. `ContrastsInput`, `createContrastsDialog`, `gridOf`/`entryCell`/`columnHead` and `session.drillPicker`'s neighbour `contrastsOpen`-as-modal all deleted; `contrastGrid.ts` untouched. **Ten findings**, four of them measurements: the stage column loses to the full width **335 px of panel against a 328 px stage** (vs 231/433, and 1,413 px of content in 1,413 px of box against 789 in 725); the denylist caught `rung` — the DRILL's word — in six class names and the panel's legend before a reader could; deleting the dialog would have deleted `modal.ts`'s only tests of its focus trap, Tab cycle, `inert` and Escape, which moved onto `createModal` directly (sweep 12/13) and found a **dead clause** in `cycle` that its own comment presented as the mechanism; and **the app's browser suite had been red since step 3.4** — the chooser left the drill card for the front door and the prediction now stands between rung iii and its menu — which bought the assertion that file did not have: answering the prediction leaves the contour masked (0 ink pixels before the pick, >1000 after). Look: [`3.5-ladder-1440x950.png`](screens/3.5-ladder-1440x950.png) · [`3.5-ladder-opened-1440x950.png`](screens/3.5-ladder-opened-1440x950.png) · [`3.5-ladder-indented-1440x950.png`](screens/3.5-ladder-indented-1440x950.png). Sweep **22 mutants, 21 killed, one recorded equivalent** — keying the check list over the filtered rows is equivalent PROVABLY rather than by luck (a `RowKey`'s ordinal counts within its `(constraint, role)` bucket and the one filter removes a whole constraint), and both first-pass survivors were real and bought a test. Full gate green: **582 files / 6,264 tests**, lint, typecheck and build silent; app browser suite 19 files / 218 tests; a11y roster clean on all three contour ids, and the open ladder plus both opened cases hand-audited clean (0 rules, 48 interactive nodes, 0 unnamed) |
+
 | 2026-09-19 | **3.4** | (this commit) | **THE DRILL REHOUSED, AND RUNG iii ASKS BEFORE IT OFFERS.** The task chooser leaves the rail for a **Practice** tab on the front door (`DoorTab`, `openTask`, a stage mark and a complete mark per task), so the drill card has ONE shape again and `session.drillPicker` is deleted; and rung iii now puts a forced choice before its menu — `drill.ts`'s `predictionFor`, an option list, a reveal and a reason. **Which question is asked is DERIVED, not declared**: both semicircles are run over the task's own integrand, so a half-plane is offered exactly when one exists. Measured over the four tasks — `rational` closes BOTH ways (π either way: with no kernel nothing forces the side), `oscillatory` upper only, `forced-downward` lower only, and `indented` NEITHER, because its pole sits on the real axis and both semicircles fail LEGALITY before any limit is taken, which is what routes it to the enclosure question rather than a flag saying so. The reason on reveal is the losing side's own ledger row (`the lower semicircle diverges for $a = 1$`), or, where both sides answer, the two VALUES — the only form in which *either* is a claim. `drillProgress` goes to **`ci.drill.v2`**: `predicted` is tri-state on the wire, first-answer-wins, and `v1` is read as STAGES ONLY and never written, which is rule 1's exception rather than a lapse from it (the field `v1` lacks defaults to *not answered*, which is what a reader who has never seen the question already has). **AND THE RUNG WHOSE QUESTION IS *WHICH CONTOUR?* WAS PRINTING THE ANSWER IN FIVE PLACES** — the Target card's `= π/e`, the record's title naming Jordan's lemma, its strategy line giving the prediction's answer in words, the Contour card's *(upper when $a > 0$)*, the Singularities table's `Ind` column, and the accumulator drawing the record's own semicircle with `1.15565557035` under it. `drillMask("argument")` gains four readers, the strip going through the SAME path a refusal takes; **the whole app suite stayed green through the repair**, so each reader arrives with its own assertion and a pairing that shows the same record unmasked outside the drill. Look: [`3.4-practice-tab-1440x950.png`](screens/3.4-practice-tab-1440x950.png) · [`3.4-prediction-1440x950.png`](screens/3.4-prediction-1440x950.png) · [`3.4-prediction-revealed-1440x950.png`](screens/3.4-prediction-revealed-1440x950.png). Sweep **20/21, one recorded equivalent** (dropping the `decided` guard from the enclosure count is unobservable — all four `decided: false` returns in `kernel/winding.ts` carry `n: 0`, checked rather than recalled; M6.4's equivalent in a new reader). Full gate green: **582 files / 6,258 tests**, lint, typecheck and build silent; app suite re-run green after the sweep restored the tree (131 files / 2,467 tests); a11y roster clean with a new `contour-integration-predict` entry, and four non-default states hand-audited clean |
 
 | 2026-09-14 | review | 3f3c9da | review published; working materials under `review-inputs/` |
@@ -214,6 +224,96 @@ changed.
 | 2026-09-15 | **0.5b-ii** | 573fb8c | the five rules through `kernel/bounds/*`, the three theorem identities, `derivation.ts`'s solve stage and `solveTarget.ts`; `latex` on the solved value; 65 wording-pinned tests updated; 191 → 152 flagged |
 
 ## Findings (things learned while executing; each names its step)
+
+- **(3.5) THE SHAPE WAS THE DEFECT, AND THE STEP IS THE SHAPE.** A modal has to shut before it
+  applies, because it covers the thing it is about to change — so the ladder could only ever be
+  walked one case at a time, each one costing a reopen, and the panel was never on screen beside the
+  argument it makes a claim about. A ladder whose entire content is *this differs from that in one
+  row* is a comparison, and a comparison that cannot be seen next to what it compares is a list. The
+  strip stays up across the five `applyState` calls that walking it now is, which is why
+  `resetTransient` no longer clears `contrastsOpen` — the field's note carries the reason — and why
+  the bar's control became a DISCLOSURE: a button that can only open is honest about a modal, which
+  shuts itself, and leaves a reader who wants the stage back with nothing to press.
+
+- **(3.5) The grid went with it, and four fifths of it was the agreement.** Five columns × nine rows
+  of glyphs is a table a reader decodes before it says anything, and most of its cells were `✓`
+  against `✓` — the sameness that makes the ladder work, drawn as the bulk of the picture. What a
+  case has to say is which row moved, which is one row label and one sentence. `contrastTable` is
+  untouched and still computes every cell, because the row LABELS and the changed row's new STATUS
+  come out of it and because `contrastGrid.test.ts` checks the declarations against it.
+
+- **(3.5) The plan's own sentence for the card is false at the last case, and the card says the
+  count out loud rather than hiding it.** *"The one row that changed from its left neighbour"* is
+  right for three of the four steps and wrong for C1, which declares FIVE — M7.1 measured that and
+  the datum has said so since. A card printing the first of five would be the plan's sentence made
+  true by omission, so the card reads `5 checks change:` and names them all.
+
+- **(3.5) `stage column` vs `full width` was MEASURED, and the stage column loses badly.** In the
+  stage's own column at 1440 px the five cases are 152 px wide, every line of every card wraps, and
+  the strip is **335 px tall against a stage of 328** — a panel taking more room than the thing it
+  comments on. Across all three columns they are 277 px, the row does not scroll at all (1,413 px of
+  content in 1,413 px of box, against 789 in 725) and the strip is 231 px with the stage keeping
+  433. It costs the rails 231 px of scroll, which is the right thing to spend: a rail's content is
+  the same content further down, where a stage's is simply smaller.
+
+- **(3.5) A highlight that outlives its argument is worse than none, and the guard for it already
+  existed.** `resetTransient` covers a link and a drill rung; `toSandbox`, `setFixture` and an
+  edited expression are ordinary commits and go nowhere near it, so the mark stayed on whatever row
+  of the NEW ledger happened to land under the same `(constraint, role, ordinal)` key. `commit`
+  already computed exactly that condition for a running sweep — *a sweep does not survive the
+  argument changing under it* — so the contrast reads the same four fields, and a parameter move is
+  deliberately not among them: same argument, different binding, and the declared row is still the
+  declared row. **Which then forced the ORDER**: `applyStateNow`'s new `then` hook ran between the
+  reset and the commit to save a patch, and applying a case moves the argument, so the commit took
+  the hook's own write straight back out. It runs after the commit with a second `render2`, which
+  is one extra patch on a click that has just paid a full solve.
+
+- **(3.5) The denylist caught the word before a reader could.** `rung` is this program's word for a
+  step of the DRILL, and the first draft spent it on the strip — in six class names and in the
+  panel's own legend. Two panels using one word for two things is how a reader comes to think the
+  ladder is a fifth rung of the drill; they are `case`s now, which is research 02 §13's own word
+  (*contrasting cases*). Phase 2's source-half scan found it in seconds, on literals the rendered
+  half would never have seen because a class name is not on screen.
+
+- **(3.5) DELETING THE LADDER WOULD HAVE DELETED THE MODAL'S OWN TESTS.** `modal.ts` was extracted
+  from the contrasts dialog at step 1.8 and `contrasts.test.ts` was kept UNCHANGED across the move —
+  which was the right no-op proof then and left the focus trap, the Tab cycle, `inert`, Escape and
+  the focus return asserted only THROUGH a consumer that step 3.5 removes. `modal.test.ts` held only
+  the half *"where the ladder cannot reach it"*. Ten tests moved onto `createModal` directly, which
+  is strictly stronger than through either consumer, and its own sweep is 12/13. It found one dead
+  clause: `at === -1 || at === last ? 0 : at + 1` — `at + 1` is already `0` when `at` is `-1`, so
+  the clause is unobservable, and the comment above it had been presenting the dead half as the
+  mechanism that handles Tab from the container. Removed. The backwards `at <= 0` is NOT redundant
+  in the same way: `at === 0` there reads `items[-1]`.
+
+- **(3.5) The one case with no answer is the one case whose job is to be the odd one out, and CSS
+  made it look like a statement.** `.caseAnswer { margin-top: auto }` loses to
+  `.shell2 .verdict { margin: 0 }` on specificity, so the wrong-way card's `⚠ incomplete` sat where
+  its text ended while the other four answers shared a baseline at the foot of the row. Seen in a
+  screenshot, not in a test; the repair is one selector, and the measurement is four answers at
+  287 px and the fifth at 281, the 6 px being the badge's own `vertical-align` overhang.
+
+- **(3.5) Sweep 22/21 killed, one recorded equivalent — and the equivalent is PROVEN rather than
+  argued.** Keying the Result card's rows over the filtered list instead of the whole ledger changes
+  nothing, because a `RowKey`'s ordinal counts within its own `(constraint, role)` bucket and the
+  card's one filter — the drill's rung ii — removes a whole CONSTRAINT, so no surviving bucket is
+  renumbered. The whole ledger is keyed anyway, and the comment now says why that is a choice rather
+  than a necessity: a filter that dropped one KILL row would renumber the rest. Two first-pass
+  survivors were real and both bought a test — nothing asserted that the highlight is SAID as well
+  as drawn (a background and an inset rule do nothing at all for the reader who most needs telling
+  which row the contrast is about), and nothing asserted `resetTransient`'s own clear, which is the
+  only one that fires for a LINK to the same record at a different camera.
+
+- **(3.5) AND THE BROWSER SUITE WAS RED, FROM STEP 3.4, IN TWO PLACES THE NODE GATE STRUCTURALLY
+  CANNOT SEE.** `drillInk.browser.test.ts` drives the drill from the bar and counts ink pixels on
+  the stage; 3.4 moved the task chooser out of the rail card onto the front door, so
+  `drillCard(root)` — the helper that found the menu — threw *no drill card* before the test reached
+  its first assertion, and 3.4's prediction then stood between rung iii and the menu the test picks
+  from. Both are 3.4's, neither is visible to `pnpm test`, and M5.6's own finding is the shape of it:
+  a browser suite that is not run is a suite that is red. The repair bought one assertion the file
+  did not have — **answering the prediction must not unmask the contour**, measured at 0 ink pixels
+  before the pick and >1000 after, because the question the prediction asks IS the question the mask
+  exists to put, and a plane that filled in between the two clicks would answer it for the reader.
 
 - **(3.4) THE RUNG WHOSE QUESTION IS "WHICH CONTOUR?" WAS PRINTING THE ANSWER, IN FIVE PLACES.** The
   drill card's own sentence at rung iii is *"Only the integral is given"*, and what was given — read

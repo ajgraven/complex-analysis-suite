@@ -77,6 +77,7 @@ function spyActions(): ShellActions & { calls: string[]; applied: ShellState[] }
     setRail: (side, folded) => calls.push(`rail:${side}:${folded}`),
     toSandbox: () => calls.push("toSandbox"),
     setContrastsOpen: (open) => calls.push(`contrasts:${open}`),
+    openContrast: (id: string) => calls.push(`contrast:${id}`),
     applyState: (next) => {
       applied.push(next);
       calls.push("applyState");

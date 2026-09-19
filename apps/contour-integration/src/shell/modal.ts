@@ -121,8 +121,12 @@ export function createModal(input: ModalInput): Modal {
    * moves and stepping in at the wrap would be less code and would be untestable: jsdom implements
    * no tab traversal at all, so a trap written that way would have exactly one observable behaviour
    * in the node gate — the wrap — and the interior would be asserted nowhere. Driving it from the
-   * index also means the dialog itself (`tabIndex = -1`, so not in the list) is handled by the same
-   * branch that handles the ends: Tab from it goes to the first control, Shift+Tab to the last.
+   * index also means the dialog itself (`tabIndex = -1`, so not in the list) needs no case of its
+   * own: `indexOf` gives `-1`, so forward is `at + 1 = 0` — the first control — and backwards is
+   * caught by `at <= 0`, which sends it to the last. **There WAS a case of its own, `at === -1 || …`
+   * on the forward branch, and it was dead** — M8 step 3.5's sweep found it, because `at + 1` was
+   * already doing that work; the comment here had been presenting the dead clause as the mechanism.
+   * The backwards `<=` is NOT redundant in the same way: `at === 0` there would read `items[-1]`.
    */
   function cycle(event: KeyboardEvent): void {
     const items = focusables();
@@ -135,7 +139,7 @@ export function createModal(input: ModalInput): Modal {
     }
     const at = items.indexOf(document.activeElement as HTMLElement);
     const last = items.length - 1;
-    const next = event.shiftKey ? (at <= 0 ? last : at - 1) : at === -1 || at === last ? 0 : at + 1;
+    const next = event.shiftKey ? (at <= 0 ? last : at - 1) : at === last ? 0 : at + 1;
     event.preventDefault();
     items[next].focus();
   }

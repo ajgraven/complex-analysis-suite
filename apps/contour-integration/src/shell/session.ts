@@ -164,12 +164,27 @@ export interface Session {
    */
   notice: { readonly text: string; readonly level: "=" | "≤" | "≈" | "⚠" } | null;
   /**
-   * Whether the contrasts dialog is open.
+   * Whether the contrast ladder — the strip of cards above the stage — is open.
    *
-   * SESSION, not state: a dialog is where the reader's hands are, and a permalink that reopened one
-   * would hand someone else a modal over the thing they came to look at.
+   * SESSION, not state, and the reason survived the strip replacing the dialog at step 3.5: a panel
+   * is where the reader's hands are, and a permalink that reopened one would hand someone else a
+   * ladder over the thing they came to look at.
+   *
+   * **It is NOT cleared by {@link resetTransient}, and that changed with the shape.** A modal had to
+   * shut before it applied, because it covered the thing it was about to change; a strip is BESIDE
+   * the stage, and walking the ladder is five `applyState` calls in a row. Clearing it here would
+   * mean the panel vanished under the reader's hand on the first card they pressed.
    */
   contrastsOpen: boolean;
+  /**
+   * The contrast cell the reader last opened, and the ledger rows that step declares — step 3.5.
+   *
+   * Transient: it is what the reader did a moment ago, so it goes through {@link resetTransient}
+   * like a notice does, and the ladder's own click sets it back AFTERWARDS. The rows are
+   * {@link RowKey}s rather than indices, because the two arguments do not have the same rows in the
+   * same order — that is `engine/contrast.ts`'s whole subject.
+   */
+  contrast: { readonly cell: string; readonly rows: readonly string[] } | null;
   /**
    * Whether the front door — the worked-example picker — is open.
    *
@@ -238,6 +253,7 @@ export function defaultSession(): Session {
     open: {},
     notice: null,
     contrastsOpen: false,
+    contrast: null,
     frontDoorOpen: false,
     drillAnswers: {},
     drillPredicted: null,
@@ -279,7 +295,11 @@ export function resetTransient(session: Session): void {
   session.drillDrawn = null;
   session.drillPredicted = null;
   session.notice = null;
-  session.contrastsOpen = false;
+  // **`contrastsOpen` is NOT cleared** — step 3.5, and the field's own note says why: the ladder is
+  // a strip beside the stage rather than a modal over it, and walking it is five `applyState` calls
+  // in a row. What IS cleared is which cell was opened and which rows it highlights, because that
+  // is a sentence about the state the reader has just left.
+  session.contrast = null;
   session.frontDoorOpen = false;
   // The reader has gone somewhere else; a sentence about the link they arrived on is no longer
   // about them. `writeHash` clears it on the reader's first action for the same reason.

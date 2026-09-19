@@ -43,7 +43,7 @@ import { createStageController, type StageController } from "./stageController.j
 import { createStageView, describeStage, type FigurePlate } from "./stageView.js";
 import { createUndo, type CommitReason } from "./undo.js";
 import { createStripView, type StripDraw } from "./strip.js";
-import { createContrastsDialog } from "./contrasts.js";
+import { changesAt, contrastCell, ladder } from "./contrasts.js";
 import { createFrontDoor } from "./frontDoor.js";
 import { taskState } from "./drill.js";
 import { thumbnailById } from "./thumbnails.js";
@@ -151,8 +151,13 @@ export function mountShell2(root: Element): Shell2Handle {
   stageWrap.className = "stage2";
   const strip = document.createElement("footer");
   strip.className = "strip2";
+  // **Its own grid area above the stage** — M8 step 3.5. Empty and `hidden` while the ladder is
+  // shut, so its `auto` row collapses and a closed panel costs the stage no height at all.
+  const ladderEl = document.createElement("div");
+  ladderEl.className = "ladderWrap";
+  ladderEl.hidden = true;
 
-  shell.append(bar, left, stageWrap, right, strip);
+  shell.append(bar, ladderEl, left, stageWrap, right, strip);
 
   /**
    * The phone notice — M8 step 1.12.
@@ -241,24 +246,13 @@ export function mountShell2(root: Element): Shell2Handle {
     step: stripView.stepAt(stripState()),
   });
 
-  // --- the contrasts dialog ---------------------------------------------------------------------
-  //
-  // **Mounted on `root`, OUTSIDE `<main class="shell2">`**, because `inert` is not defeasible from
-  // CSS: a modal inside the element it makes inert is a modal nobody can reach. It wears the shell's
-  // class to get the visual system without the containment (`shell.css` cancels the grid).
-  //
-  // Its content is built on the FIRST open rather than at mount — five full solves, four of them
-  // gallery records, which at mount would sit in front of the app's first frame.
-  const contrasts = createContrastsDialog(root as HTMLElement, shell, {
-    apply: (next) => applyStateNow(next),
-    close: () => {
-      session.contrastsOpen = false;
-      render2();
-    },
-  });
   // --- the front door ---------------------------------------------------------------------------
   //
-  // Mounted beside the contrasts dialog and for its reasons, on `root` rather than in the shell.
+  // Mounted on `root`, OUTSIDE `<main class="shell2">`, because `inert` is not defeasible from CSS:
+  // a modal inside the element it makes inert is a modal nobody can reach. It wears the shell's
+  // class to get the visual system without the containment (`shell.css` cancels the grid). The
+  // contrast ladder was mounted here for the same reason until step 3.5 made it a panel IN the
+  // grid, which is the whole of what that step changed about it.
   //
   // **`apply` FRAMES the contour, and `applyStateNow` deliberately does not.** A link carries the
   // camera the sharer chose (M6.2's finding), so the door a link comes through must not reframe —
@@ -732,11 +726,31 @@ export function mountShell2(root: Element): Shell2Handle {
     },
     setContrastsOpen: (open) => {
       session.contrastsOpen = open;
-      // The dialog owns its own DOM, its focus and the page's `inert`; the session flag is what the
-      // BAR reads. Both are written here so the two cannot disagree about whether it is up.
-      if (open) contrasts.open();
-      else contrasts.close();
+      // **The flag is the whole of it now** — the strip is a description of the session, so opening
+      // it is one write and a repaint. The dialog had a second half (its own DOM, its focus, the
+      // page's `inert`) that had to be kept in step with this flag by hand.
+      if (!open) session.contrast = null;
       render2();
+    },
+    openContrast: (cellId) => {
+      const cell = contrastCell(cellId);
+      // Unreachable from the strip, whose ids all come out of `CONTRAST_CELLS`; it exists because
+      // the action takes a string and an id is the kind of thing a later caller can get wrong.
+      if (cell === undefined) return;
+      const table = ladder();
+      const index = table.cells.findIndex((c) => c.id === cellId);
+      // **APPLY FIRST, then say which rung.** `applyStateNow` runs `resetTransient`, which clears
+      // `session.contrast` — rightly, because it is a sentence about the state the reader was in.
+      // The order the dialog used was the opposite one (shut, then apply) and for the opposite
+      // reason: it had to get its own DOM out of the way before the page underneath changed.
+      applyStateNow(cell.state(), () => {
+        session.contrast = { cell: cellId, rows: changesAt(table, index).map((c) => c.key) };
+        // **A WRITE, not a computed default.** The Result card's check list opens by itself when a
+        // row has failed, but an explicit click wins and survives every recompute (`session.open`),
+        // so a reader who had shut it would have had the highlight land in a closed disclosure.
+        // Opening a rung IS the reader asking to see what changed.
+        session.open["result:hypotheses"] = true;
+      });
     },
     applyState: (next) => applyStateNow(next),
 
@@ -844,6 +858,11 @@ export function mountShell2(root: Element): Shell2Handle {
     patch(bar, out.bar);
     patch(left, out.left);
     patch(right, out.right);
+    // **`hidden` from the LIST rather than from `session.contrastsOpen`**, so the element's state
+    // and its contents cannot disagree: one description decides both, and an empty panel that still
+    // occupied a grid row would be a strip of blank above the stage.
+    patch(ladderEl, out.ladder);
+    ladderEl.hidden = out.ladder.length === 0;
     // **The banner is drawn from the FIELD, on every repaint, rather than written where the field
     // is set.** It was written at its two setters, and so outlived its own field: `resetTransient`
     // nulls `linkRefusal` on every `applyState`, nothing redrew the element, and `writeHash`'s
@@ -976,15 +995,20 @@ export function mountShell2(root: Element): Shell2Handle {
     // to share the id `limit:R`. Decided HERE, on the state, rather than in each of the five
     // actions, because a sixth would have to remember; `setParam`'s own commits change none of
     // these fields, so a running sweep is untouched by its own writes.
-    if (
-      sweepFrame !== 0 &&
-      (next.record !== state.record ||
-        next.fixture !== state.fixture ||
-        next.mode !== state.mode ||
-        next.expr !== state.expr)
-    ) {
-      endSweep();
-    }
+    // **And a contrast highlight does not either, for the same reason and on the same condition.**
+    // `resetTransient` clears it, so a link or a rung is covered; `toSandbox`, `setFixture` and an
+    // edited expression are ordinary commits, and each of them leaves the reader looking at a
+    // DIFFERENT argument. The mark would then point at whatever row of the new ledger happened to
+    // land under the same `(constraint, role, ordinal)` key — a highlight that is about nothing,
+    // which is worse than none. A parameter move is deliberately not in this list: it is the same
+    // argument at a different binding, and the declared row is still the declared row.
+    const argumentMoved =
+      next.record !== state.record ||
+      next.fixture !== state.fixture ||
+      next.mode !== state.mode ||
+      next.expr !== state.expr;
+    if (sweepFrame !== 0 && argumentMoved) endSweep();
+    if (argumentMoved) session.contrast = null;
     if (next.expr !== state.expr) compiled = compile(next.expr);
     state = next;
     // A draft budget while a gesture is live and the full one on settle — the plan's rule. At 1.1
@@ -1159,7 +1183,7 @@ export function mountShell2(root: Element): Shell2Handle {
     stageA11y.announce(`${done}.`);
   }
 
-  function applyStateNow(next: ShellState): void {
+  function applyStateNow(next: ShellState, then?: () => void): void {
     // **The camera comes back into the plane HERE**, because a link is the way a reader arrives at
     // one they did not navigate to. `decodeShell` checks the camera is three finite numbers with a
     // positive height and says nothing about magnitude — rightly, since a far-off camera is a link
@@ -1182,6 +1206,15 @@ export function mountShell2(root: Element): Shell2Handle {
     const nextMode = shellMode(wanted);
     if (nextMode !== wasMode) session.rails = railsFor(nextMode);
     commit(wanted, "link");
+    // **AFTER the commit, not between the reset and it**, which is where the first draft put it to
+    // save a patch. `commit` drops a contrast highlight whenever the argument moves — and applying
+    // a contrast case moves it — so a `then` that ran before the commit would have had its own
+    // write taken straight back out. One extra patch on a click that has just paid a full solve is
+    // not a cost worth an ordering nobody can see.
+    if (then !== undefined) {
+      then();
+      render2();
+    }
   }
 
   /** What each mode opens with. Explore is both rails; a worked example is the derivation. */
@@ -1248,7 +1281,6 @@ export function mountShell2(root: Element): Shell2Handle {
       frontDoor.destroy();
       stageView.destroy();
       stripView.destroy();
-      contrasts.destroy();
       observer?.disconnect();
     },
   };

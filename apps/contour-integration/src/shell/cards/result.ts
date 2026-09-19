@@ -19,8 +19,10 @@ import { integralRefusal, ledgerHeadline, type LedgerResult } from "../../engine
 import { RESIDUE_THEOREM_IDENTITY } from "../../engine/residueTheorem.js";
 import type { ContourIntegral } from "../../engine/contour/integrate.js";
 import type { ResidueTheoremResult } from "../../engine/residueTheorem.js";
+import type { Piece } from "../../engine/contour/model.js";
 import type { PoleReport } from "../../kernel/poles.js";
 import { constraintLabel } from "../../engine/vocabulary.js";
+import { rowKeys } from "../../engine/contrast.js";
 import { drillMask } from "../drillPanel.js";
 import { fmtApprox, fmtNum } from "../format.js";
 import { h, type Child, type Desc } from "../dom.js";
@@ -40,6 +42,15 @@ interface Facts {
   readonly poles: PoleReport | null;
   /** Pass 5's answer to what the RECORD asked, which is not `∮` (C1: `∮ = 0` and the integral is π/2). */
   readonly solved: { readonly value: number; readonly text?: string; readonly latex?: string } | null;
+  /**
+   * The pieces the ledger's rows name — for `rowKeys`, and for nothing else here.
+   *
+   * A contrast rung declares which rows it moves as `(constraint, role, ordinal)` keys, because the
+   * two arguments being compared do not have the same rows in the same order (`engine/contrast.ts`
+   * is entirely about that), and turning one of those keys back into a row of THIS ledger needs the
+   * role of each row's piece.
+   */
+  readonly pieces: readonly { readonly id: string; readonly role: Piece["role"] }[];
 }
 
 function factsOf(ctx: CardContext): Facts {
@@ -52,17 +63,25 @@ function factsOf(ctx: CardContext): Facts {
       theorem: run?.theorem ?? null,
       poles: run?.poles ?? null,
       solved: resolution.solved,
+      pieces: run?.contour.pieces ?? [],
     };
   }
   if (resolution.kind === "plain" || resolution.kind === "declared") {
     const a = resolution.analysis;
-    return { ledger: a.ledger, integral: a.integral, theorem: a.theorem, poles: ctx.poles, solved: null };
+    return {
+      ledger: a.ledger,
+      integral: a.integral,
+      theorem: a.theorem,
+      poles: ctx.poles,
+      solved: null,
+      pieces: ctx.state.contour.pieces,
+    };
   }
-  return { ledger: null, integral: null, theorem: null, poles: null, solved: null };
+  return { ledger: null, integral: null, theorem: null, poles: null, solved: null, pieces: [] };
 }
 
 export const resultCard: Card = (ctx) => {
-  const { ledger, integral, theorem, poles, solved } = factsOf(ctx);
+  const { ledger, integral, theorem, poles, solved, pieces } = factsOf(ctx);
   // **A worked example that could not RUN is not an app with no integrand** — M8 step 2.4. It has
   // one, and a reason it did not get an answer from it, and the reason was reachable only from the
   // Derivation card: this card said "There is no integrand", which is false in the one place a
@@ -160,17 +179,40 @@ export const resultCard: Card = (ctx) => {
   // At rung ii the KILL column is the reader's to supply, so its rows come off the table — which is
   // exactly what the drill's own questions ask for, one per piece. The rest of the ledger stays: the
   // rung is about what each piece is FOR, not about whether the hypotheses hold.
-  const shown = mask === "kill" ? ledger.rows.filter((row) => row.constraint !== "KILL") : ledger.rows;
-  const rows = shown.map((row, i) =>
-    h(
+  // Carried WITH its index in the whole ledger, because the row's contrast key is computed over the
+  // whole ledger and `indexOf` on a row object would be an identity lookup where two rows are equal.
+  const shown = ledger.rows
+    .map((row, at) => ({ row, at }))
+    .filter(({ row }) => mask !== "kill" || row.constraint !== "KILL");
+  // **The contrast's declared rows, marked where they land in THIS ledger** — M8 step 3.5. Keyed
+  // over `ledger.rows` and not over `shown`, and the sweep's answer to that is worth writing down:
+  // keying over `shown` is EQUIVALENT, provably rather than by luck. A `RowKey`'s ordinal counts
+  // within its own `(constraint, role)` bucket, and the one filter this card applies — the drill's
+  // rung ii — removes a whole CONSTRAINT, so no surviving bucket is renumbered. The whole ledger is
+  // keyed anyway because that equivalence is a property of today's mask and not of the alignment: a
+  // filter that dropped one KILL row would renumber the rest, and this would then be wrong in the
+  // silent way `engine/contrast.ts` exists because of.
+  const keys = rowKeys(ledger.rows, pieces);
+  const declared = new Set(ctx.session.contrast?.rows ?? []);
+  const rows = shown.map(({ row, at }, i) => {
+    const marked = declared.has(keys[at]);
+    return h(
       "li",
-      { key: `row:${i}`, class: `checkRow ${row.status}` },
+      {
+        key: `row:${i}`,
+        class: `checkRow ${row.status}`,
+        ...(marked ? { "data-change": "declared" } : {}),
+      },
       badge(row.status === "failed" ? "⚠" : row.evidence.level, "lv"),
       h("span", { key: "c", class: "tag" }, constraintLabel(row.constraint)),
       h("span", { key: "t", class: "claim" }, ...mathText(row.claim, `c${i}`)),
+      // **Said in text, not drawn in an outline alone.** `data-change` carries the colour; this is
+      // the sentence a reader who cannot see it gets, and it names the ladder so the mark is
+      // attached to the thing that made it rather than being a highlight from nowhere.
+      marked ? h("span", { key: "ch", class: "srOnly" }, " — this is the check the contrast changes") : null,
       row.repair === undefined ? null : h("p", { key: "fix", class: "repair small" }, row.repair),
-    ),
-  );
+    );
+  });
   const hypotheses = disclosure(
     ctx,
     "result:hypotheses",
@@ -185,7 +227,7 @@ export const resultCard: Card = (ctx) => {
     // of the other. Step 0.2's decision is that the reader's words are decided in one file; a card
     // that spends one of them on a wider set is the same drift from the other end.
     failed
-      ? `What was checked — ${shown.filter((r) => r.status === "failed").length} of ${shown.length} failed`
+      ? `What was checked — ${shown.filter(({ row }) => row.status === "failed").length} of ${shown.length} failed`
       : `What was checked — ${shown.length} rows`,
     h("ul", { key: "l", class: "checkList" }, ...rows),
   );

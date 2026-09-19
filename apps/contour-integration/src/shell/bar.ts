@@ -224,12 +224,17 @@ export function bar(ctx: CardContext): readonly Desc[] {
       // M7.1's ladder. Five arguments, each one declared ledger row from the last — a panel rather
       // than a mode, because a third mode would make every mode check (the codec's included) grow a
       // case meaning "none of the above".
+      //
+      // **A DISCLOSURE since step 3.5**, because the ladder became a strip that stays on screen: a
+      // control that could only ever open it was honest about a modal, which shut itself, and would
+      // leave a reader who wanted the strip away with nothing in the bar to press.
       h(
         "button",
         {
           key: "contrasts",
           "aria-label": "compare five arguments that differ by one row of the checks",
-          onClick: () => actions.setContrastsOpen(true),
+          "aria-expanded": ctx.session.contrastsOpen ? "true" : "false",
+          onClick: () => actions.setContrastsOpen(!ctx.session.contrastsOpen),
         },
         "Contrasts",
       ),

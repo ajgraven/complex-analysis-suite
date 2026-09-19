@@ -183,79 +183,90 @@ describe("the rail speaks the reader's vocabulary, not the engine's ids", () => 
 });
 
 // ──────────────────────────────────────────────────────────────────────────────────────────────
-// The contrast ladder, reached the way a reader reaches it.
+// The contrast ladder, reached the way a reader reaches it — M8 step 3.5.
 //
 // `test/contrastGrid.test.ts` owns the claim that the declared differences are real, and
-// `test/contrasts.test.ts` owns the modal — focus, the trap, `inert`, and which cell a button asks
-// for. What is left is the wiring: that the bar's button puts it up, that what the columns SAY is
-// the record's answer, and that opening a cell moves the app.
+// `test/contrasts.test.ts` owns the strip's own description — which card carries which sentence,
+// and which id it asks for. What is left is the WIRING, and step 3.5 made that the substance rather
+// than the remainder: the ladder is no longer a dialog that shuts before it applies, so the claims
+// worth pinning here are the ones that only a mounted app can make — that the panel SURVIVES the
+// state it applies, and that the row the card names is marked in the Result card's own check list.
 // ──────────────────────────────────────────────────────────────────────────────────────────────
 
-/** The dialog's own element, or null when it is not in the document. */
-const dialogOf = (): HTMLElement | null => document.querySelector<HTMLElement>('[role="dialog"]');
+/** The strip itself, or null when the ladder is shut. */
+const ladderOf = (root: ParentNode): HTMLElement | null => root.querySelector<HTMLElement>(".ladder2");
 
-/** Put the ladder up the way a reader does, and hand back the dialog it built. */
+/** The bar's disclosure. */
+const contrastsButton = (root: ParentNode): HTMLButtonElement =>
+  byLabel<HTMLButtonElement>(root, "compare five arguments that differ by one row of the checks");
+
+/** Put the ladder up the way a reader does, and hand back the strip it drew. */
 function openLadder(root: ParentNode): HTMLElement {
-  byLabel<HTMLButtonElement>(root, "compare five arguments that differ by one row of the checks").click();
-  const dialog = dialogOf();
-  if (dialog === null) throw new Error("the Contrasts button put no dialog up");
-  return dialog;
+  contrastsButton(root).click();
+  const strip = ladderOf(root);
+  if (strip === null) throw new Error("the Contrasts button put no ladder up");
+  return strip;
 }
 
-/** What each column comes to — the answer line of its heading, or its refusal. */
-const answersOf = (dialog: ParentNode): (string | undefined)[] =>
-  [...dialog.querySelectorAll("thead th")]
-    .slice(1)
-    .map((th) => th.querySelector(".num, .verdict, .muted:not(.small)")?.textContent ?? undefined);
+/** What each case comes to — its answer line, or its refusal. */
+const answersOf = (strip: ParentNode): (string | undefined)[] =>
+  [...strip.querySelectorAll("button.ladderCard")].map(
+    (b) => b.querySelector(".caseAnswer")?.textContent ?? undefined,
+  );
 
-/** The Open button of the column whose name contains `text`. */
-function openColumn(dialog: ParentNode, text: string): void {
-  const button = [...dialog.querySelectorAll<HTMLButtonElement>("thead button")].find((b) =>
+/** Press the case whose SPOKEN name contains this text. */
+function openCase(strip: ParentNode, text: string): void {
+  const button = [...strip.querySelectorAll<HTMLButtonElement>("button.ladderCard")].find((b) =>
     (b.getAttribute("aria-label") ?? "").includes(text),
   );
-  if (button === undefined) throw new Error(`no column named ${text}`);
+  if (button === undefined) throw new Error(`no case named ${text}`);
   button.click();
 }
 
-describe("the contrast ladder, from the bar", () => {
-  it("is closed at boot, and costs nothing until it is opened", () => {
-    const { root, app } = mount();
-    // **Not merely hidden: not in the document and not BUILT.** The old shell laid a `hidden`
-    // `<section>` over the page, which is what made "is it modal?" a question at all; here the
-    // dialog's DOM does not exist until the first open. Five full solves — four of them gallery
-    // records — in front of the app's first frame would be the cost of a panel most readers never
-    // open, and the ladder is memoised at module scope so the second open is free.
-    expect(dialogOf()).toBeNull();
-    expect(root.querySelector(".modalBackdrop")).toBeNull();
-    expect(app.session().contrastsOpen).toBe(false);
+/** The Result card's check list, as `CONSTRAINT-label + claim` strings, marked rows first. */
+const declaredRows = (root: ParentNode): string[] =>
+  [...root.querySelectorAll('[data-card="result"] .checkRow[data-change="declared"]')].map(
+    (li) => li.querySelector(".tag")?.textContent ?? "",
+  );
 
-    // The bar's button is what puts it up, and the session flag is what the bar reads back — both
-    // written in one place so the two cannot disagree about whether it is up.
-    const dialog = openLadder(root);
-    expect(dialog.querySelector("table"), "the ladder was not built on the first open").not.toBeNull();
+describe("the contrast ladder, from the bar", () => {
+  it("is closed at boot, and costs the stage nothing until it is opened", () => {
+    const { root, app } = mount();
+    // **Not merely hidden: not BUILT.** Five full solves — four of them gallery records — in front
+    // of the app's first frame would be the cost of a panel most readers never open, and
+    // `contrastStrip` is the only caller of the memoised `ladder()`. What is observable from here
+    // is that the grid row is empty AND its wrapper is `hidden`, which is what keeps a shut ladder
+    // from taking height off the stage.
+    expect(ladderOf(root)).toBeNull();
+    expect(q<HTMLElement>(root, ".ladderWrap").hidden).toBe(true);
+    expect(app.session().contrastsOpen).toBe(false);
+    expect(contrastsButton(root).getAttribute("aria-expanded")).toBe("false");
+
+    const strip = openLadder(root);
+    expect(strip.querySelectorAll("button.ladderCard")).toHaveLength(5);
+    expect(q<HTMLElement>(root, ".ladderWrap").hidden).toBe(false);
     expect(app.session().contrastsOpen).toBe(true);
+    expect(contrastsButton(root).getAttribute("aria-expanded")).toBe("true");
   });
 
-  it("closes on Escape, tells the shell, and gives focus back to the bar", () => {
+  it("is a DISCLOSURE: the same control puts it away again", () => {
+    // The modal shut itself — on Escape, on its own Close button, on applying a cell — so a bar
+    // control that could only ever open it was honest. A strip stays up, so a reader who wants the
+    // stage back has to have something to press, and it is the control they opened it with.
     const { root, app } = mount();
-    const button = byLabel<HTMLButtonElement>(root, "compare five arguments that differ by one row of the checks");
-    button.focus();
-    const dialog = openLadder(root);
-    dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    expect(dialogOf()).toBeNull();
-    expect(document.activeElement).toBe(button);
-    // The shell's own flag, which `test/contrasts.test.ts` can only see as a call on a stub: a
-    // dialog that came down while the bar still thought it was up would refuse the next open.
+    openLadder(root);
+    contrastsButton(root).click();
+    expect(ladderOf(root)).toBeNull();
     expect(app.session().contrastsOpen).toBe(false);
   });
 
   it("prints C1's ANSWER, π/2 — not the 0 its ∮ evaluates to", () => {
     const { root } = mount();
-    const dialog = openLadder(root);
+    const strip = openLadder(root);
     // C1's contour encloses nothing, so its `∮` is exactly 0 while the integral it determines is
-    // π/2 — the last rung's whole lesson. Printing the ledger's number here would make it read as
-    // a mistake. The wrong-way column has no answer at all and says which group refused instead.
-    expect(answersOf(dialog)).toEqual([
+    // π/2 — the last case's whole lesson. Printing the ledger's number here would make it read as
+    // a mistake. The wrong-way case has no answer at all and says which group refused instead.
+    expect(answersOf(strip)).toEqual([
       "π",
       "π/e",
       `⚠ incomplete (${constraintLabel("KILL").toLowerCase()})`,
@@ -264,50 +275,132 @@ describe("the contrast ladder, from the bar", () => {
     ]);
   });
 
-  it("marks the wrong-way column's FAILED row as the step's own declared change", () => {
-    const { root } = mount();
-    const dialog = openLadder(root);
-    // `test/contrasts.test.ts` requires the two markers to be disjoint and both to appear. This is
-    // the one cell where the declared change and a failure COINCIDE — the rung's whole content, that
-    // closing the same integral the other way fails at exactly the row the step names — and there is
-    // exactly one of it in the ladder.
-    expect(dialog.querySelectorAll('td[data-change="declared"][data-status="failed"]')).toHaveLength(1);
-  });
-
-  it("OPENS a cell into the app, which is the only thing the ladder does to the state", () => {
+  it("STAYS UP over the state it applies, and marks the case that is showing", () => {
+    // **The step's whole point.** The dialog had to shut before it applied, because it covered the
+    // thing it was about to change — so the ladder could only be walked one rung at a time and was
+    // never on screen beside the argument it makes a claim about. Walking it is now five clicks.
     const { root, app } = mount();
-    openColumn(openLadder(root), "∫₀^∞ sin x/x dx");
-    expect(dialogOf(), "the dialog stayed up over the state it had just applied").toBeNull();
-    const state = app.currentState();
-    expect(state.mode).toBe("gallery");
-    expect(state.record).toBe("indented-sinc");
+    const strip = openLadder(root);
+    openCase(strip, "∫₀^∞ sin x/x dx");
+    const after = ladderOf(root);
+    expect(after, "the ladder came down under the reader's hand").not.toBeNull();
+    expect(app.currentState().record).toBe("indented-sinc");
+    expect(app.session().contrastsOpen).toBe(true);
+    // `aria-current`, on exactly one card, and it is the one that was pressed — so the mark and the
+    // announcement are the same attribute and cannot come apart.
+    const current = [...(after?.querySelectorAll("button.ladderCard[aria-current]") ?? [])];
+    expect(current).toHaveLength(1);
+    expect(current[0].getAttribute("data-cell")).toBe("indented");
+
+    // And walking on from there moves the mark rather than adding a second one.
+    openCase(q(root, ".ladder2"), "∫ cos x/(x²+1) dx");
+    const moved = [...q(root, ".ladder2").querySelectorAll("button.ladderCard[aria-current]")];
+    expect(moved).toHaveLength(1);
+    expect(moved[0].getAttribute("data-cell")).toBe("oscillatory");
   });
 
-  it("opens the WRONG-WAY cell into the sandbox, since no record can be closed wrongly", () => {
+  it("HIGHLIGHTS the declared check in the Result card, in a list it opens for the purpose", () => {
+    const { root, app } = mount();
+    // The reader shuts the check list first, which is the case a computed default cannot serve: an
+    // explicit click wins and survives every recompute (`session.open`), so the highlight would
+    // have landed inside a closed disclosure. Opening a case IS the reader asking to see what
+    // changed, so the action writes the disclosure open rather than leaning on the default.
+    app.session().open["result:hypotheses"] = false;
+    openCase(openLadder(root), "∫ cos x/(x²+1) dx");
+    // **By its SUMMARY, not by position.** The Result card draws two disclosures and the numerics
+    // one opens by its own rule; `details:first-of-type` would be an assertion about which of them
+    // is written first in the file.
+    const details = [...root.querySelectorAll<HTMLDetailsElement>('[data-card="result"] details')].find((d) =>
+      (d.querySelector("summary")?.textContent ?? "").startsWith("What was checked"),
+    );
+    expect(details?.open).toBe(true);
+    // The `oscillatory` case declares exactly one row, and it is a boundary-term row — the arc
+    // estimate becoming Jordan's lemma, which is the ladder's premise that one lemma is all that
+    // separates the first two arguments.
+    expect(declaredRows(root)).toEqual([constraintLabel("KILL")]);
+    // **And the mark is SAID, not only drawn.** `data-change` carries a background and an inset
+    // rule and nothing else; a reader who cannot see either would get a row indistinguishable from
+    // the six around it, which is the highlight doing nothing for exactly the reader who most needs
+    // to be told which row the contrast is about.
+    const row = q(root, '[data-card="result"] .checkRow[data-change="declared"]');
+    expect(row.textContent).toContain("this is the check the contrast changes");
+    // **And it does not outlive the argument it is about.** `toSandbox` is an ordinary commit — it
+    // never goes near `resetTransient` — so before step 3.5's `argumentMoved` guard the mark stayed
+    // on whatever row of the SANDBOX's ledger landed under the same `(constraint, role, ordinal)`
+    // key. The session field is asserted as well as the drawn rows, because an empty list here is
+    // also what a ledger with no matching key would produce: the outcome alone does not say the
+    // highlight was dropped.
+    app.actions().toSandbox();
+    expect(app.session().contrast).toBeNull();
+    expect(declaredRows(root)).toEqual([]);
+  });
+
+  it("drops the highlight on a state that arrives the OTHER way, even at the same argument", () => {
+    // `commit`'s `argumentMoved` guard covers a reader who walks off the record; it cannot cover a
+    // LINK to the same record at the same fixture with a different camera, which moves none of the
+    // four fields it watches. That case is `resetTransient`'s, and without it the sharer's view
+    // would open with a contrast mark on it explaining a comparison the reader never made.
+    const { root, app } = mount();
+    openCase(openLadder(root), "∫ cos x/(x²+1) dx");
+    expect(declaredRows(root)).toHaveLength(1);
+    const same = app.currentState();
+    app.actions().applyState({ ...same, view: { ...same.view, halfHeight: same.view.halfHeight * 2 } });
+    // The argument is untouched — so this is the reset's clear and nothing else's.
+    expect(app.currentState().record).toBe(same.record);
+    expect(app.currentState().expr).toBe(same.expr);
+    expect(app.session().contrast).toBeNull();
+    expect(declaredRows(root)).toEqual([]);
+  });
+
+  it("marks the row the LAST case names, which is not the row the first one does", () => {
+    // The pairing is `(constraint, role, ordinal)` rather than an index, because C1 has nine rows
+    // where B1 has seven — so an index-keyed highlight would drift by two from the indentation
+    // onward and mark rows the step never declared. C1 declares FIVE, across two groups.
+    const { root } = mount();
+    openCase(openLadder(root), "∫₀^∞ sin x/x dx");
+    expect(new Set(declaredRows(root))).toEqual(new Set([constraintLabel("CATCH"), constraintLabel("KILL")]));
+    expect(declaredRows(root)).toHaveLength(5);
+  });
+
+  it("does nothing at all for an id that is not a case", () => {
+    // Unreachable from the strip, whose ids all come out of `CONTRAST_CELLS` — so the guard exists
+    // because the action takes a STRING, and a later caller (a permalink, a keyboard shortcut, a
+    // second panel) is the kind of thing that gets one wrong. What must not happen is the half
+    // action: the state left where it was while `session.contrast` names a case nobody opened.
+    const { root, app } = mount();
+    openLadder(root);
+    const before = app.currentState();
+    app.actions().openContrast("not-a-case");
+    expect(app.currentState()).toEqual(before);
+    expect(app.session().contrast).toBeNull();
+    expect(ladderOf(root)?.querySelectorAll("button.ladderCard[aria-current]")).toHaveLength(0);
+  });
+
+  it("opens the WRONG-WAY case into the sandbox, since no record can be closed wrongly", () => {
     const { root, app } = mount();
     // B1 derives its closing side from its own parameter, and a `derived` parameter is read-only
     // precisely so the geometry cannot desync from its definition — so the record is INCAPABLE of
     // being closed wrongly, and the cell is a sandbox state instead. `test/contrasts.test.ts`
     // asserts which state the button asks for; this asserts that the app arrives in it.
-    openColumn(openLadder(root), "closed downward");
+    openCase(openLadder(root), "closed downward");
     const state = app.currentState();
     expect(state.mode).toBe("sandbox");
     expect(state.contourSource?.template).toBe("semicircleDown");
     expect(state.expr).toBe("exp(i*z)/(1+z^2)");
   });
 
-  it("leaves M6.4's structure intact — one <main>, one <h1>, and the dialog outside both", () => {
+  it("leaves M6.4's structure intact — one <main>, one <h1>, and the ladder INSIDE the landmark", () => {
     const { root } = mount();
-    const dialog = openLadder(root);
+    const strip = openLadder(root);
     expect(root.querySelectorAll("main")).toHaveLength(1);
     expect(root.querySelectorAll("h1")).toHaveLength(1);
     // The panel's own heading is a level 2, under the page's one level 1.
-    expect(q(dialog, "h2").textContent).toBe("Contrasting arguments");
-    // **And it is NOT inside the landmark**, which is the new shell's reason for mounting it on the
-    // root: `inert` is not defeasible from CSS, so a modal inside the element it makes inert is a
-    // modal nobody can reach. That makes "outside `<main>`" a correctness fact rather than a
-    // stylistic one.
-    expect(q(root, "main.shell2").contains(dialog)).toBe(false);
+    expect(q(strip, "h2").textContent).toBe("Contrasting arguments");
+    // **And it IS inside the landmark now**, which is the exact opposite of what this asserted
+    // while the ladder was a modal: `inert` is not defeasible from CSS, so a dialog inside the
+    // element it makes inert is a dialog nobody can reach. A strip makes nothing inert, and content
+    // about the argument on screen belongs in the page's main content rather than beside it.
+    expect(q(root, "main.shell2").contains(strip)).toBe(true);
   });
 });
 

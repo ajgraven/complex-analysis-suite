@@ -33,31 +33,89 @@ const settled = async (): Promise<void> => {
   await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 };
 
-describe("the contrasts panel", () => {
-  it("draws all five columns INSIDE its dialog", async () => {
-    // **It never did.** The table wore `numTable`, whose `th` rule is `white-space: nowrap`, so no
-    // column head ever wrapped and the table was wider than the dialog at every window size — step
-    // 1.7's own screenshot has the third column cut off mid-word, and the fourth and fifth were
-    // drawn past the edge where nothing could reach them. Measured before the fix at 1440 px: the
-    // table is 2,209 px in a 1,088 px dialog. The class is gone and the layout is fixed-width, so
-    // the columns share what there is and the heads wrap.
+describe("the contrast ladder", () => {
+  it("costs the stage NOTHING while it is shut, and gives it back when it closes", async () => {
+    // **The grid grew a row for it** (M8 step 3.5), and a row that reserved height would take it
+    // off the stage on every page load for the sake of a panel most readers never open. `auto` plus
+    // a `hidden` wrapper is exactly zero; jsdom cannot see the difference, because every rect there
+    // is zeros either way.
+    const app = mount();
+    await settled();
+    const wrap = document.querySelector<HTMLElement>(".ladderWrap");
+    const stage = document.querySelector<HTMLElement>(".stage2");
+    if (wrap === null || stage === null) throw new Error("no ladder wrapper or stage");
+    expect(wrap.getBoundingClientRect().height).toBe(0);
+    const tall = stage.getBoundingClientRect().height;
+
+    app.actions().setContrastsOpen(true);
+    await settled();
+    const open = wrap.getBoundingClientRect().height;
+    expect(open, "the strip drew nothing").toBeGreaterThan(40);
+    // The stage pays for the strip and for nothing else — the arithmetic, not an inequality, so a
+    // layout that also ate a margin somewhere would fail.
+    expect(Math.round(stage.getBoundingClientRect().height)).toBe(Math.round(tall - open));
+
+    app.actions().setContrastsOpen(false);
+    await settled();
+    expect(wrap.getBoundingClientRect().height).toBe(0);
+    expect(Math.round(stage.getBoundingClientRect().height)).toBe(Math.round(tall));
+  });
+
+  it("draws all five cases inside the strip, each one whole", async () => {
+    // **The grid this replaced never fitted.** Its table wore `numTable`, whose `th` rule is
+    // `white-space: nowrap`, so no column head wrapped and the table was wider than the dialog at
+    // every window size — 2,209 px in a 1,088 px dialog, with the fourth and fifth columns drawn
+    // past the edge where nothing could reach them. The strip is a flex row in the stage's own
+    // column, which is narrower still, so the same question has to be asked again of the new shape.
     const app = mount();
     await settled();
     app.actions().setContrastsOpen(true);
     await settled();
-    const table = document.querySelector<HTMLTableElement>(".contrastGrid");
-    if (table === null) throw new Error("no contrast grid");
-    const dialog = table.closest<HTMLElement>(".modalDialog");
-    if (dialog === null) throw new Error("no dialog");
-    expect(table.tHead?.rows[0].cells.length, "not the five columns and their row heading").toBe(6);
-    expect(table.scrollWidth, "the table is wider than the dialog holding it").toBeLessThanOrEqual(
-      dialog.clientWidth,
-    );
-    // And every column is actually on screen, not merely inside a box that scrolls.
-    const right = dialog.getBoundingClientRect().right;
-    for (const cell of [...(table.tHead?.rows[0].cells ?? [])]) {
-      expect(cell.getBoundingClientRect().right, `${cell.textContent?.slice(0, 20)} is off the dialog`).toBeLessThanOrEqual(right + 1);
+    const list = document.querySelector<HTMLElement>(".ladderList");
+    if (list === null) throw new Error("no ladder list");
+    const cards = [...list.querySelectorAll<HTMLElement>("button.ladderCard")];
+    expect(cards).toHaveLength(5);
+    // Every card is inside the region's own scroll width — which is what "reachable" means for a
+    // row that may scroll — and nothing is clipped horizontally inside a card.
+    for (const c of cards) {
+      expect(c.getBoundingClientRect().width, "a case collapsed to nothing").toBeGreaterThan(80);
+      expect(c.scrollWidth, `${c.getAttribute("data-cell") ?? "?"} overflows its own box`).toBeLessThanOrEqual(
+        c.clientWidth + 1,
+      );
     }
+    // And they are laid out as a ROW: five cards, five different left edges, one shared top.
+    const tops = new Set(cards.map((c) => Math.round(c.getBoundingClientRect().top)));
+    expect(tops.size, "the cases wrapped into a column").toBe(1);
+    expect(new Set(cards.map((c) => Math.round(c.getBoundingClientRect().left))).size).toBe(5);
+    // **And the strip does not cost more than the stage it comments on.** In the stage's own
+    // column the five cases are 152 px wide, every line wraps, and the panel is 335 px tall beside
+    // a stage of 328 — which is what sent it across all three columns, where it is 231 and the
+    // stage keeps 433. The numbers are in `shell.css`; this is the claim they were taken for.
+    const strip = document.querySelector<HTMLElement>(".ladderWrap");
+    const stage2 = document.querySelector<HTMLElement>(".stage2");
+    if (strip === null || stage2 === null) throw new Error("no ladder wrapper or stage");
+    expect(strip.getBoundingClientRect().height).toBeLessThan(stage2.getBoundingClientRect().height);
+  });
+
+  it("marks the declared check in the Result card where a reader can SEE it", async () => {
+    // The mark is a background and an inset rule, so the node gate can only assert the attribute.
+    // What it cannot assert is that the row is on screen at all: the check list is a disclosure,
+    // and a highlight inside a closed `<details>` has a height of zero.
+    const app = mount();
+    await settled();
+    app.actions().setContrastsOpen(true);
+    await settled();
+    const card = [...document.querySelectorAll<HTMLButtonElement>("button.ladderCard")].find(
+      (b) => b.getAttribute("data-cell") === "oscillatory",
+    );
+    if (card === undefined) throw new Error("no oscillatory case");
+    card.click();
+    await settled();
+    const marked = document.querySelector<HTMLElement>('.checkRow[data-change="declared"]');
+    if (marked === null) throw new Error("no marked row");
+    const box = marked.getBoundingClientRect();
+    expect(box.height, "the marked row is inside a closed disclosure").toBeGreaterThan(8);
+    expect(box.width).toBeGreaterThan(80);
   });
 });
 

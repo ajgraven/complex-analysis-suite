@@ -1,509 +1,472 @@
 // @vitest-environment jsdom
 //
-// The contrasts dialog — M8 step 1.7.
+// The contrast ladder AS A STRIP OF CARDS — M8 step 3.5.
 //
-// **What is asserted here is the MODAL, not the ladder.** `test/contrastGrid.test.ts` already
-// derives the real difference set from the engine and requires it to match the declared one in both
-// directions; re-checking any of that here would be a second copy of a claim that already has an
-// owner. What has no owner until this file is the part a reader's hands meet: where focus goes, what
-// Tab does at the ends, whether the page behind is reachable, and whether the thing shuts.
+// **This file was the MODAL's until this step, and none of that survives here.** A dialog's
+// properties are about a reader's hands in a box that covers the page — where focus goes, what Tab
+// does at the ends, whether the page behind is reachable, whether Escape shuts it — and the strip
+// has no box, so every one of those questions is now about `test/modal.test.ts`'s front door rather
+// than about this panel. What replaces them is the only thing a strip of five cards can be wrong
+// about: whether the right five are drawn, in the right order, saying the right thing about the
+// step into each of them, and asking for the right rung when one is pressed.
 //
-// Every test below names the defect it prevents. **Four of them had to be rewritten once the sweep
-// showed the first version passing with the feature removed**, and each says so where it stands: the
-// `$…$` rule (no ladder label carries a dollar, so only the claim TOOLTIPS can falsify it), the
-// hidden glyph (`some` matched the absent-row cells and let an exposed status glyph through), the
-// per-column Open buttons (pressing the first one and checking the state was plausible), and the
-// focus-trap helper, which computed the expected list with the module's own selector and so could
-// not see that selector change. A test that would pass with the feature absent is worth nothing.
-import { afterEach, describe, expect, it } from "vitest";
+// **What is asserted here is the PRESENTATION, not the ladder.** `test/contrastGrid.test.ts` already
+// derives each step's real difference set from the engine and requires it to match the declared one
+// in both directions; re-checking any of that here would be a second copy of a claim that has an
+// owner. So every expectation about WHICH rows change is read out of `changesAt(ladder(), i)` — the
+// datum itself — and only the sentence built from it is this file's business. The counts are
+// additionally pinned as literals, because a `changesAt` that returned nothing at all would satisfy
+// a test that only compared the screen against its output.
+//
+// Every test below names the defect it prevents.
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { CONTRAST_CELLS, contrastTable } from "../src/shell/contrastGrid.js";
-import { createContrastsDialog, type ContrastsDialog } from "../src/shell/contrasts.js";
-import type { ShellState } from "../src/shell/state.js";
+import { CONTRAST_CELLS } from "../src/shell/contrastGrid.js";
+import { changesAt, contrastStrip, ladder } from "../src/shell/contrasts.js";
+import { constraintLabel } from "../src/engine/vocabulary.js";
+import { circleTemplate } from "../src/engine/contour/templates.js";
+import { compile, defaultState, resolveState, type ShellState } from "../src/shell/state.js";
+import { patch } from "../src/shell/dom.js";
+import { defaultSession, type Session } from "../src/shell/session.js";
+import type { CardContext, ShellActions } from "../src/shell/cards/card.js";
 
-/** What a mounted dialog is tested against: a real page, a real opener, and a record of the asks. */
-interface Harness {
-  readonly dialog: ContrastsDialog;
-  readonly host: HTMLElement;
-  readonly page: HTMLElement;
-  readonly opener: HTMLButtonElement;
-  /** `apply` and `close`, in the order they were called — the whole point of the cell test. */
-  readonly calls: string[];
-  readonly applied: ShellState[];
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+// Helpers — `cards.test.ts`'s and `drillPanel.test.ts`'s, copied rather than imported for their own
+// stated reason: step 3.5 does not own either file, and a shared harness would make a change to one
+// panel's test a change to three.
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+
+/** Actions that record what was asked for, so a card can be pressed and the ask inspected. */
+function spyActions(): ShellActions & { calls: string[]; applied: ShellState[] } {
+  const calls: string[] = [];
+  const applied: ShellState[] = [];
+  return {
+    calls,
+    applied,
+    fitContour: () => calls.push("fit"),
+    setExpr: (s) => calls.push(`expr:${s}`),
+    setFixture: (i) => calls.push(`fixture:${i}`),
+    setParam: (n, v) => calls.push(`param:${n}=${v}`),
+    setScrubbing: (on) => calls.push(`scrub:${on}`),
+    hover: (p) => calls.push(`hover:${p}`),
+    setTemplate: (id) => calls.push(`template:${id}`),
+    reverseContour: () => calls.push("reverse"),
+    penStart: () => calls.push("pen:start"),
+    penStop: () => calls.push("pen:stop"),
+    penBack: () => calls.push("pen:back"),
+    penCommit: (closed) => calls.push(`pen:commit:${closed}`),
+    setBranch: () => calls.push("branch"),
+    setIso: (on) => calls.push(`iso:${on}`),
+    setStageMode: (m) => calls.push(`stageMode:${m}`),
+    undo: () => calls.push("undo"),
+    redo: () => calls.push("redo"),
+    declare: (id) => calls.push(`declare:${id}`),
+    undeclare: () => calls.push("undeclare"),
+    setDeclaration: () => calls.push("decl"),
+    setOpen: (id, open) => calls.push(`open:${id}:${open}`),
+    setStep: (step) => calls.push(`step:${step}`),
+    playSweep: (a: { stepId: string }) => calls.push(`playSweep:${a.stepId}`),
+    stopSweep: () => calls.push("stopSweep"),
+    copyLink: () => calls.push("copyLink"),
+    saveFigure: (t) => calls.push(`saveFigure:${t}`),
+    copyFigure: () => calls.push("copyFigure"),
+    setMode: (m) => calls.push(`mode:${m}`),
+    setRail: (side, folded) => calls.push(`rail:${side}:${folded}`),
+    toSandbox: () => calls.push("toSandbox"),
+    setContrastsOpen: (open) => calls.push(`contrasts:${open}`),
+    openContrast: (id: string) => calls.push(`contrast:${id}`),
+    applyState: (next) => {
+      applied.push(next);
+      calls.push("applyState");
+    },
+    openFrontDoor: () => calls.push("frontDoor"),
+    notify: (text, level) => calls.push(`notify:${level}:${text}`),
+    redraw: () => calls.push("redraw"),
+  };
 }
 
-let live: ContrastsDialog | null = null;
+/**
+ * A context for the strip.
+ *
+ * The state is a real one and is resolved for real, though the strip reads neither: a context
+ * assembled out of placeholders would stop being the object the app passes the moment the strip
+ * grew a second reader, and the resolve costs one sandbox solve.
+ */
+function contextOf(session: Session, actions: ShellActions): CardContext {
+  const state = defaultState(circleTemplate([0, 0], 1.5));
+  const compiled = compile(state.expr);
+  const resolution = resolveState(state, compiled);
+  return {
+    state,
+    resolution,
+    session,
+    poles: compiled.ok ? compiled.poles : null,
+    actions,
+  };
+}
+
+interface Harness {
+  readonly host: HTMLElement;
+  readonly session: Session;
+  readonly actions: ReturnType<typeof spyActions>;
+}
+
+/**
+ * Draw the strip into a host that is IN the document.
+ *
+ * In the document because the panel's name is an `aria-labelledby` and the only honest way to check
+ * one is to dereference the id, which needs a document to look it up in.
+ */
+function strip(over: Partial<Session> = {}): Harness {
+  const session: Session = { ...defaultSession(), contrastsOpen: true, ...over };
+  const actions = spyActions();
+  const host = document.createElement("div");
+  document.body.append(host);
+  patch(host, contrastStrip(contextOf(session, actions)));
+  return { host, session, actions };
+}
 
 afterEach(() => {
-  live?.destroy();
-  live = null;
   document.body.replaceChildren();
 });
 
-function mount(): Harness {
-  const page = document.createElement("main");
-  // Something focusable BEHIND the dialog. Without it "the page is inert" would be a claim about an
-  // empty box, and the focus-return test would have nothing to return to.
-  const opener = document.createElement("button");
-  opener.textContent = "Contrasts";
-  const behind = document.createElement("button");
-  behind.textContent = "somewhere else entirely";
-  page.append(opener, behind);
-
-  const host = document.createElement("div");
-  document.body.append(page, host);
-
-  const calls: string[] = [];
-  const applied: ShellState[] = [];
-  const dialog = createContrastsDialog(host, page, {
-    apply: (next) => {
-      calls.push("apply");
-      applied.push(next);
-    },
-    close: () => calls.push("close"),
-  });
-  live = dialog;
-  return { dialog, host, page, opener, calls, applied };
-}
-
-/** The dialog's own element, or null when it is not in the document. */
-const dialogOf = (): HTMLElement | null => document.querySelector<HTMLElement>('[role="dialog"]');
+/** The five case cards, in the order they were drawn. */
+const cardsIn = (root: ParentNode): HTMLButtonElement[] => [
+  ...root.querySelectorAll<HTMLButtonElement>("button.ladderCard"),
+];
 
 /**
- * What Tab must land on, in order.
+ * What a reader SEES.
  *
- * **Every control in this dialog is a `<button>`, and that is what is queried — deliberately NOT the
- * module's own focusable selector.** A test that recomputes the expected list the way the code
- * computes it adapts to whatever the code decides is focusable, so it cannot see the decision
- * change: the sweep found exactly that, with `tabIndex = -1` on the dialog changed to `0` and the
- * mirror-selector version of this helper obligingly including the dialog in both lists. Naming the
- * elements independently is what makes "the cycle is the CONTROLS" an assertion.
+ * `.katex-mathml` carries the LaTeX source for a screen reader, so a bare `textContent` reads the
+ * mathematics twice — once typeset and once as `\int_{-\infty}`. Stripping it is what makes "no
+ * `$…$` reached the screen" a statement about the rendered text rather than about KaTeX's internals.
  */
-function focusables(): HTMLElement[] {
-  const d = dialogOf();
-  return d === null ? [] : [...d.querySelectorAll("button")];
+function seen(el: Element): string {
+  const clone = el.cloneNode(true) as HTMLElement;
+  for (const m of clone.querySelectorAll(".katex-mathml")) m.remove();
+  return clone.textContent ?? "";
 }
 
-/** Send a key to whatever has focus. Returns `false` when the handler called `preventDefault`. */
-function press(key: string, shiftKey = false): boolean {
-  const target = document.activeElement ?? document.body;
-  return target.dispatchEvent(new KeyboardEvent("keydown", { key, shiftKey, bubbles: true, cancelable: true }));
+/**
+ * What one card's ANSWER slot says.
+ *
+ * Its own reader because the slot is the only part of a card whose exact text is a claim: three of
+ * the five cards carry a `0` somewhere innocent (`∫₀^∞`, `Res(f, 0)`), so an assertion about the
+ * whole card could never say "and nothing else".
+ */
+function answerOf(card: Element): string {
+  const slot = card.querySelector(".caseAnswer");
+  if (slot === null) throw new Error(`card ${card.getAttribute("data-cell") ?? "?"} has no answer slot`);
+  return seen(slot);
 }
 
-describe("the contrasts dialog — what it announces itself as", () => {
-  it("is a dialog, is modal, and its label RESOLVES to text", () => {
-    // The defect: `aria-labelledby` pointing at an id that is not in the document. It is invisible
-    // in every browser and in every screenshot — the dialog simply has no name, and a reader is told
-    // "dialog" and nothing more. Asserting the attribute's presence would not catch it, so the id is
-    // dereferenced and the text it lands on is read.
-    const { dialog } = mount();
-    dialog.open();
-    const d = dialogOf();
-    expect(d, "no element carries role=dialog").not.toBeNull();
-    expect(d?.getAttribute("aria-modal")).toBe("true");
-    const id = d?.getAttribute("aria-labelledby") ?? "";
-    expect(id, "no aria-labelledby at all").not.toBe("");
-    const label = document.getElementById(id);
-    expect(label, `aria-labelledby names '${id}', which is in no document`).not.toBeNull();
-    expect((label?.textContent ?? "").trim().length, "the dialog's name is empty").toBeGreaterThan(0);
-    // The heading is INSIDE the dialog. A label that resolves to a node the dialog does not contain
-    // resolves fine and still names something the reader cannot reach.
-    expect(d?.contains(label)).toBe(true);
+/** The declared counts, as literals. Named here so every test that leans on them says so. */
+const DECLARED_COUNTS = [0, 1, 1, 1, 5] as const;
+
+describe("the contrast strip — whether it is there at all", () => {
+  it("draws NOTHING while the ladder is shut, so the stage keeps its height", () => {
+    // The defect: rendering the section with `hidden` or an empty class instead of returning
+    // nothing. It looks identical in a screenshot and costs the stage a grid row for a panel the
+    // reader never asked for — and, worse, pays the five solves below on every mount.
+    const session: Session = { ...defaultSession(), contrastsOpen: false };
+    expect(contrastStrip(contextOf(session, spyActions()))).toEqual([]);
+
+    const open = contrastStrip(contextOf({ ...defaultSession(), contrastsOpen: true }, spyActions()));
+    expect(open.length, "an open ladder drew no section").toBe(1);
+    expect(open[0].tag).toBe("section");
   });
 
-  it("draws the five columns and a row for every ledger row", () => {
-    // Not a claim about the ladder's content — that is `contrastGrid.test.ts`'s. This is the claim
-    // that the dialog RENDERED it: the first draft built its content in the constructor and a later
-    // change deferred it to the first open, which is exactly the edit that can leave an empty box
-    // behind a correct-looking `role="dialog"`.
-    const { dialog } = mount();
-    dialog.open();
-    const head = dialogOf()?.querySelectorAll("thead th") ?? [];
-    expect(head.length, "corner cell plus five columns").toBe(6);
-    expect((dialogOf()?.querySelectorAll("tbody tr") ?? []).length).toBeGreaterThan(3);
-  });
-
-  it("gives EVERY header cell a non-empty accessible name, the corner included", () => {
-    // M7.1 ran axe against the open panel and found `empty-table-header` on the corner cell — found
-    // by hand, because the a11y roster audits a page in its DEFAULT state and a panel nothing opens
-    // is never audited. This is that audit made part of the blocking gate.
-    const { dialog } = mount();
-    dialog.open();
-    const headers = [...(dialogOf()?.querySelectorAll("th") ?? [])];
-    expect(headers.length).toBeGreaterThan(5);
-    for (const th of headers) {
-      const name = (th.getAttribute("aria-label") ?? th.textContent ?? "").trim();
-      expect(name, `an empty <th> (scope=${th.getAttribute("scope") ?? "none"})`).not.toBe("");
-    }
-    // And the corner specifically, by position — a loop over all of them would still pass if the
-    // corner cell were simply absent, which is the other way to get a table with no row headings.
-    expect((headers[0].textContent ?? "").trim()).not.toBe("");
-    expect(headers[0].getAttribute("scope")).not.toBeNull();
-  });
-
-  it("prints mathematics, never `$…$` source — in the cells AND in their tooltips", () => {
-    // `.katex-mathml` carries the LaTeX source, so `textContent` is not what a reader sees — strip
-    // it and read what is actually drawn.
+  it("pays no SOLVE while it is shut, and pays it exactly once when it opens", async () => {
+    // The defect the shape of `contrastStrip` exists to prevent: reading `ladder()` before the
+    // guard. Five full solves, four of them gallery records, on every mount of an app whose ladder
+    // is shut by default — invisible except as a slow boot, and `toEqual([])` above cannot see it
+    // because a strip that solved and then threw the table away returns `[]` just the same.
     //
-    // **The tooltips are where this test has teeth, and measuring said so.** None of the ladder's
-    // five column labels, five notes, four `because` sentences or nine row labels contains a `$`
-    // today, so the assertion on the visible text below cannot currently fail however the module
-    // sets them — it is an obligation on the convention rather than a guard, and saying otherwise
-    // would be the vacuous test M6.3 took three attempts to stop writing. The LEDGER CLAIMS do
-    // carry them: 11 of the grid's 37 entries are `$…$` sentences, and each is a cell's `title`.
-    // A module that put the raw claim there would show `$\operatorname{Ind}_\gamma(a) \neq 0$` in
-    // a tooltip, and that is what the second half of this test catches.
-    const { dialog } = mount();
-    dialog.open();
-    const clone = dialogOf()?.cloneNode(true) as HTMLElement;
-    for (const m of clone.querySelectorAll(".katex-mathml")) m.remove();
-    const text = clone.textContent ?? "";
-    expect(text, "LaTeX delimiters reached the screen").not.toContain("$");
-    expect(text, "LaTeX source reached the screen").not.toMatch(/\\pi|\\frac|\\oint|\\cdot/);
-
-    // **The anti-vacuity clause, read off the ENGINE rather than off the screen**: the claims this
-    // grid is built from really do carry `$…$`, so "no title contains a `$`" is a statement about
-    // stripping and not about there being nothing to strip. If the engine's wording ever loses its
-    // mathematics this line goes red and says so, instead of the test quietly stopping to bite.
-    const claims = contrastTable()
-      .rows.flatMap((r) => r.cells)
-      .filter((c) => c !== null)
-      .map((c) => c.claim);
-    expect(claims.filter((c) => c.includes("$")).length, "no ledger claim carries `$…$` — this test no longer bites").toBeGreaterThan(5);
-
-    const titles = [...(dialogOf()?.querySelectorAll("td[title]") ?? [])].map((td) => td.getAttribute("title") ?? "");
-    expect(titles.length, "no cell carries its claim at all").toBeGreaterThan(20);
-    // Only the DELIMITERS: `mathPlain` is `splitMath(...).join("")` and deliberately keeps the
-    // LaTeX body, which is what every `aria-label` in this app carries (`stageView.ts`'s chips).
-    // A tooltip is not a place to typeset, and inventing a second stripping rule here would be a
-    // second place for the `$…$` convention to live.
-    for (const t of titles) expect(t, "a raw `$…$` claim reached a tooltip").not.toContain("$");
-  });
-});
-
-describe("the contrasts dialog — what each cell says", () => {
-  it("names every status in text, not in a glyph alone", () => {
-    // A grid of ✓ and ✗ names nothing: the glyph is `aria-hidden` and the word beside it is the
-    // cell's whole accessible content. Remove that word and a screen reader reads 37 empty cells —
-    // which looks perfect on screen and is the exact shape of a11y defect nobody notices.
-    const { dialog } = mount();
-    dialog.open();
-    const cells = [...(dialogOf()?.querySelectorAll("tbody td") ?? [])];
-    expect(cells.length).toBeGreaterThan(20);
-    for (const td of cells) {
-      const spoken = [...td.querySelectorAll("span")]
-        .filter((sp) => sp.getAttribute("aria-hidden") === null)
-        .map((sp) => sp.textContent ?? "")
-        .join(" ")
-        .trim();
-      expect(spoken, `a cell whose only content is a glyph (status=${td.getAttribute("data-status") ?? "?"})`).not.toBe("");
-    }
-    // And EVERY glyph is really hidden — a ✓ announced as "check mark" beside the word "satisfied"
-    // is the same claim twice. **`some` is not enough and the sweep proved it**: the absent-row
-    // cells carry their own hidden em-dash, so a status glyph left exposed still left one cell
-    // matching and the assertion passed. `aria-hidden=""` is the way it happens, because the keyed
-    // builder writes a boolean `true` prop as an empty attribute value and an empty value is
-    // invalid ARIA — the element stays exposed.
-    for (const td of cells) {
-      expect(td.querySelector('[aria-hidden="true"]'), "a cell's glyph is exposed to a screen reader").not.toBeNull();
-    }
-  });
-
-  it("marks the DECLARED difference apart from a mere rewording", () => {
-    // M7.1's finding, and the one loophole that would empty the declaration of content: a row whose
-    // wording moved without the argument doing so must never be drawn as the step's change. The two
-    // markers are therefore disjoint by construction, and both must actually appear — a module that
-    // marked nothing would satisfy "disjoint" perfectly.
-    const { dialog } = mount();
-    dialog.open();
-    const declared = [...(dialogOf()?.querySelectorAll('td[data-change="declared"]') ?? [])];
-    const reworded = [...(dialogOf()?.querySelectorAll('td[data-change="wording"]') ?? [])];
-    expect(declared.length, "the ladder declares differences and none is marked").toBeGreaterThan(3);
-    expect(reworded.length, "the ladder declares reworded rows and none is marked").toBeGreaterThan(0);
-    expect(declared.some((td) => reworded.includes(td)), "a cell is both the change and a rewording").toBe(false);
-    // Not by outline alone. The stylesheet may not exist yet and the reader may not see outlines;
-    // the sentence is the part that is true either way.
-    for (const td of declared) expect(td.textContent ?? "").toContain("declared change");
-    for (const td of reworded) expect(td.textContent ?? "").toContain("reworded");
-  });
-});
-
-describe("the contrasts dialog — focus", () => {
-  it("moves focus INTO the dialog on open and RETURNS it to the opener on close", () => {
-    // Two defects in one property. A dialog that does not take focus leaves a keyboard reader
-    // tabbing through a page they cannot see; one that does not give it back drops them at the top
-    // of the document with no announcement, which is the more common and the harder to notice.
-    const { dialog, opener } = mount();
-    opener.focus();
-    expect(document.activeElement).toBe(opener);
-
-    dialog.open();
-    const d = dialogOf();
-    expect(d, "the dialog is not in the document").not.toBeNull();
-    expect(d?.contains(document.activeElement), "focus stayed outside the dialog").toBe(true);
-
-    dialog.close();
-    expect(document.activeElement, "focus did not come back to the control that opened it").toBe(opener);
-  });
-
-  it("lands on the dialog itself, so the first Space does not shut it", () => {
-    // The specific choice, asserted so a later change has to argue with it: focusing the first
-    // control means focusing `Close`, and Space on a focused button ACTIVATES it — a reader who
-    // opens the panel and presses Space to scroll the grid closes it again instantly.
-    const { dialog } = mount();
-    dialog.open();
-    expect(document.activeElement).toBe(dialogOf());
-    expect(document.activeElement?.tagName.toLowerCase(), "the container is not a button").not.toBe("button");
-  });
-
-  it("does not re-capture the return target on a second open", () => {
-    // The defect: `open()` called again while open captures whatever is focused NOW — a control
-    // inside the dialog — so closing focuses a node that has just left the document and the reader
-    // is dropped on `<body>`.
-    const { dialog, opener } = mount();
-    opener.focus();
-    dialog.open();
-    focusables()[0]?.focus();
-    dialog.open();
-    dialog.close();
-    expect(document.activeElement).toBe(opener);
-  });
-
-  it("cycles Tab within the dialog, in both directions", () => {
-    // The trap. Without it Tab from the last control walks into the page the dialog is covering —
-    // which is the whole difference between this and the old shell's overlay, and is invisible to
-    // anyone using a mouse. Asserted at both ends AND in the interior, because a trap that only
-    // handles the wrap has no interior behaviour to be wrong about in jsdom and would pass a test
-    // written only at the ends whether it stepped through the controls or not.
-    const { dialog } = mount();
-    dialog.open();
-    const items = focusables();
-    expect(items.length, "nothing to cycle").toBeGreaterThan(2);
-
-    items[items.length - 1].focus();
-    press("Tab");
-    expect(document.activeElement, "Tab off the last control did not wrap to the first").toBe(items[0]);
-
-    press("Tab");
-    expect(document.activeElement, "Tab did not step forward inside the dialog").toBe(items[1]);
-
-    items[0].focus();
-    press("Tab", true);
-    expect(document.activeElement, "Shift+Tab off the first control did not wrap to the last").toBe(items[items.length - 1]);
-
-    press("Tab", true);
-    expect(document.activeElement, "Shift+Tab did not step backward inside the dialog").toBe(items[items.length - 2]);
-  });
-
-  it("sends Tab from the container to the first control, and Shift+Tab to the last", () => {
-    // Where `open()` leaves focus is not in the cycle (`tabIndex = -1`), so the two moves out of it
-    // are their own case. Get this wrong and a reader who opens the dialog and presses Tab goes
-    // nowhere at all — the one keystroke every keyboard reader makes first.
-    const { dialog } = mount();
-    dialog.open();
-    const items = focusables();
-    press("Tab");
-    expect(document.activeElement).toBe(items[0]);
-
-    dialogOf()?.focus();
-    press("Tab", true);
-    expect(document.activeElement).toBe(items[items.length - 1]);
-  });
-});
-
-describe("the contrasts dialog — the two keystrokes it takes over", () => {
-  it("CANCELS the Tab it handled, so the browser does not move focus as well", () => {
-    // **jsdom performs no tab traversal, so the trap looks right here whether or not it cancels the
-    // event** — and in a real browser an uncancelled Tab moves focus a second time, on top of the
-    // move the trap just made, landing two controls along or out of the dialog entirely. The
-    // dispatch's return value is the one signal for that which this environment does have.
-    const { dialog } = mount();
-    dialog.open();
-    focusables()[0].focus();
-    expect(press("Tab"), "the Tab was not cancelled — the browser will move focus again").toBe(false);
-    expect(press("Tab", true), "the Shift+Tab was not cancelled").toBe(false);
-  });
-
-  it("does not let Escape reach the rest of the app", () => {
-    // The stage's own Escape abandons a half-drawn pen path. A reader shutting a dialog that happens
-    // to be over the stage did not ask for that, and would have no way to connect the two.
-    const seen: string[] = [];
-    const spy = (e: Event): void => {
-      seen.push((e as KeyboardEvent).key);
-    };
-    document.addEventListener("keydown", spy);
+    // **`ladder()` memoises at module scope, so the call cannot be observed from outside the
+    // module** — which is why this is the one test here that re-imports. A fresh registry gives a
+    // fresh (empty) memo, and `contrastTable` is spied through the module `contrasts.ts` imports it
+    // from, so what is counted is the solve itself and not a proxy for it.
+    vi.resetModules();
+    let solves = 0;
+    vi.doMock("../src/shell/contrastGrid.js", async (importOriginal) => {
+      const real = await importOriginal<typeof import("../src/shell/contrastGrid.js")>();
+      return {
+        ...real,
+        contrastTable: (...args: Parameters<typeof real.contrastTable>) => {
+          solves += 1;
+          return real.contrastTable(...args);
+        },
+      };
+    });
     try {
-      const { dialog } = mount();
-      dialog.open();
-      press("Escape");
-      expect(seen, "Escape bubbled out of the dialog and into the app").toEqual([]);
+      const fresh = await import("../src/shell/contrasts.js");
+      const shut = contextOf({ ...defaultSession(), contrastsOpen: false }, spyActions());
+      expect(fresh.contrastStrip(shut)).toEqual([]);
+      expect(solves, "the ladder was solved for a panel that is not on screen").toBe(0);
+
+      // The anti-vacuity half: a `contrastStrip` that solved nothing ever would pass the line above
+      // perfectly. Opening it must really reach the table — and reach it once, because the memo is
+      // the reason the dialog could be rebuilt on every keystroke and this strip on every frame.
+      const live = contextOf({ ...defaultSession(), contrastsOpen: true }, spyActions());
+      expect(fresh.contrastStrip(live).length).toBe(1);
+      expect(solves, "opening the ladder solved nothing").toBe(1);
+      expect(fresh.contrastStrip(live).length).toBe(1);
+      expect(solves, "the module-scope memo is not a memo — a second render re-solved").toBe(1);
     } finally {
-      document.removeEventListener("keydown", spy);
+      vi.doUnmock("../src/shell/contrastGrid.js");
+      vi.resetModules();
     }
   });
 });
 
-describe("the contrasts dialog — the page behind it", () => {
-  it("marks the page `inert` while open and restores it after", () => {
-    // **jsdom does not implement `inert`** — measured: `"inert" in document.createElement("div")` is
-    // false, there is no accessor on `HTMLElement.prototype`, assigning the property creates an
-    // expando that reflects to no attribute, and focus reaches a button inside an inert subtree.
-    // So the ATTRIBUTE is what the module writes and what is asserted here; the property test would
-    // pass against `el.inert = true` writing nothing anybody can see. What cannot be asserted in
-    // this environment is the EFFECT — that focus and the accessibility tree really stop at the
-    // dialog — and that is a browser's job, said plainly rather than faked with a property read.
-    expect("inert" in document.createElement("div"), "jsdom grew inert — assert the effect, not the attribute").toBe(false);
-
-    const { dialog, page } = mount();
-    expect(page.hasAttribute("inert")).toBe(false);
-    dialog.open();
-    expect(page.hasAttribute("inert"), "the page behind the modal is still reachable").toBe(true);
-    dialog.close();
-    expect(page.hasAttribute("inert"), "the page was left inert after the dialog went away").toBe(false);
+describe("the contrast strip — the five cases", () => {
+  it("draws one card per cell, in CONTRAST_CELLS order, each addressable by its own id", () => {
+    // Two defects at once. A strip built from `contrastTable().rows` rather than `.cells`, or from
+    // a filtered list, quietly drops a rung; and a card whose `data-cell` is its INDEX rather than
+    // its id addresses the right thing today and the wrong thing the moment a cell is inserted —
+    // which is what every other test here, and the shell's own highlight, look the card up by.
+    const { host } = strip();
+    const cards = cardsIn(host);
+    expect(cards.length, "the ladder is five rungs").toBe(5);
+    expect(
+      cards.map((b) => b.getAttribute("data-cell")),
+      "the cards are not the declared cells, in the declared order",
+    ).toEqual(CONTRAST_CELLS.map((c) => c.id));
+    // The whole card is the control, not a card with an Open button inside it: a second target
+    // would be a second thing to name and a second thing for a reader to find.
+    for (const b of cards) expect(b.getAttribute("type"), "a button with no type submits a form").toBe("button");
   });
 
-  it("RESTORES `inert` rather than clearing it, when the page already had it", () => {
-    // The defect: closing this dialog clears an `inert` somebody else set — a second modal above it,
-    // a loading state — and the page comes back alive underneath something still covering it. The
-    // dialog remembers what it found rather than assuming it found nothing.
-    const { dialog, page } = mount();
-    page.setAttribute("inert", "");
-    dialog.open();
-    expect(page.hasAttribute("inert")).toBe(true);
-    dialog.close();
-    expect(page.hasAttribute("inert"), "the dialog cleared an inert it did not set").toBe(true);
+  it("names each card by the cell's SPOKEN twin, never by its LaTeX", () => {
+    // Step 2.1's defect, which is invisible on screen: the labels are typeset now, so an
+    // `aria-label` built from `cell.label` (or from `mathPlain` of it, which only strips the `$`)
+    // is read out as "backslash int underscore zero caret open brace infinity". Four of the five
+    // labels carry a formula, so this bites — and the names must differ from each other, since five
+    // rows reading "open" in a screen reader's element list name nothing at all.
+    const { host } = strip();
+    const names = cardsIn(host).map((b) => b.getAttribute("aria-label") ?? "");
+    expect(new Set(names).size, "two cards offer the same accessible name").toBe(5);
+    CONTRAST_CELLS.forEach((cell, i) => {
+      expect(names[i], `card ${i} (${cell.id}) is not named after its own cell`).toContain(cell.labelText);
+      expect(names[i], "an accessible name carrying LaTeX").not.toContain("\\");
+    });
+    // The anti-vacuity clause, read off the datum: `labelText` would be a pointless twin if it were
+    // the same string as `label`, and then `not.toContain("\\")` would be satisfied by either.
+    const typeset = CONTRAST_CELLS.filter((c) => c.label.includes("\\"));
+    expect(typeset.length, "no cell label carries LaTeX — the spoken twin no longer bites").toBeGreaterThan(2);
   });
 
-  it("closes on Escape", () => {
-    // Escape is the one shortcut every reader tries, and a modal that ignores it is a trap. It must
-    // also tell the shell, or `session.contrastsOpen` stays true and the next render puts the dialog
-    // straight back up — so the ask is asserted alongside the DOM going away.
-    const { dialog, calls } = mount();
-    dialog.open();
-    press("Escape");
-    expect(dialog.isOpen, "Escape did not shut it").toBe(false);
-    expect(dialogOf(), "the dialog is still in the document").toBeNull();
-    expect(calls, "the shell was not told, so the next render reopens it").toEqual(["close"]);
+  it("prints the record's ANSWER, so the indented case reads π/2 and not the 0 its ∮ evaluates to", () => {
+    // C1's whole lesson, and the reason `ContrastTableCell.answer` is the record's solved value
+    // rather than the ledger's `∮`: its contour encloses nothing, so `∮` is exactly 0 while the
+    // integral it determines is π/2. A card that printed the ledger's value would show `0` under
+    // the one rung that exists to say the two are different.
+    const { host } = strip();
+    const table = ladder();
+    const cards = cardsIn(host);
+    table.cells.forEach((cell, i) => {
+      if (cell.answer === null) return;
+      expect(answerOf(cards[i]), `card ${i} (${cell.id}) does not print its answer`).toContain(cell.answer);
+    });
+    // **Read out of the answer slot, not out of the card.** The whole card's text contains a `0` in
+    // three innocent places — the label's `∫₀^∞`, the `Res(f, 0)` in its sentence — so "the card
+    // does not say 0" is unwritable, while "the answer slot says π/2 and only that" is exactly the
+    // claim. Named outright rather than only derived, so a `contrastSideOf` that started handing
+    // back the ledger's value would fail here by name instead of agreeing with itself.
+    const indented = cards[CONTRAST_CELLS.findIndex((c) => c.id === "indented")];
+    expect(
+      answerOf(indented).trim(),
+      "the indented case printed the ledger's ∮ rather than the record's answer",
+    ).toBe("π/2");
   });
 
-  it("closes on the Close button", () => {
-    // The pointer's route to the same place. Separate from Escape because they are separate
-    // listeners and the first draft wired only one of them through `dismiss`.
-    const { dialog, calls } = mount();
-    dialog.open();
-    const button = [...(dialogOf()?.querySelectorAll("button") ?? [])].find((b) => (b.textContent ?? "").includes("Close"));
-    expect(button, "no Close button").not.toBeUndefined();
-    button?.click();
-    expect(dialog.isOpen).toBe(false);
-    expect(calls).toEqual(["close"]);
+  it("stamps the case that does NOT close with ⚠ and the constraint it failed at", () => {
+    // The honest-labelling guardrail on the one rung that is a failure: the wrong-way argument has
+    // no value, and a card that left the slot blank — or drew an em-dash, which is what a cell with
+    // nothing to say gets — would read as an argument that simply has no answer yet rather than one
+    // whose boundary terms diverge. The constraint is NAMED, so the card says WHICH part failed.
+    const { host } = strip();
+    const at = CONTRAST_CELLS.findIndex((c) => c.id === "wrong-way");
+    const text = answerOf(cardsIn(host)[at]);
+    expect(text, "the failing case carries no ⚠").toContain("⚠");
+    expect(text, "the failing case does not name what it failed at").toContain(
+      `incomplete (${constraintLabel("KILL").toLowerCase()})`,
+    );
+    // And the datum agrees that this is the failing one — otherwise the two lines above would be a
+    // claim about whichever card happens to sit third.
+    expect(ladder().cells[at].closes, "the wrong-way case closes — this test is about another cell").toBe(false);
+    expect(ladder().cells[at].failedAt).toBe("KILL");
   });
 });
 
-describe("the contrasts dialog — opening a cell", () => {
-  it("shuts FIRST and applies second, with a real state", () => {
-    // The order is the assertion. `applyState` runs `resetTransient`, which clears
-    // `session.contrastsOpen` and re-renders — so applying first has the shell decide the dialog is
-    // shut while its DOM is still up, the page still `inert` and focus still inside a panel the
-    // shell has stopped drawing. Shutting first leaves one order, and the opener is still in the
-    // document to receive focus because nothing has re-rendered yet.
-    const { dialog, opener, calls, applied } = mount();
-    opener.focus();
-    dialog.open();
-    const open = [...(dialogOf()?.querySelectorAll("button") ?? [])].find((b) =>
-      (b.getAttribute("aria-label") ?? "").startsWith("open "),
-    );
-    expect(open, "no per-column Open button").not.toBeUndefined();
-    open?.click();
-
-    expect(calls, "apply ran before the dialog came down").toEqual(["close", "apply"]);
-    expect(dialog.isOpen).toBe(false);
-    expect(document.activeElement, "focus was not returned before the shell re-rendered").toBe(opener);
-    // A real `ShellState`, not a placeholder: the cell is a state (M7.1), and a handler that passed
-    // an empty object would satisfy "apply was called" exactly.
-    expect(applied.length).toBe(1);
-    expect(applied[0].mode === "gallery" || applied[0].mode === "sandbox").toBe(true);
-    expect(applied[0].contour.pieces.length).toBeGreaterThan(0);
+describe("the contrast strip — the declared change, in words", () => {
+  it("names the ONE row that changed and what it did, on each of the three single-row steps", () => {
+    // The strip's whole reason for replacing the grid: five columns × nine rows of glyphs made a
+    // reader decode a table before it said anything, and what a rung has to say is one row label and
+    // one verb. The defect this prevents is a card that highlights a row somewhere else on the page
+    // and says nothing itself — which is what the grid did, and which leaves the strip a list of
+    // five integrals in no stated relation.
+    //
+    // The verb is derived from the datum's STATUS rather than written down per card, so a `became`
+    // that always returned "now holds" fails on the wrong-way rung instead of passing three times.
+    const { host } = strip();
+    const table = ladder();
+    const cards = cardsIn(host);
+    const said: Record<string, string> = { satisfied: "now holds", failed: "now fails" };
+    for (const id of ["oscillatory", "wrong-way", "forced-downward"]) {
+      const at = CONTRAST_CELLS.findIndex((c) => c.id === id);
+      const changes = changesAt(table, at);
+      expect(changes.length, `${id} no longer declares exactly one row`).toBe(1);
+      const verb = said[changes[0].status];
+      expect(verb, `${id}'s row landed on an unexpected status`).not.toBeUndefined();
+      expect(seen(cards[at]), `${id} does not name its changed row and what it did`).toContain(
+        `${changes[0].label} ${verb}`,
+      );
+    }
+    // The pair the ladder exists for: the SAME row, satisfied on one rung and failed on the next.
+    // A card that printed the label without the verb would read identically on both.
+    const wrong = cards[CONTRAST_CELLS.findIndex((c) => c.id === "wrong-way")];
+    expect(seen(wrong), "the failing rung reads as though its estimate still holds").not.toContain("now holds");
   });
 
-  it("opens the column whose button was pressed, and not the first one", () => {
-    // The sweep's finding: binding every button to `CONTRAST_CELLS[0]` survived a test that pressed
-    // the first button and checked only that a plausible state arrived. A reader would press the
-    // fifth column and be shown the first, with nothing on screen to say so — and four of the five
-    // states are gallery records at the same record, so only the third (a SANDBOX state, because
-    // B1's contour derives its closing side and cannot be closed wrongly) differs at a glance.
-    // Every column is therefore checked against its own cell.
+  it("says the COUNT out loud on the rung that moves five rows, and names all five", () => {
+    // M7.1 measured the step into C1 and it moves FIVE rows, not the plan's two. A card that
+    // printed the first of them would make the plan's sentence — "the one row that changed" — true
+    // by hiding the other four, which is the one way this panel could lie about the ladder.
+    const { host } = strip();
+    const at = CONTRAST_CELLS.findIndex((c) => c.id === "indented");
+    const changes = changesAt(ladder(), at);
+    const text = seen(cardsIn(host)[at]);
+    expect(text, "the count is not said out loud").toContain(`${changes.length} checks change`);
+    for (const change of changes) {
+      expect(text, `the rung does not name '${change.label}'`).toContain(change.label);
+    }
+  });
+
+  it("declares 0, 1, 1, 1 and 5 rows — the counts as literals, not as whatever `changesAt` returns", () => {
+    // **The tests above compare the screen against `changesAt`, so a `changesAt` that returned an
+    // empty list for every rung would agree with a card that printed nothing.** This is the datum
+    // asserted independently: the first three steps are one row apart and it is the same row all
+    // three times, and the last is five. Both halves have to hold for the pair to mean anything.
+    const table = ladder();
+    expect(table.cells.map((_, i) => changesAt(table, i).length)).toEqual([...DECLARED_COUNTS]);
+    const single = [1, 2, 3].map((i) => changesAt(table, i)[0].key);
+    expect(new Set(single).size, "the first three rungs no longer turn on ONE shared row").toBe(1);
+  });
+
+  it("says nothing about a step into the FIRST rung, because there is no step into it", () => {
+    // The defect: a `changes.length >= 0` guard, or a card that prints an empty change line. The
+    // first case is the one the ladder is measured FROM; a sentence there would have to be about a
+    // comparison that does not exist.
+    const { host } = strip();
+    expect(changesAt(ladder(), 0).length, "the first cell declares a difference from nothing").toBe(0);
+    expect(
+      cardsIn(host)[0].querySelector(".caseChange"),
+      "the first card carries a change line",
+    ).toBeNull();
+    for (const at of [1, 2, 3, 4]) {
+      expect(cardsIn(host)[at].querySelector(".caseChange"), `card ${at} carries no change line`).not.toBeNull();
+    }
+  });
+});
+
+describe("the contrast strip — how it prints mathematics", () => {
+  it("prints mathematics, never `$…$` source", () => {
+    // The app's convention (`mathText`) applied to a panel whose labels became typeset at step 2.1.
+    // A card that dropped a label straight into a text node would print
+    // `$\int_{-\infty}^{\infty} \frac{dx}{x^2+1}$` on screen — visible, but only to someone reading
+    // the strip rather than the tests.
+    //
+    // **This bites, and the datum says so**: four of the five cell labels, three of the five notes
+    // and one `because` carry `$…$`. That is asserted below rather than assumed, because the same
+    // test written against the old grid's column headings said nothing at all — none of them
+    // carried a dollar, so no implementation of the panel could have failed it.
+    const { host } = strip();
+    const text = seen(host);
+    expect(text, "LaTeX delimiters reached the screen").not.toContain("$");
+    expect(text, "LaTeX source reached the screen").not.toMatch(/\\int|\\frac|\\oint|\\operatorname/);
+    // And the typesetting really happened: stripping `$` and printing the LaTeX body would satisfy
+    // both lines above. KaTeX leaves its own markup, which is the evidence that a formula was built.
+    expect(host.querySelectorAll(".katex").length, "nothing was typeset at all").toBeGreaterThan(3);
+
+    const dollars = CONTRAST_CELLS.filter((c) => c.label.includes("$")).length;
+    expect(dollars, "no cell label carries `$…$` — this test no longer bites").toBeGreaterThan(3);
+  });
+});
+
+describe("the contrast strip — the rung the reader is on", () => {
+  it("marks exactly the card the session names, and none when it names nothing", () => {
+    // The strip's reason for existing is that it STAYS OPEN while the reader walks it, so the one
+    // thing it must never lose is which rung is showing. The defect: `aria-current` on the first
+    // card, or on all of them, or on none — each of which looks like a stylesheet problem and is
+    // not. Every cell is checked, because marking `cards[0]` unconditionally passes a test that
+    // only ever opens the first.
+    for (const cell of CONTRAST_CELLS) {
+      document.body.replaceChildren();
+      const { host } = strip({ contrast: { cell: cell.id, rows: [] } });
+      const marked = cardsIn(host).filter((b) => b.getAttribute("aria-current") === "true");
+      expect(marked.length, `${cell.id}: ${marked.length} cards claim to be the current rung`).toBe(1);
+      expect(marked[0].getAttribute("data-cell"), "the wrong card is marked as current").toBe(cell.id);
+    }
+    document.body.replaceChildren();
+    const { host } = strip({ contrast: null });
+    expect(
+      cardsIn(host).filter((b) => b.hasAttribute("aria-current")).length,
+      "a card claims to be current while the reader has opened none",
+    ).toBe(0);
+  });
+});
+
+describe("the contrast strip — what a press asks for", () => {
+  it("asks to open the card that was pressed, by id, and asks for nothing else", () => {
+    // Two defects, and the sweep found the first of them on the dialog: every button bound to
+    // `CONTRAST_CELLS[0]` survives a test that presses one card and checks that something plausible
+    // happened. Each card is therefore pressed and checked against its OWN id.
+    //
+    // The second is `applyState(cell.state())` from the strip. Opening a rung is three writes in one
+    // order — apply, then record which rung and which rows it declares, then open the check list
+    // that is about to show them — and only the first survives `resetTransient`, so a strip that
+    // applied the state itself would leave the rung unmarked and its declared row unhighlighted.
+    // `toEqual` on the whole call list is what makes "and nothing else" an assertion.
     CONTRAST_CELLS.forEach((cell, i) => {
       document.body.replaceChildren();
-      const { dialog, applied } = mount();
-      dialog.open();
-      const buttons = [...(dialogOf()?.querySelectorAll("button") ?? [])].filter((b) =>
-        (b.getAttribute("aria-label") ?? "").startsWith("open "),
-      );
-      buttons[i].click();
-      const want = cell.state();
-      expect(applied.length, `column ${i} asked for nothing`).toBe(1);
-      expect(
-        { mode: applied[0].mode, record: applied[0].record, expr: applied[0].expr, bindings: applied[0].bindings },
-        `column ${i} (${cell.id}) opened a different cell`,
-      ).toEqual({ mode: want.mode, record: want.record, expr: want.expr, bindings: want.bindings });
-      dialog.destroy();
+      const { host, actions } = strip();
+      cardsIn(host)[i].click();
+      expect(actions.calls, `card ${i} (${cell.id}) asked for the wrong thing`).toEqual([`contrast:${cell.id}`]);
+      expect(actions.applied, "the strip applied a state itself instead of asking for the rung").toEqual([]);
     });
-  });
-
-  it("offers one Open button per column, each naming its own column", () => {
-    // Five buttons all reading "Open" name nothing, and a screen reader's element list is then five
-    // identical rows. The names must also be plain text: an `aria-label` is read aloud, so a `$`
-    // in it is spelled out.
-    const { dialog } = mount();
-    dialog.open();
-    const names = [...(dialogOf()?.querySelectorAll("button") ?? [])]
-      .map((b) => b.getAttribute("aria-label") ?? "")
-      .filter((n) => n.startsWith("open "));
-    expect(names.length).toBe(5);
-    expect(new Set(names).size, "two columns offer the same button name").toBe(5);
-    // Each name is its OWN column's, checked against the table rather than against a shape: five
-    // distinct names are still five wrong names if the buttons were built off the wrong index.
-    //
-    // **And `$`-free, which step 2.1 made falsifiable.** Until then none of the five labels carried
-    // a formula, so the assertion could not fail and would have said nothing; now four of them are
-    // typeset, and the button reads the SPOKEN twin — reading `c.label` here would put
-    // `\int_0^{\infty}` into a name a screen reader says out loud.
-    const labels = contrastTable().cells.map((c) => c.labelText);
-    expect(names).toEqual(labels.map((l) => `open ${l} in the app`));
-    for (const n of names) expect(n, "an accessible name carrying LaTeX").not.toContain("\\");
   });
 });
 
-describe("the contrasts dialog — closing twice", () => {
-  it("does not throw and does not move focus a second time", () => {
-    // `dismiss()` is reached from Escape, from the button, from the backdrop AND from the shell's
-    // own re-render, so being called twice about one gesture is the normal case. The defect a guard
-    // prevents is not the throw — it is the SECOND focus move: without it, closing after the reader
-    // has clicked somewhere else yanks them back to the opener out of nowhere.
-    const { dialog, opener } = mount();
-    opener.focus();
-    dialog.open();
-    dialog.close();
-    expect(document.activeElement).toBe(opener);
-
-    const elsewhere = document.createElement("button");
-    document.body.append(elsewhere);
-    elsewhere.focus();
-    expect(() => dialog.close()).not.toThrow();
-    expect(document.activeElement, "a second close yanked focus back to the opener").toBe(elsewhere);
-    expect(dialog.isOpen).toBe(false);
+describe("the contrast strip — the panel's own chrome", () => {
+  it("carries one heading, and that heading is the panel's accessible name", () => {
+    // Two defects in one property. The shell asserts a single `<h1>` and a flat list of `<h2>`s as a
+    // structural invariant (M6.4), so a panel that shipped two headings — or a heading at the wrong
+    // level — breaks the page's outline for everyone using it to navigate. And `aria-labelledby`
+    // pointing at an id that is in no document is invisible in every browser and every screenshot:
+    // the section simply has no name. The id is therefore dereferenced and the text it lands on read.
+    const { host } = strip();
+    const section = host.querySelector("section");
+    expect(section, "no section at all").not.toBeNull();
+    expect(host.querySelectorAll("h2").length, "the panel's heading count is not one").toBe(1);
+    const id = section?.getAttribute("aria-labelledby") ?? "";
+    expect(id, "the panel has no aria-labelledby").not.toBe("");
+    const label = document.getElementById(id);
+    expect(label, `aria-labelledby names '${id}', which is in no document`).not.toBeNull();
+    expect((label?.textContent ?? "").trim().length, "the panel's name is empty").toBeGreaterThan(0);
+    expect(label?.tagName.toLowerCase(), "the name is not the heading").toBe("h2");
   });
 
-  it("can be closed before it was ever opened, and destroyed after", () => {
-    // The lifecycle's edges. `destroy()` on an open dialog must take the page's `inert` off with it,
-    // or unmounting the shell leaves the whole page unreachable with nothing on screen to explain it.
-    const { dialog, page } = mount();
-    expect(() => dialog.close()).not.toThrow();
-    dialog.open();
-    expect(page.hasAttribute("inert")).toBe(true);
-    dialog.destroy();
-    expect(page.hasAttribute("inert"), "destroy left the page inert").toBe(false);
-    expect(dialogOf()).toBeNull();
-    expect(dialog.isOpen).toBe(false);
+  it("offers a Close that asks the SHELL to shut, rather than removing itself", () => {
+    // `session.contrastsOpen` is the single source of truth for whether the strip is drawn, so a
+    // Close that took its own DOM away would be undone by the next render — and a render happens on
+    // every recompute, which is every frame of a contour drag. The ask is what is asserted.
+    const { host, actions } = strip();
+    const close = [...host.querySelectorAll("button")].find((b) => (b.textContent ?? "").includes("Close"));
+    expect(close, "no Close button").not.toBeUndefined();
+    expect(close?.classList.contains("ladderCard"), "the Close control is one of the case cards").toBe(false);
+    close?.click();
+    expect(actions.calls, "Close did not ask the shell to shut the ladder").toEqual(["contrasts:false"]);
   });
 });

@@ -175,9 +175,17 @@ async function clickIn(host: Element, needle: string): Promise<void> {
  * By label rather than by the row's text, `shell2Drill.test.ts`'s reason: `forced-downward`'s words
  * EXTEND `oscillatory`'s, so a `textContent.includes` matches both and the row a test then reads is
  * whichever came first.
+ *
+ * **The chooser is the FRONT DOOR's Practice tab since step 3.4**, not a card in the rail — which
+ * is why this file went red, and why the node gate could not tell anyone: the drill card no longer
+ * exists before a task is picked, so `drillCard(root)` threw where it used to return a menu. The
+ * dialog is mounted on the root and OUTSIDE `<main class="shell2">`, so it is searched for from the
+ * document rather than from the shell.
  */
 async function openTask(root: Element, label: string): Promise<void> {
-  const b = [...drillCard(root).querySelectorAll<HTMLButtonElement>("button")].find((x) =>
+  const door = root.querySelector<HTMLElement>('[role="dialog"]');
+  if (door === null) throw new Error("the Drill segment opened no chooser");
+  const b = [...door.querySelectorAll<HTMLButtonElement>("button")].find((x) =>
     (x.getAttribute("aria-label") ?? "").startsWith(`open ${label} at stage `),
   );
   if (b === undefined) throw new Error(`no chooser row for '${label}'`);
@@ -217,6 +225,16 @@ describe("the drill's mask, on the stage", () => {
     // rings this rung deliberately keeps are set aside. The rest of the ink layer is the contour,
     // its handles and its cuts, and at this rung the reader has not chosen one.
     expect(inkPixels(root, poleCentres(root, handle)), "rung iii must leave NOTHING of the contour").toBe(0);
+
+    // **The rung asks its PREDICTION before it offers the menu** — M8 step 3.4 — and answering it
+    // must not give the contour back: the question the prediction asks (which half-plane must the
+    // arc lie in?) is the same question the mask exists to put, so a plane that filled in on the
+    // pick would be answering it for the reader between the two clicks.
+    await clickExact(drillCard(root), "the upper half-plane");
+    expect(
+      inkPixels(root, poleCentres(root, handle)),
+      "answering the prediction unmasked the contour",
+    ).toBe(0);
 
     await clickExact(drillCard(root), "lower semicircle");
     expect(

@@ -148,8 +148,18 @@ export interface ShellActions {
   readonly setRail: (side: "left" | "right", folded: boolean) => void;
   /** Leave whatever record is open and go to the sandbox, keeping the parked sandbox contour. */
   readonly toSandbox: () => void;
-  /** Open or shut the contrasts dialog. */
+  /** Open or shut the contrast ladder — the strip of cards above the stage. */
   readonly setContrastsOpen: (open: boolean) => void;
+  /**
+   * Open one rung of the ladder — M8 step 3.5.
+   *
+   * **Not `applyState(cell.state())` from the strip**, though that is what it starts with. Opening a
+   * rung is three writes in one order — apply, then record WHICH rung and which rows it declares,
+   * then open the check list that is about to show them — and only the first survives
+   * `resetTransient`. A caller that composed them itself would be composing them again the next
+   * time something opened a rung, with the reset in the middle to get wrong.
+   */
+  readonly openContrast: (cellId: string) => void;
   /** Apply a whole state — a contrast cell, a drill rung, a front-door card. */
   readonly applyState: (next: ShellState) => void;
   /**

@@ -13,6 +13,7 @@ import { LEFT_CARDS, RIGHT_CARDS, cardTitle, type CardId } from "../engine/vocab
 import type { PoleReport } from "../kernel/poles.js";
 import type { ShellState, StateResolution } from "./state.js";
 import { bar } from "./bar.js";
+import { contrastStrip } from "./contrasts.js";
 import { drillPanel } from "./drillPanel.js";
 import { contourCard } from "./cards/contour.js";
 import { cutsCard } from "./cards/cuts.js";
@@ -34,6 +35,13 @@ export interface Rendered {
   readonly bar: readonly Desc[];
   readonly left: readonly Desc[];
   readonly right: readonly Desc[];
+  /**
+   * The contrast ladder above the stage — empty when it is shut (M8 step 3.5).
+   *
+   * A grid area like the rails, rather than a thing the shell mounts for itself, so the ladder is a
+   * description of the session like every other panel and a test can assert it without a browser.
+   */
+  readonly ladder: readonly Desc[];
   /** Which rails are folded, as the attributes the CSS grid reads. */
   readonly rails: { readonly left: string; readonly right: string };
 }
@@ -105,6 +113,7 @@ export function render(
       "right",
       [drillPanel(ctx), ...RIGHT_CARDS.map(build)].filter((d): d is Desc => d !== null),
     ),
+    ladder: contrastStrip(ctx),
     rails: {
       left: session.rails.left ? "folded" : "open",
       right: session.rails.right ? "folded" : "open",

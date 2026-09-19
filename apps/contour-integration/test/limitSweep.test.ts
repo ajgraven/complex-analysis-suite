@@ -55,6 +55,7 @@ function spyActions(): ShellActions & { calls: string[] } {
     setRail: (side, folded) => push(`rail:${side}:${folded}`),
     toSandbox: () => push("toSandbox"),
     setContrastsOpen: (open) => push(`contrasts:${open}`),
+    openContrast: (id: string) => push(`contrast:${id}`),
     applyState: () => push("applyState"),
     openFrontDoor: () => push("frontDoor"),
     notify: (text, level) => push(`notify:${level}:${text}`),

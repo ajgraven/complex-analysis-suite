@@ -73,9 +73,12 @@
      `.bar2`'s wrapping rule: at 1024 px the bar's controls no longer fit on one line, and a fixed
      row is what made the old `nowrap` decision the right one. With the row free to grow, a wrapped
      second line is visible instead of spilling under the stage. */
-  grid-template-rows: minmax(var(--bar2), auto) minmax(0, 1fr) var(--strip2);
+  /* The ladder's row is `auto` and its element is `hidden` when the panel is shut, so the row is
+     zero and the stage keeps every pixel it had — M8 step 3.5. */
+  grid-template-rows: minmax(var(--bar2), auto) auto minmax(0, 1fr) var(--strip2);
   grid-template-areas:
     "bar bar bar"
+    "ladder ladder ladder"
     "left stage right"
     "left strip right";
 }
@@ -799,46 +802,115 @@
   padding-top: 0.5rem;
 }
 
-/* **`max-content`, because five columns never fitted and the table was CLIPPING them.** At `width:
-   100%` the table is exactly the dialog's width and its cells overflow their own boxes, so the
-   fourth and fifth columns were drawn past the dialog's edge and could not be read or reached —
-   measured at 1440 px in step 2.1 and visible in step 1.7's own screenshot, where the third column
-   is already cut off mid-word. `min-width: 100%` keeps it filling the dialog when it does fit, and
-   the dialog's own `overflow: auto` carries the rest; the dialog takes focus when it opens, so the
-   scrollable region is reachable from the keyboard. */
-.contrastGrid {
-  table-layout: fixed;
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--t-s);
-  margin-top: 0.3rem;
+/* ---- the contrast ladder — M8 step 3.5 ----
+   A strip of cases above the stage, spanning the WHOLE width rather than the stage's own column —
+   and that was measured rather than chosen. In the stage column at 1440 px the five cases are
+   152 px wide, every line of every card wraps, and the strip is **335 px tall against a stage of
+   328**: a panel taking more room than the thing it is a comment on. Across all three columns they
+   are 277 px, nothing scrolls (1,413 px of content in 1,413 px of box, against 789 in 725), and
+   the strip is 231 px with the stage keeping 433. It costs the rails 231 px of scroll, which is
+   the right thing to spend: a rail's content is the same content further down, where a stage's is
+   simply smaller. The wrapper's grid row is `auto` and the element is `hidden` when the panel is
+   shut, so a closed ladder is exactly zero pixels rather than a collapsed box with padding. */
+.shell2 > .ladderWrap {
+  grid-area: ladder;
+  min-width: 0;
+  overflow: hidden;
 }
-/* The row headings name a check (`Boundary terms · vanishing piece 1`); the five columns share what
-   is left, equally, so no column can grow until it pushes another off the dialog. */
-.contrastGrid th:first-child {
-  width: 11rem;
+.ladder2 {
+  background: var(--g-panel);
+  border-bottom: 1px solid var(--g-border);
+  padding: 0.5rem 0.85rem 0.6rem;
 }
-.contrastGrid th,
-.contrastGrid td {
-  text-align: left;
-  vertical-align: top;
-  padding: 0.25rem 0.4rem;
-  border-top: 1px solid var(--g-border);
+.ladderHead {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
 }
-.contrastGrid th {
-  font-weight: 600;
-  color: var(--g-muted);
+.ladderHead > h2 {
+  font-size: var(--t-m);
+  margin: 0;
+}
+/* The legend takes the slack so the Close button sits at the right edge, where the reader's eye
+   already looks for one after the bar's own controls. */
+.ladderHead > p {
+  flex: 1 1 auto;
+  margin: 0;
 }
 
-/* **A row that CHANGED, and a row whose wording moved without the argument doing so.** M7.1 filed
-   those apart deliberately: widening the declared set would point at rows that did not change, and
-   ignoring them would leave a difference nobody watches. Two marks, because they are two facts. */
-.contrastGrid td[data-change="declared"] {
+/* **A row that SCROLLS rather than five cases that shrink to nothing.** At the full width the five
+   fit with room over, so the scroll never appears there; it is what keeps the strip readable in a
+   narrower window instead of taking the cases below the width at which their labels mean anything.
+   The region is reachable from the keyboard because its contents are buttons. */
+.ladderList {
+  display: flex;
+  gap: 0.45rem;
+  list-style: none;
+  margin: 0.45rem 0 0;
+  padding: 0;
+  overflow-x: auto;
+}
+.ladderList > li {
+  flex: 1 1 0;
+  min-width: 9.5rem;
+  display: flex;
+}
+button.ladderCard {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  text-align: left;
+  padding: 0.4rem 0.5rem;
+  font-size: var(--t-s);
+  /* Normal weight and wrapping: the bar's buttons are labels, and a rung is four lines of content
+     that happens to be pressable. */
+  font-weight: 400;
+  white-space: normal;
+  height: 100%;
+}
+/* The rung whose argument is the one on screen. `aria-current` rather than a class, so the mark and
+   the announcement are the same attribute and cannot come apart. */
+button.ladderCard[aria-current="true"] {
+  border-color: var(--g-accent);
+  box-shadow: inset 0 0 0 1px var(--g-accent);
+}
+.caseLabel {
+  font-size: var(--t-m);
+}
+.caseWhy {
+  /* Two lines at most: a rung is a pointer to an argument, not the argument. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+/* The declared change, in the accent the Result card's highlighted row also wears — one colour for
+   one fact, across the two places it is said. */
+.caseChange {
+  color: var(--g-accent);
+}
+/* **`.shell2 button.ladderCard >`, and the specificity is the whole point.** A plain `.caseAnswer`
+   loses to `.shell2 .verdict { margin: 0 }` — so the ONE case with no answer, the wrong-way one,
+   had its `⚠ incomplete` sitting where its text ended while the other four had theirs on a shared
+   baseline at the foot of the row. The odd card out was the card whose whole job is to be the odd
+   one out, which made a layout accident read as a statement. */
+.shell2 button.ladderCard > .caseAnswer {
+  margin-top: auto;
+  padding-top: 0.15rem;
+}
+
+/* **The check the ladder's rung declares, in the Result card's own list.** The same mark as the
+   grid's `data-change="declared"` wore, moved to where the rows actually are: a reader who opens a
+   rung is looking at one argument, so the contrast has to be drawn on that argument's own checks
+   rather than in a table of five. M7.1's second mark (a row whose WORDING moved without the
+   argument doing so) has no reader here on purpose — it is a fact about the comparison, and the
+   card is not showing one. */
+.checkRow[data-change="declared"] {
   background: rgba(110, 168, 254, 0.12);
   box-shadow: inset 2px 0 0 var(--g-accent);
-}
-.contrastGrid td[data-change="wording"] {
-  background: rgba(153, 161, 179, 0.1);
 }
 
 /* The visually-hidden text that carries a status word beside an `aria-hidden` glyph. `app.css` has
