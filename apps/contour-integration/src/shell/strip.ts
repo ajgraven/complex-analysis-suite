@@ -25,16 +25,18 @@
 import { attachCanvasA11y } from "@cas/ui";
 import { integrandEmptyClause } from "./errors.js";
 
-import { accumulateForIntegral, type Accumulation } from "../engine/contour/accumulate.js";
+import { accumulateForIntegral, type Accumulation, type AccumulationStep } from "../engine/contour/accumulate.js";
 import type { ContourIntegral, PathFn } from "../engine/contour/integrate.js";
 import type { CutSide } from "../engine/contour/model.js";
-import type { Cx, Resolved } from "../kernel/geom.js";
+import type { Resolved } from "../kernel/geom.js";
 import { CONTRAST_LABELS, drawAccumulator, stepNear, type ContrastMode } from "../ui/accumulator.js";
 import { DARK_INK, type InkTheme } from "../ui/inkTheme.js";
-import { drawnContour } from "./state.js";
+import { drawnContour, showStepDetail } from "./state.js";
+import { degrees, stepDetail } from "./stepDetail.js";
 import type { ShellState, StateResolution } from "./state.js";
 import { h, patch } from "./dom.js";
-import { fmtApprox } from "./format.js";
+import { fmtApprox, fmtNum } from "./format.js";
+import { fmtCx } from "../kernel/decimal.js";
 import { mathText } from "./math.js";
 import type { Session } from "./session.js";
 
@@ -52,6 +54,8 @@ export interface StripInput {
   readonly setScrub: (t: number) => void;
   /** Choose the compare trail. The shell commits it to `ShellState.contrast`. */
   readonly setContrast: (mode: ContrastMode) => void;
+  /** Turn the amplitwist detail on or off — M8 step 3.3. The shell commits `ShellState.showStep`. */
+  readonly setShowStep: (on: boolean) => void;
   /**
    * Light the piece a point of the trail came from, or clear it — M8 step 1.10.
    *
@@ -67,8 +71,15 @@ export interface StripView {
   readonly canvas: HTMLCanvasElement;
   /** The accumulation for a draw, or null — CACHED by value, because the stage reads it too. */
   accumulation(d: StripDraw): Accumulation | null;
-  /** The step the scrub is on, or null — what the stage draws its marker at. */
-  stepAt(d: StripDraw): { readonly index: number; readonly z: readonly [number, number] } | null;
+  /**
+   * The step the scrub is on, or null.
+   *
+   * **The whole step, not just its point** — M8 step 3.3. The stage draws `Δz` and `f(z)·Δz` as
+   * arrows from `z`, and the panel prints `|f|` and `arg f` beside them, and all of it has to be
+   * the term the TRAIL ends on. Handing out the walk's own object is what makes that structural
+   * rather than a convention two modules keep separately.
+   */
+  stepAt(d: StripDraw): { readonly index: number; readonly step: AccumulationStep } | null;
   /** Draw on the next frame. Coalesced: a scrub asks far more often than a frame can answer. */
   schedule(d: () => StripDraw): void;
   /** Draw now — for a test, and for the figure export, which must not wait a frame. */
@@ -256,6 +267,99 @@ function describe(scrub: number, acc: Accumulation | null, withheld: string | nu
 }
 
 /**
+ * The amplitwist rows — the toggle and, when it is on, the four numbers — M8 step 3.3.
+ *
+ * **Four numbers and not five.** `|f(z_k)|`, `arg f(z_k)` in degrees, `Δz_k` and the term: the
+ * first two ARE the picture on the stage (the ratio of the arrows, and the angle between them), the
+ * third is the arrow the reader can see is a step along the contour, and the fourth is the segment
+ * the trail just grew by. The partial sum is already the panel's headline value above and would be
+ * a fifth number saying something the reader did not ask about at this step.
+ *
+ * **The magnification is stated whenever the arrows are drawn.** It is chosen per frame so the
+ * longer arrow is 60 px, so it changes with the camera — a reader who zooms in and sees the arrows
+ * stay the same size is entitled to know why, and a picture carrying an unstated scale factor is
+ * the kind of thing the honest-labelling guardrail is about one level down from numbers.
+ *
+ * The detail can be `null` — a non-finite term (`removable-one-minus-cos`), a zero `Δz`, or a stage
+ * with no size — and then the toggle stands alone with one sentence rather than four blank slots.
+ */
+function stepRows(
+  d: StripDraw,
+  acc: Accumulation,
+  index: number,
+  input: StripInput,
+): readonly (ReturnType<typeof h> | null)[] {
+  const on = showStepDetail(d.state);
+  const toggle = h(
+    "div",
+    { key: "sdrow", class: "btnRow" },
+    h(
+      "button",
+      {
+        key: "sd",
+        type: "button",
+        class: "stepBtn",
+        "data-testid": "acc-step-toggle",
+        // `aria-pressed` rather than a class, the segmented control's own rule a few lines up: the
+        // class the old shell toggled is invisible to assistive tech.
+        "aria-pressed": on ? "true" : "false",
+        onClick: () => {
+          input.setShowStep(!on);
+          input.announce(on ? "Step detail off." : "Step detail on.");
+        },
+      },
+      "Show step",
+    ),
+  );
+  if (!on) return [toggle];
+
+  // The camera is the STAGE's and this panel cannot see it, so the numbers are computed at a
+  // pixels-per-unit of 1: `|f|`, `arg f`, `Δz` and the term do not depend on it — only the
+  // magnification does, and the magnification the stage actually used is the one it states beside
+  // its own arrows. What this panel prints is the mathematics.
+  const detail = stepDetail(acc.steps[index], index, 1);
+  const step = acc.steps[index];
+  if (detail === null || step === undefined) {
+    return [
+      toggle,
+      h(
+        "p",
+        { key: "sdnone", class: "muted small", "data-testid": "acc-step-none" },
+        "This term has no arrows to draw — it is not a finite number.",
+      ),
+    ];
+  }
+  // **When one arrow is not drawn, the panel says which and why.** Measured over the corpus, 2,545
+  // of 6,717 finite steps lose one — and on a vanishing-arc record it is most of them, because
+  // `|f| ≪ 1` out there is what makes the arc vanish. A reader looking at ONE arrow with four
+  // numbers beside it is owed the sentence; without it the picture reads as broken rather than as
+  // the KILL lemma drawn.
+  const missing =
+    detail.dz === null
+      ? "$\\Delta z_k$ is not drawn: at this amplification it would be under a pixel long."
+      : detail.term === null
+        ? "$f(z_k)\\,\\Delta z_k$ is not drawn: at this amplification it would be under a pixel long."
+        : null;
+  const row = (key: string, label: string, value: string): ReturnType<typeof h> =>
+    h(
+      "p",
+      { key, class: "muted small stepNum", "data-testid": `acc-${key}` },
+      h("span", { key: "l" }, ...mathText(label, `sl${key}`)),
+      h("span", { key: "v", class: "num" }, value),
+    );
+  return [
+    toggle,
+    row("mod", "$|f(z_k)|$", fmtNum(detail.modulus)),
+    row("arg", "$\\arg f(z_k)$", `${fmtNum(degrees(detail.argument), 1)}°`),
+    row("dz", "$\\Delta z_k$", fmtCx(step.dz)),
+    row("term", "$f(z_k)\\,\\Delta z_k$", fmtCx(step.term)),
+    missing === null
+      ? null
+      : h("p", { key: "sdmiss", class: "muted small", "data-testid": "acc-step-missing" }, ...mathText(missing, "sdm")),
+  ];
+}
+
+/**
  * Which piece the hover names, as an INDEX into the drawn contour, or `undefined`.
  *
  * `session.hover.piece` is an id because the rail rows, the derivation lines and the stage all speak
@@ -331,13 +435,13 @@ export function createStripView(host: HTMLElement, input: StripInput): StripView
     return accumulate(d, inputsOf(d.state, d.resolution));
   }
 
-  function stepAt(d: StripDraw): { readonly index: number; readonly z: Cx } | null {
+  function stepAt(d: StripDraw): { readonly index: number; readonly step: AccumulationStep } | null {
     const acc = accumulation(d);
     if (acc === null) return null;
     const index = stepIndex(d.state.scrub, acc.steps.length);
     const step = acc.steps[index];
     if (step === undefined) return null;
-    return { index, z: step.z };
+    return { index, step };
   }
 
   /** Size the canvas to its box at the device ratio, and return its context ready to draw in CSS px. */
@@ -444,6 +548,7 @@ export function createStripView(host: HTMLElement, input: StripInput): StripView
         { key: "why", class: "muted small", "data-testid": "acc-why" },
         ...mathText(contrastWhy(mode, got.ok ? got.integral.closed : null), "why"),
       ),
+      ...stepRows(d, acc, index, input),
     ]);
   }
 
@@ -479,6 +584,9 @@ export function createStripView(host: HTMLElement, input: StripInput): StripView
       // INDICES, so the drawn contour is what turns one into the other — the same list the colours
       // come from, so a highlight and a colour cannot name different pieces.
       highlight: pieceIndexOf(d),
+      // The one term the stage is drawing as arrows, drawn here in its own plane — M8 step 3.3.
+      // Only while the toggle is on, so the two pictures appear and disappear together.
+      step: showStepDetail(d.state) ? stepIndex(d.state.scrub, acc.steps.length) : undefined,
     });
   }
 

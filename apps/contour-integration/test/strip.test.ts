@@ -28,6 +28,8 @@ interface Recorded extends StripInput {
   readonly contrasts: ContrastMode[];
   readonly said: string[];
   readonly hovered: (string | null)[];
+  /** Every `setShowStep` the panel asked for — M8 step 3.3's toggle. */
+  readonly shown: boolean[];
 }
 
 function mount(): { host: HTMLElement; view: StripView; input: Recorded } {
@@ -36,15 +38,18 @@ function mount(): { host: HTMLElement; view: StripView; input: Recorded } {
   document.body.replaceChildren(host);
   const scrubs: number[] = [];
   const contrasts: ContrastMode[] = [];
+  const shown: boolean[] = [];
   const said: string[] = [];
   const hovered: (string | null)[] = [];
   const input: Recorded = {
     scrubs,
     contrasts,
+    shown,
     said,
     hovered,
     setScrub: (t) => scrubs.push(t),
     setContrast: (m) => contrasts.push(m),
+    setShowStep: (on) => shown.push(on),
     hover: (p) => hovered.push(p),
     announce: (m) => said.push(m),
   };
@@ -137,8 +142,11 @@ describe("the scrub is a STEP INDEX, and the readout is on it", () => {
       if (acc === null) throw new Error("…and it should be readable");
       expect(at.index).toBe(stepIndex(scrub, acc.steps.length));
       expect(text(host, "[data-testid=acc-step]")).toBe(`step ${at.index + 1} of ${acc.steps.length}`);
-      // And the marker is drawn at THAT step's point, not at an interpolated position.
-      expect(at.z).toEqual(acc.steps[at.index].z);
+      // And the marker is drawn at THAT step's point, not at an interpolated position — now read
+      // off the step object itself, which is what `stepAt` hands out since M8 step 3.3, so the
+      // point, the `Δz` the stage draws and the `|f|` the panel prints are one term and not three.
+      expect(at.step).toBe(acc.steps[at.index]);
+      expect(at.step.z).toEqual(acc.steps[at.index].z);
     }
   });
 

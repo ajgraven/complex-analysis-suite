@@ -24,12 +24,15 @@ import type { Node } from "@cas/expr";
 import type { DeclaredProduct } from "../kernel/branch/declared.js";
 import type { Cx, Resolved } from "../kernel/geom.js";
 import type { PoleReport } from "../kernel/poles.js";
-import { plotToScreen, type View, type Viewport } from "../kernel/camera.js";
+import type { AccumulationStep } from "../engine/contour/accumulate.js";
+import { scaleLabel, stepDetail } from "./stepDetail.js";
+import { showStepDetail } from "./state.js";
+import { plotToScreen, scale, type View, type Viewport } from "../kernel/camera.js";
 import { DARK_INK, LIGHT_INK, type InkTheme } from "../ui/inkTheme.js";
 import type { StageMode } from "../ui/stage/mode.js";
 import { drawPoleGlyph, drawTextbookPlate } from "../ui/stage/ink.js";
 import { drillMask } from "./drillPanel.js";
-import { drawBranchHandles, drawContour, drawPenPath } from "../ui/stage/ink.js";
+import { drawBranchHandles, drawContour, drawPenPath, type InkOptions } from "../ui/stage/ink.js";
 import { GLStage } from "../ui/stage/glStage.js";
 import { drawnContour } from "./state.js";
 import type { ShellState, StateResolution } from "./state.js";
@@ -54,6 +57,15 @@ export interface StageDraw {
    * — `Analysis` carries the ledger, not the pole report. The shell holds both, so the shell says.
    */
   readonly poles: PoleReport | null;
+  /**
+   * The accumulation step the scrub is on — M8 step 3.3, and passed in for `poles`' reason.
+   *
+   * The walk is the STRIP's (it caches it by value, because every scrub tick is a commit that
+   * builds a fresh resolution), and `resolveState` does not carry it. The shell holds both surfaces,
+   * so the shell says — which also keeps the stage from computing a second walk that could disagree
+   * with the trail about which term `k` is.
+   */
+  readonly step?: { readonly index: number; readonly step: AccumulationStep } | null;
   readonly theme?: InkTheme;
   /**
    * Which export plate this draw is for — M8 step 2.3. Absent is the stage as it is shown.
@@ -484,6 +496,18 @@ export function createStageView(host: HTMLElement): StageView {
         emphasis: d.session.gesture === "handle" && hoveredHandle === i ? "grabbed" : hoveredHandle === i ? "hover" : "none",
       })),
       cuts: hidden ? [] : drawnCuts(effectiveBranch(d.state.branch), view, vp),
+      // **On an export plate too, unlike step 3.1c's callouts, and the difference is the codec.**
+      // A callout is keyed to `session.step`, which a permalink does not carry, so a plate showing
+      // one is a picture its own link cannot reopen. The scrub position and this toggle are both
+      // STATE and both in the codec, so these arrows are reproducible from the link the figure is
+      // stamped with — the rule is "nothing a link cannot restore", not "nothing but the contour".
+      // **`scale` is plot units per PIXEL and the detail wants pixels per UNIT.** They are
+      // reciprocals, nothing in the types says so, and the first draft passed it straight through:
+      // the magnification came out `60/s²` instead of `60`, so on A6 at `halfHeight ≈ 6` the term's
+      // arrow was tens of thousands of pixels long and the stage drew it clipped to the canvas edge
+      // — a bright bar along the real axis that read as part of the contour. Inverted here, once,
+      // where the camera is.
+      stepDetail: hidden ? undefined : (inkDetail(d, 1 / scale(view, vp)) ?? undefined),
       // Hatching is the app's mark for a cut; the plate takes the printed figure's dashes instead.
       // `ink.ts`'s own note on `dashCuts` records that this collides with two other meanings of a
       // dash and why it is survivable here.
@@ -561,6 +585,23 @@ export function createStageView(host: HTMLElement): StageView {
    * `argument.ts` is the ONE place it is built, so the stage and the card cannot come to disagree
    * about which step index means which step.
    */
+  /**
+   * The amplitwist detail, or null — the toggle, the step and the camera in one place.
+   *
+   * The camera is what makes this a function of the DRAW rather than of the state: the magnification
+   * is chosen so the longer arrow is 60 screen pixels, so a zoom changes it, which is exactly why
+   * the panel states the factor rather than leaving a reader to assume the arrows are to scale.
+   */
+  function inkDetail(d: StageDraw, pxPerUnit: number): InkOptions["stepDetail"] | null {
+    if (!showStepDetail(d.state) || d.step === undefined || d.step === null) return null;
+    // The index rides along rather than being invented here: `StepDetail.index` exists so the panel
+    // and the stage cannot end up describing two different terms, and a stage that passed `0`
+    // because it does not draw the number would be the first thing to break that.
+    const got = stepDetail(d.step.step, d.step.index, pxPerUnit);
+    if (got === null) return null;
+    return { at: got.at, dz: got.dz, term: got.term, label: scaleLabel(got.scale) };
+  }
+
   function focusOf(d: StageDraw): StageFocus {
     // **The plate arm only.** The first draft also returned early for `step === "all"`; the sweep
     // found that mutant alive, because `stepIndex` already answers `"all"` with `null` and the

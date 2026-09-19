@@ -58,6 +58,7 @@ function mount(): StripView {
   const view = createStripView(host, {
     setScrub: () => undefined,
     setContrast: () => undefined,
+    setShowStep: () => undefined,
     hover: () => undefined,
     announce: () => undefined,
   });

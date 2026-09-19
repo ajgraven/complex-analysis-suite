@@ -205,8 +205,6 @@ export function mountShell2(root: Element): Shell2Handle {
   /** The record behind the current resolution, or null — what `withParam` needs to pick a channel. */
   const familyNow = (): Family | null => (resolution.kind === "gallery" ? resolution.family : null);
 
-  const drawState = (): StageDraw => ({ state, resolution, session, poles: polesNow() });
-
   // --- the strip ------------------------------------------------------------------------------
   //
   // Its own module (step 1.6), because the accumulator is a second PICTURE rather than a card: it
@@ -218,6 +216,10 @@ export function mountShell2(root: Element): Shell2Handle {
   const stripView = createStripView(strip, {
     setScrub: (t) => commit({ ...state, scrub: t }, "gesture"),
     setContrast: (mode) => commit({ ...state, contrast: mode }, "edit"),
+    // An EXPLICIT choice, so it is a boolean and never back to `null`: a reader who turns the
+    // detail off in Worked example means off, and writing `null` would hand them the mode's
+    // default again on the next render. `null` is only ever the state nobody has touched.
+    setShowStep: (on) => commit({ ...state, showStep: on }, "edit"),
     // The third surface of step 1.10's link, through the same action the rail rows use — one
     // identifier, three readers, which is what stops a highlight meaning different things.
     hover: (piece) => actions.hover(piece),
@@ -225,6 +227,18 @@ export function mountShell2(root: Element): Shell2Handle {
   });
   const accCanvas = stripView.canvas;
   const stripState = (): StripDraw => ({ state, resolution, session });
+
+  // **Defined AFTER the strip, and that is the wiring rather than an accident of order.** The
+  // amplitwist arrows are the term the TRAIL ends on, so the stage must be given the strip's own
+  // walk — the strip caches it by value, and a stage that accumulated a second time could disagree
+  // with the picture beside it about which term `k` is.
+  const drawState = (): StageDraw => ({
+    state,
+    resolution,
+    session,
+    poles: polesNow(),
+    step: stripView.stepAt(stripState()),
+  });
 
   // --- the contrasts dialog ---------------------------------------------------------------------
   //

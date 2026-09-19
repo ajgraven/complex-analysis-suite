@@ -30,6 +30,16 @@ export interface AccumulatorOptions {
   readonly pieceColours: readonly number[];
   /** The piece INDEX to emphasise, or `undefined` for none. Matches `AccumulationStep.piece`. */
   readonly highlight?: number;
+  /**
+   * The STEP index whose segment is the amplitwist detail's — M8 step 3.3.
+   *
+   * A different question from {@link highlight}, which names a PIECE (a whole arc of the contour,
+   * dozens of terms). This is one term, and it is the same term the stage draws as its second
+   * arrow: `f(z_k)·Δz_k` is a length in the value plane, which is the plane this canvas is in, so
+   * here it needs no magnification and is drawn exactly. Emphasising it is what makes the two
+   * pictures one object.
+   */
+  readonly step?: number;
 }
 
 export interface Frame {
@@ -296,13 +306,16 @@ export function drawAccumulator(
   // equal it, so every iteration sets `lineWidth = 2` and the output is what it was before the
   // option existed.
   let from: Cx = [0, 0];
-  for (const step of shown) {
+  let detail: { readonly a: Cx; readonly b: Cx } | null = null;
+  for (let k = 0; k < shown.length; k += 1) {
+    const step = shown[k] as AccumulationStep;
     ctx.beginPath();
     ctx.moveTo(frame.toX(from[0]), frame.toY(from[1]));
     ctx.lineTo(frame.toX(step.running[0]), frame.toY(step.running[1]));
     ctx.strokeStyle = PIECE_COLOURS[(opts.pieceColours[step.piece] ?? step.piece) % PIECE_COLOURS.length];
     ctx.lineWidth = step.piece === opts.highlight ? EMPHASIS_WIDTH : TRAIL_WIDTH;
     ctx.stroke();
+    if (k === opts.step) detail = { a: from, b: step.running };
     from = step.running;
   }
 
@@ -314,4 +327,33 @@ export function drawAccumulator(
   ctx.lineWidth = 1.5;
   ctx.fill();
   ctx.stroke();
+
+  // **Over the trail AND over the head**, in the stage's own term colour. Both halves of that were
+  // measured rather than reasoned.
+  //
+  // After the loop rather than inside it, because the next segment would otherwise paint over half
+  // of it — which is what the first draft did and what made the emphasis invisible at every step
+  // but the last. And after the HEAD, which the second draft got wrong in the other direction: the
+  // emphasised segment is always the LAST drawn one (the strip passes `stepIndex(scrub, …)` and
+  // this function slices the walk at the same `scrub`, so `opts.step` is `shown.length - 1` by
+  // construction), and the head is a 9 px disc filled on that segment's far end. So the emphasis
+  // showed only where the term was longer than the disc. Swept over A6: **0 painted pixels at
+  // scrub 0.05, 0.1 and every position from 0.3 to 1.0, and 45 at 0.2** — invisible at the default
+  // scrub of 1, with the whole wire correctly connected. The same sweep after the reorder reads
+  // **4, 6, 58, 7, 5, 4, 4**: present everywhere, and small exactly where the term is small.
+  //
+  // The round cap is what makes that repair work rather than merely reorder it: a term too short
+  // to be a line still paints a dot, and a dot is the honest mark here, because what this says is
+  // WHICH term the arrows are about and not how long it is. `theme.stepArrow.term` rather than a
+  // piece colour: the stage's second arrow and this segment are the same vector.
+  if (detail !== null) {
+    ctx.beginPath();
+    ctx.moveTo(frame.toX(detail.a[0]), frame.toY(detail.a[1]));
+    ctx.lineTo(frame.toX(detail.b[0]), frame.toY(detail.b[1]));
+    ctx.strokeStyle = opts.theme.stepArrow.term;
+    ctx.lineWidth = EMPHASIS_WIDTH;
+    ctx.lineCap = "round";
+    ctx.stroke();
+    ctx.lineCap = "butt";
+  }
 }

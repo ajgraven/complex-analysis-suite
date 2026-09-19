@@ -58,6 +58,36 @@ export interface InkTheme {
   readonly handleGrabbed: string;
   /** The integration marker, filled — the one filled round thing on the stage. */
   readonly markerFill: string;
+  /**
+   * The amplitwist detail's two arrows — M8 step 3.3.
+   *
+   * Two colours because the picture's whole content is that these are DIFFERENT vectors: one is a
+   * step along the contour and one is that step amplified and twisted. Neither is a piece colour
+   * (they are not pieces, and a piece colour beside a piece would read as naming it) and neither is
+   * `cutInk` or `refusedInk`, which already say something. `arc` is the angle between them, drawn
+   * thinner than either, because it is a measurement of the pair rather than a third vector — and
+   * in the TERM's own hue rather than a third colour, because it is the twist that carried `Δz`
+   * onto the term. It is opaque: the first draft made it the term's hue at 55 % alpha, and on the
+   * sandbox's circle at `arg f = −44°` the portrait behind it happens to be green, so the mark was
+   * painted (12 pixels, measured) and invisible. Every other stroke here carries a halo and an
+   * opaque ink for that reason; the arc was the one that did not.
+   *
+   * **Both were CHANGED after measuring a real frame**, which is the only way this file's rule about
+   * colours meaning one thing can be checked. The first draft took a grey for `Δz` and the gold
+   * `#ffd166` for the term. Counted over A6's ink layer with the detail off — 11,885 painted pixels
+   * — the grey matched **75** of them (the handle rings and the pole glyphs antialiasing against
+   * the dark paper), so a test asking "did the arrow appear" could not have had a clean answer and
+   * neither could a reader; and the gold is 29 away from `refusedInk` in the widest channel, which
+   * on a refused contour is two ambers on one canvas. Teal and lime match **0** pixels on that same
+   * frame and sit 64 and 62 away from the nearest colour in either theme.
+   */
+  readonly stepArrow: {
+    /** `Δz` — the step itself. */
+    readonly dz: string;
+    /** `f(z)·Δz` — the term. The colour the strip's emphasised segment takes, so the two agree. */
+    readonly term: string;
+    readonly arc: string;
+  };
   /** The pen's un-committed path: dashed, and never in a piece colour. */
   readonly penPreview: string;
   /** The accumulator strip. */
@@ -89,6 +119,7 @@ export const DARK_INK: InkTheme = {
   handleRing: "#e7e9ee",
   handleGrabbed: "#ffffff",
   markerFill: "#ffffff",
+  stepArrow: { dz: "#2ed6c4", term: "#b2eb5e", arc: "#b2eb5e" },
   penPreview: "#7aa2f7",
   accumulator: {
     axes: "rgba(231, 233, 238, 0.16)",
@@ -125,6 +156,7 @@ export const LIGHT_INK: InkTheme = {
   handleRing: "#2a2e38",
   handleGrabbed: "#000000",
   markerFill: "#000000",
+  stepArrow: { dz: "#0e7c72", term: "#5d7f14", arc: "#5d7f14" },
   penPreview: "#2b5fb8",
   accumulator: {
     axes: "rgba(20, 24, 32, 0.20)",

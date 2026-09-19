@@ -110,6 +110,32 @@ export interface InkOptions {
    * following the contour is a refusal.
    */
   readonly dashCuts?: boolean;
+  /**
+   * The amplitwist detail at one step of the accumulation — M8 step 3.3.
+   *
+   * Both vectors arrive in PLOT coordinates with their magnification already applied
+   * (`shell/stepDetail.ts` chose it, because only the caller knows the camera's pixels-per-unit),
+   * so this module's whole job is arrows and an arc. Either may be `null`: the ratio of the two
+   * lengths is exactly `|f(z)|` and the corpus carries that to the thousands, so the shorter arrow
+   * is omitted rather than drawn a hundredth of a pixel long.
+   */
+  readonly stepDetail?: {
+    readonly at: Cx;
+    readonly dz: Cx | null;
+    readonly term: Cx | null;
+    /**
+     * The magnification, written out — *arrows ×12*.
+     *
+     * **Drawn HERE rather than in a panel, and the plan's own placement was the first casualty of
+     * looking at it.** The plan said the readout, and the stage's readout (step 1.10) appears only
+     * while the pointer is over the canvas — so a picture that is drawn whether or not anyone is
+     * hovering would have carried an unstated scale factor for most of the time it was on screen.
+     * Beside the arrows it is also on the export plate, which matters because the plate carries the
+     * arrows: a figure showing two vectors at an undisclosed relative-to-nothing scale is precisely
+     * the kind of claim the honest-labelling guardrail exists to stop, one level below numbers.
+     */
+    readonly label?: string;
+  };
 }
 
 /**
@@ -507,6 +533,8 @@ export function drawContour(
     ctx.stroke();
   }
 
+  drawStepDetail(ctx, opts, view, vp, t);
+
   if (opts.marker !== undefined) {
     const z = pointAtFraction(pieces, opts.marker);
     if (z) {
@@ -755,4 +783,155 @@ export function drawPoleGlyph(
   }
 
   ctx.restore();
+}
+
+/** How long an arrowhead's barbs are, in pixels, and how wide they open. */
+const HEAD_PX = 9;
+const HEAD_SPREAD = 0.42;
+
+/** The shaft and the two barbs of one arrow, as a path. Stroked twice: halo, then ink. */
+function arrowPath(ctx: CanvasRenderingContext2D, from: readonly [number, number], to: readonly [number, number]): boolean {
+  const dx = to[0] - from[0];
+  const dy = to[1] - from[1];
+  const len = Math.hypot(dx, dy);
+  if (!(len > 0)) return false;
+  const th = Math.atan2(dy, dx);
+  // The head is capped at a third of the shaft, so a short arrow is an arrow and not a triangle:
+  // at `MIN_ARROW_PX` the shaft is 2 px and an unclamped 9 px head would be the whole mark.
+  const head = Math.min(HEAD_PX, len / 3);
+  const barb = (sign: 1 | -1): [number, number] => [
+    to[0] - head * Math.cos(th + sign * HEAD_SPREAD),
+    to[1] - head * Math.sin(th + sign * HEAD_SPREAD),
+  ];
+  ctx.beginPath();
+  ctx.moveTo(from[0], from[1]);
+  ctx.lineTo(to[0], to[1]);
+  const [ax, ay] = barb(1);
+  const [bx, by] = barb(-1);
+  ctx.moveTo(ax, ay);
+  ctx.lineTo(to[0], to[1]);
+  ctx.lineTo(bx, by);
+  return true;
+}
+
+/**
+ * The two arrows and the arc between them.
+ *
+ * **The arc is drawn at a radius inside the SHORTER arrow**, so it sits between the two shafts
+ * rather than crossing one of them, and it is the thing that makes `arg f` visible as an angle
+ * instead of as a number in the panel. It is omitted when either arrow is, because an angle between
+ * one vector and nothing is not an angle.
+ *
+ * **Screen angles, not plot angles, and they are the same angle.** `plotToScreen` flips `y`, so the
+ * arc's endpoints must come from the drawn directions rather than from `arg f` — a positive
+ * (counter-clockwise) twist in the plane is clockwise on the canvas, and an arc built from the
+ * plot-space angle would be drawn on the wrong side of the pair for every record in the gallery.
+ */
+function drawStepDetail(
+  ctx: CanvasRenderingContext2D,
+  opts: InkOptions,
+  view: View,
+  vp: Viewport,
+  t: InkTheme,
+): void {
+  const d = opts.stepDetail;
+  if (d === undefined) return;
+  const o = plotToScreen(d.at[0], d.at[1], view, vp);
+  const tip = (v: Cx | null): readonly [number, number] | null =>
+    v === null ? null : plotToScreen(d.at[0] + v[0], d.at[1] + v[1], view, vp);
+  const a = tip(d.dz);
+  const b = tip(d.term);
+
+  // **`Δz` WIDER and under, and BOTH HALOES BEFORE EITHER INK.** Both halves were found by looking
+  // at the frame, and the second only after the first was in.
+  //
+  // On A6's real axis near the pole `|f| = 0.9956`, so the two arrows are the same length to within
+  // half a percent and point the same way — and with equal strokes the term's, drawn second, hid
+  // the step's completely: 980 term-coloured pixels on that frame and **0** of `Δz`'s. Stacking
+  // them the other way only mirrors the defect, and nudging one aside would misstate the very angle
+  // the arc exists to show. A wider stroke under a narrower one leaves the step showing as a fringe,
+  // which says what is true — they are nearly the same vector — and it is the emphasis idiom
+  // `drawContour` already uses (4 against 2.5).
+  //
+  // Widening alone changed nothing, and the reason is that each arrow used to draw its own halo
+  // immediately under its own ink: the term's 5 px dark halo then painted over the step's 4.5 px
+  // teal, so the fringe was erased by the thing it was supposed to fringe. Two passes.
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  const shafts: { readonly to: readonly [number, number]; readonly ink: string; readonly width: number }[] = [
+    ...(a === null ? [] : [{ to: a, ink: t.stepArrow.dz, width: 4.5 }]),
+    ...(b === null ? [] : [{ to: b, ink: t.stepArrow.term, width: 2.25 }]),
+  ];
+  ctx.strokeStyle = t.halo;
+  for (const s of shafts) {
+    if (!arrowPath(ctx, o, s.to)) continue;
+    ctx.lineWidth = s.width + 2.75;
+    ctx.stroke();
+  }
+  for (const s of shafts) {
+    if (!arrowPath(ctx, o, s.to)) continue;
+    ctx.strokeStyle = s.ink;
+    ctx.lineWidth = s.width;
+    ctx.stroke();
+  }
+  // **Drawn AFTER the arrows, not before.** It was first, and the two shafts' own haloes — 7.25 px
+  // and 5 px of near-black — then painted over most of it: 25 px of arc ink expected and 5 measured.
+  // The arc is a statement about the pair, so it belongs on top of them.
+  if (a !== null && b !== null) {
+    const ra = Math.hypot(a[0] - o[0], a[1] - o[1]);
+    const rb = Math.hypot(b[0] - o[0], b[1] - o[1]);
+    const r = Math.max(6, Math.min(ra, rb) * 0.45);
+    const sweep = (): void => {
+      ctx.beginPath();
+      ctx.arc(o[0], o[1], r, Math.atan2(a[1] - o[1], a[0] - o[0]), Math.atan2(b[1] - o[1], b[0] - o[0]));
+    };
+    // **A halo under the arc, and an opaque ink over it** — found by looking at a real frame. It
+    // was the term's hue at 55 % alpha with nothing under it, and on the sandbox's circle at
+    // `arg f = −44°` the portrait behind it is green, so the mark was painted (12 pixels, measured)
+    // and invisible. Every other stroke here carries a halo for exactly that reason. What tells the
+    // arc from the arrows is then GEOMETRY rather than colour: its pixels all sit at one radius
+    // from `z_k`, where an arrow's run from `z_k` out to its tip.
+    sweep();
+    ctx.strokeStyle = t.halo;
+    ctx.lineWidth = 3.75;
+    ctx.stroke();
+    sweep();
+    ctx.strokeStyle = t.stepArrow.arc;
+    ctx.lineWidth = 1.75;
+    ctx.stroke();
+  }
+  ctx.lineCap = "butt";
+  ctx.lineJoin = "miter";
+
+  // **At the longer arrow's tip and stepped PERPENDICULAR to it**, which is the lesson `labelAnchor`
+  // already learned for a cut: a label on the curve's own direction sits on the curve. Measured on
+  // A6 at `arg f = 0`, where both arrows run along the real axis — the first draft stepped 16 px
+  // further along the shaft, `textAlign` centred the box on that point, and the box's 90 px of dark
+  // halo then covered the arrow's whole head and the contour beneath it. The longer arrow because
+  // it is the one the magnification was chosen against, and because the shorter may not be drawn.
+  const tipFor = (): readonly [number, number] | null => {
+    if (a === null) return b;
+    if (b === null) return a;
+    return Math.hypot(a[0] - o[0], a[1] - o[1]) >= Math.hypot(b[0] - o[0], b[1] - o[1]) ? a : b;
+  };
+  const end = tipFor();
+  if (d.label === undefined || d.label === "" || end === null) return;
+  const len = Math.hypot(end[0] - o[0], end[1] - o[1]);
+  const ux = len > 0 ? (end[0] - o[0]) / len : 0;
+  const uy = len > 0 ? (end[1] - o[1]) / len : 0;
+  // A short step along, so the box clears the head, and a longer one across it. The normal's sign
+  // is chosen so the label lands on the side AWAY from the other arrow, which is where there is
+  // room: the two shafts and the arc are all on the other side by construction.
+  const other = end === a ? b : a;
+  const side = other === null ? 1 : Math.sign(-uy * (other[0] - o[0]) + ux * (other[1] - o[1])) || 1;
+  const x = end[0] + ux * 6 - uy * side * 14;
+  const y = end[1] + uy * 6 + ux * side * 14;
+  ctx.font = "11px ui-monospace, Menlo, Consolas, monospace";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const tw = ctx.measureText(d.label).width;
+  ctx.fillStyle = t.halo;
+  ctx.fillRect(x - tw / 2 - 3, y - 8, tw + 6, 16);
+  ctx.fillStyle = t.stepArrow.term;
+  ctx.fillText(d.label, x, y);
 }

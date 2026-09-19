@@ -127,6 +127,18 @@ export interface ShellState {
   /** Modulus contours: `null` follows the context, a boolean is the reader's own choice. */
   readonly iso: boolean | null;
   /**
+   * The amplitwist detail at the scrubbed step — M8 step 3.3.
+   *
+   * `iso`'s tri-state rather than `stageMode`'s enum, and for `iso`'s reason: the app has a default
+   * that depends on the MODE — on in Worked example, off in Explore — so `false` and "I have not
+   * chosen" are different states, and collapsing them would make a reader who switches to Explore
+   * lose a toggle they had deliberately turned on. {@link showStepDetail} resolves it, in one place.
+   *
+   * A VIEW field like the two beside it: `resolveState` does not read it, so no position of the
+   * control can move a number.
+   */
+  readonly showStep: boolean | null;
+  /**
    * What the stage draws behind the contour — M8 step 1.9.
    *
    * **A VIEW field**, and provably one: {@link resolveState} does not read it, so no position of the
@@ -216,6 +228,7 @@ export function defaultState(contour: Contour): ShellState {
     contrast: "none",
     scrub: 1,
     iso: null,
+    showStep: null,
     stageMode: DEFAULT_STAGE_MODE,
     drill: null,
     workedExample: false,
@@ -404,6 +417,19 @@ export type ShellMode = "explore" | "worked" | "drill";
 export function shellMode(state: ShellState): ShellMode {
   if (state.drill !== null) return "drill";
   return state.workedExample ? "worked" : "explore";
+}
+
+/**
+ * Is the amplitwist detail showing? — M8 step 3.3, and the one place the tri-state is resolved.
+ *
+ * The plan's rule: on by default in Worked example, off in Explore. **The drill takes Explore's
+ * answer rather than Worked example's**, although a rung is a worked example faded — because the
+ * fade is the point, and two arrows naming the very term a rung may be asking about is the app
+ * answering its own question. A reader who wants them can still turn them on; what they cannot get
+ * is them arriving unasked at a rung.
+ */
+export function showStepDetail(state: ShellState): boolean {
+  return state.showStep ?? shellMode(state) === "worked";
 }
 
 /** The declared order, read off the branch point the factor sits on — never stored twice. */

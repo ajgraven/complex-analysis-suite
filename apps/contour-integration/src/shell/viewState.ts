@@ -163,6 +163,8 @@ interface Wire {
   readonly k?: ContrastMode;
   readonly s?: number;
   readonly i?: boolean;
+  /** `showStep` — the amplitwist detail (M8 step 3.3). Tri-state, so absent is "follow the mode". */
+  readonly sd?: boolean;
   /**
    * `stageMode` — what the stage draws behind the contour (M8 step 1.9).
    *
@@ -432,6 +434,9 @@ export function encodeShell(state: ShellState): EncodeResult {
   put("k", state.contrast, d.contrast);
   put("s", state.scrub, d.scrub);
   put("i", state.iso ?? undefined, undefined);
+  // Tri-state, carried the way `iso` is: absent means "follow the mode", so a link shares the
+  // reader's own choice and not the default that would have been filled in for them anyway.
+  put("sd", state.showStep ?? undefined, undefined);
   put("sm", state.stageMode, d.stageMode);
   if (state.drill !== null) wire.dr = [state.drill.task, state.drill.stage] as const;
   // Optional, and absent when false — a worked example is a thing to share, and the default costs
@@ -686,6 +691,11 @@ export function decodeShell(hashOrLink: string): DecodeResult | null {
     if (typeof w.i !== "boolean") return { ok: false, reason: "the modulus-contour flag in this link is not a boolean" };
     iso = w.i;
   }
+  let showStep = base.showStep;
+  if (w.sd !== undefined) {
+    if (typeof w.sd !== "boolean") return { ok: false, reason: "the step-detail flag in this link is not a boolean" };
+    showStep = w.sd;
+  }
   let stageMode = base.stageMode;
   if (w.sm !== undefined) {
     if (!isStageMode(w.sm)) {
@@ -728,6 +738,7 @@ export function decodeShell(hashOrLink: string): DecodeResult | null {
       contrast,
       scrub,
       iso,
+      showStep,
       stageMode,
       drill,
       // `=== 1` rather than truthiness: the wire is `1` or absent, and a link carrying anything else

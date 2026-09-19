@@ -281,6 +281,33 @@ describe("the gate: the sandbox, with a declared branch", () => {
     expect(verdict(back)).toBe(verdict(s));
   });
 
+  it("carries the AMPLITWIST toggle as a TRI-STATE, both values and the absence — M8 step 3.3", () => {
+    // `showStep` is `iso`'s shape, not `stageMode`'s: `false` and "I have not chosen" are different
+    // states, because the default follows the MODE (on in Worked example, off in Explore) and
+    // collapsing them would hand a reader who deliberately turned the arrows off the mode's answer
+    // again on the next render. So all three have to survive the wire, and the `null` one survives
+    // by being ABSENT rather than by being written — which is also why the pairing below is on the
+    // payload and not only on the decoded state.
+    for (const want of [true, false] as const) {
+      const back = roundTrip({ ...base(), showStep: want }).state;
+      expect(`showStep ${String(want)} came back as ${String(back.showStep)}`).toBe(
+        `showStep ${String(want)} came back as ${String(want)}`,
+      );
+    }
+    const untouched = roundTrip({ ...base(), showStep: null }).state;
+    expect(`untouched came back as ${String(untouched.showStep)}`).toBe("untouched came back as null");
+
+    // **The `false` case is the one a "carried it" test can pass without carrying it**, because a
+    // codec that dropped the field entirely also decodes to `null`, and `null` in Explore resolves
+    // to off — which LOOKS like `false`. So the wire is read directly: an explicit choice is a key
+    // on it and an untouched one is not.
+    const off = encodeShell({ ...base(), showStep: false });
+    const none = encodeShell({ ...base(), showStep: null });
+    expect(`explicit off is on the wire: ${off.ok && off.hash !== (none.ok ? none.hash : "")}`).toBe(
+      "explicit off is on the wire: true",
+    );
+  });
+
   it("carries the STAGE MODE, which decides the picture and no number — M8 step 1.9", () => {
     // A view field like the three above, and carried for the same reason: a textbook plate and a
     // full-chroma portrait are two pictures of one argument, and the one the sharer chose is the
