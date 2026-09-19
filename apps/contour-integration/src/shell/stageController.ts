@@ -11,7 +11,7 @@
 // reader was trying to hold still.
 import { applyBranchGrab, branchHandles, sameBranchGrab, type BranchHandle } from "../engine/branchEdit.js";
 import { nearestHandle, onContour, pieceAt, radiusDragValue, translateContour, type Handle } from "../engine/contour/edit.js";
-import { bulgeFromApex, penContour } from "../engine/contour/pen.js";
+import { arcThroughBulge, bulgeFromApex, penContour } from "../engine/contour/pen.js";
 import { clampView, panBy, scale, screenToPlot, zoomAt, type View, type Viewport } from "../kernel/camera.js";
 import { pointAt, type Cx, type Resolved } from "../kernel/geom.js";
 import type { PoleReport } from "../kernel/poles.js";
@@ -120,6 +120,80 @@ export interface CanvasKeyLike {
   readonly dx?: number;
   readonly dy?: number;
   readonly direction?: number;
+}
+
+/**
+ * The bulge that puts an arc's centre EXACTLY at the origin, when the chord admits one — step 4.2.
+ *
+ * **Why the tool has to offer this number.** `ledger.ts`'s `arcRadius` returns `null` for an arc
+ * whose centre is not exactly `(0, 0)`, because every certified arc bound in `kernel/bounds/`
+ * reasons from the reverse triangle inequality on the circle `|z| = R` ABOUT THE ORIGIN, and
+ * reading one off an arc centred elsewhere computes a `≤` from the wrong geometry (M4.6c's finding,
+ * and not one to relax). By hand the reader cannot get there: a chord from `(−8, 0)` to `(8, 0)`
+ * with the apex dragged to `(0.3, 7.6)` has bulge `7.6`, hence `k = (7.6² − 8²)/(2·7.6) = −0.4105`
+ * and a centre at `(0, −0.4105)` — refused, correctly, and no steadier hand fixes it. So the
+ * engine is right and the tool was the thing that could not reach it.
+ *
+ * **The derivation.** `arcThroughBulge` puts the centre at `C = M + k·n`, with `M` the chord's
+ * midpoint, `n` the unit normal to the LEFT of travel, `h` the half-chord and `k = (b² − h²)/(2b)`.
+ * Resolve `C = 0` in the chord's own frame `(t, n)`:
+ *
+ *  - along `t`: `M·t = 0`, which is `(|to|² − |from|²) / (2·chord)` and therefore a condition on the
+ *    ENDPOINTS alone — no bulge can buy it. It says the two ends are equidistant from the origin,
+ *    which is the statement that some circle about the origin passes through both of them at all.
+ *  - along `n`: `k = −(M·n) =: k₀`, and `(b² − h²)/(2b) = k₀` is `b² − 2k₀b − h² = 0`, so
+ *    `b = k₀ ± R` with `R = √(k₀² + h²)`.
+ *
+ * Both roots name the SAME circle — `(b² + h²)/(2|b|)` works out to `R` for either — and they carry
+ * opposite signs, so they are the two arcs the chord cuts that circle into, one bowing to each side.
+ * The reader's drag has already chosen a side, so the root nearer their current bulge is theirs.
+ * `R` is also `|from|`, as it must be, which is a second reading of the same fact.
+ *
+ * **Verified rather than assumed, and that is what fixes the fire/don't-fire line.** The last step
+ * builds the arc and applies `arcRadius`'s own test to its centre, so the snap fires exactly when
+ * it delivers what it names, instead of whenever the algebra looked promising. Measured over
+ * 100,000 random chords: with the ends exactly ANTIPODAL — which is what the mirror snap above
+ * produces, and the reason these two snaps are one feature rather than two — the centre is exactly
+ * `(0, 0)` every time, because `M` is then exactly the origin, `k₀` is a signed zero, `b` is exactly
+ * `±h` and so `k` is exactly `0`.
+ *
+ * **Everywhere else it is incidental, and that is measured too.** Endpoints that are equidistant
+ * without being antipodal — a chord mirrored in one axis, say — come out exact for **26%** of roots
+ * over 20,000 random cases, and the property belongs to the ROOT as much as to the chord: for
+ * `(1,1) → (−1,1)` the major arc is exact and the minor one lands at `(0, 2.2e-16)`. Endpoints that
+ * are equidistant only to rounding cannot work at all, because their midpoint's component ALONG the
+ * chord is what misses and no bulge addresses it — nudging `b` by a few ulps lifts the general case
+ * from 3.1% to 8.4% and is therefore not worth having. So the snap declines most of what it is
+ * asked, and declining is the honest answer: `arcRadius` refuses a centre of `1e-16` exactly as it
+ * refuses one of `−0.41`, and a snap that fired anyway would be promising a bound the geometry
+ * cannot carry. What the reader is given instead is a route that always works — reflect, then bow.
+ */
+function originCentredBulge(from: Cx, to: Cx, current: number, tol: number): number | null {
+  const dx = to[0] - from[0];
+  const dy = to[1] - from[1];
+  const chord = Math.hypot(dx, dy);
+  if (!(chord > 0)) return null;
+  // Every quantity here is the one `arcThroughBulge` will recompute from the same two points, in
+  // the same form: the half-chord from the same `hypot`, the midpoint from the same halving, the
+  // normal from the same division. A rearranged but algebraically equal route would be right to a
+  // few ulps and wrong where it counts, since the test this has to pass is equality with zero.
+  const h = chord / 2;
+  const mx = (from[0] + to[0]) / 2;
+  const my = (from[1] + to[1]) / 2;
+  const nx = -dy / chord;
+  const ny = dx / chord;
+  const k0 = -(mx * nx + my * ny);
+  const radius = Math.hypot(k0, h);
+  const roots = [k0 + radius, k0 - radius].sort((p, q) => Math.abs(p - current) - Math.abs(q - current));
+  for (const b of roots) {
+    if (!(Math.abs(b - current) <= tol)) continue;
+    const arc = arcThroughBulge(from, to, b);
+    // `arcRadius`'s test, character for character, so the two cannot come to disagree about what
+    // "centred at the origin" means. A signed zero passes both, since `-0 !== 0` is false.
+    if (arc === null || arc.center[0] !== 0 || arc.center[1] !== 0) continue;
+    return b;
+  }
+  return null;
 }
 
 export function createStageController(input: StageControllerInput): StageController {
@@ -248,6 +322,25 @@ export function createStageController(input: StageControllerInput): StageControl
         return { at: [node.at[0], node.at[1]], why: "a vertex already placed" };
       }
     }
+    // **THE REFLECTION OF A VERTEX IN THE ORIGIN** — M8 step 4.2, and the half of it a reader
+    // notices last. A drawn base `[−R, R]` is symmetric only to the pixel, and an asymmetric base
+    // is why a hand-drawn semicircle can never earn an arc bound: `ledger.ts`'s `arcRadius` reasons
+    // on `|z| = R` about the ORIGIN and refuses an arc centred anywhere else, so a base whose ends
+    // are `−7.98` and `8.02` has its midpoint at `x = 0.02` and therefore its centre there too,
+    // whatever the reader then does with the apex, and the bound is gone. Negation is
+    // exact in binary floating point, so what this returns is `−v` to the last bit rather than to a
+    // tolerance — which is the whole reason the bow snap below can reach the origin at all.
+    //
+    // **Ranked with the vertices rather than with the poles**, one paragraph down, because it IS a
+    // vertex — the one already placed, reflected. A pole that happened to lie within the same 11 px
+    // would otherwise take the click and leave the base asymmetric, which is the single outcome
+    // this snap exists to prevent; a reader aiming AT the pole aims at the pole, not at `−v`.
+    for (const node of p?.nodes ?? []) {
+      const mirror: Cx = [-node.at[0], -node.at[1]];
+      if (Math.hypot(at[0] - mirror[0], at[1] - mirror[1]) <= tol) {
+        return { at: mirror, why: "the reflection of a vertex in the origin" };
+      }
+    }
     for (const pole of getPoles()?.poles ?? []) {
       if (Math.hypot(at[0] - pole.at[0], at[1] - pole.at[1]) <= tol) {
         // Snapping ONTO a pole is allowed and named, not prevented: LEGALITY refuses a contour
@@ -327,7 +420,7 @@ export function createStageController(input: StageControllerInput): StageControl
     redraw();
   }
 
-  function penBow(at: Cx): void {
+  function penBow(at: Cx, free: boolean): void {
     const p = pen();
     if (p === null || p.drag === null) return;
     const i = p.drag.index;
@@ -336,11 +429,21 @@ export function createStageController(input: StageControllerInput): StageControl
     if (from === undefined || to === undefined) return;
     // Through `bulgeFromApex`, which is also how `penPath` reads a bulge back off a finished arc —
     // one formula, so the gesture and its inverse cannot disagree about what a bulge means.
-    const bulge = bulgeFromApex(from.at, to.at, at);
-    if (bulge === 0) return;
+    const raw = bulgeFromApex(from.at, to.at, at);
+    if (raw === 0) return;
+    // The SAME modifier that suppresses the vertex snaps suppresses this one, and the draft carries
+    // the name when it fires: a bulge that jumped to an exact value with nothing on screen saying so
+    // is precisely the silent snap research 07 rule 5 forbids — and here it would be silently
+    // deciding whether the arc earns a bound.
+    const snapped = free ? null : originCentredBulge(from.at, to.at, raw, tolerance());
     const nodes = [...p.nodes];
-    nodes[i] = { at: from.at, bulge };
-    setPen({ ...p, nodes });
+    // Spread rather than rebuilt: a node carries more than a position and a bulge (step 4.1 puts the
+    // piece's role and its lemma there), and a drag must not quietly drop what the reader declared.
+    nodes[i] = { ...from, bulge: snapped ?? raw };
+    // **The name shown is the snap that fired HERE.** `snap` was last written by the CLICK that
+    // placed this vertex, and leaving that up while the drag bows the piece would attribute a live
+    // gesture to a constraint that fired a moment ago somewhere else on screen.
+    setPen({ ...p, nodes, snap: snapped === null ? null : "an arc centred at the origin, $|z| = R$" });
     redraw();
   }
 
@@ -422,7 +525,7 @@ export function createStageController(input: StageControllerInput): StageControl
       const free = ev.altKey || ev.metaKey;
       // A drag BOWS the piece just placed; a plain move only moves the pending end.
       if (p.drag !== null && (ev.buttons & 1) !== 0) {
-        penBow(raw);
+        penBow(raw, free);
       } else {
         const snapped = snapTo(raw, free);
         setPen({ ...p, at: [snapped.at[0], snapped.at[1]], snap: snapped.why, drag: null });

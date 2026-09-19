@@ -22,7 +22,7 @@
 // reader clicked and not a discretisation of anything.
 
 import { pointAt, type Resolved } from "../../kernel/geom.js";
-import { resolveAll, type Contour, type Piece, type PieceRole } from "./model.js";
+import { resolveAll, type Contour, type LemmaId, type Piece, type PieceRole } from "./model.js";
 
 /** Where the reader clicked, and how the piece LEAVING that vertex bows. */
 export interface PenNode {
@@ -35,6 +35,30 @@ export interface PenNode {
    * never has to think about which way `theta` runs.
    */
   readonly bulge?: number;
+  /**
+   * What the piece LEAVING this vertex is FOR — M8 step 4.2.
+   *
+   * **On the node rather than derived, because a role is not a fact about geometry.** Everything
+   * else `penPath` recovers it reads back off the curve: where the reader clicked, how far the
+   * piece bows, whether the path closes. A role is the reader's own claim about what the piece does
+   * in an argument, and nothing in the plane says it — so it is carried, and this is the one field
+   * of a `PenNode` that `penContour` cannot reconstruct.
+   *
+   * Absent means {@link PEN_ROLE}: a drawn path is `free` until a reader says otherwise, which is
+   * the honest starting point (an undisposed piece is a term nobody has bounded, and step 4.1's
+   * COVER row says exactly that).
+   */
+  readonly role?: PieceRole;
+  /**
+   * Which lemma disposes of the piece leaving this vertex, when it is a `vanish` one.
+   *
+   * Carried for {@link PenNode.role}'s reason and read by the ledger exactly as a template's is
+   * (step 4.1): a drawn arc declaring Jordan's lemma on a rational integrand is refused by name,
+   * the same sentence a template piece would get. The pen does not validate the pairing — the
+   * ledger is where that question is answered, and answering it twice is how two answers come to
+   * disagree.
+   */
+  readonly lemma?: LemmaId;
 }
 
 export interface PenPath {
@@ -162,6 +186,13 @@ export function penContour(path: PenPath): Contour {
     const id = `pen${i}`;
     const arc = arcThroughBulge(a.at, b.at, a.bulge ?? 0);
     const n = i + 1;
+    // **The role rides the node, and a lemma only where it means something** — M8 step 4.2. A
+    // `lemma` is a statement about how a VANISHING piece is disposed of, so carrying one on a
+    // `target` or a `free` piece would put a field on the wire that nothing reads — the same rule
+    // `setRole` enforces from the editing side, stated once on each side of the boundary because
+    // neither can see the other.
+    const role = a.role ?? PEN_ROLE;
+    const lemma = role === "vanish" && a.lemma !== undefined ? { lemma: a.lemma } : {};
     pieces.push(
       arc === null
         ? {
@@ -172,7 +203,8 @@ export function penContour(path: PenPath): Contour {
               from: { x: a.at[0], y: a.at[1] },
               to: { x: b.at[0], y: b.at[1] },
             },
-            role: PEN_ROLE,
+            role,
+            ...lemma,
             colour: COLOURS[i % COLOURS.length],
           }
         : {
@@ -185,7 +217,8 @@ export function penContour(path: PenPath): Contour {
               theta0: arc.theta0,
               theta1: arc.theta1,
             },
-            role: PEN_ROLE,
+            role,
+            ...lemma,
             colour: COLOURS[i % COLOURS.length],
           },
     );
@@ -221,13 +254,23 @@ export function penPath(contour: Contour): PenPath | null {
   const startOf = (g: Resolved): readonly [number, number] => pointAt(g, 0);
   const endOf = (g: Resolved): readonly [number, number] => pointAt(g, 1);
 
-  const nodes: PenNode[] = resolved.map((g) => {
+  // **The role comes from the PIECE, not from the geometry** — M8 step 4.2, and it is the one part
+  // of a node this function does not derive. Everything else here is read back off the curve, which
+  // is what makes `penContour(penPath(c))` a round trip the codec can verify; a role has no
+  // geometric shadow, so dropping it would silently turn a drawn argument back into a drawn shape
+  // the first time a link was minted from it.
+  const nodes: PenNode[] = resolved.map((g, i) => {
+    const spec = contour.pieces[i];
+    const carried =
+      spec === undefined
+        ? {}
+        : { role: spec.role, ...(spec.lemma === undefined ? {} : { lemma: spec.lemma }) };
     const from = startOf(g);
-    if (g.kind === "segment") return { at: [from[0], from[1]] as const };
+    if (g.kind === "segment") return { at: [from[0], from[1]] as const, ...carried };
     // The bulge is the apex's signed offset from the chord's midpoint — the same quantity the drag
     // measured, through the same function.
     const bulge = bulgeFromApex(from, endOf(g), pointAt(g, 0.5));
-    return { at: [from[0], from[1]] as const, bulge };
+    return { at: [from[0], from[1]] as const, bulge, ...carried };
   });
 
   const first = startOf(resolved[0]);

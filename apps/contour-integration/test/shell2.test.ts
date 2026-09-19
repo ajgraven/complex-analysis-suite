@@ -17,7 +17,11 @@ import { describe, expect, it, vi } from "vitest";
 import { LEFT_CARDS, RIGHT_CARDS, cardTitle } from "../src/engine/vocabulary.js";
 import { handlesOf, onContour } from "../src/engine/contour/edit.js";
 import { resolveAll } from "../src/engine/contour/model.js";
-import { CENTER_MAX, plotToScreen, scale } from "../src/kernel/camera.js";
+import { CENTER_MAX, plotToScreen, scale, screenToPlot } from "../src/kernel/camera.js";
+import { makeComplexFn, parse } from "@cas/expr";
+import { analyse } from "../src/engine/analyse.js";
+import { arcThroughBulge, bulgeFromApex, type PenNode } from "../src/engine/contour/pen.js";
+import { findPoles } from "../src/kernel/poles.js";
 import { pointAt } from "../src/kernel/geom.js";
 import { translateContour } from "../src/engine/contour/edit.js";
 import { STAGE_MODES } from "../src/ui/stage/mode.js";
@@ -591,6 +595,383 @@ describe("the pen, through the controller", () => {
     // mode with no pen controls place a vertex the reader never asked for.
     expect(app.session().pen).toBeNull();
     expect(app.session().gesture).toBe("none");
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+// The pen's two ORIGIN snaps — M8 step 4.2.
+//
+// **What they are for.** `ledger.ts`'s `arcRadius` refuses an arc whose centre is not EXACTLY the
+// origin, because every certified arc bound reasons on `|z| = R` about 0 (M4.6c). So a drawn
+// semicircle certified nothing: a reader dragging the apex of a chord from `(−8, 0)` to `(8, 0)` to
+// `(0.3, 7.6)` gets a bulge of `7.6`, a `k` of `−0.4105`, and a centre at `(0, −0.4105)`. The engine
+// was right and the tool could not reach it. The mirror snap makes the base exactly antipodal and
+// the bow snap then lands the centre exactly on 0 — one feature in two gestures, which is why the
+// last test here draws the whole semicircle and asks the ledger.
+//
+// Every number below is in the 900 × 600 stage at the default view (centre 0, half-height 2), so a
+// plot unit is 150 px and the 11 px grab radius is 0.0733 plot units. The offsets are chosen
+// against that, and each test says which mutant its assertion kills.
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+
+/** The stage `mountStage` stubs, for reading a pointer position back as the plane sees it. */
+const STAGE_BOX = { width: 900, height: 600 };
+
+/** Where a pointer at these stage pixels lands BEFORE any snap — what a suppressed snap must give. */
+function rawPlot(app: ReturnType<typeof mountShell2>, px: number, py: number): readonly [number, number] {
+  return screenToPlot(px, py, app.currentState().view, STAGE_BOX);
+}
+
+/** The nodes the pen is currently holding. */
+function penNodes(app: ReturnType<typeof mountShell2>): readonly PenNode[] {
+  return app.session().pen?.nodes ?? [];
+}
+
+describe("the pen's snaps to the origin", () => {
+  it("snaps to the REFLECTION of a placed vertex, exactly", () => {
+    const { app, ink } = mountStage();
+    app.stage().penStart();
+    // A vertex off both axes, so the mirror is the only snap that can fire: on the real axis the
+    // axis snap agrees about `y` and the test would be weaker by exactly the coordinate it is about.
+    const [ax, ay] = screenOf(app, [-1.2, 0.8]);
+    ink.dispatchEvent(pointer("pointerdown", ax, ay));
+    const [mx, my] = screenOf(app, [1.2, -0.8]);
+    // 4 px right and 3 px down of the mirror: 5 px, inside the 11 px radius.
+    ink.dispatchEvent(pointer("pointerdown", mx + 4, my + 3));
+    const [a, b] = penNodes(app);
+    // **Exact negation, not a rounded one** — the mutant is a mirror that lands "near enough",
+    // which is the whole defect this feature exists to remove. `toBe` is `Object.is`.
+    expect(b.at[0]).toBe(-a.at[0]);
+    expect(b.at[1]).toBe(-a.at[1]);
+    expect(app.session().pen?.snap).toBe("the reflection of a vertex in the origin");
+    // And it is not vacuous: the pointer was somewhere else, so the snap MOVED the vertex. Kills a
+    // "snap" that names the constraint and places the raw point anyway (`penClick` could do that,
+    // and M7.2's sweep found exactly that survivor on the first-vertex snap).
+    const raw = rawPlot(app, mx + 4, my + 3);
+    expect(Math.hypot(raw[0] - b.at[0], raw[1] - b.at[1])).toBeGreaterThan(0.01);
+  });
+
+  it("does NOT fire outside the grab radius", () => {
+    const { app, ink } = mountStage();
+    app.stage().penStart();
+    const [ax, ay] = screenOf(app, [-1.2, 0.8]);
+    ink.dispatchEvent(pointer("pointerdown", ax, ay));
+    const [mx, my] = screenOf(app, [1.2, -0.8]);
+    // 20 px away, comfortably outside 11 — and off both axes, so nothing else fires either.
+    ink.dispatchEvent(pointer("pointerdown", mx + 14, my + 14));
+    const [, b] = penNodes(app);
+    const raw = rawPlot(app, mx + 14, my + 14);
+    // Kills a mirror snap with no distance test at all, and one measured against a tolerance of its
+    // own rather than the shared `tolerance()`.
+    expect(b.at[0]).toBe(raw[0]);
+    expect(b.at[1]).toBe(raw[1]);
+    expect(app.session().pen?.snap).toBeNull();
+  });
+
+  it("is suppressed by the free modifier, like every other snap", () => {
+    const { app, ink } = mountStage();
+    app.stage().penStart();
+    const [ax, ay] = screenOf(app, [-1.2, 0.8]);
+    ink.dispatchEvent(pointer("pointerdown", ax, ay));
+    const [mx, my] = screenOf(app, [1.2, -0.8]);
+    ink.dispatchEvent(pointer("pointerdown", mx + 4, my + 3, { altKey: true }));
+    const [, b] = penNodes(app);
+    const raw = rawPlot(app, mx + 4, my + 3);
+    // Kills a mirror snap added ABOVE `snapTo`'s `if (free)` guard, or one written into `penClick`
+    // where the modifier is not consulted — a reader who cannot place a vertex where they meant to
+    // has lost the tool.
+    expect(b.at[0]).toBe(raw[0]);
+    expect(b.at[1]).toBe(raw[1]);
+    expect(app.session().pen?.snap).toBeNull();
+  });
+
+  /**
+   * The base `[−R, R]` both bow tests start from, drawn the way a reader draws it.
+   *
+   * Right end first, so the arc that follows runs right-to-left over the top — counter-clockwise,
+   * which is the traversal every worked semicircle in the gallery has.
+   */
+  function drawBase(app: ReturnType<typeof mountShell2>, ink: HTMLCanvasElement): void {
+    app.stage().penStart();
+    const [rx, ry] = screenOf(app, [1.5, 0]);
+    ink.dispatchEvent(pointer("pointerdown", rx, ry));
+    const [lx, ly] = screenOf(app, [-1.5, 0]);
+    ink.dispatchEvent(pointer("pointerdown", lx + 5, ly + 2));
+  }
+
+  it("snaps the BOW to an arc centred at the origin — exactly, and says so", async () => {
+    const { root, app, ink } = mountStage();
+    drawBase(app, ink);
+    const [a, b] = penNodes(app);
+    expect(b.at[0], "the base is antipodal, which is the mirror snap's doing").toBe(-a.at[0]);
+    // Drag the apex to about `(0, 1.45)`: a bulge of 1.4467 where the origin wants 1.5, so the snap
+    // has 0.053 to travel and the 0.0733 radius to do it in.
+    const apex = screenOf(app, [0, 1.45]);
+    ink.dispatchEvent(pointer("pointermove", apex[0], apex[1]));
+    const bowed = penNodes(app)[0];
+    const bulge = bowed.bulge ?? 0;
+    const arc = arcThroughBulge(bowed.at, b.at, bulge);
+    if (arc === null) throw new Error("the drag left a segment");
+    // **THE CLAIM, AND THE REASON THE SNAP EXISTS**: `toBe(0)`, not `toBeCloseTo`. `arcRadius` tests
+    // `center[0] !== 0 || center[1] !== 0`, so a centre of `1e-17` is refused exactly as `−0.41` is,
+    // and a snap that merely got close would have bought nothing at all.
+    expect(arc.center[0]).toBe(0);
+    expect(arc.center[1]).toBe(0);
+    // The closed form for an antipodal base: the bulge IS the half-chord, so the arc is a
+    // semicircle. Kills a snap that lands on the other root (which is `+h` here, the same circle
+    // bowed the other way) while the drag was plainly on this side.
+    const half = Math.hypot(b.at[0] - bowed.at[0], b.at[1] - bowed.at[1]) / 2;
+    expect(bulge).toBe(-half);
+    // Not vacuous: the pointer asked for a different number, and the snap moved it. Kills the
+    // do-nothing mutant, whose centre is `(0, −0.054)` — plausible on screen and refused by the
+    // engine, which is the state of the world this step is fixing.
+    expect(Math.abs(Math.abs(bulge) - 1.45)).toBeGreaterThan(0.01);
+    // Research 07 rule 5: named, and named BESIDE THE POINTER rather than only in the session, or a
+    // reader watching the apex jump is not told why.
+    expect(app.session().pen?.snap).toBe("an arc centred at the origin, $|z| = R$");
+    await frame();
+    expect(q(root, ".overlay2 .stageChip.snap").textContent ?? "").toContain("centred at the origin");
+  });
+
+  it("is suppressed by the free modifier, and then the arc is centred nowhere in particular", () => {
+    const { app, ink } = mountStage();
+    drawBase(app, ink);
+    const b = penNodes(app)[1];
+    const apex = screenOf(app, [0, 1.45]);
+    ink.dispatchEvent(pointer("pointermove", apex[0], apex[1], { altKey: true }));
+    const bowed = penNodes(app)[0];
+    const bulge = bowed.bulge ?? 0;
+    // The raw measurement, through the same function the gesture uses.
+    expect(bulge).toBe(bulgeFromApex(bowed.at, b.at, rawPlot(app, apex[0], apex[1])));
+    const arc = arcThroughBulge(bowed.at, b.at, bulge);
+    if (arc === null) throw new Error("the drag left a segment");
+    // Kills a bow snap that ignores `free` — and the number says what the reader loses by holding
+    // it: a centre 0.05 off the origin, which no arc bound in the app will read.
+    expect(Math.hypot(arc.center[0], arc.center[1])).toBeGreaterThan(0.01);
+    expect(app.session().pen?.snap).toBeNull();
+  });
+
+  it("leaves a SHALLOW arc alone — the snap has a grab radius like every other", () => {
+    // Kills a bow snap with no distance test: every drag would be yanked into a semicircle, and a
+    // reader could not draw a shallow arc at all. Measured here as 0.7 plot units of travel against
+    // a 0.073 radius — an order of magnitude outside, which is an ordinary drag and not a corner case.
+    const { app, ink } = mountStage();
+    drawBase(app, ink);
+    const b = penNodes(app)[1];
+    const apex = screenOf(app, [0, 0.8]);
+    ink.dispatchEvent(pointer("pointermove", apex[0], apex[1]));
+    const bowed = penNodes(app)[0];
+    expect(bowed.bulge).toBe(bulgeFromApex(bowed.at, b.at, rawPlot(app, apex[0], apex[1])));
+    expect(app.session().pen?.snap).toBeNull();
+  });
+
+  it("takes the root the DRAG is nearer, when the chord puts both in reach", () => {
+    // The two roots `k₀ ± R` are the two arcs the chord cuts its circle into, one bowing to each
+    // side, so which one the reader means is the side their drag is on. Kills a snap that takes the
+    // far root, or simply the first.
+    //
+    // **Reachable only just.** The roots are `2R` apart, so both are inside the grab radius only
+    // when the circle is SMALLER than that radius on screen — and then the origin's own snap is
+    // within reach of both endpoints and takes the first click before the base exists. So the first
+    // vertex goes down with the modifier held (raw, unsnapped) and the second on the mirror, which
+    // is checked before the origin: an odd gesture, and the only one that puts a reader in front of
+    // this choice at all.
+    const { app, ink } = mountStage();
+    app.applyState({ ...app.currentState(), view: { center: [0, 0], halfHeight: 50 } });
+    app.stage().penStart();
+    const start = screenOf(app, [1.4, 0]);
+    ink.dispatchEvent(pointer("pointerdown", start[0], start[1], { altKey: true }));
+    const placed = penNodes(app)[0].at;
+    const mirror = screenOf(app, [-placed[0], -placed[1]]);
+    ink.dispatchEvent(pointer("pointerdown", mirror[0], mirror[1]));
+    const [a, b] = penNodes(app);
+    expect(b.at[0], "the base is antipodal, so both roots are `±h`").toBe(-a.at[0]);
+    const half = Math.hypot(b.at[0] - a.at[0], b.at[1] - a.at[1]) / 2;
+    const tol = 11 * scale(app.currentState().view, STAGE_BOX);
+    const apex = screenOf(app, [0, -0.2]);
+    const raw = bulgeFromApex(a.at, b.at, rawPlot(app, apex[0], apex[1]));
+    expect(raw, "the drag is on the positive side, which is the side it must keep").toBeGreaterThan(0);
+    // Asserted rather than assumed: unless BOTH roots are in reach the choice is made by the grab
+    // radius and this test says nothing about the ordering.
+    expect(Math.abs(half - raw)).toBeLessThan(tol);
+    expect(Math.abs(-half - raw)).toBeLessThan(tol);
+    ink.dispatchEvent(pointer("pointermove", apex[0], apex[1]));
+    expect(penNodes(app)[0].bulge).toBe(half);
+  });
+
+  it("reaches a circle about the origin from a chord that does not pass near it", () => {
+    // **The snap is not "make it a semicircle".** The condition is that the two ends are equidistant
+    // from the origin — the statement that some circle about 0 passes through both — and the chord
+    // `(1, 1) → (−1, 1)` satisfies it without being a diameter. There `k₀` is 1 rather than a signed
+    // zero, so this is the only test in the file in which `k₀ = −(M·n)` carries any information:
+    // kills the dropped minus sign, and kills `R = √(k₀² + h²)` reduced to `h`. Both mutants make
+    // the roots miss, the built arc's centre fails the check, and the snap silently stops firing.
+    const { app, ink } = mountStage();
+    app.stage().penStart();
+    const start = screenOf(app, [1, 1]);
+    ink.dispatchEvent(pointer("pointerdown", start[0], start[1]));
+    const end = screenOf(app, [-1, 1]);
+    ink.dispatchEvent(pointer("pointerdown", end[0], end[1]));
+    const [a, b] = penNodes(app);
+    expect(Math.hypot(a.at[0], a.at[1]), "the ends are equidistant from 0").toBe(Math.hypot(b.at[0], b.at[1]));
+    // Not antipodal — the midpoint is `(0, 1)` and nowhere near the origin, which is what makes
+    // `k₀` carry information here where an antipodal base leaves it a signed zero.
+    expect(Math.hypot(a.at[0] + b.at[0], a.at[1] + b.at[1])).toBeGreaterThan(1);
+    // Bow it the LONG way round, under the origin: the major arc of `|z| = √2`, bulge `k₀ + R =
+    // 2.414`. **Measured, and the reason it is this root and not the other**: exactness is a
+    // property of the root as well as of the chord, and for this chord the minor root's arc lands
+    // at `(0, 2.2e-16)` — so the snap declines it, which is the honest answer (a bound would be
+    // refused there anyway) and not a gap. Over 20,000 random chords mirrored in an axis, 26% of
+    // roots come out exact; over antipodal ones, 100% of 40,000. That is why the semicircle above —
+    // the base the mirror snap builds — is the case the feature is FOR.
+    const apex = screenOf(app, [0, -1.36]);
+    ink.dispatchEvent(pointer("pointermove", apex[0], apex[1]));
+    const bowed = penNodes(app)[0];
+    const arc = arcThroughBulge(bowed.at, b.at, bowed.bulge ?? 0);
+    if (arc === null) throw new Error("the drag left a segment");
+    expect(arc.center[0]).toBe(0);
+    expect(arc.center[1]).toBe(0);
+    expect(arc.radius).toBeCloseTo(Math.SQRT2, 12);
+    expect(app.session().pen?.snap).toBe("an arc centred at the origin, $|z| = R$");
+  });
+
+  it("does not DROP what the reader declared about the piece it is bowing", () => {
+    // A node carries a role and a lemma as well as a position (step 4.1), and a drag rebuilds the
+    // node. Kills `nodes[i] = { at: from.at, bulge }`, which loses both — silently, and only for the
+    // piece the reader happened to bow, which is the one they were paying most attention to.
+    const { app, ink } = mountStage();
+    drawBase(app, ink);
+    const draft = app.session().pen;
+    if (draft === null) throw new Error("the pen is away");
+    draft.nodes = [{ ...draft.nodes[0], role: "vanish", lemma: "L1" }, draft.nodes[1]];
+    const apex = screenOf(app, [0, 1.45]);
+    ink.dispatchEvent(pointer("pointermove", apex[0], apex[1]));
+    const bowed = penNodes(app)[0];
+    expect(bowed.role).toBe("vanish");
+    expect(bowed.lemma).toBe("L1");
+  });
+
+  it("does not fire where the origin is UNREACHABLE — and the base cannot reach it, by construction", () => {
+    const { app, ink } = mountStage();
+    app.stage().penStart();
+    const [rx, ry] = screenOf(app, [2, 0]);
+    ink.dispatchEvent(pointer("pointerdown", rx, ry));
+    // The far end placed with the modifier down, so the mirror snap does not make it symmetric: the
+    // base runs `2 → −1.5`, whose perpendicular bisector is `x = 0.25` and therefore misses 0.
+    const [lx, ly] = screenOf(app, [-1.5, 0]);
+    ink.dispatchEvent(pointer("pointerdown", lx, ly, { altKey: true }));
+    const [a, b] = penNodes(app);
+    expect(Math.hypot(a.at[0], a.at[1])).not.toBe(Math.hypot(b.at[0], b.at[1]));
+    // **By construction, not by hoping**: EVERY bulge puts the centre on that bisector, so no value
+    // the snap could have chosen would have been honest. Swept rather than argued, because the claim
+    // is about the whole family and one sample would only say the gesture missed.
+    let nearest = Infinity;
+    for (let i = -400; i <= 400; i++) {
+      const arc = arcThroughBulge(a.at, b.at, i / 100);
+      if (arc !== null) nearest = Math.min(nearest, Math.hypot(arc.center[0], arc.center[1]));
+    }
+    expect(nearest).toBeGreaterThan(0.2);
+    // Now drag to within the grab radius of the bulge the algebra WOULD offer — `k₀ ± R` is `±1.75`
+    // here — so the test is aimed at the mutant rather than merely far from it. Without the built
+    // arc's centre being checked the snap fires, names the origin, and hands the reader an arc
+    // centred at `(0.25, 0)`: a bound refused with a sentence about somebody else's dogbone.
+    const apex = screenOf(app, [0.25, 1.7]);
+    ink.dispatchEvent(pointer("pointermove", apex[0], apex[1]));
+    const bowed = penNodes(app)[0];
+    const bulge = bowed.bulge ?? 0;
+    expect(Math.abs(Math.abs(bulge) - 1.75), "the drag is not even in range of the mutant").toBeLessThan(
+      11 * scale(app.currentState().view, STAGE_BOX),
+    );
+    expect(bulge).toBe(bulgeFromApex(bowed.at, b.at, rawPlot(app, apex[0], apex[1])));
+    expect(app.session().pen?.snap).toBeNull();
+  });
+
+  it("DRAWS A SEMICIRCLE THE LEDGER CERTIFIES — the two snaps, end to end", () => {
+    // The payoff, and the one test that would have caught the whole gap before this step: three
+    // clicks and a drag, and the arc earns an ML bound.
+    //
+    // **The ledger is driven directly rather than through `app.resolution()`** for one reason: a
+    // drawn piece arrives `free`, and it is step 4.1's card — not the pen — that lets a reader call
+    // it a vanishing one. Setting the role on the committed contour is what that card does; routing
+    // the assertion through the card as well would make a geometry test fail whenever the card moved.
+    const { app, ink } = mountStage();
+    app.stage().penStart();
+    const right = screenOf(app, [1.5, 0]);
+    ink.dispatchEvent(pointer("pointerdown", right[0], right[1]));
+    const left = screenOf(app, [-1.5, 0]);
+    ink.dispatchEvent(pointer("pointerdown", left[0] + 5, left[1] + 2));
+    const apex = screenOf(app, [0, 1.45]);
+    ink.dispatchEvent(pointer("pointermove", apex[0], apex[1]));
+    // A third vertex on the way back, because Enter closes a path of three and not of two.
+    const mid = screenOf(app, [0, 0]);
+    ink.dispatchEvent(pointer("pointerdown", mid[0], mid[1], { buttons: 0 }));
+    ink.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+
+    const drawn = app.currentState().contour;
+    const arcs = drawn.pieces.filter((piece) => piece.geom.kind === "arc");
+    expect(arcs, "the drag left exactly one arc, and the two segments are the diameter").toHaveLength(1);
+    const contour = {
+      ...drawn,
+      pieces: drawn.pieces.map((piece) => (piece.geom.kind === "arc" ? { ...piece, role: "vanish" as const } : piece)),
+    };
+    const ast = parse("1/(1+z^2)");
+    const fn = makeComplexFn(ast);
+    const rows = analyse({
+      ast,
+      f: (z: readonly [number, number]) => fn(z as [number, number], [0, 0]) as readonly [number, number],
+      poles: findPoles(ast),
+      contour,
+    }).ledger.rows;
+    const row = rows.find((r) => r.pieceId === arcs[0].id && r.constraint === "KILL");
+    if (row === undefined) throw new Error("the arc got no disposal row at all");
+    // **The verdict is the assertion.** With the snaps the arc is `|z| = 3/2` about the origin and
+    // the ML estimate discharges it; without them the same three clicks and the same drag produce
+    // the row below instead. Kills BOTH snaps at once — drop either and the base stops being
+    // antipodal or the bulge stops being the half-chord, and the centre is no longer 0.
+    expect(row.status).toBe("satisfied");
+    // The sentence lives in the certificate's METHOD — what was done to establish the row — which
+    // is where the refusal below prints it, so the two assertions are about the same field.
+    expect(row.evidence.method).not.toContain("centred elsewhere");
+    // The honest-labelling guardrail, read off the row: a RIGOROUS BOUND, not an estimate and not
+    // "nothing was established" — which is the `?` the refusing twin below carries.
+    expect(row.evidence.level).toBe("≤");
+  });
+
+  it("and WITHOUT the snaps the same gesture certifies nothing — the contrast that makes the last test mean something", () => {
+    // The same three clicks and the same drag with the modifier held throughout. A test that only
+    // showed the certified case would pass for an app that certified every arc it was handed.
+    const { app, ink } = mountStage();
+    app.stage().penStart();
+    const right = screenOf(app, [1.5, 0]);
+    ink.dispatchEvent(pointer("pointerdown", right[0], right[1], { altKey: true }));
+    const left = screenOf(app, [-1.5, 0]);
+    ink.dispatchEvent(pointer("pointerdown", left[0] + 5, left[1] + 2, { altKey: true }));
+    const apex = screenOf(app, [0, 1.45]);
+    ink.dispatchEvent(pointer("pointermove", apex[0], apex[1], { altKey: true }));
+    const mid = screenOf(app, [0, 0]);
+    ink.dispatchEvent(pointer("pointerdown", mid[0], mid[1], { altKey: true, buttons: 0 }));
+    ink.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+
+    const drawn = app.currentState().contour;
+    const arc = drawn.pieces.find((piece) => piece.geom.kind === "arc");
+    if (arc === undefined) throw new Error("the drag left no arc");
+    const contour = {
+      ...drawn,
+      pieces: drawn.pieces.map((piece) => (piece.id === arc.id ? { ...piece, role: "vanish" as const } : piece)),
+    };
+    const ast = parse("1/(1+z^2)");
+    const fn = makeComplexFn(ast);
+    const rows = analyse({
+      ast,
+      f: (z: readonly [number, number]) => fn(z as [number, number], [0, 0]) as readonly [number, number],
+      poles: findPoles(ast),
+      contour,
+    }).ledger.rows;
+    const row = rows.find((r) => r.pieceId === arc.id && r.constraint === "KILL");
+    if (row === undefined) throw new Error("the arc got no disposal row at all");
+    expect(row.status).toBe("unknown");
+    expect(row.evidence.method).toContain("centred elsewhere");
+    expect(row.evidence.level, "nothing was established, and the row says so").toBe("?");
   });
 });
 

@@ -458,10 +458,44 @@ describe("a link that cannot be honoured refuses BY NAME", () => {
     const ok = encodeShell({ ...base(), contour: drawn, contourSource: null, sandboxContour: drawn });
     expect(ok.ok, ok.ok ? "" : ok.reason).toBe(true);
   });
+
+  it("a drawn contour whose pieces carry ROLES — because the wire cannot hold them yet", () => {
+    // M8 step 4.2. The pen carries roles now, so a drawn contour can BE an argument; the wire form
+    // that carries them is step 4.4. `sameShape` compares geometry and nothing else, so a link
+    // minted today would VERIFY perfectly and open the same curve with every piece `free` — the
+    // reader's argument gone, and no sign it was ever there. Refusing is M7.2's own posture, and
+    // the refusal is what says which step has to come next.
+    const drawn = penContour({
+      nodes: [
+        { at: [-1, -1], role: "target" },
+        { at: [1, -1] },
+        { at: [0, 1], role: "vanish", lemma: "L2" },
+      ],
+      closed: true,
+    });
+    const e = encodeShell({ ...base(), contour: drawn, contourSource: null, sandboxContour: drawn });
+    expect(e.ok).toBe(false);
+    if (!e.ok) {
+      expect(e.reason).toContain("2 of its pieces");
+      expect(e.reason).toContain("argument stripped out");
+    }
+    // **And the pairing**: the SAME curve with no role assigned links perfectly, so the refusal is
+    // about the roles and not about the shape. Without this the test would pass on a codec that had
+    // simply stopped encoding drawn contours.
+    const bare = penContour({
+      nodes: [{ at: [-1, -1] }, { at: [1, -1] }, { at: [0, 1] }],
+      closed: true,
+    });
+    const okBare = encodeShell({ ...base(), contour: bare, contourSource: null, sandboxContour: bare });
+    expect(okBare.ok).toBe(true);
+  });
 });
 
 describe("the stepper's place in the argument travels — M8 step 3.6", () => {
-  const roundTrip = (step: number | "all"): number | "all" => {
+  // **`stepRoundTrip`, not `roundTrip`** — the file already has one at module scope, and
+  // `no-shadow` is an ERROR for this app. It shipped shadowed in steps 3.6 and 4.1 because the gate
+  // harness reported the BUILD's exit code rather than lint's; see this step's findings.
+  const stepRoundTrip = (step: number | "all"): number | "all" => {
     const e = encodeShell({ ...base(), mode: "gallery", record: "jordan-cosine-kernel", fixture: 0 }, step);
     if (!e.ok) throw new Error(e.reason);
     const d = decodeShell(e.hash);
@@ -475,9 +509,9 @@ describe("the stepper's place in the argument travels — M8 step 3.6", () => {
     // STALE step surviving a change of argument — which a link naming a step for its own argument
     // is not. Until this field the plan's own Phase 3 gate clause, *a worked-example permalink at
     // step 5 of A6*, named something that did not exist.
-    expect(roundTrip(4)).toBe(4);
-    expect(roundTrip(0)).toBe(0);
-    expect(roundTrip("all")).toBe("all");
+    expect(stepRoundTrip(4)).toBe(4);
+    expect(stepRoundTrip(0)).toBe(0);
+    expect(stepRoundTrip("all")).toBe("all");
   });
 
   it("costs nothing when there is no step, so every other link is byte-identical", () => {

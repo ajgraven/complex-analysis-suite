@@ -41,7 +41,7 @@ import { isStageMode, type StageMode } from "../ui/stage/mode.js";
 import { defaultState, offeredCorpus, type ContourSource, type DrillState, type ShellState } from "./state.js";
 import { DRILL_STAGES, taskById } from "./drill.js";
 import { TEMPLATES, type TemplateId } from "./templates.js";
-import { penContour, penPath, sameShape, STRAIGHT } from "../engine/contour/pen.js";
+import { PEN_ROLE, penContour, penPath, sameShape, STRAIGHT } from "../engine/contour/pen.js";
 
 /** This app's namespace in the shared envelope. */
 const APP = "ci";
@@ -310,6 +310,21 @@ function contourOut(
         reason:
           "this contour came from neither a template nor the pen, so there is nothing to put in a " +
           "link — no recipe to rebuild it from, and no vertices to carry",
+      };
+    }
+    // **A ROLE IS NOT ON THE WIRE YET, AND SILENCE WOULD BE THE WRONG ANSWER** — M8 step 4.2. The
+    // pen carries roles now, so a drawn contour can BE an argument; the wire form that carries them
+    // is step 4.4. `sameShape` compares geometry and nothing else, so a link minted today would
+    // verify perfectly and open the same curve with every piece `free` — the reader's argument gone
+    // and no sign that it was ever there. M7.2's own posture applies again: refuse by name, and let
+    // the refusal be the thing that says which step has to come next.
+    const assigned = contour.pieces.filter((piece) => piece.role !== PEN_ROLE);
+    if (assigned.length > 0) {
+      return {
+        ok: false,
+        reason:
+          `this drawn contour assigns a role to ${assigned.length === 1 ? "one of its pieces" : `${assigned.length} of its pieces`}, ` +
+          "and a link cannot carry that yet — it would open the same curve with the argument stripped out",
       };
     }
     const bulges: Record<string, number> = {};
