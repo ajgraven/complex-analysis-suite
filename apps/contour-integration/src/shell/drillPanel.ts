@@ -55,7 +55,7 @@ import {
 import { type TemplateId } from "./templates.js";
 import { constraintLabel, disposalLabel, templateLabel } from "../engine/vocabulary.js";
 import { h, type Child, type Desc } from "./dom.js";
-import { mathPlain, mathText } from "./math.js";
+import { mathPlain, mathSpoken, mathText } from "./math.js";
 import type { Session } from "./session.js";
 import { card, type CardContext } from "./cards/card.js";
 
@@ -275,10 +275,12 @@ function rungKill(ctx: CardContext, task: DrillTask): readonly Child[] {
           "select",
           {
             key: "s",
-            // **`mathPlain`, not the name.** The name is `the $R \to \infty$ semicircle`, and an
-            // accessible name carrying raw LaTeX is read out as "dollar R backslash to" — the one
-            // sentence a screen-reader user gets for this control, in the app's own source syntax.
-            "aria-label": `what ${mathPlain(q.name)} is for`,
+            // **`mathSpoken`, and `mathPlain` left half of it** — M8 step 3.6. The name is
+            // `the $R \to \infty$ semicircle`, and an accessible name carrying raw LaTeX is read
+            // out as "R backslash to backslash infty" — the one sentence a screen-reader user gets
+            // for this control, in the app's own source syntax. A piece name is exactly the bounded
+            // case the spoken map is for.
+            "aria-label": `what ${mathSpoken(q.name)} is for`,
             value: answers[q.pieceId] ?? "",
             disabled: graded !== null,
             onChange: (e: Event) => {

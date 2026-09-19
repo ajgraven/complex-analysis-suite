@@ -49,7 +49,7 @@ function factsOf(ctx: CardContext): Facts {
   // Cheap and PURE: a template rebuild and a structural compare, which is nothing beside the solve
   // the resolution already ran. Asking it on every render is what makes the refusal current rather
   // than a stale answer from whenever the reader last pressed something.
-  const enc = encodeShell(ctx.state);
+  const enc = encodeShell(ctx.state, ctx.session.step);
   return enc.ok ? { refusal: null, bytes: enc.hash.length } : { refusal: enc.reason, bytes: null };
 }
 

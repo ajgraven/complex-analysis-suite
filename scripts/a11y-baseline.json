@@ -95,5 +95,6 @@
     }
   },
   "contour-integration-drill": {},
-  "contour-integration-predict": {}
+  "contour-integration-predict": {},
+  "contour-integration-worked": {}
 }

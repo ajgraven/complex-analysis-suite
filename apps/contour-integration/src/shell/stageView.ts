@@ -38,7 +38,7 @@ import { drawnContour } from "./state.js";
 import type { ShellState, StateResolution } from "./state.js";
 import { h, patch } from "./dom.js";
 import { readout } from "./readout.js";
-import { mathPlain, mathText } from "./math.js";
+import { mathSpoken, mathText } from "./math.js";
 import type { Session } from "./session.js";
 import { stableKey } from "./stableKey.js";
 import { argumentOf, stepIndex } from "./argument.js";
@@ -496,11 +496,18 @@ export function createStageView(host: HTMLElement): StageView {
         emphasis: d.session.gesture === "handle" && hoveredHandle === i ? "grabbed" : hoveredHandle === i ? "hover" : "none",
       })),
       cuts: hidden ? [] : drawnCuts(effectiveBranch(d.state.branch), view, vp),
-      // **On an export plate too, unlike step 3.1c's callouts, and the difference is the codec.**
-      // A callout is keyed to `session.step`, which a permalink does not carry, so a plate showing
-      // one is a picture its own link cannot reopen. The scrub position and this toggle are both
+      // **On an export plate too, unlike step 3.1c's callouts** — the rule being *nothing a link
+      // cannot restore*, not *nothing but the contour*: the scrub position and this toggle are both
       // STATE and both in the codec, so these arrows are reproducible from the link the figure is
-      // stamped with — the rule is "nothing a link cannot restore", not "nothing but the contour".
+      // stamped with.
+      //
+      // **The callouts' original reason has LAPSED and the exclusion stands on another.** It was
+      // that a callout is keyed to `session.step`, which a permalink did not carry — step 3.6 put
+      // it on the wire, so a plate showing one is now perfectly reopenable. What keeps them off is
+      // that a callout is a DOM chip (see the note where they are built: they are DOM so they can
+      // carry typeset mathematics and a badge) and a plate is a canvas composite, so drawing one
+      // would mean a second renderer for the same chip. Recorded rather than left as a comment
+      // asserting a reason that is no longer true.
       // **`scale` is plot units per PIXEL and the detail wants pixels per UNIT.** They are
       // reciprocals, nothing in the types says so, and the first draft passed it straight through:
       // the magnification came out `60/s²` instead of `60`, so on A6 at `halfHeight ≈ 6` the term's
@@ -664,12 +671,13 @@ export function createStageView(host: HTMLElement): StageView {
         // **Through `mathText`.** A piece name is a SENTENCE in this app's `$…$` convention — the
         // circle is called `the circle $|z - a| = R$` — and a chip that set it as plain text printed
         // the dollar signs on screen. Found in a browser; no node assertion on `textContent` could
-        // see it, because `textContent` is what a KaTeX span reads back as anyway. `aria-label`
-        // carries the delimiters stripped, so a screen reader is not told about the dollars either.
+        // see it, because `textContent` is what a KaTeX span reads back as anyway. **`mathSpoken`
+        // rather than `mathPlain` since step 3.6**: stripping the delimiters left the macros, and a
+        // piece name is the bounded case that map exists for.
         chips.push(
           h(
             "span",
-            { key: "held", class: "stageChip held", style: box, "aria-label": mathPlain(held.label) },
+            { key: "held", class: "stageChip held", style: box, "aria-label": mathSpoken(held.label) },
             ...mathText(held.label, "held"),
           ),
         );
@@ -715,7 +723,18 @@ export function createStageView(host: HTMLElement): StageView {
               key: callout.key,
               class: callout.pulse === true ? "stageChip callout pulse" : "stageChip callout",
               style: box,
-              "aria-label": mathPlain(callout.text),
+              // **HIDDEN from the accessibility tree — M8 step 3.6, and it is a measurement.** A
+              // callout is a FORMULA, not a name: `firstFormula` of a KILL line, a residue, the
+              // limit step's first statement, the conclusion's value. There is no honest short map
+              // from a certified bound to speech, and `mathPlain` was announcing the LaTeX source
+              // instead — *backslash int, backslash le* — which is worse than silence.
+              //
+              // Nothing is lost, and that was checked rather than assumed: every one of the four
+              // callout kinds is drawn from something the Derivation card renders on the SAME step
+              // — `step.lines` as the piece list, `step.statements` above it, `step.poles` as the
+              // table, and the conclusion in the card's footer. The chip is a POINTER onto the
+              // plane, and a pointer is the one thing a screen reader cannot use.
+              "aria-hidden": "true",
             },
             callout.level === null
               ? null

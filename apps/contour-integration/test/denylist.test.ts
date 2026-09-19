@@ -251,7 +251,14 @@ function visibleText(): string {
 function onScreen(): string {
   const clone = document.body.cloneNode(true) as HTMLElement;
   for (const m of clone.querySelectorAll('[role="math"]')) {
-    m.replaceChildren(document.createTextNode(m.getAttribute("aria-label") ?? ""));
+    // **`data-tex` where there is no name** — M8 step 3.6. A typeset node's accessible name used
+    // to be its LaTeX source, so `aria-label` alone put every formula into this sweep; the step
+    // stopped announcing the source (it was being read out character by character) and left this
+    // helper substituting `""`, which would have taken every formula in the app OUT of a denylist
+    // scan without a single test going red. A house word reaching a reader inside `\text{…}` is
+    // exactly what this file exists to catch. `data-tex` is set on every typeset node, so the pair
+    // is total.
+    m.replaceChildren(document.createTextNode(m.getAttribute("aria-label") ?? m.getAttribute("data-tex") ?? ""));
   }
   const spoken: string[] = [];
   for (const el of clone.querySelectorAll("*")) {

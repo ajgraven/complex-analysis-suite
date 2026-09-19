@@ -535,12 +535,14 @@ describe("the Derivation card", () => {
     const inds = rows.map((r) => r.querySelectorAll("td")[3]);
     // The tag NAMES the quantity since step 2.1 — `$\\operatorname{Ind}_\\gamma$ undecided` — and
     // KaTeX lays every formula down twice, so the tag's own text is read through the formula's
-    // accessible name and the words that follow it.
+    // SOURCE and the words that follow it. That source is `data-tex` since step 3.6: the accessible
+    // name used to carry the LaTeX and no longer does, because Chrome was flattening it into the
+    // name of whatever heading contained it.
     const texts = inds.map((td) => {
       const m = td?.querySelector('[role="math"]');
       return m === null || m === undefined
         ? (td?.textContent ?? "")
-        : `${m.getAttribute("aria-label") ?? ""}${m.nextSibling?.nodeValue ?? ""}`;
+        : `${m.getAttribute("data-tex") ?? ""}${m.nextSibling?.nodeValue ?? ""}`;
     });
     expect(texts).toContain("\\operatorname{Ind}_\\gamma undecided");
     expect(texts).toContain("1");

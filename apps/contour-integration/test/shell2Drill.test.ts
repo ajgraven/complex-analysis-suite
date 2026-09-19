@@ -58,11 +58,19 @@ const q = <T extends HTMLElement = HTMLElement>(root: ParentNode, sel: string): 
  *
  * Every typeset formula stands for the sentence it is NAMED with: KaTeX renders each one twice, so a
  * raw `textContent` carries three copies of every symbol and buries a failure in them.
+ *
+ * **The name FALLS BACK to `data-tex`** — M8 step 3.6. A node carries an `aria-label` only where the
+ * caller has a real plain-text twin now; everywhere else the label used to be the LaTeX source, and
+ * that is what this helper was reading. `data-tex` is where that source went, so `label ?? tex` is
+ * character for character the string this helper used to build — without it every formula on the
+ * page reads as the empty string here, and a mask test asking whether the integral is still on
+ * screen would pass with the whole card blank.
  */
 function textOf(host: Element): string {
   const clone = host.cloneNode(true) as HTMLElement;
   for (const m of clone.querySelectorAll('[role="math"]')) {
-    m.replaceChildren(clone.ownerDocument.createTextNode(m.getAttribute("aria-label") ?? ""));
+    const said = m.getAttribute("aria-label") ?? m.getAttribute("data-tex") ?? "";
+    m.replaceChildren(clone.ownerDocument.createTextNode(said));
   }
   return (clone.textContent ?? "").replace(/\s+/g, " ").trim();
 }

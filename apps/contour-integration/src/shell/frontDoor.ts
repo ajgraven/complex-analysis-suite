@@ -19,7 +19,7 @@ import type { ShellState } from "./state.js";
 import { h, patch, type Child, type Desc } from "./dom.js";
 import { DRILL_TASKS, type DrillTask } from "./drill.js";
 import { LAST_STAGE, isComplete, readProgress, stageFor, type KeyStore } from "./drillProgress.js";
-import { math, mathPlain, mathText } from "./math.js";
+import { math, mathSpoken, mathText } from "./math.js";
 import { createModal } from "./modal.js";
 
 /**
@@ -482,7 +482,10 @@ export function createFrontDoor(host: HTMLElement, page: HTMLElement, input: Fro
                 // source syntax ("dollar R backslash to"). Measured: none of the four labels
                 // carries a delimiter today, so `mathPlain` is the identity on all four — it is
                 // here so that the day one does, the name is a sentence rather than source.
-                "aria-label": `open ${mathPlain(task.labelText)} at stage ${stage}`,
+                // `mathSpoken` since step 3.6: `labelText` is already a spoken twin, so this is a
+                // belt on a brace — but a twin that grew a macro would announce it, and the corpus
+                // sweep in `test/spoken.test.ts` is what would then say so.
+                "aria-label": `open ${mathSpoken(task.labelText)} at stage ${stage}`,
                 onClick: () => openDrillTask(task, stage),
               },
               "Open",

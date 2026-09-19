@@ -115,8 +115,15 @@ changed.
   two that matter are that a comparison which cannot be seen beside what it compares is a list —
   which is what the modal made it — and that the app's **browser suite had been red since step
   3.4**, in two places the node gate structurally cannot see.
-  **Next execution action: step 3.6** (the Phase 3 gate — full gate, browser suite, `pnpm a11y`
-  with two new roster entries, screenshots under `M8/screens/phase3/`, STATUS.md: Phase 4 next).
+  **PHASE 3 IS CLOSED (step 3.6).** The gate is green, the browser suite is green, the a11y roster
+  is clean on all four contour pages, and the phase's screenshots are committed under
+  [`M8/screens/phase3/`](screens/phase3/). The gate's own clause — *a Worked-example permalink at
+  step 5 of A6* — **named a link that could not exist**, so the step built it: `Wire.st` carries the
+  reader's place in the argument, which made the stepper's step bodies, its callouts and 3.2's Play
+  controls reachable by the roster at all. And measuring the accessible names at 1440 px found the
+  stepper announcing its LaTeX source, under a comment recording that defect as fixed.
+  **Next execution action: PHASE 4, step 4.1** (the contour as an editable piece list with roles —
+  see [`M8-plan.md`](../M8-plan.md) §7).
   **Step 1.12 is done — THE CUTOVER.** `main.ts` stops choosing, the old `src/shell/app.ts` (3,700
   lines), `src/ui/app.css` and four of its test files are deleted, and `src/shell2/` has BECOME
   `src/shell/`. [`parity.md`](parity.md) is complete. The parity sweep found two capabilities the new
@@ -147,6 +154,8 @@ changed.
 
 | date | step | commit | notes |
 |---|---|---|---|
+| 2026-09-19 | **3.6** | (this commit) | **THE PHASE 3 GATE — AND ITS OWN CLAUSE NAMED A LINK THAT COULD NOT EXIST.** *A Worked-example permalink at step 5 of A6*: the codec carried no step, because the reader's place in an argument is SESSION state (M6.1) and `resetTransient` clears it (M7.4) — so the stepper's step BODIES, its callouts and step 3.2's Play controls and checkpoint table were a surface the roster could never reach, it auditing a page in the state a link opens it in. `Wire.st` is one field on `dr`'s precedent, and M7.4's reason is untouched: the reset still runs and the link writes its step back afterwards, through step 3.5's `then` hook. The SHAPE is refused and the range is not (`stepIndex` already lands a stale index on the last step), and `setStep` becomes **the one caller of `syncHash` that is not `commit`** — the step is not `ShellState`, so `commit`'s *one place to say the link changed* no longer covers the whole wire. **And reading the accessibility tree at 1440 px found the stepper announcing its LaTeX SOURCE** — `step 5 of 8 — Boundary terms · the R \to \infty semicircle` — under a comment from 3.1b recording that defect as closed: `mathPlain` strips `$` and nothing else. M6.4's lesson for the third time in this app. `mathSpoken` is a NINE-macro map measured over all 28 records (`\to \infty \rho \varepsilon \arg \pi \log \eta \operatorname`), deliberately for names and not formulas, guarded by `test/spoken.test.ts`'s corpus sweep; the stage's callout chips go `aria-hidden` instead, on the measurement that all four kinds are drawn from something the Derivation card renders on the SAME step. **The app-wide leak took THREE changes and each one alone changed nothing, measured**: `mathText` passed the LaTeX as its span's `aria-label` (65 of 66 formulas on the landing page) and KaTeX's `<annotation>` held the same source in the MathML — remove either alone and the tree is identical; all three and it reads **zero** backslash-bearing names, from six. `data-tex` replaces the `aria-label`'s second job (telling a TEST which formula a node holds) and is not in the tree at all. `test/limitSweep.test.ts` had a test *speaks a step's title as words, never as its LaTeX source* **asserting `mathPlain`** — the defect pinned as intended behaviour. Look: [`phase3/`](screens/phase3/) (the worked example at the limit step, the amplitwist detail, the drill's prediction, the contrast ladder). Sweep **19 mutants, 19 killed, no equivalents** — one had to be rewritten because it ADDED a no-op beside the call it meant to remove, which the driver's own changed-file guard cannot catch. Full gate green: **583 files / 6,283 tests**, lint, typecheck and build silent; app browser suite 19 files / 218 tests; `pnpm a11y` clean across the whole roster with the new `contour-integration-worked` entry |
+
 | 2026-09-19 | **3.5** | (this commit) | **THE LADDER STOPS BEING A MODAL.** Five cases in a strip above the stage (`contrastStrip` → `Rendered.ladder` → its own `auto` grid row, `hidden` and EMPTY when shut, so a closed ladder costs the stage nothing), the bar's Contrasts button a **disclosure** with `aria-expanded`, and each case a single `<button class="ladderCard">` carrying the typeset integral, the step's own sentence, the check(s) it declares **in words** with what each one did (`now holds` / `now fails`), and the record's ANSWER. `session.contrast` records which case is open and which `RowKey`s it declares; `resetTransient` no longer clears `contrastsOpen` (a strip is not a dialog — walking the ladder is five `applyState` calls in a row) and `commit` drops the highlight on the same four fields a running sweep dies on. The Result card marks those rows `data-change="declared"`, says so in `srOnly` text, and the action WRITES the check list open rather than leaning on a computed default. `ContrastsInput`, `createContrastsDialog`, `gridOf`/`entryCell`/`columnHead` and `session.drillPicker`'s neighbour `contrastsOpen`-as-modal all deleted; `contrastGrid.ts` untouched. **Ten findings**, four of them measurements: the stage column loses to the full width **335 px of panel against a 328 px stage** (vs 231/433, and 1,413 px of content in 1,413 px of box against 789 in 725); the denylist caught `rung` — the DRILL's word — in six class names and the panel's legend before a reader could; deleting the dialog would have deleted `modal.ts`'s only tests of its focus trap, Tab cycle, `inert` and Escape, which moved onto `createModal` directly (sweep 12/13) and found a **dead clause** in `cycle` that its own comment presented as the mechanism; and **the app's browser suite had been red since step 3.4** — the chooser left the drill card for the front door and the prediction now stands between rung iii and its menu — which bought the assertion that file did not have: answering the prediction leaves the contour masked (0 ink pixels before the pick, >1000 after). Look: [`3.5-ladder-1440x950.png`](screens/3.5-ladder-1440x950.png) · [`3.5-ladder-opened-1440x950.png`](screens/3.5-ladder-opened-1440x950.png) · [`3.5-ladder-indented-1440x950.png`](screens/3.5-ladder-indented-1440x950.png). Sweep **22 mutants, 21 killed, one recorded equivalent** — keying the check list over the filtered rows is equivalent PROVABLY rather than by luck (a `RowKey`'s ordinal counts within its `(constraint, role)` bucket and the one filter removes a whole constraint), and both first-pass survivors were real and bought a test. Full gate green: **582 files / 6,264 tests**, lint, typecheck and build silent; app browser suite 19 files / 218 tests; a11y roster clean on all three contour ids, and the open ladder plus both opened cases hand-audited clean (0 rules, 48 interactive nodes, 0 unnamed) |
 
 | 2026-09-19 | **3.4** | (this commit) | **THE DRILL REHOUSED, AND RUNG iii ASKS BEFORE IT OFFERS.** The task chooser leaves the rail for a **Practice** tab on the front door (`DoorTab`, `openTask`, a stage mark and a complete mark per task), so the drill card has ONE shape again and `session.drillPicker` is deleted; and rung iii now puts a forced choice before its menu — `drill.ts`'s `predictionFor`, an option list, a reveal and a reason. **Which question is asked is DERIVED, not declared**: both semicircles are run over the task's own integrand, so a half-plane is offered exactly when one exists. Measured over the four tasks — `rational` closes BOTH ways (π either way: with no kernel nothing forces the side), `oscillatory` upper only, `forced-downward` lower only, and `indented` NEITHER, because its pole sits on the real axis and both semicircles fail LEGALITY before any limit is taken, which is what routes it to the enclosure question rather than a flag saying so. The reason on reveal is the losing side's own ledger row (`the lower semicircle diverges for $a = 1$`), or, where both sides answer, the two VALUES — the only form in which *either* is a claim. `drillProgress` goes to **`ci.drill.v2`**: `predicted` is tri-state on the wire, first-answer-wins, and `v1` is read as STAGES ONLY and never written, which is rule 1's exception rather than a lapse from it (the field `v1` lacks defaults to *not answered*, which is what a reader who has never seen the question already has). **AND THE RUNG WHOSE QUESTION IS *WHICH CONTOUR?* WAS PRINTING THE ANSWER IN FIVE PLACES** — the Target card's `= π/e`, the record's title naming Jordan's lemma, its strategy line giving the prediction's answer in words, the Contour card's *(upper when $a > 0$)*, the Singularities table's `Ind` column, and the accumulator drawing the record's own semicircle with `1.15565557035` under it. `drillMask("argument")` gains four readers, the strip going through the SAME path a refusal takes; **the whole app suite stayed green through the repair**, so each reader arrives with its own assertion and a pairing that shows the same record unmasked outside the drill. Look: [`3.4-practice-tab-1440x950.png`](screens/3.4-practice-tab-1440x950.png) · [`3.4-prediction-1440x950.png`](screens/3.4-prediction-1440x950.png) · [`3.4-prediction-revealed-1440x950.png`](screens/3.4-prediction-revealed-1440x950.png). Sweep **20/21, one recorded equivalent** (dropping the `decided` guard from the enclosure count is unobservable — all four `decided: false` returns in `kernel/winding.ts` carry `n: 0`, checked rather than recalled; M6.4's equivalent in a new reader). Full gate green: **582 files / 6,258 tests**, lint, typecheck and build silent; app suite re-run green after the sweep restored the tree (131 files / 2,467 tests); a11y roster clean with a new `contour-integration-predict` entry, and four non-default states hand-audited clean |
@@ -224,6 +233,98 @@ changed.
 | 2026-09-15 | **0.5b-ii** | 573fb8c | the five rules through `kernel/bounds/*`, the three theorem identities, `derivation.ts`'s solve stage and `solveTarget.ts`; `latex` on the solved value; 65 wording-pinned tests updated; 191 → 152 flagged |
 
 ## Findings (things learned while executing; each names its step)
+
+- **(3.6) THE PLAN'S OWN GATE CLAUSE NAMED A LINK THAT COULD NOT EXIST.** *A Worked-example
+  permalink at step 5 of A6* — and the codec carried no step: the reader's place in an argument is
+  SESSION state (M6.1), `resetTransient` clears it (M7.4), and `encodeShell` takes a `ShellState`.
+  So the stepper's step BODIES, its callouts and step 3.2's Play controls and checkpoint table were
+  a surface the a11y roster could never reach, because the roster audits a page in the state a link
+  opens it in — M7.1's *a panel nothing opens is never audited*, one phase later and about the
+  phase's own headline feature. `Wire.st` is one field, `dr` is its precedent one line up, and
+  **M7.4's reason is untouched**: the reset still runs, and a link writes its step back afterwards,
+  for its OWN argument, through step 3.5's `then` hook. The shape is refused and the RANGE is not —
+  a step count changes with the record, so an index past the end lands on the last step the way
+  `stepIndex` already decided, while a value that is not a non-negative whole number is a hash this
+  codec never minted.
+
+- **(3.6) And it made `commit` stop being the only writer of the link.** Every other field on the
+  wire is read out of `ShellState`, so `commit`'s own note — *one way for the state to change, one
+  place to say the link changed* — covered them all. The step is not state, so `setStep` has to say
+  so itself; without it the address bar sits a step behind the screen, which is M6.2's first finding
+  in a new field, and the Copy button would have hidden it by writing its own hash.
+
+- **(3.6) THE STEPPER WAS ANNOUNCING ITS LATEX SOURCE, AND THE COMMENT ABOVE IT SAID THAT WAS
+  FIXED.** Read off the accessibility tree at 1440 px: *step 5 of 8 — Boundary terms · the R \to
+  \infty semicircle*, the backslashes read aloud, for the two steps of every record that has a
+  limit. Step 3.1b had noticed the DOLLARS, stripped them with `mathPlain` — which removes `$` and
+  nothing else — and recorded the defect as closed. **M6.4's lesson for the third time in this app:
+  the accessibility tree is the instrument, not the DOM.** A name carrying LaTeX looks like ordinary
+  text in the source and passes `axe`, whose question is whether a name EXISTS.
+
+- **(3.6) The fix is a map, and the map is a MEASUREMENT.** Over all 28 records at every fixture the
+  titles the stepper turns into names carry exactly nine macros — `\to`, `\infty`, `\rho`,
+  `\varepsilon`, `\arg`, `\pi`, `\log`, `\eta`, `\operatorname` — so `mathSpoken` is a short table
+  and not a LaTeX-to-speech renderer. It is deliberately for NAMES only: a piece, a parameter, a
+  step. `test/spoken.test.ts` sweeps the corpus and fails naming any macro nobody mapped, because an
+  unmapped one is left visible rather than dropped into a name that reads almost right. **And
+  `test/limitSweep.test.ts` had a test called *speaks a step's title as words, never as its LaTeX
+  source* that asserted the name EQUALS `mathPlain(title)`** — the defect pinned as intended
+  behaviour under a title claiming the opposite, which is the `@cas/export` Latin-1 finding again.
+
+- **(3.6) The stage's CALLOUT chips are hidden from the tree, and that is a measurement too.** A
+  callout is a FORMULA — `firstFormula` of a KILL line, a residue, the limit step's first statement,
+  the conclusion's value — and there is no honest short reading of a certified bound, so `mathPlain`
+  was announcing `\left|\int g(z)e^{iaz}\,dz\right| \le …` character by character. Nothing is lost,
+  and it was checked rather than assumed: every one of the four callout kinds is drawn from
+  something the Derivation card renders on the SAME step — `step.lines`, `step.statements`,
+  `step.poles`, and the conclusion in the footer. A chip is a POINTER onto the plane, and a pointer
+  is the one thing a screen reader cannot use.
+
+- **(3.6) THE APP-WIDE LEAK TOOK THREE CHANGES, AND EACH ONE ALONE CHANGED NOTHING — MEASURED.**
+  `mathText` passed the LaTeX fragment as its span's `aria-label` (65 of the 66 formulas on the
+  landing page), and KaTeX's `<annotation encoding="application/x-tex">` held the same source inside
+  the MathML, which Chrome's name computation flattens into whatever is above it. Removing the label
+  alone: the tree is **identical**. Removing the annotation alone: **identical**. Both: still
+  identical, because `mathText` supplies a label explicitly and `math()`'s fallback was not the
+  path. All three — no label from `mathText`, no fallback in `math()`, no annotation — and the tree
+  reads **zero** names carrying a backslash, from six. The doc comment on `math()` had claimed
+  *every node carries an `aria-label` of the plain-text form*, which is true only where the caller
+  HAS one (a `Value` carries `text` beside `latex`); a `$…$` fragment of a sentence has no twin, so
+  the fallback was the source.
+
+- **(3.6) A dozen tests were reading the LaTeX out of the accessibility surface, which is why it was
+  there.** The `aria-label` was doing two jobs — telling a reader what the formula says, and telling
+  a TEST which formula a node holds — and the second was the one that worked. `data-tex` does the
+  second and is not in the accessibility tree at all. Several more were matching LaTeX inside
+  `textContent`, which only ever contained it because of KaTeX's annotation.
+
+- **(3.6) The plate's reason for excluding the callouts has LAPSED.** `stageView.ts` said a callout
+  is keyed to `session.step`, which a permalink does not carry, so a plate showing one is a picture
+  its own link cannot reopen — true until this step put the step on the wire. The exclusion stands
+  on the other reason, which is now stated: a callout is a DOM chip (so it can carry typeset
+  mathematics and a badge) and a plate is a canvas composite, so drawing one would mean a second
+  renderer for the same chip. Recorded rather than left asserting a reason that is no longer true.
+
+- **(3.6) The roster entry's first draft named the wrong record.** *Step 5 of A6* was written before
+  the step list existed; A6 is `semicircle-quartic` (the cold start) with eight steps, and the draft
+  used B1, which has seven — so the same index is a different step. `st: 5` on A6 is *Let R → ∞*,
+  step 3.2's Play / Step pair and its checkpoint table, which is the largest control set Phase 3
+  added and the reason a roster entry is worth having at all. Step 5 of 8 is a static bound with no
+  controls.
+
+- **(3.6) A mutant that ADDS a no-op beside the call it was meant to remove passes the driver's own
+  guard.** `sweep.sh` checks that the file CHANGED — which catches a patch that silently matched
+  nothing — and `ap-no-sync-step`'s first version inserted `if (false) syncHash();` above the real
+  call rather than deleting it, so the file changed, the mutant applied, and the sweep reported a
+  survivor for a line that was never removed. It is the sweep's own version of *pinning the outcome
+  without pinning the reason*, and the cheap guard is to write a removal as a removal.
+
+- **(3.6) And `setStep`'s own `syncHash` was a real survivor underneath that, for a second
+  reason.** The test drove `setMode("worked")` and then `setStep(2)` — but `syncHash` coalesces on
+  a 250 ms timer and writes whatever is CURRENT when it fires, so the mode change's pending write
+  picked the step up anyway and the assertion passed with the line removed. Settling first leaves
+  `setStep` as the only thing that can move it, and the discriminator is step 1 → step 3 rather
+  than nothing → step 3, because `setMode("worked")` opens the stepper at its first step.
 
 - **(3.5) THE SHAPE WAS THE DEFECT, AND THE STEP IS THE SHAPE.** A modal has to shut before it
   applies, because it covers the thing it is about to change — so the ladder could only ever be

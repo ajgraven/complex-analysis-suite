@@ -19,7 +19,7 @@ import { argumentOf, stepIndex } from "../src/shell/argument.js";
 import { defaultSession, type Session, type SweepRow } from "../src/shell/session.js";
 import { planSweep } from "../src/shell/sweep.js";
 import type { ShellActions } from "../src/shell/cards/card.js";
-import { mathPlain } from "../src/shell/math.js";
+import { mathSpoken } from "../src/shell/math.js";
 
 function spyActions(): ShellActions & { calls: string[] } {
   const calls: string[] = [];
@@ -363,6 +363,12 @@ describe("the stepper's accessible names", () => {
     // fragment cannot go — so a screen-reader user heard the LaTeX source, dollars and
     // backslashes included. Older than the sweep control (it dates to step 3.1b) and found by
     // reading the accessible name in a browser, which is why nothing in the node gate had it.
+    //
+    // **This test had been asserting the defect as the intended behaviour** — M8 step 3.6. Its two
+    // equalities pinned the name to `mathPlain(title)`, which strips the `$` and NOTHING else, so
+    // the LaTeX source was what the test required under a title saying the opposite: a name reading
+    // *Let R \to \infty* passed, and a name reading *Let R to infinity* would have failed. The
+    // instrument is `mathSpoken`, which is the function the app now names the steps with.
     const state = gallery(A6);
     const at = stepAt(state, "limit");
     const steps = argumentOf({ state, resolution: resolveState(state, compile(state.expr)), poles: null }).steps;
@@ -384,8 +390,12 @@ describe("the stepper's accessible names", () => {
     // And the names are the TITLES with their delimiters taken off, rather than a blank or a
     // number: stripping the mathematics out altogether would pass every assertion above.
     const title = steps[at]?.title ?? "";
-    expect(spoken[0]).toBe(`Step ${at + 1} of ${steps.length}: ${mathPlain(title)}`);
-    expect(dots[at]).toBe(`step ${at + 1} of ${steps.length} — ${mathPlain(title)}`);
-    expect(mathPlain(title), "the title lost its words as well as its dollars").toContain("Let");
+    expect(spoken[0]).toBe(`Step ${at + 1} of ${steps.length}: ${mathSpoken(title)}`);
+    expect(dots[at]).toBe(`step ${at + 1} of ${steps.length} — ${mathSpoken(title)}`);
+    // ANTI-VACUITY, both halves: a `mathSpoken` returning `""` would satisfy the two equalities
+    // above and every `$`-clause before them, and one that had quietly become `mathPlain` again
+    // would satisfy the words clause. So the spoken title must carry real words AND no backslash.
+    expect(mathSpoken(title), "the title lost its words as well as its dollars").toContain("Let");
+    expect(mathSpoken(title), "the title is still being spoken as LaTeX").not.toContain("\\");
   });
 });

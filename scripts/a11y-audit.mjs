@@ -192,6 +192,29 @@ const PAGES = [
     expect: "[data-card=\"drill\"] [data-predict-option]",
   },
   {
+    // **The WORKED EXAMPLE, at the limit step** — M8 step 3.6, and the plan's own gate clause for
+    // this phase. Its wording is *a Worked-example permalink at step 5 of A6*, written before the
+    // step list existed; measured, A6 (`semicircle-quartic`, the app's cold start) has eight steps
+    // and the fifth is a static bound with no controls at all, while `st: 5` — step 6 of 8,
+    // *Let R → ∞* — is step 3.2's Play / Step pair and its checkpoint table, the largest control
+    // set Phase 3 added. A roster entry is worth having for the controls it reaches, so it is that
+    // step. **And the first draft named B1**, which has seven: the same index is a different step
+    // in every record, which is exactly why `expect` names a selector and not a step.
+    //
+    // **The link could not be written until this step**, which is the other half of the clause:
+    // the reader's place in an argument is SESSION state and no field on the wire carried it, so
+    // the stepper's step bodies, its callouts and 3.2's table were a surface the roster could never
+    // reach — it audits a page in the state a link opens it in. `expect` keeps it honest: a build
+    // that stopped honouring the step would leave `.stepBody` absent and fail by name, rather than
+    // auditing the whole-argument view under a label claiming otherwise.
+    id: "contour-integration-worked",
+    mount: "contour-integration",
+    dist: "apps/contour-integration/dist",
+    file: "index.html",
+    hash: viewState("ci", { m: "g", r: "semicircle-quartic", we: 1, st: 5 }),
+    expect: '[data-card="derivation"] .stepBody[data-step]',
+  },
+  {
     id: "correspondences",
     mount: "correspondences",
     dist: "apps/correspondences/dist",

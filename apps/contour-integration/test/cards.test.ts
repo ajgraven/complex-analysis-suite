@@ -191,8 +191,8 @@ describe("the Integrand card", () => {
     // screen in a nicer font and show them nothing; the AST's `\\frac{1}{1}+z` shows the precedence.
     const { host } = rail(sandbox({ expr: "1/1+z" }));
     const preview = q(host, '[data-card="integrand"] .math-display');
-    expect(preview.getAttribute("aria-label") ?? "").toContain("\\frac");
-    expect(preview.getAttribute("aria-label") ?? "").not.toBe("1/1+z");
+    expect(preview.getAttribute("data-tex") ?? "").toContain("\\frac");
+    expect(preview.getAttribute("data-tex") ?? "").not.toBe("1/1+z");
   });
 
   it("asks for a preset by its SOURCE, so the box and the menu cannot disagree", () => {
@@ -223,7 +223,7 @@ describe("the Parameters card", () => {
     const tags = new Map<string, string>();
     for (const row of host.querySelectorAll('[data-card="parameters"] .paramRow2')) {
       const name = (row.querySelector(".paramValue")?.textContent ?? "").split(" ")[0];
-      const tag = row.querySelector('.tag [role="math"]')?.getAttribute("aria-label");
+      const tag = row.querySelector('.tag [role="math"]')?.getAttribute("data-tex");
       if (tag !== null && tag !== undefined) tags.set(name, tag);
     }
     expect([...tags.keys()].sort(), "D1's two limit parameters are not both tagged").toEqual(["R", "eps"]);
@@ -305,7 +305,7 @@ describe("the Singularities card", () => {
     // down twice — so the raw text carries two copies of the symbol around the word.
     const { host } = rail(sandbox({ expr: "1/(z-1.5)" }));
     const cell = host.querySelector('[data-card="singularities"] tbody tr td:nth-child(4)');
-    const ind = (cell?.querySelector('[role="math"]')?.getAttribute("aria-label") ?? "") +
+    const ind = (cell?.querySelector('[role="math"]')?.getAttribute("data-tex") ?? "") +
       (cell?.querySelector('[role="math"]')?.nextSibling?.nodeValue ?? "");
     expect(ind.trim()).toBe("\\operatorname{Ind}_\\gamma undecided");
   });
@@ -673,14 +673,16 @@ describe("the Target card", () => {
     const record = recordOf(state);
     if (record === null) throw new Error("no record");
     const { host } = rail(state);
-    // **Both halves of the pair.** `aria-label` is the spoken form and KaTeX's own `<annotation>`
-    // carries the TeX it was given, so this reads the typeset form too — measured by a mutant that
-    // dropped the bindings from the LATEX alone and passed, leaving the picture in symbols and the
-    // accessible name in numbers.
+    // **Both halves of the pair.** `aria-label` is the spoken form and `data-tex` carries the TeX
+    // the node was given, so this reads the typeset form too — measured by a mutant that dropped
+    // the bindings from the LATEX alone and passed, leaving the picture in symbols and the
+    // accessible name in numbers. The source is read off `data-tex` rather than out of KaTeX's
+    // `<annotation>` because step 3.6 strips that element — Chrome was flattening it into the
+    // accessible name of whatever contained it — and `data-tex` is where the source went.
     const node = q(host, '[data-card="target"] .targetLine .math');
-    const shown =
-      `${node.getAttribute("aria-label") ?? ""} ${node.querySelector("annotation")?.textContent ?? ""}`;
-    expect(node.querySelector("annotation"), "no typeset source to read").not.toBeNull();
+    const tex = node.getAttribute("data-tex") ?? "";
+    const shown = `${node.getAttribute("aria-label") ?? ""} ${tex}`;
+    expect(tex, "no typeset source to read").not.toBe("");
     const bound = Object.entries(record.golden.params).filter(([, v]) => typeof v === "number");
     expect(bound.length, "this record binds nothing, so the test asserts nothing").toBeGreaterThan(0);
     for (const [name] of bound) {

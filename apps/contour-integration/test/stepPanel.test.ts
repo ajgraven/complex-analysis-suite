@@ -382,11 +382,18 @@ describe("when only one arrow can be drawn", () => {
     expect(`the sentence is there: ${said !== null}`).toBe("the sentence is there: true");
     // It NAMES the arrow rather than saying something is missing: which one it is, is the whole
     // content — the term's going is the lemma, the step's going is an amplification off the scale.
+    //
+    // **Read off `data-tex`, not out of `textContent`** — M8 step 3.6 strips KaTeX's `<annotation>`,
+    // so the LaTeX the sentence was typeset from is no longer anywhere in the text; what is left is
+    // the rendered glyphs, in which `f(z_k)` is an `f`, a bracket and a subscripted `k`. `data-tex`
+    // is where the source went, and it is the same claim: the sentence names THIS arrow.
     const which = stepDetail(acc.steps[dropped], dropped, 1);
     const wanted = which !== null && which.term === null ? "f(z_k)" : "\\Delta z_k";
-    expect(`names ${wanted}: ${(said?.textContent ?? "").includes(wanted.replace("\\\\", "\\"))}`).toBe(
-      `names ${wanted}: true`,
-    );
+    const tex = [...(said?.querySelectorAll('[role="math"]') ?? [])]
+      .map((m) => m.getAttribute("data-tex") ?? "")
+      .join(" ");
+    expect(`the sentence was typeset: ${tex !== ""}`).toBe("the sentence was typeset: true");
+    expect(`names ${wanted}: ${tex.includes(wanted)}`).toBe(`names ${wanted}: true`);
     // And the four numbers are STILL there — dropping an arrow is not dropping the term.
     expect(`the numbers survive: ${detailShowing(host)}`).toBe("the numbers survive: true");
   });

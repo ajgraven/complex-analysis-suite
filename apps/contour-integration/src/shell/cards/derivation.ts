@@ -29,7 +29,7 @@ import { h, type Child, type Desc } from "../dom.js";
 import { scrub } from "../scrub.js";
 import { planSweep } from "../sweep.js";
 import type { Param } from "../../engine/contour/model.js";
-import { math, mathPlain, mathText } from "../math.js";
+import { math, mathSpoken, mathText } from "../math.js";
 import { card, disclosure, nothing, type Card, type CardContext } from "./card.js";
 
 /** `=` / `≤` / `≈` / `⚠` as the square stamp `theme.css` draws. The Result card's own helper. */
@@ -519,12 +519,14 @@ function stepperControls(
             class: "stepDot",
             // The step a reader is ON, named for assistive tech the same way it is drawn.
             ...(i === index ? { "aria-current": "step" } : {}),
-            // `mathPlain`, not the raw title: a step's title carries `$…$` (*Let $R \to \infty$*,
-            // *Boundary terms · the $R \to \infty$ semicircle*), and an `aria-label` is one of the
-            // places a fragment cannot go — so a screen-reader user heard the LaTeX source, dollars
-            // and backslashes included, for the two steps of every record that have a limit. Older
-            // than this step (3.1b), found by reading the accessible name in a browser.
-            "aria-label": `step ${i + 1} of ${steps.length} — ${mathPlain(s.title)}`,
+            // **`mathSpoken`, and `mathPlain` was the HALF fix** — M8 step 3.6. A step's title
+            // carries `$…$` (*Let $R \to \infty$*, *Boundary terms · the $R \to \infty$
+            // semicircle*) and an `aria-label` is one of the places a fragment cannot go. Step 3.1b
+            // stripped the dollars and recorded the defect as closed; reading the accessible name
+            // in a browser at the Phase 3 gate found the backslashes still being announced —
+            // *step 5 of 8 — Boundary terms · the R \to \infty semicircle* — for the two steps of
+            // every record that have a limit.
+            "aria-label": `step ${i + 1} of ${steps.length} — ${mathSpoken(s.title)}`,
             "data-failed": s.failed ? "1" : undefined,
             onClick: () => actions.setStep(i),
           }),
@@ -557,7 +559,7 @@ function stepperControls(
     h(
       "span",
       { key: "sr", class: "srOnly" },
-      `Step ${index + 1} of ${steps.length}: ${mathPlain(step.title)}`,
+      `Step ${index + 1} of ${steps.length}: ${mathSpoken(step.title)}`,
     ),
   );
 }

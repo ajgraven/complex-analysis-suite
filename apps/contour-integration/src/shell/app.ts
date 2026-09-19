@@ -566,6 +566,14 @@ export function mountShell2(root: Element): Shell2Handle {
     setStep: (step) => {
       session.step = step;
       repaint();
+      // **The one caller of `syncHash` that is not `commit`, and the reason is worth stating where
+      // it can be read.** `commit`'s own note says the structural payoff is that there is one way
+      // for the state to change, so there is one place to say the link changed — and step 3.6 put
+      // a field on the wire that is NOT in `ShellState`. The step is the reader's place in an
+      // argument and lives in the session, so it cannot go through `commit`; without this the
+      // address bar would sit a step behind the screen, which is M6.2's first finding in a new
+      // field. Coalesced like every other write, so pressing Next five times is one `replaceState`.
+      syncHash();
     },
 
     playSweep: (ask) => {
@@ -630,7 +638,7 @@ export function mountShell2(root: Element): Shell2Handle {
     },
 
     copyLink: () => {
-      const enc = encodeShell(state);
+      const enc = encodeShell(state, session.step);
       if (!enc.ok) {
         // **Through `shareRefusal`, not the codec's own words** — M8 step 2.6, the third unmapped
         // reader the Phase 2 gate found. The Share card had been mapped at 2.4 and this button had
@@ -900,7 +908,7 @@ export function mountShell2(root: Element): Shell2Handle {
     // with axes at 16% alpha that are not there at all.
     stripView.drawNow(plate === "dark" ? stripState() : { ...stripState(), theme: LIGHT_INK });
     const caption = captionNow();
-    const enc = encodeShell(state);
+    const enc = encodeShell(state, session.step);
     const permalink = enc.ok ? window.location.origin + window.location.pathname + enc.hash : null;
     const layout = figureLayout(
       { w: glCanvas.width, h: glCanvas.height },
@@ -1087,7 +1095,7 @@ export function mountShell2(root: Element): Shell2Handle {
       session.linkRefusal = null;
       render2();
     }
-    const enc = encodeShell(state);
+    const enc = encodeShell(state, session.step);
     // **The phone notice's link is written even when the state CANNOT be encoded** (the pen's own
     // contour is M6.2's recorded refusal), because the address is still an address: it opens the
     // app, on the record or the expression the hash last carried. Refusing to show it would leave a
@@ -1133,7 +1141,11 @@ export function mountShell2(root: Element): Shell2Handle {
   // camera, and reframing would throw away the view the sharer chose.
   const link = decodeShell(window.location.hash);
   if (link !== null) {
-    if (link.ok) applyStateNow(link.state);
+    // **The step through the `then` hook** (step 3.5's), because `resetTransient` clears
+    // `session.step` — rightly: a state arriving from elsewhere must not hold the previous
+    // record's step 4 open. A link that NAMES a step names it for its own argument, so it is
+    // written back after the reset and before the render, which is exactly what the hook is.
+    if (link.ok) applyStateNow(link.state, () => { session.step = link.step; });
     else {
       session.linkRefusal = link.reason;
       render2();

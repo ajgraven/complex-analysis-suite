@@ -30,6 +30,7 @@ import {
 } from "../src/shell/drill.js";
 import { PROGRESS_KEY, clearedOf, readProgress } from "../src/shell/drillProgress.js";
 import { compile, defaultState, resolveState, type ShellState } from "../src/shell/state.js";
+import { mathPlain, mathSpoken } from "../src/shell/math.js";
 import { patch } from "../src/shell/dom.js";
 import { defaultSession, resetTransient, type Session } from "../src/shell/session.js";
 import { drillMask, drillPanel } from "../src/shell/drillPanel.js";
@@ -164,6 +165,18 @@ const clickExact = (root: ParentNode, label: string): void => {
 };
 const tagsSaying = (root: ParentNode, word: string): number =>
   [...root.querySelectorAll(".tag")].filter((t) => (t.textContent ?? "").trim() === word).length;
+
+/**
+ * The LaTeX a node was typeset FROM — M8 step 3.6.
+ *
+ * KaTeX used to leave its source in the MathML as an `<annotation>`, and the app used to put it in
+ * the `aria-label` as well, so a `textContent` sweep could find a formula by its source. Both are
+ * gone: the annotation because Chrome flattened it into the accessible name of whatever contained
+ * it, the label because that name was then read out as LaTeX. `data-tex` is where the source went,
+ * and it is not in the accessibility tree at all.
+ */
+const texOf = (root: ParentNode): string[] =>
+  [...root.querySelectorAll('[role="math"]')].map((m) => m.getAttribute("data-tex") ?? "");
 
 // ──────────────────────────────────────────────────────────────────────────────────────────────
 // The mask.
@@ -304,9 +317,21 @@ describe("rung ii — the KILL column", () => {
     const { host } = harness(drillState("indented", 2));
     const selects = [...host.querySelectorAll<HTMLSelectElement>("select")];
     expect(selects).toHaveLength(questions.length);
+    // **The SPOKEN name, not the raw one** — M8 step 3.6. A piece is called `the $R \\to \\infty$
+    // semicircle`, and stripping only the delimiters left the backslashes in the one sentence a
+    // screen-reader user gets for this control; `mathSpoken` is what the card names them with now.
+    // Written out through `mathSpoken` rather than hardcoded, so the roster still fails if a
+    // question's name changes — and `mathSpoken` of a name with no macros in it is the name.
     expect(selects.map((s) => s.getAttribute("aria-label"))).toEqual(
-      questions.map((k) => `what ${k.name.split("$").join("")} is for`),
+      questions.map((k) => `what ${mathSpoken(k.name)} is for`),
     );
+    // ANTI-VACUITY: every assertion above is satisfied by a `mathSpoken` that returns its argument
+    // unchanged, on a task whose names are prose. `indented`'s are not — it is named for its
+    // `$\\rho \\to 0$` indentation — so at least one name must really have been rewritten.
+    expect(
+      questions.filter((k) => mathSpoken(k.name) !== mathPlain(k.name)).length,
+      "no question name carries a macro, so the raw names would pass this too",
+    ).toBeGreaterThan(0);
   });
 
   it("offers five DISTINCT answers, and none of them carries a `$`", () => {
@@ -372,13 +397,15 @@ describe("rung ii — the KILL column", () => {
     const clone = claims[0].cloneNode(true) as HTMLElement;
     for (const m of clone.querySelectorAll(".katex-mathml")) m.remove();
     // **In the LEDGER's words, derived from the row rather than transcribed here** — both halves of
-    // the row: its prose, and the LaTeX it chose. (The LaTeX is read from the UNstripped node, where
-    // KaTeX's MathML annotation carries the source; a card that printed its own plausible sentence
-    // about Jordan's bound fails on both.)
+    // the row: its prose, and the LaTeX it chose. The LaTeX is read off `data-tex` since step 3.6,
+    // which strips KaTeX's `<annotation>`: the source is no longer anywhere in `textContent`, and
+    // the rendered glyphs are not the row's words. A card that printed its own plausible sentence
+    // about Jordan's bound fails on both halves exactly as before.
     const [prose, formula] = questions[1].row.claim.split("$");
     expect(prose.trim().length, "the row has no prose to match on").toBeGreaterThan(0);
     expect(clone.textContent ?? "").toContain(prose.trim());
-    expect(claims[0].textContent ?? "").toContain(formula);
+    expect(formula.length, "the row chose no formula to match on").toBeGreaterThan(0);
+    expect(texOf(claims[0])).toContain(formula);
   });
 
   it("locks the sheet once graded, and `Try again` unlocks it and clears the grading", () => {
@@ -578,9 +605,12 @@ describe("rung iv — the enclosure", () => {
     clickExact(host, "Check the enclosure");
     expect(actions.calls).toContain("redraw");
     draw();
-    const shown = host.textContent ?? "";
-    expect(shown).toContain("(i) = -1");
-    expect(shown).toContain("needs 1");
+    // The winding is a FORMULA — `$\\operatorname{Ind}_\\gamma(i) = -1$` — so its number is read off
+    // `data-tex` rather than out of `textContent`, where step 3.6 leaves only KaTeX's glyphs (and
+    // a Unicode minus, which is not the `-` the refusal was written with). The prose half is still
+    // a text node and is still read as one.
+    expect(texOf(host).join(" ")).toContain("(i) = -1");
+    expect(host.textContent ?? "").toContain("needs 1");
     expect(host.querySelector(".tag.warn"), "refused, and marked as refused").not.toBeNull();
 
     // The same curve the right way round is accepted — so the refusal above is about the sign and

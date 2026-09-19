@@ -460,6 +460,56 @@ describe("a link that cannot be honoured refuses BY NAME", () => {
   });
 });
 
+describe("the stepper's place in the argument travels — M8 step 3.6", () => {
+  const roundTrip = (step: number | "all"): number | "all" => {
+    const e = encodeShell({ ...base(), mode: "gallery", record: "jordan-cosine-kernel", fixture: 0 }, step);
+    if (!e.ok) throw new Error(e.reason);
+    const d = decodeShell(e.hash);
+    if (d === null || !d.ok) throw new Error("the link did not decode");
+    return d.step;
+  };
+
+  it("carries a step, and absent means the whole argument at once", () => {
+    // **The one field on this wire that is not read out of `ShellState`.** M6.1 put the reader's
+    // place in an argument in the session and M7.4 made `resetTransient` clear it, both against a
+    // STALE step surviving a change of argument — which a link naming a step for its own argument
+    // is not. Until this field the plan's own Phase 3 gate clause, *a worked-example permalink at
+    // step 5 of A6*, named something that did not exist.
+    expect(roundTrip(4)).toBe(4);
+    expect(roundTrip(0)).toBe(0);
+    expect(roundTrip("all")).toBe("all");
+  });
+
+  it("costs nothing when there is no step, so every other link is byte-identical", () => {
+    // `put`'s rule, checked rather than assumed: a field that appeared as `"all"` on the wire would
+    // grow every link in the app for the sake of the one state that does not use it.
+    const st = { ...base(), mode: "gallery" as const, record: "jordan-cosine-kernel", fixture: 0 };
+    const withNone = encodeShell(st);
+    const withAll = encodeShell(st, "all");
+    expect(withNone.ok && withAll.ok && withNone.hash).toBe(withAll.ok ? withAll.hash : "");
+  });
+
+  it("refuses a step that is not a whole number, and does NOT refuse one past the end", () => {
+    // The shape is the codec's business and the range is the card's: a step count changes with the
+    // record and the fixture, so `stepIndex` lands a stale index on the LAST step deliberately —
+    // an index that does not exist is the ordinary case rather than a broken link. A value that is
+    // not a non-negative whole number is a hash this codec never minted.
+    const bad = (v: unknown): string => {
+      const good = encodeShell({ ...base(), mode: "gallery", record: "jordan-cosine-kernel", fixture: 0 });
+      if (!good.ok) throw new Error(good.reason);
+      const env = JSON.parse(atob(good.hash.slice(4).replace(/-/g, "+").replace(/_/g, "/"))) as Record<string, unknown>;
+      const next = { ...env, state: { ...(env.state as object), st: v } };
+      const hash = `#vs=${btoa(JSON.stringify(next)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")}`;
+      const r = decodeShell(hash);
+      if (r === null) throw new Error("no link");
+      return r.ok ? "" : r.reason;
+    };
+    for (const v of [1.5, -1, "3", null]) expect(bad(v), `st: ${String(v)}`).toContain("not a whole number");
+    // 9,999 is past every record's step count in the corpus, and it is honoured.
+    expect(bad(9999)).toBe("");
+  });
+});
+
 describe("the payload stays inside research 07 §6's budget", () => {
   it("a gallery link is tiny, and the worst sandbox case is well under 2 kB of URL", () => {
     const gal = encodeShell({ ...base(), mode: "gallery", record: "series-cot-kernel", fixture: 0 });

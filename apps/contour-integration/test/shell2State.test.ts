@@ -102,15 +102,22 @@ function clickNamed(host: ParentNode, startsWith: string): void {
 /**
  * What a region SAYS, as one line.
  *
- * Every typeset formula is replaced by its accessible name. KaTeX renders each formula twice — once
- * as MathML and once as positioned spans — so a raw `textContent` carries three copies of every
- * symbol and buries an assertion failure in them; the name is the sentence a reader would hear, and
- * comparing on it is comparing on what was said rather than on how it was drawn.
+ * Every typeset formula is replaced by its accessible name, or by its source where it has no name.
+ * KaTeX renders each formula twice — once as MathML and once as positioned spans — so a raw
+ * `textContent` carries three copies of every symbol and buries an assertion failure in them.
+ *
+ * **The `?? data-tex` half arrived with M8 step 3.6.** A typeset node's accessible name used to be
+ * its LaTeX source, and the step stopped announcing that — so `aria-label` alone would read every
+ * formula on the page as the empty string, and a screen comparison would go on passing while
+ * comparing prose with prose. `data-tex` is set on every typeset node, so the pair is total and
+ * this reads character for character what it always did.
  */
 function textOf(host: Element): string {
   const clone = host.cloneNode(true) as HTMLElement;
   for (const m of clone.querySelectorAll('[role="math"]')) {
-    m.replaceChildren(clone.ownerDocument.createTextNode(m.getAttribute("aria-label") ?? ""));
+    m.replaceChildren(
+      clone.ownerDocument.createTextNode(m.getAttribute("aria-label") ?? m.getAttribute("data-tex") ?? ""),
+    );
   }
   return (clone.textContent ?? "").replace(/\s+/g, " ").trim();
 }
@@ -852,6 +859,59 @@ describe("the `#vs=` permalink, at the shell", () => {
   //
   // Two settles rather than one, so the claim is "one per settle" and not "at most one ever" —
   // which `if (false) writeHash()` would satisfy perfectly.
+  it("puts the STEP in the address bar, and opens a link on the step it names", async () => {
+    // **`commit` is not the only way the link can change any more** — M8 step 3.6. Every other
+    // field on the wire is read out of `ShellState`, so `commit` calling `syncHash` covered them
+    // all; the step is the reader's place in an argument and lives in the SESSION, so `setStep`
+    // has to say so itself. Without that the address bar sits a step behind the screen, which is
+    // M6.2's first finding in a new field — and the copy button would hide it, because it writes
+    // its own hash.
+    const { app } = mountSandbox();
+    openRecord(app, "jordan-cosine-kernel");
+    app.actions().setMode("worked");
+    // **Settled FIRST, and the sweep is why.** `syncHash` coalesces on a 250 ms timer and writes
+    // whatever is current when it FIRES — so with the mode change's own pending write still in
+    // flight, a `setStep` that told nobody would be picked up by it anyway, and the assertion
+    // below would pass with this step's one line removed. Flushing first leaves `setStep` as the
+    // only thing that can put the step in the bar.
+    await settle();
+    const stepOf = (h: string): number | "all" | null => {
+      const d = decodeShell(h);
+      return d === null || !d.ok ? null : d.step;
+    };
+    // Step 1, because `setMode("worked")` opens the stepper at its first step (3.1b) and that
+    // change goes through `commit`, which syncs. So the discriminator is 0 → 2 rather than
+    // "all" → 2, and it is still one only `setStep` can make.
+    expect(stepOf(window.location.hash), "the mode change did not reach the bar").toBe(0);
+    app.actions().setStep(2);
+    await settle();
+    const hash = window.location.hash;
+    expect(stepOf(hash)).toBe(2);
+
+    // A FRESH app given nothing but that hash lands on the same step — which is the whole of what
+    // the field is for, and the anti-vacuity clause for the assertion above: a hash that carried
+    // the step and a boot that ignored it would leave this on the default.
+    const opened = mount(hash);
+    expect(opened.app.session().step).toBe(2);
+    expect(opened.app.currentState().workedExample).toBe(true);
+  });
+
+  it("does not let a link's step outlive the argument a LATER state brings", async () => {
+    // `resetTransient` still clears `session.step`, which is M7.4's decision and is untouched: the
+    // link writes its step back afterwards, for its OWN argument. A state applied later gets the
+    // whole argument at once rather than inheriting a step index from the link the reader arrived
+    // on — a step 5 that means something in A6's derivation means something else in D7's.
+    const { app } = mountSandbox();
+    openRecord(app, "jordan-cosine-kernel");
+    app.actions().setMode("worked");
+    app.actions().setStep(2);
+    await settle();
+    const opened = mount(window.location.hash);
+    expect(opened.app.session().step).toBe(2);
+    opened.app.actions().applyState({ ...opened.app.currentState(), record: "log-cubed-keyhole" });
+    expect(opened.app.session().step).toBe("all");
+  });
+
   it("coalesces a burst of changes into ONE write, and the next burst into one more", async () => {
     const { app } = mountSandbox();
     const spy = vi.spyOn(window.history, "replaceState").mockImplementation(() => undefined);

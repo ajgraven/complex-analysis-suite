@@ -188,6 +188,28 @@ interface Wire {
    * bytes. Filed with the view for the reason `dr` is: it decides what is SHOWN and never a number.
    */
   readonly we?: 1;
+  /**
+   * `session.step` — the stepper's index, 0-based. Absent means the whole argument at once.
+   *
+   * **The one field on this wire that is not read out of `ShellState`**, which is why
+   * `encodeShell` takes a second argument. M6.1 put the reader's place in an argument in the
+   * SESSION and M7.4 made `resetTransient` clear it, both for the same reason: a state arriving
+   * from elsewhere must not hold step 4 of the previous record's derivation open. That reason is
+   * about a STALE step surviving a change of argument, and it is untouched — a link that names a
+   * step names it for its OWN argument, and the reset still runs before it is applied. `dr` is the
+   * precedent, one field up: the drill's rung is equally the reader's place and equally shareable.
+   *
+   * The plan's Phase 3 gate asks for *a worked-example permalink at step 5 of A6*, and until this
+   * field there was no such thing — so the stepper's step BODIES, the callouts and step 3.2's Play
+   * controls and checkpoint table were a surface the a11y roster could never reach, because the
+   * roster audits a page in the state a link opens it in.
+   *
+   * **A step past the end is not a refusal.** `stepIndex` already lands a stale index on the last
+   * step, deliberately — the step count changes with the record and the fixture, so an index that
+   * does not exist is the ordinary case rather than a broken link. What IS refused is a value that
+   * is not a non-negative whole number, which is a hash nothing here minted.
+   */
+  readonly st?: number;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -370,7 +392,7 @@ const branchOut = (b: BranchChoice): BranchWire => ({
  * contour**, because the record derives it (M6.1's finding). The sandbox carries its box, its
  * contour's recipe, its declaration and its cut system. Both carry the view.
  */
-export function encodeShell(state: ShellState): EncodeResult {
+export function encodeShell(state: ShellState, step: number | "all" = "all"): EncodeResult {
   const d = defaults();
   const wire: Record<string, unknown> = {};
   const put = <K extends keyof Wire>(k: K, v: Wire[K], def?: unknown): void => {
@@ -442,6 +464,7 @@ export function encodeShell(state: ShellState): EncodeResult {
   // Optional, and absent when false — a worked example is a thing to share, and the default costs
   // no bytes. `put` is not used because the wire field is a flag rather than a value with a default.
   if (state.workedExample) wire.we = 1;
+  if (typeof step === "number") wire.st = step;
 
   return { ok: true, hash: encodeViewState(APP, wire) };
 }
@@ -453,7 +476,7 @@ export function encodeShell(state: ShellState): EncodeResult {
 // ──────────────────────────────────────────────────────────────────────────────────────────────
 
 export type DecodeResult =
-  | { readonly ok: true; readonly state: ShellState }
+  | { readonly ok: true; readonly state: ShellState; readonly step: number | "all" }
   | { readonly ok: false; readonly reason: string };
 
 const isNum = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x);
@@ -720,8 +743,17 @@ export function decodeShell(hashOrLink: string): DecodeResult | null {
     drill = { task: d[0], stage: d[1] as DrillState["stage"] };
   }
 
+  // **The SHAPE is refused and the RANGE is not**, which is the honest boundary for this field. A
+  // step count changes with the record and the fixture, so an index past the end is the ordinary
+  // case and `stepIndex` already answers it by landing on the last step; a value that is not a
+  // non-negative whole number is a hash this codec never minted.
+  if (w.st !== undefined && !(isNum(w.st) && Number.isInteger(w.st) && w.st >= 0)) {
+    return { ok: false, reason: "this link names a step that is not a whole number" };
+  }
+
   return {
     ok: true,
+    step: w.st ?? "all",
     state: {
       mode: gallery ? "gallery" : "sandbox",
       expr,
