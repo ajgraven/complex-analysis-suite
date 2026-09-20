@@ -25,6 +25,7 @@ import {
   reversePiece,
   setParam,
   setRole,
+  splitPiece,
 } from "../src/engine/contour/edit.js";
 import {
   resolve,
@@ -40,10 +41,11 @@ import {
   indentedSemicircleTemplate,
   keyholeTemplate,
   semicircleTemplate,
+  squareTemplate,
 } from "../src/engine/contour/templates.js";
 import { integrateContour } from "../src/engine/contour/integrate.js";
 import { TEMPLATES } from "../src/shell/templates.js";
-import { endPoint, isClosed, startPoint, type Cx } from "../src/kernel/geom.js";
+import { arcLength, distanceToPoint, endPoint, isClosed, pointAt, startPoint, type Cx } from "../src/kernel/geom.js";
 
 /** `1/z`, whose integral round the unit circle is the one number every reader knows. */
 const oneOverZ = ([x, y]: Cx): Cx => {
@@ -616,6 +618,294 @@ describe("the join: symbolic where it can be, literal where it cannot", () => {
       expect(next.pieces, `delta=${delta}`).toHaveLength(3 + joins);
       expect(isClosed(resolveAll(next)), `delta=${delta}`).toBe(true);
     }
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+// `splitPiece` — M8 step 4.3's half of the operation, and the one whose whole claim is a NEGATIVE:
+// the curve does not move. So the assertions below are about the shape as much as about the list,
+// and the piece count is the least of them: a split that honoured the reader's point rather than
+// projecting it would keep the count, keep the closure, and quietly hand back a different contour.
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+
+/** The two halves a split produced, in list order, given the id that was divided. */
+function halvesOf(before: Contour, after: Contour, id: string): readonly [Piece, Piece] {
+  const at = after.pieces.findIndex((p) => p.id === id);
+  const first = after.pieces[at];
+  const second = after.pieces[at + 1];
+  if (first === undefined || second === undefined) {
+    throw new Error(`the split of '${id}' did not leave two pieces in place of one`);
+  }
+  expect(before.pieces.some((p) => p.id === second.id), "the minted id was already taken").toBe(false);
+  return [first, second];
+}
+
+describe("splitPiece", () => {
+  it.each(TEN)("divides every piece of %s in two, leaving the CURVE where it was", (id, contour) => {
+    const before = clone(contour);
+    for (const piece of contour.pieces) {
+      const shape = resolve(piece.geom, contour.params);
+      const where = `${id}/${piece.id}`;
+      // The piece's own midpoint: exactly on the curve, so the projection has nothing to do and
+      // every deviation measured below is the operation's rather than the fixture's.
+      const next = splitPiece(contour, piece.id, pointAt(shape, 0.5));
+
+      // ONE new piece, always — no cases, unlike every other operation in the module.
+      expect(next.pieces, where).toHaveLength(contour.pieces.length + 1);
+      expect(isClosed(resolveAll(next)), where).toBe(true);
+      const [first, second] = halvesOf(contour, next, piece.id);
+
+      // **The curve, in both directions.** Every point of both halves lies on the ORIGINAL piece,
+      // and the two lengths add up to it — which together say *the same curve, divided*. The first
+      // alone would pass for a split that dropped half the sweep (a shorter arc is still on the
+      // circle); the second alone would pass for a split that moved both halves onto a circle of
+      // the same total length somewhere else. This is the pair of assertions a mutant that
+      // honoured the reader's point, or mis-projected, cannot satisfy.
+      const halves = [resolve(first.geom, contour.params), resolve(second.geom, contour.params)];
+      for (const half of halves) {
+        for (let k = 0; k <= 16; k++) {
+          expect(distanceToPoint(shape, pointAt(half, k / 16)), where).toBeLessThan(1e-12);
+        }
+      }
+      expect(arcLength(halves[0]) + arcLength(halves[1]), where).toBeCloseTo(arcLength(shape), 9);
+      // …and the division is where it was asked for, rather than anywhere on the piece: a mutant
+      // ignoring `at` and halving the parameter would satisfy everything above on THIS fixture and
+      // is killed by the off-centre split in the arc test below. Here the claim is the weaker one
+      // the sampling cannot make: the two halves MEET, and they meet at the point named.
+      const join = endPoint(halves[0]);
+      expect(dist(join, startPoint(halves[1])), where).toBeLessThan(1e-12);
+      expect(dist(join, pointAt(shape, 0.5)), where).toBeLessThan(1e-12);
+    }
+    expect(clone(contour), "the input must not be mutated").toBe(before);
+  });
+
+  it("keeps both halves on the SAME circle, and moves the point onto it", () => {
+    // **The arc decision, and its cost.** The reader's point is not on the arc — it is a pointer
+    // within a grab radius of one — so the operation projects it. Measured here at a third of the
+    // way round the default circle and a tenth of a unit outside it: the vertex lands exactly on
+    // the circle, 0.1 away from where it was asked for.
+    const circle = circleTemplate([0, 0], 1.5);
+    const arc = circle.pieces[0];
+    if (arc.geom.kind !== "arc") throw new Error("the circle template's piece is an arc");
+    const theta = (2 * Math.PI) / 3;
+    const outside: Cx = [1.6 * Math.cos(theta), 1.6 * Math.sin(theta)];
+    const next = splitPiece(circle, "circle", outside, 0.5);
+    const [first, second] = halvesOf(circle, next, "circle");
+    if (first.geom.kind !== "arc" || second.geom.kind !== "arc") throw new Error("a half is not an arc");
+
+    // **`toBe`, and identity is the claim.** Both halves carry the ORIGINAL centre and radius
+    // objects, not copies — which is what keeps `ledger.ts`'s `arcRadius` able to read a bound off
+    // them (it requires a centre of exactly `(0, 0)`), and what a mutant fitting a circle to the
+    // reader's point cannot produce.
+    expect(first.geom.center).toBe(arc.geom.center);
+    expect(second.geom.center).toBe(arc.geom.center);
+    expect(first.geom.radius).toBe(arc.geom.radius);
+    expect(second.geom.radius).toBe(arc.geom.radius);
+
+    const vertex = endPoint(resolve(first.geom, circle.params));
+    expect(Math.hypot(vertex[0], vertex[1]), "the vertex left the circle").toBeCloseTo(1.5, 12);
+    expect(dist(vertex, outside), "the projection's cost, measured").toBeCloseTo(0.1, 9);
+    // The ANGLE is the reader's, which is the other half of "projected": a mutant splitting at the
+    // midpoint of the sweep would put the vertex at 1.5·e^{iπ} and satisfy everything above.
+    expect(Math.atan2(vertex[1], vertex[0])).toBeCloseTo(theta, 9);
+  });
+
+  it("holds the join as a FRACTION, so it rides the parameter rather than sitting still", () => {
+    // The square's right side runs from `(N+½, −(N+½))` to `(N+½, N+½)`, so both coordinates are
+    // bound to `N` — which is what makes it the fixture where a literal join and a symbolic one
+    // separate visibly. Split a quarter of the way up and scrub `N`.
+    const square = squareTemplate(2);
+    const side = square.pieces[0];
+    const shape = resolve(side.geom, square.params);
+    const next = splitPiece(square, side.id, pointAt(shape, 0.25), 1e-9);
+    const [first] = halvesOf(square, next, side.id);
+    if (first.geom.kind !== "segment") throw new Error("a side's half is not a segment");
+    // Bound, not a number: the assertion that fails the moment the symbolic branch is dropped for
+    // the literal fallback, which is otherwise numerically right at today's `N` and only there.
+    expect(typeof first.geom.to.x).toBe("object");
+    expect(typeof first.geom.to.y).toBe("object");
+
+    for (const n of [2, 9, 0.25]) {
+      const moved = setParam(next, "N", n);
+      const half = resolve(first.geom, moved.params);
+      const whole = resolve(side.geom, moved.params);
+      // The vertex is still ON the side it divides, at every `N` — and a quarter of the way along
+      // it, which is the invariant the fraction holds and the point does not.
+      expect(distanceToPoint(whole, endPoint(half)), `N=${n}`).toBeLessThan(1e-12);
+      expect(dist(endPoint(half), pointAt(whole, 0.25)), `N=${n}`).toBeLessThan(1e-12);
+      expect(isClosed(resolveAll(moved)), `N=${n}`).toBe(true);
+    }
+    // **What the literal alternative would have cost, measured rather than asserted.** A vertex
+    // pinned where it was dropped stays at `(2.5, −1.25)` while the side moves out to `x = 9.5`, so
+    // the contour becomes a dogleg through a point 7.0 units off the side it is supposed to divide.
+    const frozen: Cx = [pointAt(shape, 0.25)[0], pointAt(shape, 0.25)[1]];
+    const far = resolve(side.geom, setParam(square, "N", 9).params);
+    expect(distanceToPoint(far, frozen)).toBeCloseTo(7, 9);
+  });
+
+  it("falls back to a LITERAL where the affine form cannot hold the fraction", () => {
+    // `scaleScalar`'s one refusal is a PARAMETER-supplied coefficient, and the fraction is a
+    // literal factor, so the fallback's case is the same one `endpointSpec` refuses: a `theta`
+    // written `k·phi`. Nothing in the gallery does it; the fixture is built, as `endpointSpec`'s
+    // own test builds one, because a fallback with no case has not been measured.
+    const fan: Contour = {
+      pieces: [
+        freePiece(
+          "fan",
+          {
+            kind: "arc",
+            center: { x: 0, y: 0 },
+            radius: 2,
+            theta0: 0,
+            theta1: { param: "phi", mul: { param: "k" } },
+          },
+          0,
+        ),
+        freePiece("back", { kind: "segment", from: { x: 2 * Math.cos(2), y: 2 * Math.sin(2) }, to: { x: 2, y: 0 } }, 1),
+      ],
+      params: { phi: par("phi", 1), k: par("k", 2) },
+    };
+    const shape = resolve(fan.pieces[0].geom, fan.params);
+    const next = splitPiece(fan, "fan", pointAt(shape, 0.5), 1e-9);
+    const [first, second] = halvesOf(fan, next, "fan");
+    if (first.geom.kind !== "arc" || second.geom.kind !== "arc") throw new Error("a half is not an arc");
+    // A number, and the same number on both sides of the seam — which is what keeps the two halves
+    // joined however the fallback was reached.
+    expect(typeof first.geom.theta1).toBe("number");
+    expect(second.geom.theta0).toBe(first.geom.theta1);
+    expect(resolveScalar(first.geom.theta1, fan.params)).toBeCloseTo(1, 12);
+    // And it is a join at today's parameters only, exactly as `endpointSpec`'s literal branch is:
+    // doubling `phi` leaves the vertex behind on the circle while the arc sweeps past it. Measured:
+    // the second half then runs backwards over a quarter of the circle, so the chain doubles back
+    // rather than opening — the honest statement is that the FRACTION is lost, not the closure.
+    const moved = setParam(fan, "phi", 2);
+    const movedSplit = splitPiece(moved, "fan", pointAt(resolve(fan.pieces[0].geom, moved.params), 0.5), 1e-9);
+    const [movedFirst] = halvesOf(moved, movedSplit, "fan");
+    if (movedFirst.geom.kind !== "arc") throw new Error("a half is not an arc");
+    expect(resolveScalar(movedFirst.geom.theta1, moved.params)).toBeCloseTo(2, 12);
+  });
+
+  it("refuses an unknown id, a point off the piece, and a degenerate half", () => {
+    const circle = circleTemplate([0, 0], 1.5);
+    const square = squareTemplate(2);
+    const side = square.pieces[0];
+    const shape = resolve(side.geom, square.params);
+    // 1. Nothing to divide — at a point that WOULD divide the first piece, which is the half of
+    //    this the sweep found missing: `[1.5, 0]` is the circle's own seam, so a mutant that read
+    //    the id as "piece 0" refused for the degeneracy instead and the test passed for the wrong
+    //    reason. M5.2's finding again — the outcome was pinned, the reason was not.
+    const good: Cx = [1.5 * Math.cos(0.7), 1.5 * Math.sin(0.7)];
+    expect(splitPiece(circle, "circle", good, 1), "the control point does not divide anything").not.toBe(circle);
+    expect(splitPiece(circle, "no-such-piece", good, 1)).toBe(circle);
+    // 2. Not on the piece, at the tolerance the caller stated — and ON it at a tolerance that
+    //    admits it, so the refusal is about the DISTANCE rather than about the point. The gap is
+    //    0.2: refused at 0.1, taken at 0.5. Away from the seam at `theta = 0`, because the arc's
+    //    own endpoint is refused for a different reason (case 3) and would make this vacuous.
+    const off: Cx = [1.7 * Math.cos(0.7), 1.7 * Math.sin(0.7)];
+    expect(splitPiece(circle, "circle", off, 0.1)).toBe(circle);
+    expect(splitPiece(circle, "circle", off, 0.5)).not.toBe(circle);
+    // …and the DEFAULT tolerance is the join's, which is the caller saying "this point is already
+    // on the piece": a micron off is refused without one.
+    expect(splitPiece(circle, "circle", [1.5 * Math.cos(0.7) + 1e-6, 1.5 * Math.sin(0.7)])).toBe(circle);
+    // 3. A degenerate half, at either end and for both kinds of piece. The tolerance is generous
+    //    so that it is the FLOOR refusing and not the distance test — a mutant that dropped the
+    //    floor would mint a zero-length row into the reader's piece list.
+    for (const t of [0, 1]) {
+      expect(splitPiece(square, side.id, pointAt(shape, t), 1), `segment at t=${t}`).toBe(square);
+    }
+    // A hair inside the floor and a hair outside it, measured against the side's own length of 5:
+    // `1e-9 / 5` is the fraction at which a half's length is exactly `JOIN_TOL`.
+    expect(splitPiece(square, side.id, pointAt(shape, 1e-10 / 5), 1), "inside the floor").toBe(square);
+    expect(splitPiece(square, side.id, pointAt(shape, 1e-7 / 5), 1), "outside the floor").not.toBe(square);
+    //    …and a piece that is ALREADY a point, which is the case neither helper guards against
+    //    because the floor is where that rule lives — the fraction comes out non-finite and both
+    //    clauses refuse it. Pinned rather than argued: the sweep could kill no guard here, so this
+    //    is what stands in for one.
+    const point: Contour = {
+      pieces: [
+        freePiece("dot", { kind: "segment", from: { x: 1, y: 1 }, to: { x: 1, y: 1 } }, 0),
+        freePiece("nowhere", { kind: "arc", center: { x: 1, y: 1 }, radius: 2, theta0: 1, theta1: 1 }, 1),
+      ],
+      params: {},
+    };
+    expect(splitPiece(point, "dot", [1, 1], 1), "a zero-length segment was divided").toBe(point);
+    const onArc: Cx = [1 + 2 * Math.cos(1), 1 + 2 * Math.sin(1)];
+    expect(splitPiece(point, "nowhere", onArc, 1), "a zero-sweep arc was divided").toBe(point);
+  });
+
+  it("inherits a role the ledger CHECKS, and drops one it takes on FAITH", () => {
+    const circle = circleTemplate([0, 0], 1.5);
+    const at = pointAt(resolve(circle.pieces[0].geom, circle.params), 0.5);
+    const withRole = (role: Piece["role"], lemma?: "L2"): Contour => ({
+      ...circle,
+      pieces: [{ ...circle.pieces[0], role, ...(lemma === undefined ? {} : { lemma }), side: "above" as const }],
+    });
+    // Checked per piece from its own geometry, so inheriting re-asserts something falsifiable.
+    for (const role of ["vanish", "residue", "free"] as const) {
+      const [first, second] = halvesOf(withRole(role), splitPiece(withRole(role), "circle", at, 1), "circle");
+      expect([first.role, second.role], role).toEqual([role, role]);
+    }
+    // Declared and believed, and the claim is about the WHOLE piece — half of the target is not the
+    // target, so neither half may keep saying it is. This is the assertion a mutant that simply
+    // copied the role cannot pass, and it is the one the step asks to be pinned.
+    for (const role of ["target", "reproduces"] as const) {
+      const [first, second] = halvesOf(withRole(role), splitPiece(withRole(role), "circle", at, 1), "circle");
+      expect([first.role, second.role], role).toEqual(["free", "free"]);
+    }
+    // The lemma rides with the role it belongs to, and is dropped ABSENT — `setRole`'s rule, so
+    // that a deep comparison and the codec agree with `"lemma" in piece`.
+    const vanishing = splitPiece(withRole("vanish", "L2"), "circle", at, 1);
+    expect(vanishing.pieces.map((p) => p.lemma)).toEqual(["L2", "L2"]);
+    const targeted = splitPiece(withRole("target", "L2"), "circle", at, 1);
+    expect(targeted.pieces.every((p) => "lemma" in p), "a dropped role kept its lemma").toBe(false);
+    // `side` is geometric — a piece running along a cut's upper lip is two pieces running along it
+    // — so it rides whatever the role does.
+    expect(targeted.pieces.map((p) => p.side)).toEqual(["above", "above"]);
+  });
+
+  it("keeps the divided piece's id and name, and mints one that collides with nothing", () => {
+    const square = squareTemplate(2);
+    const named = renamePiece(square, "side-1", "the side I named myself");
+    const shape = resolve(named.pieces[0].geom, named.params);
+    const once = splitPiece(named, "side-1", pointAt(shape, 0.5), 1e-9);
+    const [first, second] = halvesOf(named, once, "side-1");
+    // The reader's own words survive, and the id every other surface addresses the piece by does
+    // too — the rail's rows, the hover link and the step focus sets all key on it.
+    expect(first.name).toBe("the side I named myself");
+    expect(second.id).toBe("part1");
+    expect(second.name).toBe("split part 1");
+    // The second half takes the NEXT colour, because two halves in one colour leave the reader
+    // looking at exactly the picture they had before — which for this operation is all there is.
+    expect(second.colour).not.toBe(first.colour);
+    // Twice, and the ids stay unique: `mint` is the convention `insertPiece` established.
+    const twice = splitPiece(once, "part1", pointAt(resolve(second.geom, once.params), 0.5), 1e-9);
+    expect(new Set(twice.pieces.map((p) => p.id)).size).toBe(twice.pieces.length);
+    expect(twice.pieces.some((p) => p.id === "part2")).toBe(true);
+  });
+
+  it("leaves ∮ EXACTLY where it was — the whole claim, through the app's own integrator", () => {
+    // The strongest reading of *the curve does not move*: run the integral the app runs, over the
+    // contour and over the divided one, and require the same number. A split that honoured the
+    // reader's point moves the curve; `1/z` round a circle is `2πi` either way only because the
+    // pole stays inside, so the REAL part — which is 0 by cancellation and is where a deformation
+    // shows first — is asserted too.
+    const circle = circleTemplate([0, 0], 1.5);
+    const value = (c: Contour): Cx => {
+      // `value` is absent when `integrateContour` REFUSES (an open contour, a pole on the path), so
+      // the throw is a real assertion rather than a type appeasement: a split that opened the
+      // contour would arrive here as a refusal rather than as a wrong number.
+      const out = integrateContour(oneOverZ, resolveAll(c), [{ at: [0, 0], order: 1 }]).value;
+      if (out === undefined) throw new Error("the integral was refused");
+      return out;
+    };
+    const theta = 0.7;
+    const next = splitPiece(circle, "circle", [1.6 * Math.cos(theta), 1.6 * Math.sin(theta)], 0.5);
+    expect(next.pieces).toHaveLength(2);
+    const [br, bi] = value(circle);
+    const [ar, ai] = value(next);
+    expect(ai).toBeCloseTo(2 * Math.PI, 8);
+    expect(ai).toBeCloseTo(bi, 10);
+    expect(ar).toBeCloseTo(br, 10);
   });
 });
 

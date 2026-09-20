@@ -1368,6 +1368,298 @@ describe("the stage's gestures", () => {
 });
 
 // ──────────────────────────────────────────────────────────────────────────────────────────────
+// Insert-by-drag — M8 step 4.3's stage half.
+//
+// The gesture is a SHIFT-drag on the curve, and every test below is written against the rule that
+// choice was made under: **a new gesture may not take an old one away.** So the plain drag is
+// asserted beside the modified one in the same test wherever the two could be confused, because
+// "the split fires" and "the body drag still fires" are one property read in two directions, and a
+// mutant that dropped the `ev.shiftKey` guard passes either half on its own.
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+
+describe("insert-by-drag: a new vertex on a piece — M8 step 4.3", () => {
+  /** The boot sandbox contour is the circle `|z| = 1.5`, one piece. A point on it, by angle. */
+  const onCircle = (app: ReturnType<typeof mountShell2>, theta: number): readonly [number, number] => {
+    const r = app.currentState().contour.params.R.value;
+    return screenOf(app, [r * Math.cos(theta), r * Math.sin(theta)]);
+  };
+
+  /** Where the app says the vertex is: the end of the first half, read off the resolved geometry. */
+  const vertexOf = (app: ReturnType<typeof mountShell2>): readonly [number, number] =>
+    pointAt(resolveAll(app.currentState().contour)[0], 1);
+
+  it("divides the piece under SHIFT, and still moves the body without it", () => {
+    const { app, ink } = mountStage();
+    const [x, y] = onCircle(app, Math.PI / 2);
+
+    // Without the modifier: the affordance that was there before this step, unchanged. A mutant
+    // that made the split unconditional fails here and nowhere else — the piece count would be the
+    // only thing that noticed, since both gestures report the same `session.gesture`.
+    const before = app.currentState().contour;
+    ink.dispatchEvent(pointer("pointerdown", x, y));
+    expect(app.session().gesture).toBe("contour");
+    expect(app.currentState().contour.pieces, "a plain drag divided the piece").toHaveLength(1);
+    ink.dispatchEvent(pointer("pointerup", x, y));
+
+    // With it: one piece becomes two, meeting where the reader pressed.
+    ink.dispatchEvent(pointer("pointerdown", x, y, { shiftKey: true }));
+    expect(app.session().gesture).toBe("contour");
+    const pieces = app.currentState().contour.pieces;
+    expect(pieces, "Shift did not divide the piece").toHaveLength(2);
+    expect(pieces[0].id, "the divided piece lost the id every other surface addresses it by").toBe(
+      before.pieces[0].id,
+    );
+    const [vx, vy] = vertexOf(app);
+    expect(Math.atan2(vy, vx), "the vertex is not where the reader pressed").toBeCloseTo(Math.PI / 2, 6);
+    ink.dispatchEvent(pointer("pointerup", x, y));
+  });
+
+  it("leaves the ANSWER exactly where it was — the whole claim of the operation", () => {
+    // The curve does not move, so the number does not move. Asserted through what the app reports
+    // rather than through the geometry, because that is where a reader would notice: the boot
+    // contour's role is `residue`, which `splitPiece` lets both halves inherit, so the division is
+    // a no-op on the argument and `∮` is still `2πi`. A mutant that honoured the reader's point
+    // instead of projecting it would move the curve, and a circle that is no longer a circle
+    // integrates to something else.
+    const { app, ink } = mountStage();
+    const value = (): string => {
+      const r = app.resolution();
+      if (r.kind !== "plain" && r.kind !== "declared") throw new Error(`nothing was integrated (${r.kind})`);
+      return r.analysis.theorem?.exactValue?.text ?? JSON.stringify(r.analysis.integral.value);
+    };
+    const was = value();
+    expect(was).toContain("2");
+    const [x, y] = onCircle(app, 0.7);
+    ink.dispatchEvent(pointer("pointerdown", x, y, { shiftKey: true }));
+    ink.dispatchEvent(pointer("pointerup", x, y));
+    expect(app.currentState().contour.pieces).toHaveLength(2);
+    expect(value(), "dividing the piece changed the integral").toBe(was);
+  });
+
+  it("adds ONE vertex however far the pointer travels, and the vertex follows it", () => {
+    // **Anchored, not accumulated.** Re-splitting the contour on screen rather than the one the
+    // gesture began on would add a vertex per pointer move: five moves, six pieces. The count is
+    // the assertion that kills it; the angle is the assertion that the drag does anything at all.
+    const { app, ink } = mountStage();
+    const [x, y] = onCircle(app, Math.PI / 2);
+    ink.dispatchEvent(pointer("pointerdown", x, y, { shiftKey: true }));
+    for (let k = 1; k <= 5; k++) {
+      const [mx, my] = onCircle(app, Math.PI / 2 + (k * Math.PI) / 10);
+      ink.dispatchEvent(pointer("pointermove", mx, my));
+    }
+    expect(app.currentState().contour.pieces, "the drag split the split").toHaveLength(2);
+    const [vx, vy] = vertexOf(app);
+    expect(Math.atan2(vy, vx), "the vertex did not follow the pointer").toBeCloseTo(Math.PI, 5);
+    // **And the pointer may leave the curve.** During the drag the vertex is CONSTRAINED to the
+    // piece, so the question *is the pointer on it?* has already been answered — a move measured at
+    // the grab radius would make the vertex vanish the moment a hand wandered. Here the pointer is
+    // three radii out, well past any tolerance the press could have used, and the vertex still
+    // follows its angle. A mutant re-using `tolerance()` on the move leaves it at π.
+    const r = app.currentState().contour.params.R.value;
+    const [fx, fy] = screenOf(app, [3 * r * Math.cos(-Math.PI / 4), 3 * r * Math.sin(-Math.PI / 4)]);
+    ink.dispatchEvent(pointer("pointermove", fx, fy));
+    const [ox, oy] = vertexOf(app);
+    expect(Math.hypot(ox, oy), "the vertex left the circle").toBeCloseTo(r, 9);
+    expect(Math.atan2(oy, ox), "the vertex stopped following a pointer off the curve").toBeCloseTo(
+      -Math.PI / 4,
+      5,
+    );
+    ink.dispatchEvent(pointer("pointerup", x, y));
+    // …and the modifier is not required to KEEP dragging: `shiftKey` is read at the press, where
+    // the decision is made. A reader who lets go of the key mid-drag has not asked for a different
+    // gesture, and the moves above carry no `shiftKey` at all, which is what pins that.
+    expect(app.currentState().contour.pieces).toHaveLength(2);
+  });
+
+  it("is ONE undo entry, back to the contour before the press", () => {
+    // The step's own rule. `undo.ts` rule 6: a `"gesture"` run pushes once, at its first frame.
+    // A mutant committing `"edit"` at the press pushes there AND lets the first drag frame open a
+    // run of its own, so the stack grows by two and one Ctrl+Z leaves a contour the reader never
+    // had — divided, at the angle they pressed rather than the angle they released.
+    const { app, ink } = mountStage();
+    const before = app.currentState().contour;
+    const depth = app.session().undo.length;
+    const [x, y] = onCircle(app, Math.PI / 2);
+    ink.dispatchEvent(pointer("pointerdown", x, y, { shiftKey: true }));
+    for (let k = 1; k <= 5; k++) {
+      const [mx, my] = onCircle(app, Math.PI / 2 + (k * Math.PI) / 10);
+      ink.dispatchEvent(pointer("pointermove", mx, my));
+    }
+    ink.dispatchEvent(pointer("pointerup", x, y));
+    expect(app.session().undo.length - depth, "the gesture left more than one entry").toBe(1);
+    document.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true, cancelable: true }),
+    );
+    expect(app.currentState().contour).toEqual(before);
+    expect(app.currentState().contour.pieces).toHaveLength(1);
+  });
+
+  it("drops the template RECIPE, because a divided template is not one", () => {
+    // `contourSource` claims the contour is `translate(build(t), shift)`. After a division it is
+    // not, and `viewState.ts` rebuilds the recipe and compares before minting a link — so leaving
+    // the field would swap a true refusal for a caught lie. (Both refuse today; step 4.4 is where
+    // an edited contour gets a wire form.)
+    const { app, ink } = mountStage();
+    expect(app.currentState().contourSource, "the sandbox did not start from a template").not.toBeNull();
+    const [x, y] = onCircle(app, Math.PI / 2);
+    ink.dispatchEvent(pointer("pointerdown", x, y, { shiftKey: true }));
+    ink.dispatchEvent(pointer("pointerup", x, y));
+    expect(app.currentState().contourSource).toBeNull();
+    // The parked sandbox contour moves with it, as it does for every other contour edit — a state
+    // whose `contour` and `sandboxContour` disagree loses the edit at the next mode switch.
+    expect(app.currentState().sandboxContour).toBe(app.currentState().contour);
+  });
+
+  it("will NOT divide a gallery record's contour", () => {
+    // Sandbox only, through the same gate as the body drag and for the same reason: under a record
+    // the contour belongs to the argument being made. A mutant dropping `canMoveBody()` from the
+    // split's guard would let a Shift-press edit a worked example.
+    const { app, ink } = mountStage();
+    app.applyState({ ...app.currentState(), mode: "gallery", record: "circle-linear-cos", fixture: 0 });
+    const r = app.resolution();
+    if (r.kind !== "gallery" || r.run === null) throw new Error("the record did not run");
+    const drawn = resolveAll(r.run.contour);
+    const parked = app.currentState().contour;
+    const [px, py] = pointAt(drawn[0], 0.25);
+    const [x, y] = screenOf(app, [px, py]);
+    ink.dispatchEvent(pointer("pointerdown", x, y, { shiftKey: true }));
+    ink.dispatchEvent(pointer("pointerup", x, y));
+    // `toBe`: a split replaces the object, so identity is the exact question. Both the record's
+    // contour and the sandbox contour parked behind it are asserted, because the gesture reads one
+    // and writes the other.
+    expect(app.currentState().contour, "a record's contour was edited").toBe(parked);
+    const after = app.resolution();
+    if (after.kind !== "gallery" || after.run === null) throw new Error("the record stopped running");
+    expect(after.run.contour.pieces).toHaveLength(r.run.contour.pieces.length);
+
+    // **And the same press with the two contours in agreement, which is where the gate is the only
+    // thing holding.** The sweep found the assertions above satisfied for the wrong reason: the
+    // gesture reads the DRAWN pieces for the id and divides `state.contour`, so with the sandbox
+    // parked on a different curve the id lookup misses and a mutant that dropped `canMoveBody()`
+    // refused anyway. Park the sandbox on the record's OWN contour — a state a reader reaches by
+    // opening a record while the sandbox holds the same shape — and the id and the geometry both
+    // match, so nothing but the gate refuses.
+    app.applyState({ ...app.currentState(), contour: r.run.contour });
+    const twinned = app.currentState().contour;
+    ink.dispatchEvent(pointer("pointerdown", x, y, { shiftKey: true }));
+    ink.dispatchEvent(pointer("pointerup", x, y));
+    expect(app.currentState().contour, "the parked sandbox contour was divided under a record").toBe(
+      twinned,
+    );
+  });
+
+  it("falls through to the BODY drag where the division would be degenerate", () => {
+    // The circle's own seam is at `theta = 0`, so a press there asks for a half of zero length and
+    // `splitPiece` refuses it. The press is still ON the contour, so the reader gets what a press
+    // there does without the modifier — rather than nothing at all, which is what a guard written
+    // as "Shift means split, full stop" would give them.
+    const { app, ink } = mountStage();
+    const before = app.currentState().contour;
+    const [x, y] = onCircle(app, 0);
+    ink.dispatchEvent(pointer("pointerdown", x, y, { shiftKey: true }));
+    expect(app.currentState().contour.pieces, "a degenerate division was minted").toHaveLength(1);
+    expect(app.session().gesture).toBe("contour");
+    const [fx] = screenOf(app, [3 * before.params.R.value, 0]);
+    ink.dispatchEvent(pointer("pointermove", fx, y));
+    ink.dispatchEvent(pointer("pointerup", fx, y));
+    expect(app.currentState().contour, "the press grabbed nothing at all").not.toEqual(before);
+    expect(app.currentState().contour.pieces).toHaveLength(1);
+  });
+
+  it("keeps the last good division when a move would be degenerate", () => {
+    // Dragging the vertex onto the piece's own seam asks for a half of zero length, which
+    // `splitPiece` refuses — and a refusal must commit NOTHING. The sweep found this uncovered:
+    // committing the refusal's return value writes back the contour the gesture began on, so the
+    // vertex the reader is holding vanishes as they drag it past the seam and the piece is whole
+    // again, mid-gesture, with the pointer still down.
+    const { app, ink } = mountStage();
+    const [x, y] = onCircle(app, Math.PI / 2);
+    ink.dispatchEvent(pointer("pointerdown", x, y, { shiftKey: true }));
+    expect(app.currentState().contour.pieces).toHaveLength(2);
+    const [sx, sy] = onCircle(app, 0);
+    ink.dispatchEvent(pointer("pointermove", sx, sy));
+    expect(app.currentState().contour.pieces, "a refused move undid the division").toHaveLength(2);
+    const [vx, vy] = vertexOf(app);
+    expect(Math.atan2(vy, vx), "the vertex moved to the seam it was refused at").toBeCloseTo(
+      Math.PI / 2,
+      5,
+    );
+    ink.dispatchEvent(pointer("pointerup", sx, sy));
+  });
+
+  it("gives a HANDLE the Shift-press, because a handle is the smaller target", () => {
+    // The header's decision order, at the one place it could go wrong: the circle's radius handle
+    // sits at the arc's mid-sweep, which is ON the curve, so a split computed before the handles
+    // were asked would take every Shift-press meant for the `R → ∞` drag. The order is the
+    // property, as it is for the cut vertex two branches up.
+    const { app, ink } = mountStage();
+    const s0 = app.currentState();
+    const handle = handlesOf(s0.contour, resolveAll(s0.contour))[0];
+    const [px, py] = screenOf(app, handle.at);
+    ink.dispatchEvent(pointer("pointerdown", px, py, { shiftKey: true }));
+    expect(app.session().gesture, "the split took a press meant for the radius handle").toBe("handle");
+    expect(app.currentState().contour.pieces).toHaveLength(1);
+  });
+
+  it("says SPLIT with the cursor, which is the gesture's only affordance before it is used", () => {
+    // A modifier nothing announces is a modifier nobody finds. `cell` rather than the pen's
+    // `crosshair` (two point-placing tools, told apart) and rather than `grab` (which is what the
+    // press would do without the key) — and it follows the same order the press does, so it cannot
+    // promise a split where a handle will take the click.
+    const { app, ink } = mountStage();
+    const [x, y] = onCircle(app, Math.PI / 2);
+    ink.dispatchEvent(pointer("pointermove", x, y, { buttons: 0 }));
+    expect(ink.style.cursor).toBe("grab");
+    ink.dispatchEvent(pointer("pointermove", x, y, { buttons: 0, shiftKey: true }));
+    expect(ink.style.cursor).toBe("cell");
+    const handle = handlesOf(app.currentState().contour, resolveAll(app.currentState().contour))[0];
+    const [hx, hy] = screenOf(app, handle.at);
+    ink.dispatchEvent(pointer("pointermove", hx, hy, { buttons: 0, shiftKey: true }));
+    expect(ink.style.cursor, "the cursor promised a split on a handle").toBe("grab");
+  });
+
+  it("speaks the piece's NAME into the live region, not its LaTeX — found here, older than the step", () => {
+    // M8 step 3.6's defect in the one surface that pass could not read: `announce` only puts text
+    // into the region once a reader has pressed something, and the roster audits a page in the
+    // state a link opens it in. A piece name is a sentence in the `$…$` convention, so both the
+    // split's announcement and `cycleGrab`'s — which predates this step — went in with their
+    // delimiters, and on the records that have one, with their backslashes.
+    const { root, app, ink } = mountStage();
+    const spoken = (): string =>
+      [...root.querySelectorAll('[role="status"]')].map((n) => n.textContent ?? "").join(" ");
+    app.stage().onCanvasKey({ kind: "commit" }, new KeyboardEvent("keydown", { key: "Enter" }));
+    app.stage().onCanvasKey({ kind: "commit" }, new KeyboardEvent("keydown", { key: "Enter" }));
+    expect(app.stage().grabLabel(), "the walk did not reach a piece-named handle").toContain("$");
+    expect(spoken(), "the live region read the LaTeX source aloud").not.toContain("$");
+    const [x, y] = onCircle(app, Math.PI / 2);
+    ink.dispatchEvent(pointer("pointerdown", x, y, { shiftKey: true }));
+    expect(spoken()).toContain("A new vertex on");
+    expect(spoken(), "the split announced its LaTeX source").not.toContain("$");
+    ink.dispatchEvent(pointer("pointerup", x, y));
+  });
+
+  it("NAMES the vertex it is holding, and lets go of it at the end", async () => {
+    // The file's own rule — what is held is said on the stage, not only in the live region — and
+    // M7.4's, that the controller's locals are let go of at the door. `grabLabel` is null again
+    // after the release, so the arrows do not silently rebind to a vertex that no longer exists.
+    const { root, app, ink } = mountStage();
+    const [x, y] = onCircle(app, Math.PI / 2);
+    ink.dispatchEvent(pointer("pointerdown", x, y, { shiftKey: true }));
+    expect(app.stage().grabLabel()).toBe(`a new vertex on ${app.currentState().contour.pieces[0].name}`);
+    await frame();
+    const chip = q(root, ".overlay2 .stageChip.held");
+    expect(chip.textContent ?? "", "the chip printed its delimiters").not.toContain("$");
+    ink.dispatchEvent(pointer("pointerup", x, y));
+    expect(app.stage().grabLabel()).toBeNull();
+    expect(app.session().held).toBeNull();
+    // And the door clears it too, which is the local `applyState` cannot see.
+    ink.dispatchEvent(pointer("pointerdown", x, y, { shiftKey: true }));
+    app.stage().reset();
+    expect(app.stage().grabLabel()).toBeNull();
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────
 // The left rail, at the mounted shell — M8 step 1.4.
 //
 // The cards' own sentences are asserted in `test/cards.test.ts`, by rendering them. What needs a

@@ -186,6 +186,16 @@ export interface Session {
    */
   contrast: { readonly cell: string; readonly rows: readonly string[] } | null;
   /**
+   * The piece whose name is being edited inline, or null — M8 step 4.3.
+   *
+   * SESSION rather than state, for {@link Session.drillAnswers}' reason: it is the reader's hand on
+   * one row, not a fact about the contour. A permalink that reopened with a text box focused would
+   * be handing someone else a half-finished edit, and `resetTransient` puts it away by
+   * construction — which is also what stops a rename surviving a change of record, where the piece
+   * it names may not exist at all.
+   */
+  renaming: string | null;
+  /**
    * Whether the front door — the worked-example picker — is open.
    *
    * SESSION, for {@link Session.contrastsOpen}'s reason: a dialog is where the reader's hands are,
@@ -254,6 +264,7 @@ export function defaultSession(): Session {
     notice: null,
     contrastsOpen: false,
     contrast: null,
+    renaming: null,
     frontDoorOpen: false,
     drillAnswers: {},
     drillPredicted: null,
@@ -300,6 +311,7 @@ export function resetTransient(session: Session): void {
   // in a row. What IS cleared is which cell was opened and which rows it highlights, because that
   // is a sentence about the state the reader has just left.
   session.contrast = null;
+  session.renaming = null;
   session.frontDoorOpen = false;
   // The reader has gone somewhere else; a sentence about the link they arrived on is no longer
   // about them. `writeHash` clears it on the reader's first action for the same reason.

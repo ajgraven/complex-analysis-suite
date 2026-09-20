@@ -75,6 +75,13 @@ function spyActions(): ShellActions & { calls: string[]; applied: ShellState[] }
     toSandbox: () => calls.push("toSandbox"),
     setContrastsOpen: (open) => calls.push(`contrasts:${open}`),
     openContrast: (id: string) => calls.push(`contrast:${id}`),
+    setPieceRole: (id: string, role: string, lemma?: string) => calls.push(`role:${id}:${role}:${lemma ?? "-"}`),
+    renamePiece: (id: string, name: string) => calls.push(`rename:${id}:${name}`),
+    deletePiece: (id: string) => calls.push(`delete:${id}`),
+    insertPiece: (afterId: string, kind: string) => calls.push(`insert:${afterId}:${kind}`),
+    movePiece: (id: string, by: number) => calls.push(`move:${id}:${by}`),
+    reversePiece: (id: string) => calls.push(`reversePiece:${id}`),
+    setRenaming: (id: string | null) => calls.push(`renaming:${id ?? "-"}`),
     applyState: (next) => {
       applied.push(next);
       calls.push("applyState");

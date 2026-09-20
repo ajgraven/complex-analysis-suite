@@ -530,6 +530,65 @@
   padding: 0.1rem 0.2rem;
   border-radius: 4px;
 }
+/* ---- the editable piece row — M8 step 4.3 ----
+   The row was a sentence and is now a sentence with controls at the end of it. The controls keep to
+   the row's own line height and do not grow it: a rail of eight rows that each gained a toolbar's
+   worth of height would push the Branch-cuts card below the fold, and the measurement that decided
+   the glyph size is that at `--t-s` a 1.15 line box holds a ✕ with no clipping. */
+.shell2 .pieceRole {
+  font-size: var(--t-s);
+  max-width: 11rem;
+}
+.shell2 .pieceRename {
+  font-size: var(--t-s);
+  /* Fills the row the way the name it replaces does, so the list does not jump when a rename opens
+     — which it did at first, because an `<input>`'s default width is 20 characters and a piece name
+     is longer than that. */
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+/* Pushed to the end of the row, so the controls line up down the list however long the names are. */
+.shell2 .pieceTools {
+  margin-left: auto;
+  display: flex;
+  gap: 0.1rem;
+  flex: 0 0 auto;
+}
+.shell2 button.pieceTool {
+  /* A glyph, not a label: six words per row would be the card's whole width. The accessible name
+     carries the sentence, which is where a name belongs. */
+  padding: 0 0.25rem;
+  min-width: 1.4rem;
+  line-height: 1.15;
+  font-size: var(--t-s);
+  background: none;
+  border-color: transparent;
+}
+/* **Revealed on hover or focus, not always**: eight rows × six controls is forty-eight glyphs, and
+   a list that looks like a control panel stops reading as a statement about the contour. They are
+   never hidden from the keyboard or from assistive technology — `visibility` and `display` would do
+   that; opacity does not, and `:focus-within` brings them back the moment a Tab reaches one. */
+.shell2 .pieces2 > li .pieceTools {
+  opacity: 0;
+}
+.shell2 .pieces2 > li:hover .pieceTools,
+.shell2 .pieces2 > li:focus-within .pieceTools {
+  opacity: 1;
+}
+@media (hover: none) {
+  /* No hover to reveal them with, so they simply stay. */
+  .shell2 .pieces2 > li .pieceTools {
+    opacity: 1;
+  }
+}
+.shell2 button.pieceTool:hover {
+  border-color: var(--g-border);
+}
+/* The ledger's own verdict on the piece, in the colour the badge uses for that level. */
+.shell2 .pieces2 .tag[data-status="failed"] {
+  color: var(--g-warn, #e0a33e);
+}
+
 /* The rail end of the three-way highlight (step 1.10 completes the others). */
 .shell2 .pieces2 > li.hot {
   background: rgba(110, 168, 254, 0.1);

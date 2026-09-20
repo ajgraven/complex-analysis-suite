@@ -32,6 +32,21 @@ import { stableKey } from "./stableKey.js";
 export type CommitReason =
   | "init"
   | "edit"
+  /**
+   * An edit that is ALWAYS its own entry — M8 step 4.3.
+   *
+   * **Rule 7's coalescing is about one control moved repeatedly**, which is what it says: ten arrow
+   * nudges of one handle are one entry, because the reader is making one adjustment and expects one
+   * step back from it. A list editor's controls are not that. Deleting two pieces inside a second is
+   * two deletions of two different pieces, and `changeKey` cannot tell them apart — every contour
+   * edit changes the same three fields, so under `"edit"` the second would silently absorb the
+   * first and one press of Ctrl+Z would bring back neither.
+   *
+   * So the distinction is the CALLER's, because only the caller knows whether a repeat is the same
+   * adjustment continued or a second act. Inline renaming still commits as `"edit"` for exactly that
+   * reason: typing is one adjustment.
+   */
+  | "edit-step"
   | "gesture"
   | "gesture-end"
   | "link"
@@ -148,12 +163,15 @@ export function createUndo(
         return;
       }
 
-      // Rule 7. The window runs from the last PUSH, not from the last commit of this key, so a
-      // held-down arrow key leaves one entry per `coalesceMs` rather than one for the whole hold:
-      // five seconds of leaning on an arrow is ⌈5000/800⌉ = 7 entries, whatever the autorepeat rate,
-      // so the reader can step back through a long drift instead of losing all of it or none of it.
-      if (lastKey === key && now - lastAt < coalesceMs) return;
+      // Rule 7, and `edit-step` is the exception with its own note on the type: an edit that says
+      // it is a discrete act never merges, and it closes the window behind it so the NEXT ordinary
+      // edit cannot merge into it either.
+      if (why !== "edit-step" && lastKey === key && now - lastAt < coalesceMs) return;
       push(prev, key, now);
+      // And it closes the window BEHIND it, so an ordinary edit landing within `coalesceMs` cannot
+      // merge into a discrete act either — the comment above said so before the line existed, which
+      // is the shape of claim this file's own rules are written to make checkable.
+      if (why === "edit-step") lastKey = null;
     },
 
     undo(current): ShellState | null {

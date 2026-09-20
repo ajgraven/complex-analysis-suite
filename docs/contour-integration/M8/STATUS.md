@@ -139,8 +139,22 @@ changed.
   until step 4.4 puts roles on the wire. Seven findings — including that the step's own premise was
   false (the readers already accept a drawn arc) and that **the gate harness had been reporting the
   wrong exit code, so steps 3.6 and 4.1 shipped with `pnpm lint` red**; both rows are corrected.
-  **Next execution action: step 4.3** (the list editor — the contour card's rows gain reorder, a
-  role menu, reverse, delete, rename and insert).
+  **4.3 is done — THE PIECE LIST IS EDITABLE, AND SO IS THE CURVE.** Every row in the Contour card
+  carries a role menu, a status glyph answering on the row, and six tools (↑ ↓ ⇄ ＋ ✎ ✕), with
+  Alt+↑/↓ reordering from anywhere inside the row; the stage gains an eighth operation,
+  `splitPiece`, reached by **Shift-dragging the curve** — the vertex is inserted and dragged in one
+  gesture and one undo entry. The role menu is **four vanishing lemmas and two known limits**, not
+  the plan's eight, because 4.1's catalogue showed two of the plan's entries are not bounds and
+  three are the same two under other names. Eleven findings; the two that matter are that the
+  commonest state in the app — a `vanish` piece with no lemma declared — had **no entry in the
+  menu**, so the control opened on a disabled option and could not return to where a reader starts
+  (found in a browser, invisible in jsdom); and that **two rules were spelled twice and neither
+  spelling could be mutated** — the split's precedence on the stage, and `"edit-step"`'s exception
+  in `undo.ts`, whose guard and whose window-close have different cases and were each satisfying
+  the other's test.
+  **Next execution action: step 4.4** (the wire form carries roles — `PenContourWire` gains `r` and
+  `n`, a structurally edited template is serialised as a pen wire, and the round-trip-by-verdict
+  test gains edited contours).
   **Step 1.12 is done — THE CUTOVER.** `main.ts` stops choosing, the old `src/shell/app.ts` (3,700
   lines), `src/ui/app.css` and four of its test files are deleted, and `src/shell2/` has BECOME
   `src/shell/`. [`parity.md`](parity.md) is complete. The parity sweep found two capabilities the new
@@ -171,6 +185,7 @@ changed.
 
 | date | step | commit | notes |
 |---|---|---|---|
+| 2026-09-20 | **4.3** | (this commit) | **THE LIST EDITOR, AND THE CURVE DIVIDED.** Seven actions on the Contour card's rows — a role `<select>`, a status glyph, rename in place, delete, insert, reverse and Alt+↑/↓ reorder — over `engine/contour/edit.ts`'s pure operations, plus an eighth operation `splitPiece` reached by **Shift-dragging the curve**, which inserts the vertex and drags it in ONE gesture and ONE undo entry. **The menu is four vanishing lemmas and two known limits, not the plan's eight**: measured at 4.1, `L7` is the `reproduces` ROLE rather than a bound, `L8` is an identity about the whole integral, and the strip/square sides and the branch/log arcs are `L1`/`L2` dispatched by geometry. A division's count rule **has no cases** (always `n + 1`) because the halves share the very `PointSpec` or `theta` they meet at; a segment's join point is SYMBOLIC (`(1−t)·a + t·b`, which at `N = 9` sits where a frozen literal would be **7.0 units off the side**), and an arc is divided **on its own circle** rather than at the pointer, because `arcRadius` refuses any centre that is not exactly `(0,0)` and a new circle would silently destroy a vanishing arc's `≤` — at the cost of up to 11 px, 0.073 units at the default camera, which the drag makes recoverable. **A role the ledger DECIDES is inherited by both halves; a role it takes ON FAITH is dropped to `free`** — so dividing a `residue` circle changes no number and dividing the target stops the app reporting one. Undo gains `"edit-step"`, because rule 7 coalesces by CHANGED FIELD NAMES and every contour edit writes the same three fields, so two deletions inside 800 ms would leave one press of Ctrl+Z to bring back neither. Eleven findings, including that the commonest state in the app had no entry in the role menu, that `cycleGrab` had been reading LaTeX aloud since 3.6 in the one surface that pass could not reach, and that **the rename box's Escape guard was documented as protecting the pen and the modals when it protects neither** — both handlers are outside the box's ancestry, and the test aimed at the pen passed with the line removed. Sweeps: **13/13 with one equivalent** on the shell half (both undo mutants and the Escape mutant closed on a second pass, each by a test that had been pinning the outcome without the reason) and **39 mutants — 35 killed by the suite, 1 by `tsc`, 3 equivalents** on the stage half. Browser-verified at 1440x950 (cursor `grab` → `cell` under Shift; one Shift-drag takes the default circle to two pieces), axe clean in the sandbox and with a rename box open, app browser suite **19 files / 218 tests**, full gate green: **586 files / 6,455 tests** |
 | 2026-09-19 | **4.2** | (this commit) | **A DRAWN CONTOUR THAT IS AN ARGUMENT.** `PenNode` carries a `role` and a `lemma`; `penContour` emits them (a lemma only onto a `vanish` piece, the rule `setRole` enforces from the other side) and `penPath` reads them back off the piece — **the one field of a node that is carried rather than derived**, because everything else is recovered from the curve and a role has no geometric shadow. **The step's own premise turned out false**: the plan says the arc readers *read template arcs only*, and measuring first showed a drawn upper semicircle already closing and reporting π with the template's certificate sentence for sentence — `LedgerInput` carries RESOLVED geometry, so a bound's hypotheses never ask where a piece came from. What a drawn arc actually lacked was a way to BE centred at the origin: a hand drag of the apex to 7.6 instead of 8 puts the centre at `(0, 0.4105)`, **5 % of the radius**, and `arcRadius` refuses it — rightly. So the pen grew two named snaps, *the reflection of a vertex in the origin* and *an arc centred at the origin*, the second of which builds the arc and applies `arcRadius`'s own test before firing. Measured over 100,000 random chords: antipodal endpoints (what the first snap produces) give an exactly-zero centre **100,000 times of 100,000**; merely equidistant ones, 26 % and a property of the ROOT; equidistant to rounding, impossible. The two snaps are one feature. The codec **refuses** a link from a role-bearing drawn contour, because `sameShape` compares geometry alone and the link would open the same curve with the argument stripped out — M7.2's posture, and the refusal names step 4.4. `penBow` was rebuilding its node as `{at, bulge}` and would have discarded the new fields silently; found by the sweep. **And the gate harness was reporting the BUILD's exit code**, so steps 3.6 and 4.1 were pushed with `pnpm lint` red on a shadowed helper — the two rows are corrected above and the harness now reports each phase. Sweeps: **5/5** on the pen and codec half, **15/15** on the snaps. Full gate green with lint, typecheck, test and build each reported separately: **585 files / 6,412 tests** |
 
 | 2026-09-19 | **4.1** | (this commit) | **THE EDITABLE CONTOUR MODEL, AND A LEMMA THE READER CHOOSES.** Seven pure operations on `Contour` (`reversePiece` — which refuses any piece whose endpoints differ, since reversal swaps them and only a full turn survives; `reorderPieces`, `deletePiece`, `insertPiece`, `renamePiece`, `setRole`, and `endpointSpec` beneath them), every refusal returning the contour by reference so the operations compose. **The joining problem is solved symbolically where it can be**: an arc's endpoints `center + radius·(cos θ, sin θ)` stay inside the affine `Scalar` language for all ten arcs in the ten templates, and a centre bound to a different parameter than the radius does too — so a join stays closed as the parameter MOVES (measured: the indented semicircle's join survives `R` 8→40 and `rho` 0.05→0.3 with a worst seam of 4.9e-15, which is the template's own `sin(π)` noise). The literal fallback is honest about being one (a parameter-bound ANGLE is not expressible; moving that parameter opens the contour by 1.9177 = 4·sin(½)). **And the ledger stops guessing which lemma kills a piece.** All 28 records have declared one since M3; all 28 agree with what the shape-driven chain picks, so the agreement held because the guess happened to be right — `test/ledgerDump.test.ts` is byte-identical, which is the no-op proof. A declared lemma now routes to its own reader and refuses by name (`kill.lemma-refused`, `lemmaLabel` in `vocabulary.ts`), naming the lemma that applies instead; `L7` and `L8` are refused by what they ARE, since neither is a vanishing lemma. **Jordan at zero frequency is a hypothesis that DEGENERATES, not one that fails** — measured, `asExponentialTimesRational` returns null for a rational integrand and a form with `a = 0` for `e^{i·0·z}/(1+z²)`, which is what lets the plan's *refuse Jordan on a rational integrand* coexist with B1's own `a = 0` fixture. `LedgerResult.target` is the target piece's integral in the limit, `∮` minus the known limits, exact in units of π; the Result card leads with it in the sandbox with the ledger's MEET as its badge. **Four false friends disappeared**: M7.3 measured that strip, wedge, keyhole and dogbone all close and report `π/e` for B1 at `a = 1`; honouring the declaration removes all four (their arcs declare the ML estimate, and a live `e^{iaz}` refuses it), so exactly one template now answers `oscillatory`. Sweeps: **45/45 on the edit operations** (three first-pass survivors, each a real gap) and **15 mutants, 14 killed, one removed as dead code** on the ledger half. Full gate: **584 files / 6,391 tests** green and build silent — **`pnpm lint` was RED here too**, the same shadowed helper 3.6 introduced, corrected at step 4.2 |
@@ -254,6 +269,160 @@ changed.
 | 2026-09-15 | **0.5b-ii** | 573fb8c | the five rules through `kernel/bounds/*`, the three theorem identities, `derivation.ts`'s solve stage and `solveTarget.ts`; `latex` on the solved value; 65 wording-pinned tests updated; 191 → 152 flagged |
 
 ## Findings (things learned while executing; each names its step)
+
+- **(4.3) THE ROLE MENU IS NOT THE PLAN'S LIST, AND STEP 4.1 IS WHY.** The plan offers *ML estimate
+  / Jordan's lemma / large-arc limit / branch arc / log arc / wedge bound / strip side / square
+  side*, written before the lemma catalogue was read against the code. Measured at 4.1: `L7` is the
+  periodic-side cancellation, which is the `reproduces` ROLE rather than a bound, and `L8` is
+  Sokhotski–Plemelj, an identity about the whole integral; the strip and square sides are `L1`/`L2`
+  on a SEGMENT, dispatched by geometry rather than chosen; and the branch and log arcs are the same
+  `L1`/`L2` under a declared branch factor. So the menu is **four vanishing lemmas and two known
+  limits**, and one offering eight would offer two that cannot bound anything and three that are the
+  same two under other names. `reproduces` is not offered either — the plan's own recorded scope
+  limit, since its coefficient needs a solve the sandbox does not have.
+
+- **(4.3) THE COMMONEST STATE IN THE APP HAD NO ENTRY IN THE MENU.** Every sandbox template
+  produces a `vanish` piece with NO lemma declared — the semicircle's arc is one — and 4.1's rule is
+  that an undeclared piece keeps the shape-driven pick. The first draft's menu had entries only for
+  the six declared pairings, so `choiceOf` returned `""` and the control opened on a DISABLED option
+  reading *vanishing piece*: the state a reader starts in was the one state the control could not
+  return to. **Found in a browser and invisible in jsdom**, because a `<select>` with no matching
+  value shows its first option either way and the card's description is identical.
+
+- **(4.3) Rule 7 of the undo stack coalesces by CHANGED FIELD NAMES, and a list editor defeats it.**
+  Every contour edit changes the same three fields, so two deletions inside 800 ms are
+  indistinguishable from ten nudges of one handle — and the second would absorb the first, leaving
+  one press of Ctrl+Z to bring back neither. The window exists for one control moved repeatedly,
+  which is what its own comment says; a row's controls are not that. `"edit-step"` is the caller
+  saying *this is a discrete act*, and the inline rename deliberately stays an ordinary `"edit"`,
+  because typing IS one adjustment continued. It also closes the window behind it — the comment
+  claimed that before the line existed, which is the shape of claim this file's rules are written
+  to make checkable.
+
+- **(4.3) A refused edit must commit NOTHING, and the operations already say so.** Every operation
+  in `engine/contour/edit.ts` refuses by returning the contour BY REFERENCE, so `editPieces`'
+  identity test is the whole of *was this edit legal?* — and a refusal pushes no undo entry for a
+  state that never moved. That is undo rule 4 arriving one layer up, where it costs one line
+  instead of a special case, and it is why the shell never has to know the closure invariant.
+
+- **(4.3) The row's status is the LEDGER's row, and its accessible name is not the claim.** A KILL
+  row's claim is a formula, and `mathPlain` strips the `$` and leaves the macros — so the first
+  draft's `srOnly` copy put `\left|\int f\,dz\right| \le 4.928e-2` on screen and `denylist.test.ts`
+  caught it within the hour. Step 3.6's finding, in the one place this step could have repeated it:
+  the glyph's name is the verdict in one word, the sentence stays a pointer `title`, and the
+  typeset version lives in the Result card's check list where a reader looking for WHY already goes.
+  That is also the plan's *expandable detail* answered by pointing at the card that has it rather
+  than by building a second one.
+
+- **(4.3) Alt+↑/↓ on the ROW, not on a grip.** A reader moving a row with the keyboard has focus
+  wherever they last were inside it, so a handler on the grip alone would work only while the grip
+  itself was focused. And it must be Alt: a bare ↑ belongs to whatever has focus, and the row's own
+  role control is a `<select>`, where ↑ changes the role — a reorder on a bare arrow would make the
+  menu unusable.
+
+- **(4.3) The measurements that set the layout.** At 1440 px in a 19 rem rail a piece row now
+  carries five things and the controls wrap onto their own line: the tallest row is **98 px**, a
+  keyhole's four-piece card is **509 px**, and the left rail's content runs to 1,472 px against 855
+  visible — so it scrolls, as it already did. The tools are revealed on `:hover` and
+  `:focus-within` rather than always, because eight rows × six controls is forty-eight glyphs and a
+  list that looks like a control panel stops reading as a statement about the contour; `opacity`
+  rather than `visibility`, so the keyboard and assistive technology never lose them.
+
+- **(4.3) THE SPLIT'S COUNT RULE HAS NO CASES: always `n + 1`.** A division opens no seam, because
+  the two halves share the very `PointSpec` (segment) or `theta` `Scalar` (arc) they meet at —
+  closure by construction rather than by `rejoin`, which is the opposite of `deletePiece`, whose
+  count is `n` or `n − 1` depending on whether the piece removed was a full turn. The segment's
+  join point is SYMBOLIC, `(1−t)·a + t·b` through the same `scaleScalar`/`addScalar` pair the rest
+  of the file composes through: measured, the square's right side split a quarter up stays a quarter
+  up at `N = 2, 9, 0.25`, where the same point frozen as a literal sits **7.0 units off the side at
+  `N = 9`** — a dogleg through a point nothing put there.
+
+- **(4.3) AN ARC IS DIVIDED ON ITS OWN CIRCLE, NOT AT THE POINTER, AND `arcRadius` IS WHY.**
+  Honouring the pointer means inventing two radii (two arcs through (start, at) and (at, end) are
+  under-determined — `insertPiece`'s own objection), and `ledger.ts`'s `arcRadius` refuses any
+  centre that is not exactly `(0,0)`, so a new circle would silently destroy a vanishing arc's `≤`.
+  The halves therefore share `center`/`radius` **by reference**, asserted with `toBe`. The cost is
+  real and priced: the vertex lands up to the grab tolerance away from the pointer — 11 px, which is
+  0.073 units at the sandbox's default camera — and the drag that follows is what makes it
+  recoverable.
+
+- **(4.3) A ROLE THE LEDGER DECIDES IS INHERITED; A ROLE IT TAKES ON FAITH IS DROPPED.** `vanish` is
+  re-derived per half from the geometry (and refused by name where a half cannot carry it), and
+  `residue`/`free` claim nothing a half could fail — so all three are inherited. `target` and
+  `reproduces` are BELIEVED (M7.3 measured `reproduces` closing four templates with nothing checking
+  it), and the claim is about the whole piece, so both halves drop to `free`. The consequence is
+  deliberate and loud: splitting a `residue` circle changes no number (`∮` bit-identical), while
+  splitting the target stops the app reporting a target value at all. Blanket inheritance was the
+  rejected alternative — right for three roles and silently false for the two the ledger cannot
+  catch.
+
+- **(4.3) THE MODIFIER WAS CHOSEN UNDER ONE RULE: a new gesture may not take an old one away.**
+  Shift-drag on the curve, with the cursor going `cell` under Shift as its only affordance.
+  Rejected, and recorded beside it: **Alt/Meta** (already means *free*, the pen's snap suppressor,
+  twice in the same file — and the window manager's on Linux); **only where the body cannot move**
+  (backwards: `canMoveBody()` is false exactly under a record, where every edit is forbidden);
+  **double-click** (it is `fitContour`, the way back from a zoom into nothing, and cannot carry a
+  drag). **A tool mode on the Contour card is deferred rather than rejected** — discoverable where a
+  modifier is not, but a mode is a state to reset at the door, serialise or deliberately not, and
+  turn off when the pen comes out. Verified in a real browser at 1440x950: the cursor reads `grab`
+  over the curve and `cell` with Shift held, and one Shift-drag takes the sandbox's default circle
+  from `[circle]` to `[circle, part1]` with no page error
+  ([`4.3-split-drag-1440x950.png`](screens/4.3-split-drag-1440x950.png)).
+
+- **(4.3) `cycleGrab` WAS READING LATEX ALOUD, and it is older than this step.**
+  `announce(\`Arrow keys now move ${grabLabel()}\`)` put `the circle $|z - a| = R$ (R)` into the live
+  region — step 3.6's defect in the one surface that pass could not reach, because `announce` writes
+  only once a reader presses Enter and the a11y roster audits a page in the state a link opens it
+  in. Both announcements go through `mathSpoken` now, pinned by a test that reads `[role="status"]`.
+
+- **(4.3) TWO RULES WERE SPELLED TWICE, AND NEITHER SPELLING COULD BE MUTATED.** 3.1c's finding, in
+  two new places in one step. On the stage, the split's precedence was stated both as a guard
+  (`bHandle === null && handle === null`) and as the branch order, so each mutant survived on the
+  other spelling; the guard is gone and the chain is the one statement, at the cost of one pure,
+  discarded `splitPiece` on a Shift-press a handle wins. In `undo.ts`, `"edit-step"`'s exception is
+  the guard (`why !== "edit-step"`) AND the `lastKey = null` after the push — and a test that
+  repeats ONE kind of edit is satisfied by either line alone, which is how both mutants survived a
+  test whose whole subject they are. They have different cases: the guard stops a discrete act
+  merging into an ordinary edit before it, the close stops an ordinary edit merging into the
+  discrete act after. Both orders are now run, each a delta of two entries.
+
+- **(4.3) THE ESCAPE GUARD'S COMMENT CLAIMED A PROTECTION IT CANNOT GIVE, and the test believed
+  it.** The rename box's `stopPropagation()` was documented as protecting the pen and the modals;
+  measured, the pen's Escape handler is on `ink` and a modal's on its own backdrop, and the rename
+  box is inside neither subtree — so the event was never going to reach them, and a test that
+  opened the pen and checked the path survived passed with the line REMOVED. What the line
+  guarantees is the row's own contract (a cancel key pressed in this box cancels this box and goes
+  no further, whatever the shell later hangs above it), so it is asserted that way: a listener on
+  an ancestor, which is the thing actually at risk. M5.2's finding — pinning the outcome without
+  pinning the reason — reached by believing a comment.
+
+- **(4.3) TWO TESTS ON THE STAGE HALF PASSED FOR THE WRONG REASON, both found by the sweep.** The
+  unknown-id refusal used `[1.5, 0]`, the circle's own seam, so a mutant reading the id as "piece 0"
+  refused for the degeneracy instead; and the gallery-mode test was satisfied by an accidental id
+  mismatch (the gesture reads the DRAWN pieces for an id and divides `state.contour`), so a mutant
+  dropping `canMoveBody()` refused anyway. It now parks the sandbox on the record's own contour,
+  where ids and geometry both match and nothing but the gate refuses.
+
+- **(4.3) Four equivalent mutants, each recorded with its reason — and two guards REMOVED rather
+  than recorded.** On the stage half: `op-seg-clamp` (clamping the segment fraction into `[0,1]` is
+  unobservable — the degeneracy floor refuses `0` exactly as it refuses `−0.3`, **and the comment
+  claiming otherwise was wrong and is corrected**), and `ui-endgesture-keeps-split` /
+  `ui-reset-keeps-split` (every reader of `splitting` sits behind `grab?.kind === "split"` and both
+  places drop the grab too; kept for the reason the `anchor = null` beside them is kept, and because
+  the field holds a whole `Contour`). A fifth, `ui-movegrab-falls-through`, is killed by **`tsc`** —
+  three `TS2339`s on `held.handle` — which is the honest instrument for a line whose job is to
+  narrow a union. Against that, two degeneracy guards nothing could kill were DELETED: a zero-length
+  segment and a zero-sweep arc reach the floor as `NaN` against a length of 0, which is safe only
+  because both floor comparisons are negated `>` — now said in the code and pinned by fixtures
+  rather than argued.
+
+- **(4.3) The shell half's one equivalent, recorded with its reason.** Dropping `moveOne`'s range half
+  (`to < 0 || to >= ids.length`) is unobservable: the swap writes `undefined` into the id list and
+  `reorderPieces` refuses it as a non-permutation — or, at `to === ids.length`, as a list of the
+  wrong length — returning the contour by reference, which `editPieces` reads as a refusal. The same
+  outcome by a longer road. It stays because *"there is nowhere to go"* and *"that is not a
+  permutation"* are different statements, and relying on the second would couple this list's ends to
+  the engine's validation shape.
 
 - **(4.2) THE STEP'S OWN PREMISE IS FALSE, AND MEASURING IS HOW.** The plan says the arc readers
   *"today read template arcs only"* and would have to be taught a drawn arc's geometry. They do not

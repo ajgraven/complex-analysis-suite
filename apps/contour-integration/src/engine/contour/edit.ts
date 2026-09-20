@@ -15,10 +15,11 @@
 // accident. Free-hand path editing — adding, removing and moving individual points — needs the pen
 // tool's own semantics for closure and is not this module.
 import type { Cx, Resolved } from "../../kernel/geom.js";
-import { distanceToPoint, endPoint, pointAt, startPoint } from "../../kernel/geom.js";
+import { arcLength, distanceToPoint, endPoint, pointAt, startPoint } from "../../kernel/geom.js";
 import {
   resolve,
   resolveAll,
+  resolveScalar,
   type Contour,
   type Geom,
   type LemmaId,
@@ -281,6 +282,11 @@ function reverseGeom(geom: Geom): Geom {
 // swapped pair includes a full turn. `insertPiece` is always `n + 1`, and the other three never
 // touch the list's length. The plan's gate asks for "closure and piece count invariants": those are
 // the invariants, and they are per-case rather than a single number.
+//
+// `splitPiece` (step 4.3) is the exception that shows the shape of that rule: it is `n + 1` with no
+// cases at all, because it opens no seam to begin with — the two halves share the very `PointSpec`
+// (or `theta` `Scalar`) they meet at, so there is nothing for {@link rejoin} to close and closure is
+// preserved by construction rather than by repair.
 
 /**
  * When two endpoints are the SAME point.
@@ -424,6 +430,16 @@ const INSERTED = {
   segment: { stem: "piece", label: "inserted segment" },
   arc: { stem: "piece", label: "inserted chord" },
 } as const;
+
+/**
+ * What a SPLIT's second half is called.
+ *
+ * A third stem beside {@link JOIN} and {@link INSERTED} for their own reason: "why is this piece
+ * here" has a third answer, and a reader who meets `part 1` in the rail has been told something a
+ * shared `piece 3` would not have told them. The FIRST half keeps the original piece's id and name
+ * — see {@link splitPiece} — so only one name is minted per split.
+ */
+const SPLIT = { stem: "part", label: "split part" } as const;
 
 /** The first `stem1`, `stem2`, … not already taken — `branchEdit.ts`'s `freshId`, whose form the
  *  piece list should share so that a reader meets one convention and not two. */
@@ -599,6 +615,288 @@ export function insertPiece(contour: Contour, afterId: string, kind: "segment" |
   return {
     ...contour,
     pieces: [...contour.pieces.slice(0, index + 1), piece, ...contour.pieces.slice(index + 1)],
+  };
+}
+
+/**
+ * Interpolate between two affine scalars at a LITERAL fraction — or `null` where the form cannot
+ * hold it.
+ *
+ * `(1 − t)·a + t·b`, built from the two helpers {@link endpointSpec} already composes an arc's
+ * endpoint out of: {@link scaleScalar} takes each end's literal factor, {@link addScalar} puts the
+ * two together and is total. So the refusal is inherited rather than new — it is exactly
+ * `scaleScalar`'s one shape, a PARAMETER-supplied coefficient, and nothing else.
+ *
+ * **`t` is frozen at the split, and that is the invariant worth having rather than a limitation.**
+ * The alternative reading — "the vertex stays at the point it was dropped on" — is what the literal
+ * fallback gives, and it is the one that comes apart: the square's right side runs from
+ * `(N+½, −(N+½))` to `(N+½, N+½)`, so a vertex pinned at `(2.5, −1.25)` while `N` moves 2 → 9 sits
+ * **7.0 units off** the side it is supposed to divide, and the contour becomes a dogleg through a
+ * point nothing put there (measured in `contourEdit.test.ts`, against the same fixture that shows
+ * the symbolic form staying a quarter of the way along at every `N`). Holding the FRACTION keeps
+ * the two halves collinear with each other and with the side they came from, at every value of
+ * every parameter. What it costs is that the vertex SLIDES under a parameter drag — which is the
+ * same statement, read by a reader watching the screen.
+ */
+function lerpScalar(a: Scalar, b: Scalar, t: number): Scalar | null {
+  const lo = scaleScalar(a, 1 - t);
+  const hi = scaleScalar(b, t);
+  if (lo === null || hi === null) return null;
+  return addScalar(lo, hi);
+}
+
+/** One piece divided in two: where along it, and the two geometries. */
+interface Division {
+  /** Where the vertex falls along the piece, in `[0, 1]` — outside it the split is refused. */
+  readonly fraction: number;
+  readonly first: Geom;
+  readonly second: Geom;
+}
+
+/**
+ * A segment divided at the foot of the perpendicular from `at`.
+ *
+ * The fraction is NOT clamped into `[0, 1]`, and **the sweep corrected what this paragraph used to
+ * claim about that.** It said a clamp would turn "I clicked past the end" into a split AT the end —
+ * a zero-length half minted rather than refused — and the mutant that adds the clamp survived,
+ * because it cannot: {@link splitPiece}'s floor refuses `fraction = 0` exactly as it refuses
+ * `fraction = −0.3`, so the two forms are indistinguishable from outside. The clamp is an
+ * equivalent mutant and the unclamped form is kept for a smaller reason than the one claimed — it
+ * is the honest quantity, *where along this line the foot of the perpendicular falls*, and the
+ * floor is left as the one place that decides whether that is a division at all.
+ */
+function segmentSplit(
+  geom: Extract<Geom, { readonly kind: "segment" }>,
+  from: Cx,
+  to: Cx,
+  at: Cx,
+): Division | null {
+  const vx = to[0] - from[0];
+  const vy = to[1] - from[1];
+  const len2 = vx * vx + vy * vy;
+  // **No guard on a zero-length segment, and the sweep is why.** One was written here, and nothing
+  // could kill it: a point has length 0, so `fraction` comes out `0/0` and {@link splitPiece}'s
+  // floor refuses it as a degenerate half — which it IS, twice over. The guard was one rule spelled
+  // in two places, which is how two answers come to disagree. What makes that safe rather than
+  // clever is the shape the floor is written in: a NEGATED `>`, so a `NaN` fails it, and the
+  // refusal is pinned by a test rather than by this paragraph.
+  const fraction = ((at[0] - from[0]) * vx + (at[1] - from[1]) * vy) / len2;
+  const x = lerpScalar(geom.from.x, geom.to.x, fraction);
+  const y = lerpScalar(geom.from.y, geom.to.y, fraction);
+  const mid: PointSpec =
+    x === null || y === null
+      ? literalSpec([from[0] + fraction * vx, from[1] + fraction * vy])
+      : { x, y };
+  // The two halves share `mid` BY REFERENCE, so the seam between them is not a seam that has to be
+  // closed to a tolerance — it is one `PointSpec` read twice, and no parameter can open it.
+  return {
+    fraction,
+    first: { kind: "segment", from: geom.from, to: mid },
+    second: { kind: "segment", from: mid, to: geom.to },
+  };
+}
+
+/**
+ * An arc divided at the angle of `at` PROJECTED onto the circle.
+ *
+ * **The decision the step asks for, and why it is not the other one.** The reader's point will not
+ * be on the arc — it is a pointer within a grab radius of it — so the operation must either move the
+ * vertex onto the curve or move the curve onto the vertex. It moves the vertex, and there are four
+ * reasons, of which the third is the one that would have bitten:
+ *
+ *  1. **It is what the operation IS.** Everything in this section changes the piece LIST; nothing in
+ *     it changes the curve. A split that honoured the point would be a geometry edit wearing a
+ *     list edit's name, and a silent one — the reader asked for a vertex and would get a different
+ *     contour, with different winding numbers and a different `∮`.
+ *  2. **The other reading is under-determined.** An arc through two points needs a third number;
+ *     "the two arcs through (start, at) and (at, end)" names four points and no radii, so honouring
+ *     the point means INVENTING two circles the reader never gave — which is precisely the
+ *     objection {@link insertPiece} records against returning an arc from a bulge-0 request. The
+ *     place a reader supplies that number is the pen's bow gesture.
+ *  3. **The ledger.** `ledger.ts`'s `arcRadius` returns null for an arc whose centre is not exactly
+ *     `(0, 0)`, because every certified bound in `kernel/bounds/` reasons on `|z| = R` about the
+ *     ORIGIN (M4.6c). Two halves on two new circles have two new centres, generically neither at
+ *     the origin — so honouring the point would silently DESTROY the `≤` on a vanishing arc that
+ *     had one, from a gesture the reader thinks adds a vertex. Projecting shares `center` and
+ *     `radius` by reference, so the bound survives bit for bit.
+ *  4. **It stays symbolic.** The shared centre and radius ride along untouched, so both halves are
+ *     still bound to `R` and still follow the `R → ∞` animation. A circle fitted to the reader's
+ *     point would have to be literal — the affine form cannot express a centre computed from three
+ *     float positions — and the halves would come off the parameter for nothing.
+ *
+ * **What it costs, measured.** The vertex does not land under the pointer. The gesture's grab radius
+ * is 11 CSS px, so the worst case is the whole of it: at the sandbox's default camera (half-height
+ * 2, a 600 px stage) a pixel is 1/150 of a unit, so the vertex can appear up to **0.073 units** from
+ * where the reader pressed, and further as they zoom out. `contourEdit.test.ts` measures one such
+ * projection at 0.1. That is visible, and it is correct, since the only place a vertex ON the arc
+ * can be is on the arc — and the drag then moves it, which is what makes the cost recoverable
+ * rather than merely stated.
+ *
+ * The angle is taken as a FRACTION of the sweep, for {@link lerpScalar}'s reason and so that one
+ * rule covers both kinds of piece. Nothing in the ten templates binds a `theta` to a parameter
+ * (`endpointSpec`'s own measurement), so the symbolic and literal forms agree everywhere in the
+ * corpus and the choice is made on the principle rather than on a difference.
+ */
+function arcSplit(
+  geom: Extract<Geom, { readonly kind: "arc" }>,
+  params: Contour["params"],
+  at: Cx,
+): Division | null {
+  const cx = resolveScalar(geom.center.x, params);
+  const cy = resolveScalar(geom.center.y, params);
+  const theta0 = resolveScalar(geom.theta0, params);
+  const sweep = resolveScalar(geom.theta1, params) - theta0;
+  // A zero sweep is a point on a circle, and {@link segmentSplit}'s note applies unchanged: the
+  // division comes out non-finite, its length is zero, and the floor refuses it.
+  const turn = Math.PI * 2;
+  // The offset from the start angle, read in the sweep's OWN direction: `[0, 2π)` for a positive
+  // sweep and `(−2π, 0]` for a negative one. Reducing modulo a turn first is what lets a full
+  // circle — whose `theta1` is `theta0 + 2π` — be divided at any angle at all, and taking the
+  // direction from the sweep is what keeps a clockwise arc's fraction positive.
+  const raw = (((Math.atan2(at[1] - cy, at[0] - cx) - theta0) % turn) + turn) % turn;
+  const offset = sweep < 0 ? raw - turn : raw;
+  const fraction = offset / sweep;
+  const mid = lerpScalar(geom.theta0, geom.theta1, fraction) ?? theta0 + offset;
+  // Spread, so `center` and `radius` are the very objects the original carried — reason 3 above is
+  // a claim about identity, and a rebuilt copy would satisfy it only until someone rounded one.
+  return { fraction, first: { ...geom, theta1: mid }, second: { ...geom, theta0: mid } };
+}
+
+/**
+ * The role each half of a divided piece carries.
+ *
+ * **A role the ledger DECIDES is inherited; a role it takes ON FAITH about the whole piece is
+ * not.** That is the rule, and it falls straight out of what the ledger does with each of the five:
+ *
+ *  - `vanish` is re-derived per piece. Its lemma is discharged from the half's own resolved
+ *    geometry, so inheriting it re-asserts a claim that is immediately re-checked — and where the
+ *    half cannot carry it (a square side divided in two is no longer a side of `Γ_N`, and
+ *    `kernel/bounds/squareSide.ts` refuses any half-width that is not `N + ½`) the ledger refuses
+ *    by name instead of believing it. A falsifiable inheritance is a safe one.
+ *  - `residue` and `free` claim nothing a half could fail: the first says the piece encircles poles,
+ *    which the winding numbers decide for themselves, and the second says the piece is merely
+ *    computed.
+ *  - `target` and `reproduces` are DECLARED and believed. Their KILL rows read *"declared by its
+ *    role"* and *"the piece is a constant multiple of the target"*, with nothing checking either —
+ *    M7.3 measured that second one: four templates close for B1 because the ledger takes
+ *    `reproduces` on faith. And the claim is about the WHOLE piece. Half of the target piece is not
+ *    the target; half of a piece that returns `−λ` times the unknown returns something else. So
+ *    **both halves go `free`**, which is the same `{@link NEW_ROLE}` every other minted piece in
+ *    this module starts in, and for the same reason: an edit may not assert what nobody claimed.
+ *
+ * **What the reader sees, and why it is the honest outcome.** Dividing a `residue` circle changes no
+ * number at all — the curve is the same curve, so `∮` is bit-identical. Dividing the `target` piece
+ * stops the app reporting a target value, loudly: `ledger.ts` hands one out only when
+ * `targets.length === 1` and nothing is `free`, so two `free` halves produce a COVER row naming
+ * them. The reader's argument really is gone — they cut the piece their unknown was defined on —
+ * and the app says so rather than quietly reporting twice the unknown, which is what inheriting
+ * would have produced (two `target` rows, each contributing one copy).
+ *
+ * The rejected alternative was the simple one: both halves inherit whatever the piece had, on the
+ * grounds that the curve is unchanged so the claims are unchanged. It is right for three roles and
+ * silently false for two, and the two it is false for are the two the ledger cannot catch.
+ */
+function halfRole(role: PieceRole): PieceRole {
+  return role === "target" || role === "reproduces" ? NEW_ROLE : role;
+}
+
+/**
+ * Divide one piece in two at `at`, leaving the curve exactly as it was.
+ *
+ * **NOT {@link insertPiece}.** That puts a new piece BETWEEN two existing ones, and on a closed
+ * contour the piece it mints has zero length because the two endpoints coincide. This one divides a
+ * piece the reader points at, so the count is always `n + 1` — the one operation in this section
+ * whose count rule has no cases, because it opens no seam: the halves meet at a `PointSpec` (or a
+ * `theta` Scalar) they SHARE, and their outer ends are the original's own, untouched.
+ *
+ * `at` is the reader's point, not a point on the piece, so it is PROJECTED — onto the line for a
+ * segment, onto the circle for an arc. {@link arcSplit} argues that choice at length; the short
+ * version is that this operation changes the piece list and never the curve.
+ *
+ * **The join point is symbolic wherever the affine form holds it**, which is the same question
+ * {@link endpointSpec} answers for a seam and the same answer: `(1 − t)·a + t·b` composes through
+ * {@link scaleScalar} and {@link addScalar}, so a vertex dropped a quarter of the way along the
+ * rectangle's right-hand side is `x = R`, `y = −R/2` and stays on that side as `R` is dragged.
+ * {@link lerpScalar} measures what the literal fallback costs when the form cannot hold it (5.0
+ * units of dogleg over an `R` of 4 → 9), and takes it anyway for `endpointSpec`'s reason: a vertex
+ * at today's numbers beats no vertex at all.
+ *
+ * **Three refusals, each returning the contour BY REFERENCE** (the section header's rule):
+ *
+ *  1. **An unknown id.** Nothing to divide.
+ *  2. **A point that is not on the piece**, judged with `distanceToPoint` — the very function
+ *     `onContour` and `pieceAt` hit-test with, so "on the piece" means one thing to the gesture
+ *     that starts a split and to the operation that performs it. The default `tolerance` is
+ *     {@link JOIN_TOL}, which is the caller saying *the point is already on the piece*; a caller
+ *     working from a pointer passes its own grab radius, because only it knows the zoom.
+ *  3. **A degenerate half.** Both halves must be longer than {@link JOIN_TOL}, measured with
+ *     `arcLength` — which is the same threshold, and therefore the same sentence, as {@link meets}:
+ *     a half shorter than that is one whose two ends MEET, so it is a point wearing a piece's row
+ *     in the rail. Stated as a length rather than as `0 < fraction < 1` because it is one
+ *     expression covering both the between-ness and the degeneracy, for both kinds of piece: a
+ *     negative fraction fails it on the first clause, and a piece that is ALREADY a point — a
+ *     zero-length segment, a zero-sweep arc — fails both, arriving as a non-finite fraction against
+ *     a length of zero. That is why neither helper carries a degeneracy guard: the sweep could not
+ *     kill one, because this is the same rule and it is already here.
+ *
+ * **The first half keeps the original's id and name**; only the second is minted. A piece's name may
+ * be the reader's own words (`renamePiece` exists so that it can be), and discarding them to mint a
+ * matched pair would take away something they typed; the id matters more still, because the rail's
+ * rows, the hover link, the step focus sets and the drill all address pieces by it, and re-minting
+ * both would dangle every one of those references. The alternative — two fresh ids, so that neither
+ * half claims to BE the piece that was divided — was rejected on that.
+ *
+ * The second half takes the NEXT palette colour, so that the division is visible on the stage. Two
+ * halves in one colour would leave the reader looking at exactly the picture they had before, which
+ * for this operation is the whole of what there is to see.
+ */
+export function splitPiece(contour: Contour, id: string, at: Cx, tolerance = JOIN_TOL): Contour {
+  const index = contour.pieces.findIndex((p) => p.id === id);
+  if (index < 0) return contour;
+  const piece = contour.pieces[index];
+  const shape = resolve(piece.geom, contour.params);
+  if (!(distanceToPoint(shape, at) <= tolerance)) return contour;
+
+  const divide =
+    piece.geom.kind === "segment"
+      ? segmentSplit(piece.geom, startPoint(shape), endPoint(shape), at)
+      : arcSplit(piece.geom, contour.params, at);
+  if (divide === null) return contour;
+
+  // **Both comparisons are NEGATED `>` rather than `<=`**, so that a non-finite fraction refuses
+  // rather than passing: that is what lets {@link segmentSplit} and {@link arcSplit} carry no
+  // degeneracy guard of their own, a zero-length piece arriving here as `NaN` on both clauses.
+  const length = arcLength(shape);
+  if (!(divide.fraction * length > JOIN_TOL)) return contour;
+  if (!((1 - divide.fraction) * length > JOIN_TOL)) return contour;
+
+  // `lemma` is destructured away rather than overwritten, for `setRole`'s reason: the field must be
+  // ABSENT when the role no longer has anything for it to be about, so that a deep comparison, the
+  // codec's `JSON.stringify` and `"lemma" in piece` all agree.
+  const { lemma: declared, ...rest } = piece;
+  const role = halfRole(piece.role);
+  const first: Piece = {
+    ...rest,
+    geom: divide.first,
+    role,
+    ...(role === "vanish" && declared !== undefined ? { lemma: declared } : {}),
+  };
+  const used = new Set(contour.pieces.map((p) => p.id));
+  const { id: mintedId, n } = mint(used, SPLIT.stem);
+  // Spread from `first`, so the two halves carry identical claims BY CONSTRUCTION — `side` included,
+  // which is geometric (a piece running along a cut's upper lip is two pieces running along it) and
+  // therefore rides whatever the role does. Writing the fields out twice is how the two would come
+  // to differ, which is the drift `reverseGeom`'s extraction exists to prevent one module over.
+  const second: Piece = {
+    ...first,
+    id: mintedId,
+    name: `${SPLIT.label} ${n}`,
+    geom: divide.second,
+    colour: PALETTE[(piece.colour + 1) % PALETTE.length],
+  };
+  return {
+    ...contour,
+    pieces: [...contour.pieces.slice(0, index), first, second, ...contour.pieces.slice(index + 1)],
   };
 }
 

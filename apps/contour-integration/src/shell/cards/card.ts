@@ -12,6 +12,7 @@
 import type { StageMode } from "../../ui/stage/mode.js";
 import { cardTitle, type CardId } from "../../engine/vocabulary.js";
 import type { BranchChoice } from "../../kernel/branch/model.js";
+import type { LemmaId, PieceRole } from "../../engine/contour/model.js";
 import type { PoleReport } from "../../kernel/poles.js";
 import type { DeclarationState } from "../../shell/state.js";
 import type { ShellMode, ShellState, StateResolution } from "../../shell/state.js";
@@ -44,6 +45,34 @@ export interface ShellActions {
   readonly setTemplate: (id: string) => void;
   /** The same curve, walked the other way — `∮` changes sign. Sandbox only. */
   readonly reverseContour: () => void;
+
+  // ── the piece list, editable (step 4.3) ───────────────────────────────────────────────────
+  //
+  // **Six actions rather than one `editContour(next)`, and the reason is the undo stack.** A single
+  // "here is the new contour" action would make every edit indistinguishable from every other at
+  // the moment it is recorded, and `undo.ts` coalesces by REASON — so a rename and a role change
+  // inside 800 ms would merge into one entry and a reader would lose the first by undoing the
+  // second. Named actions also give each row's control an `aria-label` that says what it does
+  // rather than what it produces.
+  //
+  // Every one of them is a pure operation from `engine/contour/edit.ts` applied to the sandbox's
+  // contour, and every one refuses by returning the contour unchanged — so the shell never has to
+  // ask whether an edit was legal, which is the property that kept the closure invariant out of
+  // this layer entirely.
+  /** Set a piece's role, and the lemma that disposes of it when it is a vanishing one. */
+  readonly setPieceRole: (id: string, role: PieceRole, lemma?: LemmaId) => void;
+  /** Rename a piece. The name is a `$…$` sentence like every other in the app. */
+  readonly renamePiece: (id: string, name: string) => void;
+  /** Remove a piece, joining its neighbours so the chain stays closed. */
+  readonly deletePiece: (id: string) => void;
+  /** Add a piece after this one, between its end and the next piece's start. */
+  readonly insertPiece: (afterId: string, kind: "segment" | "arc") => void;
+  /** Move a piece one place along the list. `-1` is earlier, `+1` is later. */
+  readonly movePiece: (id: string, by: -1 | 1) => void;
+  /** Walk ONE piece the other way — only meaningful where its endpoints coincide. */
+  readonly reversePiece: (id: string) => void;
+  /** Put one row's name into an inline text box, or take it out. Session, not state. */
+  readonly setRenaming: (id: string | null) => void;
   /** The pen. Straight through to the stage controller, which owns the drawing state. */
   readonly penStart: () => void;
   readonly penStop: () => void;

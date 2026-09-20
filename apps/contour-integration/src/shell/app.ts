@@ -16,7 +16,15 @@ import { Frac } from "@cas/exact";
 
 import { clampView } from "../kernel/camera.js";
 import { circleTemplate } from "../engine/contour/templates.js";
-import { reverseContour } from "../engine/contour/edit.js";
+import {
+  deletePiece,
+  insertPiece,
+  renamePiece,
+  reverseContour,
+  reversePiece,
+  reorderPieces,
+  setRole,
+} from "../engine/contour/edit.js";
 import { TEMPLATES } from "./templates.js";
 import { coldStartState, compile, drawnContour, resolveState, shellMode, withParam, type Compiled, type ShellMode, type ShellState, type StateResolution } from "./state.js";
 import { converged } from "../engine/contour/integrate.js";
@@ -49,7 +57,7 @@ import { taskState } from "./drill.js";
 import { thumbnailById } from "./thumbnails.js";
 import { createSweep, planSweep, type SweepDriver } from "./sweep.js";
 import { argumentOf } from "./argument.js";
-import type { Params } from "../engine/contour/model.js";
+import type { Contour, Params } from "../engine/contour/model.js";
 import type { Cx } from "../kernel/geom.js";
 
 /** A mounted shell, from the outside — the same two functions the old shell exposes. */
@@ -450,6 +458,48 @@ export function mountShell2(root: Element): Shell2Handle {
     };
   }
 
+  /**
+   * Apply one pure piece-list operation to the sandbox's contour — M8 step 4.3.
+   *
+   * Every operation in `engine/contour/edit.ts` refuses by returning the contour BY REFERENCE, so
+   * the identity test below is the whole of "was this edit legal?" — and a refused edit commits
+   * nothing at all rather than pushing an undo entry for a state that did not move. That is rule 4
+   * of the undo stack arriving one layer up, where it costs one line instead of a special case.
+   */
+  function editPieces(op: (c: Contour) => Contour, why: CommitReason = "edit-step"): void {
+    const next = op(state.contour);
+    if (next === state.contour) return;
+    commit({ ...state, contour: next, sandboxContour: next, contourSource: null }, why);
+  }
+
+  /**
+   * Move one piece by one place — the row's reorder, expressed as `reorderPieces`' permutation.
+   *
+   * `reorderPieces` takes the whole order because a permutation is what it can verify; a reader
+   * moves one row. The translation is here rather than in `edit.ts` so the engine keeps the
+   * operation it can check, and the shell keeps the gesture a reader makes.
+   */
+  function moveOne(contour: Contour, id: string, by: -1 | 1): Contour {
+    const ids = contour.pieces.map((p) => p.id);
+    const at = ids.indexOf(id);
+    const to = at + by;
+    // At either end there is nowhere to go, and a wrap would move the piece the whole way across
+    // the list on a keypress that means "one step".
+    //
+    // **The range half is a recorded equivalent, kept deliberately.** Dropping it is unobservable:
+    // the swap would write `undefined` into the id list, and `reorderPieces` refuses that as a
+    // non-permutation (or, at `to === ids.length`, as a list of the wrong length) and returns the
+    // contour by reference, which `editPieces` reads as a refusal — the same outcome by a longer
+    // road. It stays because "there is nowhere to go" and "that is not a permutation" are different
+    // statements, and relying on the second would couple this list's ends to the engine's
+    // validation shape.
+    if (at < 0 || to < 0 || to >= ids.length) return contour;
+    const next = [...ids];
+    next[at] = ids[to];
+    next[to] = ids[at];
+    return reorderPieces(contour, next);
+  }
+
   const actions: ShellActions = {
     fitContour: () => controller?.fitContour(),
     setExpr: (src) => commit({ ...state, expr: src }, "edit"),
@@ -502,6 +552,45 @@ export function mountShell2(root: Element): Shell2Handle {
     reverseContour: () => {
       const flipped = reverseContour(state.contour);
       commit({ ...state, contour: flipped, sandboxContour: flipped, contourSource: null }, "edit");
+    },
+
+    // ── the piece list, editable — M8 step 4.3 ──────────────────────────────────────────────
+    //
+    // **One helper and six callers**, because what is the same about them is everything except the
+    // operation: each applies a pure function from `engine/contour/edit.ts`, each drops the
+    // template recipe, and each is its own undo entry. Writing that out six times is six places for
+    // one of them to forget the recipe — which is the bug `contourSource` exists to prevent, on the
+    // other side.
+    //
+    // **`contourSource` goes to null and `reverseContour` above shows why that is not automatic.**
+    // A reversal is the same template at the same parameters, so it keeps its recipe; an edited
+    // piece list is not a template any more, and a recipe that claimed otherwise would rebuild a
+    // different contour the first time a link was opened. `viewState.ts` verifies the recipe before
+    // minting a link, so the failure would be caught — as a refused link rather than as a wrong
+    // one, which is still a capability lost for no reason.
+    //
+    // **`"edit-step"`, not `"edit"`**: two deletions inside 800 ms are two acts, and rule 7 would
+    // otherwise merge them (every contour edit changes the same fields, so `changeKey` cannot tell
+    // them apart). The exception is the inline rename, which commits as an ordinary edit because
+    // typing IS one adjustment continued.
+    setPieceRole: (id, role, lemma) => editPieces((c) => setRole(c, id, role, lemma)),
+    renamePiece: (id, name) => editPieces((c) => renamePiece(c, id, name), "edit"),
+    deletePiece: (id) => editPieces((c) => deletePiece(c, id)),
+    insertPiece: (afterId, kind) => editPieces((c) => insertPiece(c, afterId, kind)),
+    movePiece: (id, by) => editPieces((c) => moveOne(c, id, by)),
+    reversePiece: (id) => editPieces((c) => reversePiece(c, id)),
+    // Session only, so no commit and no undo entry: opening a text box is not an edit, and an undo
+    // that closed one would spend the reader's step on nothing.
+    setRenaming: (id) => {
+      session.renaming = id;
+      render2();
+      // **The focus is the SHELL's business, and it has to come after the patch** — the box does not
+      // exist until the render that opens it, so the card cannot ask for focus from inside its own
+      // description. `dom.ts` has no `ref` prop and should not grow one for this: a function passed
+      // as a prop would be written out with `setAttribute`, which is a stray attribute carrying the
+      // function's source. `select()` rather than `focus()` so typing replaces the name, which is
+      // what a rename almost always is.
+      if (id !== null) shell.querySelector<HTMLInputElement>(".pieceRename")?.select();
     },
     // **These four go through the controller, and the controller's `redraw` repaints the RAIL as
     // well as the stage** — which it did not, and the pen's whole card was dead in the live app as a

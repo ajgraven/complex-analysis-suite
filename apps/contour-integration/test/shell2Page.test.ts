@@ -148,16 +148,25 @@ describe("the page's structure, live", () => {
 // ──────────────────────────────────────────────────────────────────────────────────────────────
 
 describe("the rail speaks the reader's vocabulary, not the engine's ids", () => {
-  it("tags a contour piece with its role's NAME", () => {
+  it("names a contour piece's role in the reader's words, in the menu that sets it", () => {
     const { root } = mount();
     // The sandbox opens on the circle template, whose single closed piece carries the `residue`
     // role — measured, not assumed: the first draft of this test guessed `free` and was wrong.
-    const tags = [...root.querySelectorAll('[data-card="contour"] .pieces2 > li .tag')].map((t) =>
-      t.textContent?.trim(),
-    );
-    expect(tags.length).toBeGreaterThan(0);
-    expect(tags).toContain(roleLabel("residue"));
-    expect(tags).not.toContain("residue");
+    //
+    // **The role moved from a tag to a `<select>` at M8 step 4.3**, and the claim did not: what the
+    // reader sees is still the label rather than the id. `residue` is the one role no menu entry
+    // describes — the sandbox cannot solve for a `reproduces` coefficient and does not offer
+    // `residue` as a choice either — so it shows as the disabled option that names it, which is the
+    // case most likely to leak an id and therefore the right one to pin.
+    const options = [...root.querySelectorAll('[data-card="contour"] .pieces2 > li select option')];
+    const labels = options.map((o) => o.textContent?.trim());
+    expect(labels.length).toBeGreaterThan(0);
+    expect(labels).toContain(roleLabel("residue"));
+    expect(labels).not.toContain("residue");
+    // And the one that is SHOWN is that one: a menu listing the right words with the wrong one
+    // selected would satisfy the two lines above.
+    const select = root.querySelector<HTMLSelectElement>('[data-card="contour"] .pieces2 > li select');
+    expect(select?.selectedOptions[0]?.textContent?.trim()).toBe(roleLabel("residue"));
   });
 
   it("tags a record's pieces with their roles' names too", () => {

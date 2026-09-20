@@ -5,16 +5,20 @@
 // the rest of the shell through exactly two things: it reads `getState()`/`getSession()`, and it
 // calls `commit(next, why)`. That is what lets a jsdom test drive a drag.
 //
-// **Three things a pointer drag can mean, decided in this order**: a cut's handle, then a radius
-// handle, then the contour itself, then the view. The cut vertex is first because it is the smaller
-// target and usually sits on top — a drag that hit the contour instead would move the one object the
-// reader was trying to hold still.
+// **Four things a pointer drag can mean, decided in this order**: a cut's handle, then a radius
+// handle, then the contour itself — bodily, or divided at the pointer when Shift is held — then the
+// view. The cut vertex is first because it is the smaller target and usually sits on top — a drag
+// that hit the contour instead would move the one object the reader was trying to hold still. The
+// split is fourth rather than third because a handle is a smaller target than the curve it sits on,
+// which is the same reason, one step down; see {@link splitTarget} for why the modifier is there at
+// all and what the alternatives cost.
 import { applyBranchGrab, branchHandles, sameBranchGrab, type BranchHandle } from "../engine/branchEdit.js";
-import { nearestHandle, onContour, pieceAt, radiusDragValue, translateContour, type Handle } from "../engine/contour/edit.js";
+import { nearestHandle, onContour, pieceAt, radiusDragValue, splitPiece, translateContour, type Handle } from "../engine/contour/edit.js";
 import { arcThroughBulge, bulgeFromApex, penContour } from "../engine/contour/pen.js";
 import { clampView, panBy, scale, screenToPlot, zoomAt, type View, type Viewport } from "../kernel/camera.js";
 import { pointAt, type Cx, type Resolved } from "../kernel/geom.js";
 import type { PoleReport } from "../kernel/poles.js";
+import { mathSpoken } from "./math.js";
 import { drawnContour } from "./state.js";
 import type { ShellState, StateResolution } from "./state.js";
 import { NO_HOVER } from "./session.js";
@@ -46,6 +50,15 @@ const WHEEL_FACTOR_MAX = 4;
 type Grab =
   | null
   | { readonly kind: "body" }
+  /**
+   * The vertex a Shift-drag has just inserted — M8 step 4.3.
+   *
+   * It carries no `Handle`, because there is nothing persistent to point at: the vertex exists only
+   * while the gesture does, and `endGesture` lets go of it like every other grab. What it carries
+   * is what the chip has to say, which is the same two things every other grab's label says —
+   * what is held, and on which piece.
+   */
+  | { readonly kind: "split"; readonly at: Cx; readonly pieceName: string }
   | { readonly kind: "radius"; readonly handle: Handle }
   | { readonly kind: "branch"; readonly handle: BranchHandle };
 
@@ -60,6 +73,7 @@ type Grab =
 function labelOf(grab: Grab): string | null {
   if (grab === null) return null;
   if (grab.kind === "body") return "the whole contour";
+  if (grab.kind === "split") return `a new vertex on ${grab.pieceName}`;
   if (grab.kind === "branch") return grab.handle.label;
   return `${grab.handle.pieceName} (${grab.handle.param})`;
 }
@@ -204,6 +218,15 @@ export function createStageController(input: StageControllerInput): StageControl
   let lastX = 0;
   let lastY = 0;
   let anchor: { readonly contour: ShellState["contour"]; readonly shift: Cx; readonly at: Cx } | null = null;
+  /**
+   * The contour a split gesture began on, and the piece it is dividing — M8 step 4.3.
+   *
+   * **Anchored, not accumulated**, for {@link anchor}'s reason and more sharply: every pointer move
+   * re-runs the split on THIS contour, so the gesture adds exactly one vertex however far the
+   * pointer travels. Re-splitting the contour on screen would add one per event, which is a
+   * hundred-vertex polyline from a half-second drag.
+   */
+  let splitting: { readonly contour: ShellState["contour"]; readonly pieceId: string } | null = null;
 
   const session = (): Session => getSession();
   const pen = (): PenDraft | null => session().pen;
@@ -221,7 +244,14 @@ export function createStageController(input: StageControllerInput): StageControl
   function setGrab(next: Grab): void {
     grab = next;
     const label = labelOf(next);
-    const at = next === null ? null : next.kind === "body" ? bodyAnchor() : next.handle.at;
+    const at =
+      next === null
+        ? null
+        : next.kind === "body"
+          ? bodyAnchor()
+          : next.kind === "split"
+            ? next.at
+            : next.handle.at;
     session().held = label === null || at === null ? null : { label, at: [at[0], at[1]] };
   }
 
@@ -256,6 +286,71 @@ export function createStageController(input: StageControllerInput): StageControl
    */
   const canMoveBody = (): boolean => getState().mode === "sandbox";
 
+  /**
+   * What a Shift-press on the curve would divide, and the state that divides it — M8 step 4.3.
+   *
+   * **THE MODIFIER IS THE DESIGN DECISION, and the rule it was chosen under is that a new gesture
+   * may not take an old one away.** A plain drag on the contour already moves it bodily, and that
+   * is the affordance a reader finds by trying; the four ways of telling the new gesture from it:
+   *
+   *  - **Shift** — this one. Nothing on the stage uses it (`onCanvasKey` reads `ev.shiftKey` for
+   *    the keyboard's *pan instead of move*, which no pointer path can reach), it is the standard
+   *    modifier for *the other thing this drag could mean*, and it leaves the body drag exactly
+   *    where it was.
+   *  - **Alt / Meta** — rejected. It already means *free*, the pen's snap suppressor, twice in
+   *    this file; a second meaning for the modifier that means "no constraints" is how the two
+   *    come to be confused. On the common Linux desktops Alt-drag is also the window manager's.
+   *  - **Only where the body cannot move** — rejected, and it is backwards: `canMoveBody()` is
+   *    false exactly under a gallery record, where every edit is forbidden because the contour is
+   *    the record's. It would put the gesture only where it may not happen.
+   *  - **A double-click** — rejected. `dblclick` is `fitContour`, the reader's way back from a
+   *    zoom into nothing, and taking it would break the rule this list is written under. It also
+   *    cannot carry a drag, so the vertex would land where the projection put it with no way to
+   *    move it.
+   *  - **A tool mode on the Contour card** — the honest fifth option, and deferred rather than
+   *    rejected: it is discoverable where a modifier is not, but it is a mode, and a mode is a
+   *    state that must be reset at the door, serialised or deliberately not, and turned off when
+   *    the pen comes out. The cursor (`cell` under Shift, in {@link updateCursor}) and the card's
+   *    own copy are where this becomes findable; if that proves too little, the mode is the step
+   *    that follows rather than the one that was skipped.
+   *
+   * **Sandbox only**, through `canMoveBody()` — the same gate and the same reason, which is that
+   * under a record the contour belongs to the argument being made rather than to the reader.
+   *
+   * Returns `null` when there is no piece under the pointer OR when the operation refuses (an
+   * endpoint, a degenerate half). A refusal falls through to the body drag, deliberately: the press
+   * IS on the contour, so the reader gets what a press there does without the modifier, rather than
+   * nothing at all.
+   */
+  function splitTarget(
+    at: Cx,
+    tol: number,
+  ): { readonly state: ShellState; readonly pieceId: string; readonly pieceName: string } | null {
+    const st = getState();
+    // The DRAWN contour's pieces, as the hover branch reads them, so the index `pieceAt` returns
+    // lands on the piece the reader can see. In the sandbox — the only place this runs — that is
+    // `state.contour` itself, which is what makes splitting `st.contour` below the same object.
+    const drawn = drawnContour(st, getResolution());
+    const index = pieceAt(pieces(), at, tol);
+    const piece = index < 0 ? undefined : drawn.pieces[index];
+    if (piece === undefined) return null;
+    const next = splitPiece(st.contour, piece.id, at, tol);
+    // `edit.ts`'s own way of asking whether an operation applied: every refusal returns the contour
+    // BY REFERENCE, so this is exact rather than a comparison that could go either way.
+    if (next === st.contour) return null;
+    return {
+      // **`contourSource` goes null, because it has become false.** The field says the contour is
+      // `translate(TEMPLATES[t].build(), shift)`, and a divided template is not that — so
+      // `viewState.ts`, which rebuilds the recipe and compares before minting a link, would refuse.
+      // It still refuses, by the other branch and naming the gap step 4.4 fills; what changes is
+      // that the refusal comes from a true field rather than from catching a lie. `penCommit` sets
+      // it null for exactly this reason.
+      state: { ...st, contour: next, sandboxContour: next, contourSource: null },
+      pieceId: piece.id,
+      pieceName: piece.name,
+    };
+  }
+
   /** The branch handle nearest `at` within `tol`, or null. */
   function nearestBranch(at: Cx, tol: number): BranchHandle | null {
     let best: BranchHandle | null = null;
@@ -277,7 +372,7 @@ export function createStageController(input: StageControllerInput): StageControl
    * over a handle in pen mode. `grab` over anything grabbable, `crosshair` while drawing, `default`
    * otherwise — so the pointer always says what a click would do.
    */
-  function updateCursor(px?: number, py?: number): void {
+  function updateCursor(px?: number, py?: number, shift = false): void {
     if (pen() !== null) {
       ink.style.cursor = "crosshair";
       return;
@@ -294,10 +389,18 @@ export function createStageController(input: StageControllerInput): StageControl
     const at = plotAt(px, py);
     const tol = tolerance();
     const h = draw();
-    const over =
-      nearestBranch(at, tol) !== null ||
-      nearestHandle(h.radius, at, tol) !== null ||
-      (canMoveBody() && onContour(pieces(), at, tol));
+    const onHandle = nearestBranch(at, tol) !== null || nearestHandle(h.radius, at, tol) !== null;
+    // **Shift over the curve says SPLIT, and it is the gesture's only affordance before it is
+    // used** — a modifier nothing announces is a modifier nobody finds ({@link splitTarget}'s
+    // fifth option is the other answer to that, deferred). `cell` rather than the pen's
+    // `crosshair`, so the two point-placing tools are told apart, and rather than `grab`, so the
+    // reader can SEE that holding Shift changed what the press will do. Under the same order the
+    // press itself uses, so the cursor cannot promise a split where a handle will take the click.
+    if (shift && !onHandle && canMoveBody() && pieceAt(pieces(), at, tol) >= 0) {
+      ink.style.cursor = "cell";
+      return;
+    }
+    const over = onHandle || (canMoveBody() && onContour(pieces(), at, tol));
     ink.style.cursor = over ? "grab" : "default";
   }
 
@@ -492,6 +595,14 @@ export function createStageController(input: StageControllerInput): StageControl
     const h = draw();
     const bHandle = nearestBranch(at, tol);
     const handle = bHandle === null ? nearestHandle(h.radius, at, tol) : null;
+    // **The precedence is the BRANCH ORDER below and nothing else, which the sweep is what settled.**
+    // The first draft also guarded this line with `bHandle === null && handle === null`, so that a
+    // Shift-press on a handle did no work the handle was about to win — and that made the rule true
+    // twice over, so neither the guard nor the order could be mutated on its own: each mutant
+    // survived on the other spelling. 3.1c's finding, in a new place. What is left is the cheaper
+    // of the two to state and the one a reader already has to read: the chain. It costs one pure
+    // `splitPiece` on a Shift-press that a handle takes, which is discarded.
+    const split = ev.shiftKey && canMoveBody() ? splitTarget(at, tol) : null;
     const s = getSession();
     if (bHandle !== null) {
       setGrab({ kind: "branch", handle: bHandle });
@@ -499,6 +610,26 @@ export function createStageController(input: StageControllerInput): StageControl
     } else if (handle !== null) {
       setGrab({ kind: "radius", handle });
       s.gesture = "handle";
+    } else if (split !== null) {
+      // **`"gesture"`, and it is what makes the whole edit ONE undo entry.** `undo.ts` rule 6: the
+      // first `"gesture"` commit of a run pushes the state BEFORE it and marks the run open, every
+      // later one pushes nothing, and `gesture-end` closes the run without pushing. So the insert
+      // and every frame of the drag that follows collapse to a single entry, whose target is the
+      // contour the reader had before they pressed. The two alternatives are both wrong here:
+      // `"edit"` would push at the press AND let the first drag frame open a second run, and
+      // `"edit-step"` — step 4.3's *always its own entry* — is for the list editor's discrete acts,
+      // where no gesture run exists to absorb the repeats.
+      //
+      // The gesture is set BEFORE the commit, because the commit recomputes and the draft budget
+      // reads `session.gesture`; this is the only branch here that commits at all, so it is the
+      // only one where the order shows.
+      s.gesture = "contour";
+      splitting = { contour: getState().contour, pieceId: split.pieceId };
+      setGrab({ kind: "split", at, pieceName: split.pieceName });
+      commit(split.state, "gesture");
+      // Pinned where the gesture began, as the body's chip is: `setGrab` snapshots a position, and
+      // a chip that chased the vertex would be a fresh node in the accessibility tree per frame.
+      announce(`A new vertex on ${mathSpoken(split.pieceName)}. Drag to move it along the piece.`);
     } else if (canMoveBody() && onContour(pieces(), at, tol)) {
       setGrab({ kind: "body" });
       s.gesture = "contour";
@@ -512,7 +643,7 @@ export function createStageController(input: StageControllerInput): StageControl
     lastX = ev.clientX;
     lastY = ev.clientY;
     ink.setPointerCapture(ev.pointerId);
-    updateCursor(px, py);
+    updateCursor(px, py, ev.shiftKey);
     redraw();
   };
 
@@ -554,7 +685,7 @@ export function createStageController(input: StageControllerInput): StageControl
       s.hover = { z: at, piece, handle: index < 0 ? null : index };
       if (linked) redraw();
       else redrawStage();
-      updateCursor(px, py);
+      updateCursor(px, py, ev.shiftKey);
       return;
     }
     if (s.gesture === "view") {
@@ -566,7 +697,18 @@ export function createStageController(input: StageControllerInput): StageControl
     }
     const at = plotAt(px, py);
     const st = getState();
-    if (grab?.kind === "branch") {
+    if (grab?.kind === "split" && splitting !== null) {
+      // **The tolerance is infinite here, deliberately.** *Is the pointer on the piece?* was
+      // answered by the press; from then on the pointer is holding a vertex that is CONSTRAINED to
+      // the piece, and asking again at the grab radius would make the vertex disappear the moment
+      // a hand wandered 12 px and reappear when it came back. What still refuses is the degeneracy
+      // floor — the refusal that matters — and a refusal simply commits nothing, so the last good
+      // division stands instead of the piece silently becoming whole again.
+      const divided = splitPiece(splitting.contour, splitting.pieceId, at, Number.POSITIVE_INFINITY);
+      if (divided !== splitting.contour) {
+        commit({ ...st, contour: divided, sandboxContour: divided, contourSource: null }, "gesture");
+      }
+    } else if (grab?.kind === "branch") {
       commit({ ...st, branch: applyBranchGrab(st.branch, grab.handle.grab, at) }, "gesture");
     } else if (grab?.kind === "body" && anchor !== null) {
       const d: Cx = [at[0] - anchor.at[0], at[1] - anchor.at[1]];
@@ -598,6 +740,12 @@ export function createStageController(input: StageControllerInput): StageControl
     const was = s.gesture;
     s.gesture = "none";
     anchor = null;
+    // **An EQUIVALENT mutant, recorded rather than removed.** Nothing can observe this clear or
+    // `reset`'s, because every reader of `splitting` sits behind `grab?.kind === "split"` and both
+    // places drop the grab as well. It is kept for the reason `anchor = null` above it is kept —
+    // the same shape, shipped at step 1.3 — and because `splitting` holds a whole `Contour`, so
+    // the alternative is a controller that goes on referencing a curve it no longer shows.
+    splitting = null;
     // **And LET GO.** Keeping the grab would leave the chip pinned to the stage after every drag —
     // seen in a browser — and would silently rebind the arrow keys to whatever the mouse last
     // touched. The keyboard's grab is something a reader ASKS for with Enter; a finished pointer
@@ -664,10 +812,15 @@ export function createStageController(input: StageControllerInput): StageControl
     };
     const index = stops.findIndex(sameAs);
     setGrab(stops[(index + 1) % stops.length] ?? null);
+    // **`mathSpoken`, and it was missing** — found while wiring the split's own announcement. A
+    // piece name is a sentence in this app's `$…$` convention, so `the circle $|z - a| = R$ (R)`
+    // went into the live region with its delimiters and, on the records that have one, its
+    // backslashes: M8 step 3.6's defect, in the one surface that pass did not look at because it
+    // reads the accessibility TREE and this text only exists once a reader presses Enter.
     announce(
       grab === null
         ? "Arrow keys pan the view. Press Enter to grab the contour instead."
-        : `Arrow keys now move ${grabLabel() ?? "the view"}. Press Enter for the next handle.`,
+        : `Arrow keys now move ${mathSpoken(grabLabel() ?? "the view")}. Press Enter for the next handle.`,
     );
     redraw();
   }
@@ -680,6 +833,16 @@ export function createStageController(input: StageControllerInput): StageControl
     // A fixed fraction of the viewport, as for panning, so a step means the same at every zoom.
     const step = (Math.min(port.width, port.height) / 24) * scale(st.view, port);
     const d: Cx = [dx * step, -dy * step]; // screen y runs down, plot y runs up
+    // **A split has no keyboard route, and this is where that is said.** The gesture needs a point
+    // ON a piece, which a pointer supplies and an arrow key does not — the arrows move what is held
+    // by a fraction of the viewport, and there is no held vertex until a press has made one. In
+    // practice the branch is unreachable (a split grab is taken and released inside one pointer
+    // gesture), and it is here so that the day something else offers one, the arrows refuse rather
+    // than falling through to the radius branch and reading `handle` off a grab that has none.
+    // **The sweep kills it with the TYPECHECKER rather than with a test**, which is the honest
+    // instrument for a line whose job is to narrow a union: removing it is three `TS2339`s on
+    // `held.handle`, and `pnpm typecheck` is in the gate.
+    if (held.kind === "split") return;
     if (held.kind === "body") {
       if (!canMoveBody()) return;
       const moved = translateContour(st.contour, d);
@@ -807,6 +970,9 @@ export function createStageController(input: StageControllerInput): StageControl
       // wrong one day without anything saying so.
       setGrab(null);
       anchor = null;
+      // The split's anchor is a local of exactly the kind the doc above is about: a restored state
+      // must not arrive still holding a piece of the contour it has just replaced.
+      splitting = null;
       updateCursor();
     },
     onCanvasKey,
