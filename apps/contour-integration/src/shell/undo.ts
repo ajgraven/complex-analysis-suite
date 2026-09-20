@@ -12,9 +12,12 @@
 // undoing a pan would restore nothing about the argument while costing the reader the edit they
 // actually meant to take back.
 //
-// **The stacks live on the {@link Session}**, not in this closure. `resetTransient` already empties
-// them, which is the M7.4 lesson the whole of `shell2/` is built on: a value the door cannot see is
-// a value the door does not clear. This module owns the POLICY; the session owns the data.
+// **The stacks live on the {@link Session}**, not in this closure, which is the M7.4 lesson the
+// whole of `shell/` is built on: a value the door cannot see is a value the door cannot reason
+// about. What clears them is rule 1 below — a `"link"` commit — and NOT `resetTransient`, which
+// says at length why they were taken off its list: clearing them in `restore` wiped the redo stack
+// the undo had just filled. Measured: four entries survive a direct `resetTransient` call
+// unchanged. This module owns the POLICY and the clearing; the session owns the data.
 import type { ShellState } from "./state.js";
 import type { Session } from "./session.js";
 import { stableKey } from "./stableKey.js";
@@ -32,6 +35,19 @@ import { stableKey } from "./stableKey.js";
 export type CommitReason =
   | "init"
   | "edit"
+  /**
+   * One character of an edit a reader is making a character at a time — the integrand box.
+   *
+   * **`record` does not mention it, and that is deliberate: it is `"edit"` here, exactly.** Rule 3
+   * closes any open run, rule 7 coalesces it against the previous push, and a burst of typing is
+   * therefore one entry the way it always was. What the reason changes is the BUDGET, over in
+   * `app.ts`: every keystroke had been a synchronous full-budget solve — 689.1 ms to resolve the
+   * intermediate `"1"` on the keyhole against 3.0 ms at the draft budget, with the page frozen for
+   * that half-second on one character. A slider already had that rule through `session.scrubbing`;
+   * typing had no way to say the same thing, because it is not a pointer gesture and `"gesture"`
+   * would have made a whole typed expression one un-coalescable run.
+   */
+  | "type"
   /**
    * An edit that is ALWAYS its own entry — M8 step 4.3.
    *
@@ -58,7 +74,20 @@ export type CommitReason =
    * would bring it back. It is not `"link"` either, which clears the stacks — and a redo with
    * nothing to go forward to is what that would leave.
    */
-  | "restore";
+  | "restore"
+  /**
+   * A re-resolve of the state the app is ALREADY in, at a different budget.
+   *
+   * The sweep's row capture is the one caller: a frame commits at the draft budget and a rung's
+   * row is then taken at the full one, from the same state. It moves nothing — `changeKey` is
+   * `null` for it — so every rule below rule 3 would have returned anyway; what it cannot be is
+   * `"edit"`, because rule 3 runs FIRST and closes the gesture run, and the next frame's
+   * `"gesture"` commit then opens a new one and pushes again. Measured on the cold start: one
+   * press of Play left FOUR undo entries and Ctrl+Z walked the sweep's own ladder,
+   * `R` = 6931 → 577 → 48 → 4, instead of undoing it. Rule 6 says a drag is worth one entry; an
+   * animation the app is making on the reader's behalf is worth none at all.
+   */
+  | "resolve";
 
 /** The plan's cap. Whole `ShellState`s, so a hundred of them is the thing being bounded. */
 const DEFAULT_LIMIT = 100;
@@ -80,7 +109,9 @@ export interface UndoStacks {
    *     belong to a different reading, and going "back" into them from a link someone else sent
    *     would be going somewhere the reader has never been. It clears even when the link happens to
    *     land on the state already showing — how the reader got here is what changed.
-   *  2. **`init`** is no entry. There is no previous state to go back to.
+   *  2. **`init`** is no entry. There is no previous state to go back to. **`restore`** and
+   *     **`resolve`** are none either, and both return before rule 3 — see their notes on
+   *     {@link CommitReason} for why the order matters.
    *  3. **`gesture-end` and `edit` close any open run** (rule 5), before anything below can return.
    *  4. **Nothing changed** is no entry. `endGesture` commits the state it already has, and an entry
    *     there would be an undo that does nothing — worse than no undo, because the reader presses it
@@ -90,9 +121,10 @@ export interface UndoStacks {
    *  6. **`gesture`** pushes on the first frame and marks a run open; the rest of the drag pushes
    *     nothing. `gesture-end` closes the run and never pushes — the state before the drag was taken
    *     at its first frame, and that is the one entry a drag is worth.
-   *  7. **`edit`** pushes, unless the previous PUSH carried the same {@link changeKey} less than
-   *     `coalesceMs` ago, in which case the earlier entry stands. That is what makes ten arrow
-   *     nudges of one handle a single entry.
+   *  7. **`edit`** (and `type`, which is the same rule) pushes, unless the previous PUSH carried
+   *     the same {@link changeKey} less than `coalesceMs` ago, in which case the earlier entry
+   *     stands. That is what makes ten arrow nudges of one handle — and a typed expression — a
+   *     single entry.
    *  8. Any push clears the redo stack and trims the undo stack to `limit` from the OLD end.
    */
   record(prev: ShellState, next: ShellState, why: CommitReason, now?: number): void;
@@ -104,7 +136,7 @@ export interface UndoStacks {
   readonly depth: { readonly undo: number; readonly redo: number };
 }
 
-/** The stacks live on the SESSION, so `resetTransient` keeps clearing them. */
+/** The stacks live on the SESSION; rule 1's `"link"` commit is the only thing that clears them. */
 export function createUndo(
   session: Pick<Session, "undo" | "redo">,
   opts?: { readonly limit?: number; readonly coalesceMs?: number },
@@ -147,6 +179,9 @@ export function createUndo(
       // A restored state is not an edit. It also leaves the stacks exactly as `undo`/`redo` left
       // them, which is what lets a reader step back and forth rather than only back.
       if (why === "restore") return;
+      // **Before rule 3, which is the whole of what this reason buys.** See the type's own note:
+      // a re-resolve at a different budget must not close the gesture run it is happening inside.
+      if (why === "resolve") return;
       // Rule 3, and it has to run before every return below: `endGesture` commits an UNCHANGED
       // state, so a run closed after the rule-4 return would never close at all.
       if (why !== "gesture") runOpen = false;

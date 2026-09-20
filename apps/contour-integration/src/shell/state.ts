@@ -1,10 +1,13 @@
 // The shell's STATE, and the one function that turns it into numbers.
 //
-// **WHY THIS FILE EXISTS.** `app.ts` is 2,500 lines reached by no test at all, and every one of
-// M6's workstreams lands in it: the `#vs=` codec has to read the shell's state, the figure export
-// has to carry it, and both have to prove that reading it back reproduces what was on screen. None
-// of that is possible while the state is a set of `let` locals inside `mountApp`'s closure, and
-// none of it is TESTABLE while the only way to reach the compute path is to mount a WebGL2 app.
+// **WHY THIS FILE EXISTS — the state of things at M6.1**, when the old shell's `app.ts` was 2,500
+// lines reached by no test at all and every one of M6's workstreams landed in it: the `#vs=` codec
+// has to read the shell's state, the figure export has to carry it, and both have to prove that
+// reading it back reproduces what was on screen. None of that is possible while the state is a set
+// of `let` locals inside `mountApp`'s closure, and none of it is TESTABLE while the only way to
+// reach the compute path is to mount a WebGL2 app. (Both halves have since moved: the M8 shell's
+// `app.ts` is ~1,450 lines and five node suites reach it — `shell2`, `shell2State`, `shell2Page`,
+// `shell2Drill`, `sweepApp`. The reasoning below is what made that possible and still holds.)
 //
 // So this module owns two things and deliberately no more:
 //
@@ -506,8 +509,21 @@ export function recordOf(state: ShellState): { family: Family; golden: Golden } 
  * drifted in shape if not yet in meaning.
  */
 export function drawnContour(state: ShellState, resolution: StateResolution | undefined): Contour {
-  return resolution?.kind === "gallery" ? (resolution.run?.contour ?? state.contour) : state.contour;
+  return resolution?.kind === "gallery" ? (resolution.run?.contour ?? NO_CONTOUR) : state.contour;
 }
+
+/**
+ * What a gallery record that could NOT be run draws: nothing.
+ *
+ * The fallback here was `state.contour`, which in gallery mode is the reader's parked SANDBOX
+ * curve (M6.1's finding) — so a record whose `solveFamily` refuses outright would have put a
+ * plausible picture of a different problem on the stage, and fed its piece count to
+ * `describeStage`'s generated sentence and its ids to the sweep's row lookup, beside a card saying
+ * the record could not be run. Unreachable with the shipped corpus (all 28 run), which is exactly
+ * why it is worth closing by construction rather than by trusting the corpus: an empty contour
+ * draws nothing, counts nothing and looks up nothing.
+ */
+const NO_CONTOUR: Contour = { pieces: [], params: {} };
 
 /**
  * The app's three compute branches, as one function of the state.

@@ -49,6 +49,18 @@ afterEach(() => {
 interface Clock {
   /** Run `ticks` whole frames. Each one drains the queue as it stood, which is what a frame does. */
   readonly flush: (ticks: number, atMs?: number) => void;
+  /**
+   * How many frames have been ASKED for since the mount.
+   *
+   * Not the queue's length, which says nothing (the shell schedules its own draws through the same
+   * rAF, so there is usually one pending whatever the sweep is doing). What this counts is new
+   * requests over a span of frames the app has no reason to want: a loop that is alive re-schedules
+   * itself on every tick, and one that is dead schedules nothing at all, so ten empty ticks
+   * separate the two by ten. It is the instrument for the review's 4.1, where `session.sweep` is
+   * already null and the loop is spinning behind it — which no assertion about the session or the
+   * parameter can see.
+   */
+  readonly asked: () => number;
 }
 
 function fakeClock(): Clock {
@@ -58,8 +70,10 @@ function fakeClock(): Clock {
   const realRaf = window.requestAnimationFrame;
   const realCancel = window.cancelAnimationFrame;
   const realNow = performance.now.bind(performance);
+  let asked = 0;
   window.requestAnimationFrame = (cb: FrameRequestCallback): number => {
     id += 1;
+    asked += 1;
     queue.set(id, cb);
     return id;
   };
@@ -73,6 +87,7 @@ function fakeClock(): Clock {
     performance.now = realNow;
   });
   return {
+    asked: (): number => asked,
     flush: (ticks: number, atMs?: number): void => {
       for (let k = 0; k < ticks; k += 1) {
         // **The whole queue, not the first callback.** The shell schedules its own draws and its
@@ -181,12 +196,84 @@ describe("a sweep does not outlive its argument", () => {
     expect(app.session().scrubbing).toBe(false);
   });
 
-  it("is put away by `applyState`, which is the permalink and the undo stack both", () => {
-    const { app, step, param } = onLimitStep();
-    app.actions().playSweep({ stepId: step.id, param, pieceId: null, stepOnce: true });
+  // ── the three doors that reset the session — the review's 4.1 ───────────────
+  //
+  // **The test that stood here drove `stepOnce: true`, the ONE branch that cannot have the defect
+  // it was named for.** A stepped press never enters the rAF branch, so `session.sweep === null`
+  // and `session.scrubbing === false` after `applyState` are both things `resetTransient` gives for
+  // free — the outcome pinned, the reason not, and the reason was that `endSweep` was reached from
+  // `commit` alone and only when the argument MOVED. `resetTransient` nulls `session.sweep`, so
+  // `advanceSweep` returns at its own guard before the branch that would cancel the frame, and the
+  // loop re-schedules itself from a closure the session cannot see. Measured on the cold start,
+  // with the loop running: 10 further ticks asked for 10 further frames after Ctrl+Z, 10 after an
+  // `applyState` of an argument-identical state, and **20 after `destroy()`** — twice, because a
+  // torn-down shell's loop is still committing and each commit schedules a draw as well.
+  //
+  // Each case starts by asserting the parameter has MOVED, because a loop that never started
+  // schedules nothing either and would pass every clause below vacuously.
+  const running = (clock: Clock): ReturnType<typeof onLimitStep> => {
+    const run = onLimitStep();
+    run.app.actions().playSweep({ stepId: run.step.id, param: run.param, pieceId: null });
+    clock.flush(10, undefined);
+    expect(paramOf(run.app, run.param).value, "the animation has to be live, or this asserts nothing").toBeGreaterThan(4);
+    return run;
+  };
+
+  it("stops the LOOP on an `applyState` — a permalink, a contrast cell or a drill rung", () => {
+    const clock = fakeClock();
+    const { app, param } = running(clock);
     app.applyState(app.currentState());
     expect(app.session().sweep).toBeNull();
     expect(app.session().scrubbing).toBe(false);
+    // The parameter is frozen under the defect too (`advanceSweep` returns at its guard), so the
+    // frames are what distinguishes a stopped loop from a spinning one.
+    const asked = clock.asked();
+    const held = paramOf(app, param).value;
+    for (let k = 0; k < 10; k += 1) clock.flush(1, 2000 + k * 50);
+    expect(`${clock.asked() - asked} frames asked, R ${paramOf(app, param).value}`).toBe(`0 frames asked, R ${held}`);
+  });
+
+  it("stops the LOOP on an undo, which does not go through `applyState` at all", () => {
+    const clock = fakeClock();
+    const { app, param } = running(clock);
+    app.actions().undo();
+    const asked = clock.asked();
+    const held = paramOf(app, param).value;
+    for (let k = 0; k < 10; k += 1) clock.flush(1, 2000 + k * 50);
+    expect(`${clock.asked() - asked} frames asked, R ${paramOf(app, param).value}`).toBe(`0 frames asked, R ${held}`);
+  });
+
+  it("stops the LOOP on `destroy()`, where nothing on screen could ever say it had not", () => {
+    const clock = fakeClock();
+    const { app, param } = running(clock);
+    app.destroy();
+    const asked = clock.asked();
+    // **Here the parameter moves too**, and that is the sharpest half: `destroy` does not reset the
+    // session, so the loop went on committing, re-resolving and re-rendering into a detached tree
+    // while the closure held the whole shell alive.
+    const held = paramOf(app, param).value;
+    for (let k = 0; k < 10; k += 1) clock.flush(1, 2000 + k * 50);
+    expect(`${clock.asked() - asked} frames asked, R ${paramOf(app, param).value}`).toBe(`0 frames asked, R ${held}`);
+  });
+
+  // **One press of Play left FIVE entries and Ctrl+Z walked the sweep's own ladder** — the review's
+  // 4.2. The row capture committed `"edit"` mid-animation, which closes the gesture run
+  // (`undo.ts` rule 3), so every checkpoint opened a new run and pushed again. Measured on the cold
+  // start before the repair: `undo.length` 0 → 4 over sixty frames, and Ctrl+Z gave
+  // `R` = 6931 → 577 → 48 → 4. `undo.ts`'s own rule 6 says a drag is worth exactly one entry, and
+  // `playSweep`'s comment calls the sweep "a gesture the app is making on the reader's behalf".
+  it("is ONE undo entry, and Ctrl+Z undoes the press rather than walking its rungs", () => {
+    const clock = fakeClock();
+    const { app, step, param } = onLimitStep();
+    const before = paramOf(app, param).value;
+    const depth = app.session().undo.length;
+    app.actions().playSweep({ stepId: step.id, param, pieceId: null });
+    clock.flush(60, undefined);
+    expect(paramOf(app, param).value, "the sweep has to have moved, or one entry is trivial").toBeGreaterThan(before);
+    expect(app.session().sweep?.rows.length, "and to have passed rungs, which is what pushed the extras").toBeGreaterThan(1);
+    expect(`${app.session().undo.length - depth} entries`).toBe("1 entries");
+    app.actions().undo();
+    expect(`R ${paramOf(app, param).value} after one Ctrl+Z`).toBe(`R ${before} after one Ctrl+Z`);
   });
 });
 

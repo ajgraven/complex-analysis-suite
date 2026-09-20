@@ -6,10 +6,12 @@
 // makes the shell testable without a browser and what stops the old shell's habit of recomputing a
 // number inside a render path and getting a different one from the ledger.
 //
-// At 1.1 the rails hold placeholder cards, titled from `vocabulary.ts`. Steps 1.4 and 1.5 replace
-// each placeholder with a real card — a function `(state, resolution, session, actions) → Desc` —
-// so the shape here is the shape they land into rather than scaffolding to be thrown away.
-import { LEFT_CARDS, RIGHT_CARDS, cardTitle, type CardId } from "../engine/vocabulary.js";
+// At 1.1 the rails held placeholder cards titled from `vocabulary.ts`, and steps 1.4 and 1.5
+// replaced each one with a real card — a function `(state, resolution, session, actions) → Desc`.
+// Every id in `LEFT_CARDS ∪ RIGHT_CARDS` has had one since, so {@link CARDS} is TOTAL and the
+// placeholder is gone: a `Partial` map would let a newly added `CardId` fall through to a silent
+// `—` instead of failing to compile, which is the opposite of what a rail wants from its own list.
+import { LEFT_CARDS, RIGHT_CARDS, type CardId } from "../engine/vocabulary.js";
 import type { PoleReport } from "../kernel/poles.js";
 import type { ShellState, StateResolution } from "./state.js";
 import { bar } from "./bar.js";
@@ -47,24 +49,6 @@ export interface Rendered {
 }
 
 /**
- * A card that has a heading and nothing in it yet.
- *
- * The heading is a real `<h2>` from the first render — the page's heading outline is one of the four
- * structural invariants `test/shell2.test.ts` asserts, and a placeholder that is a bare `<div>` would
- * let the outline be wrong for the whole of Phase 1 and then be fixed at the end, which is exactly
- * how M6.4 found the nav reading last.
- */
-function placeholder(id: CardId): Desc {
-  return h(
-    "section",
-    { key: `card:${id}`, class: "card2", "data-card": id },
-    h("h2", { key: "t" }, cardTitle(id)),
-    h("p", { key: "p", class: "placeholder" }, "—"),
-  );
-}
-
-
-/**
  * The whole shell, as descriptions.
  *
  * The four arguments are the contract Phase 1's cards are written against (plan §4.0: a card is
@@ -74,12 +58,13 @@ function placeholder(id: CardId): Desc {
  * teach a reader that the app has a target it is failing to find.
  */
 /**
- * Which card function builds each id — the cards that exist. A placeholder stands where one does not.
+ * Which card function builds each id.
  *
- * Steps 1.4 and 1.5 fill this in a card at a time, so a half-built rail is a rail with placeholders
- * in it rather than a rail that throws, and the four structural invariants hold throughout.
+ * **Total over every id the rails can hold**, `"drill"` excepted: that one is the right rail's top
+ * slot rather than a member of `RIGHT_CARDS`, and {@link render} builds it directly. Total is what
+ * makes adding a `CardId` a compile error here rather than a `—` a reader is left to interpret.
  */
-const CARDS: Partial<Record<CardId, Card>> = {
+const CARDS: Record<Exclude<CardId, "drill">, Card> = {
   target: targetCard,
   integrand: integrandCard,
   parameters: parametersCard,
@@ -100,10 +85,21 @@ export function render(
 ): Rendered {
   const gallery = state.mode === "gallery";
   const ctx: CardContext = { state, resolution, session, poles, actions };
-  const build = (id: CardId): Desc => CARDS[id]?.(ctx) ?? placeholder(id);
+  // `LEFT_CARDS` and `RIGHT_CARDS` are declared `readonly CardId[]`, and `"drill"` is kept out of
+  // both by `vocabulary.ts`'s own note rather than by their type — so the one test here is what
+  // narrows it, which is also what lets {@link CARDS} be total. Neither list contains it, so the
+  // `null` arm is the drill's exclusion stated once and not a card that might be missing.
+  const build = (id: CardId): Desc | null => (id === "drill" ? null : CARDS[id](ctx));
+  const isDesc = (d: Desc | null): d is Desc => d !== null;
   return {
     bar: bar(ctx),
-    left: railOf(ctx, "left", LEFT_CARDS.filter((id) => gallery || id !== "target").map(build)),
+    left: railOf(
+      ctx,
+      "left",
+      LEFT_CARDS.filter((id) => gallery || id !== "target")
+        .map(build)
+        .filter(isDesc),
+    ),
     // **The drill's card is the TOP SLOT, not a member of `RIGHT_CARDS`.** It appears only while a
     // rung is open, where every other card is always present; putting it in the list would make the
     // list's contract "a card, or nothing" for one member's sake, and every `map` over it would grow
@@ -111,7 +107,7 @@ export function render(
     right: railOf(
       ctx,
       "right",
-      [drillPanel(ctx), ...RIGHT_CARDS.map(build)].filter((d): d is Desc => d !== null),
+      [drillPanel(ctx), ...RIGHT_CARDS.map(build)].filter(isDesc),
     ),
     ladder: contrastStrip(ctx),
     rails: {

@@ -130,6 +130,34 @@ describe("what becomes an entry", () => {
     expect(u.undo(live)).toBe(s0);
   });
 
+  // **The sweep's row capture, which had been closing the run it happens INSIDE.** `advanceSweep`
+  // commits a frame as `"gesture"` and then re-resolves the SAME state at the full budget so the
+  // row's `≈` columns are the run's own numbers. That second commit was `"edit"`, and rule 3 runs
+  // before every return below — so it cleared `runOpen` and the next frame opened a second run and
+  // pushed again. Measured through the app: one press of Play left FOUR entries and Ctrl+Z walked
+  // `R` = 6931 → 577 → 48 → 4 instead of undoing the press.
+  //
+  // The two records below are the same three commits under the two reasons, so what is pinned is
+  // the REASON and not the outcome: `"edit"` gives 2 and is what the mutant restores.
+  it("a `resolve` leaves an open gesture run open — the sweep's full-budget row capture", () => {
+    const u = createUndo(stacks());
+    const s0 = base();
+    const s1 = { ...s0, geometry: { R: 8 } };
+    const s2 = { ...s1, geometry: { R: 16 } };
+    u.record(s0, s1, "gesture", 0);
+    u.record(s1, s1, "resolve", 5);
+    u.record(s1, s2, "gesture", 16);
+    expect(u.depth).toEqual({ undo: 1, redo: 0 });
+    // And the one entry is the state before the sweep began, which is what Ctrl+Z has to reach.
+    expect(u.undo(s2)).toBe(s0);
+
+    const closes = createUndo(stacks());
+    closes.record(s0, s1, "gesture", 0);
+    closes.record(s1, s1, "edit", 5);
+    closes.record(s1, s2, "gesture", 16);
+    expect(closes.depth, "an `edit` in the same place closes the run — the defect").toEqual({ undo: 2, redo: 0 });
+  });
+
   it("starts a new entry for the next gesture after the run closed", () => {
     const u = createUndo(stacks());
     const s0 = base();
@@ -161,6 +189,34 @@ describe("what becomes an entry", () => {
     const late = { ...live, geometry: { ...live.geometry, R: 2 } };
     u.record(live, late, "edit", 10 * 80 + 900);
     expect(u.depth).toEqual({ undo: 2, redo: 0 });
+  });
+
+  // **`"type"` is rule 7 exactly, and that is the point of it.** The review moved `setExpr` off
+  // `"edit"` to buy the draft evaluation budget — a keystroke had been a synchronous full-budget
+  // solve, 553 ms for the intermediate `"1"` on the keyhole — and the one thing that must NOT move
+  // with it is the history a reader has: seventeen keystrokes inside the window are one entry, and
+  // Ctrl+Z reaches the expression they started from rather than a prefix of it.
+  it("makes a typed expression one entry, the same as an edit", () => {
+    const u = createUndo(stacks());
+    const s0 = base();
+    const src = "1/(1+z^4)/(z^2+2)";
+    let live = s0;
+    for (let i = 1; i <= src.length; i++) {
+      const next = { ...live, expr: src.slice(0, i) };
+      // 40 ms apart, so the seventeen span 680 ms — inside the 800 ms window from the first push.
+      u.record(live, next, "type", i * 40);
+      live = next;
+    }
+    expect(u.depth).toEqual({ undo: 1, redo: 0 });
+    expect(u.undo(live)).toBe(s0);
+    u.redo(s0);
+
+    // And it closes an open run, as `"edit"` does — a keystroke after a drag is a second act.
+    const dragged = { ...live, geometry: { R: 3 } };
+    u.record(live, dragged, "gesture", 1000);
+    u.record(dragged, { ...dragged, expr: "z" }, "type", 1010);
+    u.record({ ...dragged, expr: "z" }, { ...dragged, expr: "z^2" }, "gesture", 1020);
+    expect(u.depth, "the typed edit closed the drag's run").toEqual({ undo: 4, redo: 0 });
   });
 
   it("coalesces by target, not by time alone", () => {

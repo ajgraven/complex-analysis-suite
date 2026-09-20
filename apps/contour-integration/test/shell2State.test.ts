@@ -18,8 +18,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CENTER_MAX, DEFAULT_VIEW } from "../src/kernel/camera.js";
 import type { Contour } from "../src/engine/contour/model.js";
+import { circleTemplate } from "../src/engine/contour/templates.js";
+import { FAILED } from "../src/shell/errors.js";
 import { penContour, sameShape } from "../src/engine/contour/pen.js";
-import { COLD_START_RECORD, offeredCorpus, shellMode, type ShellState } from "../src/shell/state.js";
+import {
+  COLD_START_RECORD,
+  defaultState,
+  drawnContour,
+  offeredCorpus,
+  shellMode,
+  type ShellState,
+  type StateResolution,
+} from "../src/shell/state.js";
 import { decodeShell, encodeShell } from "../src/shell/viewState.js";
 import { mountShell2, type Shell2Handle } from "../src/shell/app.js";
 
@@ -321,6 +331,15 @@ describe("applyState(currentState()) is a fixed point", () => {
       // below are about what is DRAWN.
       contour: boot.contour,
       sandboxContour: boot.contour,
+      // **Three fields the pair had IDENTICAL, which the review measured** — `contourSource`,
+      // `showStep` and `stageMode` were `{template:"keyhole",shift:[0,0]}`, `null` and `"quiet"` on
+      // BOTH sides, so a `currentState` that forgot any of the three and an `applyState` that never
+      // read it would have passed: the M6.1 lossy-pair trap surviving in three of twenty fields,
+      // inside the very test written to close it. The recipe is the boot circle's, which is the
+      // contour two lines up, and moved so the pair differs in the shift as well as the template.
+      contourSource: { template: "circle", shift: [1, -2] },
+      showStep: false,
+      stageMode: "textbook",
       bindings: { a: 1, b: 1 },
       geometry: { R_lim: 9 },
       view: DEFAULT_VIEW,
@@ -341,6 +360,11 @@ describe("applyState(currentState()) is a fixed point", () => {
     expect(b.branch).not.toEqual(a.branch);
     expect(b.drill).not.toEqual(a.drill);
     expect(b.workedExample).not.toBe(a.workedExample);
+    // The review's three. Asserted here rather than only set above, so the premise stays CHECKABLE
+    // as fields are added: a pair that quietly agrees on a field is a pair blind to its loss.
+    expect(b.contourSource).not.toEqual(a.contourSource);
+    expect(b.showStep).not.toEqual(a.showStep);
+    expect(b.stageMode).not.toEqual(a.stageMode);
 
     app.applyState(b);
     expect(app.currentState()).toEqual(b);
@@ -929,5 +953,55 @@ describe("the `#vs=` permalink, at the shell", () => {
     } finally {
       spy.mockRestore();
     }
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────────────────────────
+// Two honesty gaps the review found on the shell's own failure paths.
+// ───────────────────────────────────────────────────────────────────────────────────────────────
+
+describe("what the shell does when a surface fails", () => {
+  // **`saveFigure`'s promise had no rejection handler.** The `bytes === null` path was covered; a
+  // THROW inside `figureBytes` — `stageView.plate`, `getComputedStyle`, `drawFigure`,
+  // `injectPngText` — became an unhandled rejection with no notice and no banner, because the fatal
+  // boundary is synchronous around the mount alone. `copyFigure` was already covered, by its inner
+  // rejection propagating through `clipboard.write`'s own two-armed `then`.
+  //
+  // The throw is planted in `getComputedStyle`, which `figureBytes` calls BEFORE its first `await`
+  // — so what is asserted is the rejection arm and not a `null` the other arm already handles.
+  it("says the figure could not be drawn when the export THROWS, not only when it returns nothing", async () => {
+    const { app } = mountSandbox();
+    const real = window.getComputedStyle;
+    window.getComputedStyle = (): CSSStyleDeclaration => {
+      throw new Error("no layout");
+    };
+    try {
+      app.actions().saveFigure("dark");
+      // A rejected promise needs a turn of the microtask queue, and `figureBytes` is `async`.
+      await Promise.resolve();
+      await Promise.resolve();
+    } finally {
+      window.getComputedStyle = real;
+    }
+    expect(app.session().notice).toEqual({ text: FAILED.drawFigure, level: "⚠" });
+  });
+
+  // **A gallery record that cannot be RUN drew the parked sandbox curve.** `drawnContour` fell back
+  // to `state.contour`, which in gallery mode is the reader's own parked sandbox contour (M6.1's
+  // finding) — so a record whose `solveFamily` refuses outright would have put a plausible picture
+  // of a different problem on the stage, fed its piece count to `describeStage`'s generated
+  // sentence and its ids to the sweep's row lookup, beside a card saying the record could not be
+  // run. Unreachable with the shipped corpus (all 28 run), which is why it is asserted on the
+  // FUNCTION rather than through a mount: the fallback has to be empty by construction and not
+  // because nothing has reached it yet.
+  it("draws NOTHING for a gallery record whose run is null", () => {
+    const parked = circleTemplate([0, 0], 1.5);
+    const state: ShellState = { ...defaultState(parked), mode: "gallery", record: "circle-linear-cos" };
+    // The anti-vacuity half: the same state with no resolution at all still hands back the contour
+    // it carries, so the emptiness below is about the failed RUN and not about the state.
+    expect(drawnContour(state, undefined).pieces).toHaveLength(parked.pieces.length);
+    const failed = { kind: "gallery", run: null } as unknown as StateResolution;
+    expect(drawnContour(state, failed).pieces).toHaveLength(0);
+    expect(drawnContour(state, failed).params).toEqual({});
   });
 });
