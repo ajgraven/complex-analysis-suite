@@ -273,7 +273,7 @@ describe("the refusals are decided rather than discovered downstream", () => {
     const r = runDeclared(declaration, contour, shifted);
     expect(r.ok).toBe(false);
     if (r.ok) throw new Error("unreachable");
-    expect(r.reason).toMatch(/ORIGIN/);
+    expect(r.reason).toMatch(/about the origin/);
   });
 
   it("a cofactor that is not rational gets no exact value, and says so rather than guessing", () => {

@@ -772,7 +772,7 @@ describe("L6 — the wedge lemma, routed and certified", () => {
     const gaussian = arcRow(run("exp(-z^2)", wedge(2)));
     expect(gaussian?.status).toBe("failed");
     expect(gaussian?.evidence.level).toBe("⚠");
-    expect(gaussian?.evidence.method).toMatch(/GROWS/);
+    expect(gaussian?.evidence.method).toMatch(/grows rather than decays/);
     expect(gaussian?.evidence.method).toMatch(/runs past π\/2/);
   });
 
