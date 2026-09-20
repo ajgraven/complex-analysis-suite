@@ -43,6 +43,7 @@ import { exactPolesOf } from "./algebraic.js";
 import { ExpSum, formatExpSum } from "./expSum.js";
 import { Exponent } from "./exponent.js";
 import { formatSqrtExt } from "./formatExact.js";
+import { LATEX } from "./notation.js";
 import type { Cx } from "./geom.js";
 
 /** `f = e^{az}·N(w)/D(w)` with `w = e^z`, all over ℚ(i). */
@@ -222,6 +223,8 @@ export interface LatticePole {
   readonly order: number;
   readonly residue: ExpSum;
   readonly residueText: string;
+  /** The same, in the LaTeX notation — `formatExpSum` at `LATEX`, never a second rendering. */
+  readonly residueLatex: string;
   /** The root of `D` this pole sits over. */
   readonly root: SqrtExt;
 }
@@ -352,6 +355,7 @@ export function polesInBand(form: LatticeForm, lo: Frac, hi: Frac): StripResult 
         order: 1,
         residue,
         residueText: formatExpSum(residue),
+        residueLatex: formatExpSum(residue, LATEX),
         root: p.at,
       });
     }

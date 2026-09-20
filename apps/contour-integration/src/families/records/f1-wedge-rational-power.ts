@@ -63,7 +63,7 @@ export const f1WedgeRationalPower: Family = {
     integrand: "1/(1 + z^n)",
     // The outgoing ray IS the target: `f` is real and positive on `[0,∞)`, so no functional is taken.
     relation: "Re",
-    note: "the return ray is the outgoing ray rotated by ω = e^{2πi/n}, and since f(ωz) = f(z) it contributes −ω times the target — so the solve divides by 1 − ω, whose |1 − ω| = 2 sin(π/n) is the sin(π/n) of the answer",
+    note: "the return ray is the outgoing ray rotated by ω = e^{2πi/n}, and since f(ωz) = f(z) it contributes −ω times the target — so the identity is divided by 1 − ω, whose |1 − ω| = 2 sin(π/n) is the sin(π/n) of the answer",
   },
 
   parameters: [{ name: "n", domain: "integer", constraints: ["n >= 2"] }],
@@ -240,7 +240,7 @@ export const f1WedgeRationalPower: Family = {
       numeric: 1.2091995761561452,
       verifiedTo: 1.8e-16,
       method:
-        "x = 1/t folds [1, inf) onto [0,1], giving the integral of (1+t)/(1+t^3) on [0,1] — smooth, 64x48 composite Gauss–Legendre; cross-checked by truncation at X = 30 plus the exact tail series. The poles of 1 + z^3 ARE expressible in one quadratic extension, so this fixture takes the per-pole route while n = 5 and n = 7 take the structural one — and all three print the same shape",
+        "$x = 1/t$ folds $[1,\\infty)$ onto $[0,1]$, giving the integral of $(1+t)/(1+t^3)$ on $[0,1]$ — smooth, by $64\\times48$ composite Gauss–Legendre; cross-checked by truncation at $X = 30$ plus the exact tail series. The poles of $1 + z^3$ do lie in one quadratic extension, so this point takes the per-pole route where $n = 5$ and $n = 7$ take the structural one, and all three print the same shape",
     },
     {
       params: { n: 2 },
@@ -248,7 +248,7 @@ export const f1WedgeRationalPower: Family = {
       numeric: 1.5707963267948966,
       verifiedTo: 5.7e-16,
       method:
-        "the same folding. The degenerate-looking case that is not: the wedge is the upper half-plane, the return ray is the negative real axis, and −ω = 1 so the solve divides by 2",
+        "the same folding. The degenerate-looking case that is not: the sector is the upper half-plane, the return ray is the negative real axis, and $-\\omega = 1$, so the identity is divided by 2",
     },
     {
       params: { n: 5 },
@@ -256,14 +256,14 @@ export const f1WedgeRationalPower: Family = {
       numeric: 1.068959332115595,
       verifiedTo: 4.2e-16,
       method:
-        "the same folding. NOT reachable pole by pole: the roots of 1 + z^5 generate a degree-4 field, so the residue at exp(i pi/5) is read structurally and the answer carries a sine rather than a radical",
+        "the same folding. Not reachable pole by pole: the roots of $1 + z^5$ generate a field of degree 4, so the residue at $e^{i\\pi/5}$ is read structurally and the answer carries a sine rather than a radical",
     },
     {
       params: { n: 7 },
       value: "(pi/7)/sin(pi/7)",
       numeric: 1.0343760552667964,
       verifiedTo: 6.4e-16,
-      method: "the same folding; degree 6, so likewise structural",
+      method: "the same folding; degree 6, and structural for the same reason",
     },
   ],
 };

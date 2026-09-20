@@ -140,7 +140,7 @@ export function applyBranchTheorem(input: BranchTheoremInput): ResidueTheoremRes
       "the branch point carries no residue; each pole of the rational cofactor contributes $z_0^{\\alpha}\\operatorname{Res}(R, z_0)$ in the declared determination",
       {
         provenance: [
-          { ok: true, text: "the branch point is NOT a pole: there is no Laurent series at it and no residue to take" },
+          { ok: true, text: "the branch point is not a pole: there is no Laurent series at it and no residue to take" },
           {
             ok: false,
             text: "no quadrature cross-check: sampling $z^{\\alpha}$ needs a determination, and a naive evaluator would use the principal branch and answer a different question",

@@ -3988,9 +3988,23 @@ students, as an exploration instrument first with a pedagogical mode.
 
 ### Action items
 
-1. Phase 0 through Phase 5 per the plan; STATUS.md is the record.
-2. After the final merge: CLAUDE.md status paragraph, README, PLAN §5 and §7 updated; the M8 plan's
-   findings folded into `docs/refactor/LOG.md`.
+1. ~~Phase 0 through Phase 5 per the plan; STATUS.md is the record.~~ **DONE.** Phase 0 merged to
+   `master` alone ([#340](https://github.com/ajgraven/complex-analysis-suite/pull/340)); Phases 1–5
+   in one merge. Forty-odd steps, each gated and mutation-swept, recorded in
+   [`contour-integration/M8/STATUS.md`](contour-integration/M8/STATUS.md).
+2. ~~After the final merge: CLAUDE.md status paragraph, README, PLAN §5 and §7 updated; the M8 plan's
+   findings folded into `docs/refactor/LOG.md`.~~ **DONE at step 5.3** — CLAUDE.md's *In progress*
+   paragraph is now *Done — M8* (and its test census and its jsdom paragraph were corrected on the
+   way, the latter having named three specs the M8 cutover deleted); the root README's census, the
+   app README's status and four new phase paragraphs, PLAN §5's superseding note and §7's M8 gate
+   block, and one `docs/refactor/LOG.md` entry.
+3. **Two things this ADR did not anticipate, recorded for the next rebuild.** The milestone's own
+   GATES were its weakest artefact twice over (M6.1's fixed-point clause survived 11 of 20 mutants;
+   step 3.6's clause named a permalink that could not exist), so a gate needs sweeping like any other
+   test. And the plan's serialisation carrier for an edited contour was FALSIFIED by measuring it —
+   a pen wire changes the ledger for four of the ten templates — so the recipe carries the reader's
+   operations instead. Neither was a failure of the decision; both were failures to measure a
+   sentence before building on it.
 
 ---
 
@@ -4126,7 +4140,15 @@ Staged in [`review/2026-09-16-complex-dynamics-review/NAV-WITHDRAWAL-PLAN.md`](r
 2. [ ] **N1** — drop the call sites and CSS offsets in the four non-M8 apps (2D Electrostatics,
        Hele-Shaw Flow, Potential Theory, 2D Hydrodynamics; six pages).
 3. [ ] **N2** — remove `navHeader.ts`, `nav.css`, `apps.ts`, the exports and the test from `@cas/ui`.
-4. [ ] **N3** — Contour Integration, through M8 (the new shell never mounts it; the old shell's host
-       and the structural test go with the M8 merge).
+4. [ ] **N3** — Contour Integration, through M8. *(Corrected at the M8 merge, 2026-09-20: the
+       premise is false — **the new shell DOES mount it**. `src/shell/app.ts` imports
+       `mountNavHeader` from `@cas/ui` and gives it its own `.shell2Nav` host prepended before
+       `<main>`, which is M6.4's ordering finding carried over deliberately. So N3 is real work on the M8 shell
+       — the host, the call, six `--cas-nav-h` offsets in `src/ui/shell.css`, and the assertions
+       in `test/shell2.test.ts` and `test/shell2.browser.test.ts` — not a deletion that rides
+       along with the merge. It was left out
+       of the M8 PR deliberately: ADR-0044 landed on `master` while M8 was in flight, N1–N5 are all
+       open, and N2 removes `navHeader.ts` from `@cas/ui` while four other apps still call it, so
+       the sequencing is the owner's.)*
 5. [ ] **N4** — the documentation sweep listed under _Consequences_.
 6. [ ] **N5** — rebuild, re-run the a11y roster, re-record the baseline, explain every delta.

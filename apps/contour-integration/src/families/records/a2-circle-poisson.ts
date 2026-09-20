@@ -154,14 +154,14 @@ export const a2CirclePoisson: Family = {
       numeric: 8.377580409572781,
       verifiedTo: 1e-14,
       method:
-        "enclosed pole z = a = 1/2 (simple), Res = i/(a²−1) = −4i/3 exactly in ℚ(i); cross-checked against a small-circle quadrature and the contour quadrature",
+        "the enclosed pole $z = a = 1/2$ is simple, with $\\operatorname{Res} = i/(a^2-1) = -4i/3$ exactly in $\\mathbb{Q}(i)$; cross-checked against a small-circle quadrature and the contour quadrature",
     },
     {
       params: { a: -0.5 },
       value: "8*pi/3",
       numeric: 8.377580409572781,
       verifiedTo: 1e-14,
-      method: "the sign of a moves the enclosed pole to −1/2 and leaves the value unchanged",
+      method: "the sign of $a$ moves the enclosed pole to $-1/2$ and leaves the value unchanged",
     },
     {
       params: { a: 2 },
@@ -169,14 +169,14 @@ export const a2CirclePoisson: Family = {
       numeric: 2.0943951023931953,
       verifiedTo: 1e-14,
       method:
-        "|a| > 1, so the ENCLOSED pole is now z = 1/a = 1/2 and Res = i/(1−a²) = −i/3 — the fixture that catches an unconditional 'take z = a', which returns −2π/3 for a squared modulus",
+        "$|a| > 1$, so the enclosed pole is now $z = 1/a = 1/2$ and $\\operatorname{Res} = i/(1-a^2) = -i/3$; an unconditional 'take $z = a$' returns $-2\\pi/3$ here, for a squared modulus",
     },
     {
       params: { a: -3 },
       value: "pi/4",
       numeric: 0.7853981633974483,
       verifiedTo: 1e-13,
-      method: "|a| > 1 with a < 0: both the switch and the sign exercised at once",
+      method: "$|a| > 1$ with $a < 0$: the switch and the sign exercised at once",
     },
     {
       params: { a: 0 },
@@ -184,7 +184,7 @@ export const a2CirclePoisson: Family = {
       numeric: 6.283185307179586,
       verifiedTo: 1e-15,
       method:
-        "the degenerate case: z = 1/a leaves the finite plane, f = −i/z has ONE simple pole, and the pole count itself changes — the fixture that catches a cached pole set",
+        "the degenerate case: $z = 1/a$ leaves the finite plane, $f = -i/z$ has one simple pole, and the pole count itself changes — a pole set computed once and cached would not follow it",
     },
     {
       params: { a: 0.9 },
@@ -192,7 +192,7 @@ export const a2CirclePoisson: Family = {
       numeric: 33.06939635357678,
       verifiedTo: 1e-14,
       method:
-        "a pole close to the contour (|z| = 0.9), where the exact route is unaffected and a floating one starts to lose digits",
+        "a pole close to the contour ($|z| = 0.9$), where the exact route is unaffected and a floating-point one starts to lose digits",
     },
   ],
 };

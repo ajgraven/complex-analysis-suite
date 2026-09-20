@@ -111,7 +111,7 @@ export function residueAtInfinityOf(
         provenance: [
           {
             ok: true,
-            text: `f = O(z^(${formatFrac(order)})) at infinity, which is NOT enough to make the residue vanish — 1/z is regular there and has Res = −1`,
+            text: `f = O(z^(${formatFrac(order)})) at infinity, which is not enough to make the residue vanish — 1/z is regular there and has Res = −1`,
           },
         ],
       },
@@ -236,7 +236,7 @@ export function branchResidueAtInfinity(
         provenance: [
           {
             ok: true,
-            text: `f = O(z^(${formatFrac(order)})) at infinity, which is NOT enough to make the residue vanish — 1/z is regular there and has Res = −1`,
+            text: `f = O(z^(${formatFrac(order)})) at infinity, which is not enough to make the residue vanish — 1/z is regular there and has Res = −1`,
           },
           {
             ok: true,

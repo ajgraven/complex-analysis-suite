@@ -20,11 +20,12 @@ import {
   type ShellState,
   type StateResolution,
 } from "../src/shell/state.js";
-import { penContour } from "../src/engine/contour/pen.js";
+import { penContour, sameShape } from "../src/engine/contour/pen.js";
+import { resolveScalar } from "../src/engine/contour/model.js";
 import { decodeShell, encodeShell } from "../src/shell/viewState.js";
 import { TEMPLATES } from "../src/shell/templates.js";
 import { NO_BRANCH, type BranchChoice } from "../src/kernel/branch/model.js";
-import { setParam, translateContour } from "../src/engine/contour/edit.js";
+import { applyOps, setParam, translateContour } from "../src/engine/contour/edit.js";
 
 const base = (): ShellState => defaultState(TEMPLATES[0].build());
 const template = (id: string): ShellState["contour"] => {
@@ -61,6 +62,24 @@ function verdict(s: ShellState): string {
     out.push(`empty=${res.reason ?? "-"}`);
   }
   return out.join("\n");
+}
+
+/** The wire object inside a hash — for the claims that are about a key being ABSENT. */
+function payloadOf(hash: string): Record<string, unknown> {
+  const env = JSON.parse(atob(hash.slice(4).replace(/-/g, "+").replace(/_/g, "/"))) as Record<string, unknown>;
+  return env.state as Record<string, unknown>;
+}
+
+/**
+ * Put a rewritten state object back into a hash, in the SAME alphabet {@link payloadOf} read.
+ *
+ * `@cas/interchange` uses base64url, so a `btoa` round trip would differ from the codec's own the
+ * moment a payload carried a `+` or a `/` — which is a test that depends on its fixture's bytes.
+ */
+function rehash(hash: string, state: Record<string, unknown>): string {
+  const env = JSON.parse(atob(hash.slice(4).replace(/-/g, "+").replace(/_/g, "/"))) as Record<string, unknown>;
+  const json = JSON.stringify({ ...env, state });
+  return `#vs=${btoa(json).replace(/\+/g, "-").replace(/\//g, "_")}`;
 }
 
 /** Encode, decode into a FRESH state, and hand back both the decoded state and its hash. */
@@ -180,6 +199,25 @@ describe("the gate: the sandbox, with a declared branch", () => {
     if (!enc.ok) expect(enc.reason).toContain("does not rebuild the contour on screen");
   });
 
+  it("REFUSES a declaration whose branch point the state no longer has", () => {
+    // **The two halves of `encodeShell` held different postures**, found reviewing M8 step 1.5b. The
+    // contour's recipe is rebuilt and compared before a link is minted, because a link that opens a
+    // different shape is worse than no link. A declaration was written straight out, and the DECODE
+    // side refused it on arrival — loud rather than silent, so nothing was ever wrong, but the
+    // failure was deferred onto whoever opened the link, who is exactly the reader who cannot do
+    // anything about it. Reachable by declaring a factor and then removing its branch point, which
+    // no code path prevents.
+    const s = declaredKeyhole();
+    expect(s.declaration, "this fixture declares nothing, so the test asserts nothing").not.toBeNull();
+    const orphaned: ShellState = { ...s, branch: { ...s.branch, points: [] } };
+    const enc = encodeShell(orphaned);
+    expect(enc.ok).toBe(false);
+    if (!enc.ok) expect(enc.reason).toContain("no longer has");
+    // And the un-orphaned state still encodes, so the check is about the ORPHAN and not about
+    // declarations in general.
+    expect(encodeShell(s).ok).toBe(true);
+  });
+
   it("round-trips a contour at MOVED PARAMETERS, which move the ledger", () => {
     // The sandbox's `R` handle edits a parameter, so a link that dropped the values would reopen at
     // the template's own — a different contour behind the same picture. The arc's bound moves with
@@ -254,6 +292,65 @@ describe("the gate: the sandbox, with a declared branch", () => {
     expect(back.scrub).toBe(0.375);
     expect(back.iso).toBe(true);
     expect(verdict(back)).toBe(verdict(s));
+  });
+
+  it("carries the AMPLITWIST toggle as a TRI-STATE, both values and the absence — M8 step 3.3", () => {
+    // `showStep` is `iso`'s shape, not `stageMode`'s: `false` and "I have not chosen" are different
+    // states, because the default follows the MODE (on in Worked example, off in Explore) and
+    // collapsing them would hand a reader who deliberately turned the arrows off the mode's answer
+    // again on the next render. So all three have to survive the wire, and the `null` one survives
+    // by being ABSENT rather than by being written — which is also why the pairing below is on the
+    // payload and not only on the decoded state.
+    for (const want of [true, false] as const) {
+      const back = roundTrip({ ...base(), showStep: want }).state;
+      expect(`showStep ${String(want)} came back as ${String(back.showStep)}`).toBe(
+        `showStep ${String(want)} came back as ${String(want)}`,
+      );
+    }
+    const untouched = roundTrip({ ...base(), showStep: null }).state;
+    expect(`untouched came back as ${String(untouched.showStep)}`).toBe("untouched came back as null");
+
+    // **The `false` case is the one a "carried it" test can pass without carrying it**, because a
+    // codec that dropped the field entirely also decodes to `null`, and `null` in Explore resolves
+    // to off — which LOOKS like `false`. So the wire is read directly: an explicit choice is a key
+    // on it and an untouched one is not.
+    const off = encodeShell({ ...base(), showStep: false });
+    const none = encodeShell({ ...base(), showStep: null });
+    expect(`explicit off is on the wire: ${off.ok && off.hash !== (none.ok ? none.hash : "")}`).toBe(
+      "explicit off is on the wire: true",
+    );
+  });
+
+  it("carries the STAGE MODE, which decides the picture and no number — M8 step 1.9", () => {
+    // A view field like the three above, and carried for the same reason: a textbook plate and a
+    // full-chroma portrait are two pictures of one argument, and the one the sharer chose is the
+    // one that should open.
+    for (const mode of ["full", "iso", "textbook"] as const) {
+      const s: ShellState = { ...base(), stageMode: mode };
+      const back = roundTrip(s).state;
+      expect(back.stageMode, mode).toBe(mode);
+      expect(verdict(back), mode).toBe(verdict(s));
+    }
+  });
+
+  it("the DEFAULT stage mode costs no bytes, and an old link decodes to it", () => {
+    // `put`'s whole point: `quiet` is absent from the wire, so every link minted before step 1.9 is
+    // already a link that names it. Asserted on the PAYLOAD rather than on the hash length, because
+    // two hashes of equal length can differ, and because an absent key is the claim.
+    const quiet = encodeShell({ ...base(), stageMode: "quiet" });
+    expect(quiet.ok).toBe(true);
+    if (!quiet.ok) return;
+    expect(Object.prototype.hasOwnProperty.call(payloadOf(quiet.hash), "sm")).toBe(false);
+    // And it is the key's absence and not a codec that never writes it: a non-default does appear.
+    const loud = encodeShell({ ...base(), stageMode: "textbook" });
+    expect(loud.ok).toBe(true);
+    if (loud.ok) expect(payloadOf(loud.hash).sm).toBe("textbook");
+
+    // The other half — a link with no `sm` at all opens quiet rather than on whatever is on screen.
+    const back = decodeShell(quiet.hash);
+    expect(back).not.toBeNull();
+    if (back === null || !back.ok) throw new Error("expected a decode");
+    expect(back.state.stageMode).toBe("quiet");
   });
 });
 
@@ -339,6 +436,7 @@ describe("a link that cannot be honoured refuses BY NAME", () => {
     expect(refusal(withState({ s: 2 }))).toContain("[0, 1]");
     expect(refusal(withState({ k: "rainbow" }))).toContain("rainbow");
     expect(refusal(withState({ i: "yes" }))).toContain("boolean");
+    expect(refusal(withState({ sm: "neon" }))).toContain("neon");
     expect(refusal(withState({ bi: { a: null } }))).toContain("'a'");
   });
 
@@ -372,6 +470,269 @@ describe("a link that cannot be honoured refuses BY NAME", () => {
     const drawn = penContour({ nodes: [{ at: [-1, -1] }, { at: [1, -1] }, { at: [0, 1] }], closed: true });
     const ok = encodeShell({ ...base(), contour: drawn, contourSource: null, sandboxContour: drawn });
     expect(ok.ok, ok.ok ? "" : ok.reason).toBe(true);
+  });
+
+  it("a role this build does not have, and a lemma on a role that cannot hold one", () => {
+    // M8 step 4.4. The two refusals that make the annotation maps a correctness surface rather than
+    // a bag of strings: a role the build cannot honour, and a claim the MODEL cannot hold. The
+    // second is the sharper one — `setRole` drops a lemma from a non-`vanish` piece silently and is
+    // right to, so a link saying `"target:L2"` would open with the lemma gone and nothing to say it
+    // had been there. Checked before `setRole` ever sees it.
+    // Built by minting a real link and REWRITING its contour object, so everything around the two
+    // maps is exactly what the codec itself produces — a hand-built envelope would be testing this
+    // file's idea of the format.
+    const wire = (c: Record<string, unknown>): string => {
+      const drawn = penContour({ nodes: [{ at: [-1, -1] }, { at: [1, -1] }, { at: [0, 1] }], closed: true });
+      const e = encodeShell({ ...base(), contour: drawn, contourSource: null, sandboxContour: drawn });
+      if (!e.ok) throw new Error(e.reason);
+      const state = payloadOf(e.hash);
+      state.c = { ...(state.c as Record<string, unknown>), ...c };
+      return rehash(e.hash, state);
+    };
+    const unknownRole = decodeShell(wire({ r: { "0": "hypotenuse" } }));
+    expect(unknownRole?.ok).toBe(false);
+    if (unknownRole !== null && !unknownRole.ok) {
+      expect(unknownRole.reason).toContain("hypotenuse");
+      expect(unknownRole.reason).toContain("this build does not have");
+    }
+    const lemmaOnTarget = decodeShell(wire({ r: { "0": "target:L2" } }));
+    expect(lemmaOnTarget?.ok).toBe(false);
+    if (lemmaOnTarget !== null && !lemmaOnTarget.ok) {
+      expect(lemmaOnTarget.reason).toContain("only a vanishing piece");
+    }
+    // A lemma this build does not know, on a role that CAN hold one — the case the role check above
+    // cannot reach, and the one a future lemma id would arrive as.
+    const unknownLemma = decodeShell(wire({ r: { "0": "vanish:L9" } }));
+    expect(unknownLemma?.ok).toBe(false);
+    if (unknownLemma !== null && !unknownLemma.ok) {
+      expect(unknownLemma.reason).toContain("L9");
+      expect(unknownLemma.reason).toContain("not a lemma this build knows");
+    }
+    // An empty name. `renamePiece` refuses one by returning the contour, so without this check the
+    // link would open with the ORIGINAL name and no sign that it had asked for anything else —
+    // silence where a refusal belongs, which is the one outcome this file rules out.
+    for (const blank of ["", "   "]) {
+      const empty = decodeShell(wire({ n: { "0": blank } }));
+      expect(empty?.ok, `'${blank}' was accepted`).toBe(false);
+      if (empty !== null && !empty.ok) expect(empty.reason).toContain("empty string");
+    }
+    // Out of range, which is what an index-keyed map has instead of an id.
+    const noSuchPiece = decodeShell(wire({ r: { "9": "target" } }));
+    expect(noSuchPiece?.ok).toBe(false);
+    if (noSuchPiece !== null && !noSuchPiece.ok) expect(noSuchPiece.reason).toContain("piece 9");
+    // **And the pairing**: the same wire with a role the build DOES have decodes, so the three
+    // refusals are about what was written and not about the shape carrying them.
+    const fine = decodeShell(wire({ r: { "0": "target", "2": "vanish:L2" } }));
+    expect(fine?.ok, fine !== null && !fine.ok ? fine.reason : "").toBe(true);
+    if (fine !== null && fine.ok) {
+      expect(fine.state.contour.pieces[0].role).toBe("target");
+      expect(fine.state.contour.pieces[2].lemma).toBe("L2");
+    }
+  });
+
+  it("carries a DRAWN argument's roles, names and all — M8 step 4.4", () => {
+    // Step 4.2 refused this link by name, because `sameShape` compares geometry and nothing else:
+    // a link minted then would have VERIFIED perfectly and opened the same curve with every piece
+    // back at `free`, the reader's argument gone and no sign it had been there. The refusal was the
+    // signal; this is the answer to it.
+    const drawn = penContour({
+      nodes: [
+        { at: [-1, -1], role: "target" },
+        { at: [1, -1] },
+        { at: [0, 1], role: "vanish", lemma: "L2" },
+      ],
+      closed: true,
+    });
+    const named = { ...drawn, pieces: drawn.pieces.map((q, i) => (i === 1 ? { ...q, name: "the reader's own words" } : q)) };
+    const e = encodeShell({ ...base(), contour: named, contourSource: null, sandboxContour: named });
+    expect(e.ok, e.ok ? "" : e.reason).toBe(true);
+    if (!e.ok) return;
+    const back = decodeShell(e.hash);
+    expect(back?.ok).toBe(true);
+    if (back === null || !back.ok) return;
+    // Piece by piece, because the diff is keyed by INDEX and an off-by-one would still round-trip
+    // the SET of roles while attaching each to the wrong piece.
+    expect(back.state.contour.pieces.map((q) => `${q.role}${q.lemma ?? ""}|${q.name}`)).toEqual(
+      named.pieces.map((q) => `${q.role}${q.lemma ?? ""}|${q.name}`),
+    );
+  });
+
+  it("holds an UNEDITED recipe to the representation, not just to the picture — M8 step 4.4b", () => {
+    // **The other branch of the verification fork, and the sweep is what asked for it.** With no
+    // ops the rebuild is deterministic from the same inputs, so the comparison is structural and
+    // there is no reason to weaken it; the contour below draws the SAME curve and is written
+    // differently — a radius of 4 as the literal 4 rather than as the parameter the template binds
+    // — so `sameShape` accepts it and the recipe is still false. Refusing is what keeps
+    // `contourSource` a falsifiable claim rather than a claim about pictures: a link that opened
+    // this would lose the slider, which is a fact about the contour no sampled point can see.
+    const built = template("semicircle");
+    const frozen: ShellState["contour"] = {
+      ...built,
+      pieces: built.pieces.map((q) =>
+        q.geom.kind !== "arc" ? q : { ...q, geom: { ...q.geom, radius: resolveScalar(q.geom.radius, built.params) } },
+      ),
+    };
+    expect(sameShape(frozen, built), "the fixture is not the same curve, so it tests nothing").toBe(true);
+    expect(JSON.stringify(frozen.pieces)).not.toBe(JSON.stringify(built.pieces));
+    const e = encodeShell({
+      ...base(),
+      contour: frozen,
+      sandboxContour: frozen,
+      contourSource: { template: "semicircle", shift: [0, 0] },
+    });
+    expect(e.ok).toBe(false);
+    if (!e.ok) expect(e.reason).toContain("does not rebuild the contour on screen");
+  });
+
+  it("refuses an edit list it cannot read, and one it cannot apply — M8 step 4.4b", () => {
+    // The two questions a reader has about a link that will not open, told apart: an entry this
+    // build cannot make, and an entry it understands perfectly and cannot perform. The second is
+    // `applyOps`' answer rather than a second copy of the engine's rules, which is why the message
+    // names the op's PLACE in the list — the only thing positional data lets anyone act on.
+    // The KEYHOLE, because `deletePiece` refuses below three remaining pieces and a semicircle has
+    // two — the fixture would then be testing that refusal instead of this one.
+    const ops = [{ k: "d", id: "upper" }] as const;
+    const replayed = applyOps(template("keyhole"), ops);
+    expect(replayed.ok, "the fixture's own edit was refused").toBe(true);
+    if (!replayed.ok) return;
+    const edited: ShellState = {
+      ...base(),
+      contour: replayed.contour,
+      sandboxContour: replayed.contour,
+      contourSource: { template: "keyhole", shift: [0, 0], ops },
+    };
+    const hash = (forged: unknown): string => {
+      const e = encodeShell(edited);
+      if (!e.ok) throw new Error(e.reason);
+      const state = payloadOf(e.hash);
+      state.c = { ...(state.c as Record<string, unknown>), o: forged };
+      return rehash(e.hash, state);
+    };
+    const unknown = decodeShell(hash([{ k: "z", id: "upper" }]));
+    expect(unknown?.ok).toBe(false);
+    if (unknown !== null && !unknown.ok) expect(unknown.reason).toContain("this build cannot make");
+    const offPiece = decodeShell(hash([{ k: "s", id: "upper", at: 1.5 }]));
+    expect(offPiece?.ok).toBe(false);
+    if (offPiece !== null && !offPiece.ok) expect(offPiece.reason).toContain("not a point along it");
+    // Understood and inapplicable: there is no piece called `nowhere`, and the refusal says WHICH
+    // edit rather than blaming the recipe's parameters.
+    const cannot = decodeShell(hash([{ k: "d", id: "upper" }, { k: "d", id: "nowhere" }]));
+    expect(cannot?.ok).toBe(false);
+    if (cannot !== null && !cannot.ok) {
+      expect(cannot.reason).toContain("edit 2");
+      expect(cannot.reason).toContain("does not apply");
+    }
+  });
+
+  it("CHECKS the origin claim rather than trusting it — M8 step 4.4b", () => {
+    // The claim says some circle about the origin passes through both ends, which is the statement
+    // that they are the same distance from it. A link saying otherwise is asking for an arc that
+    // does not exist, and building the nearest thing would mint a `≤` from geometry that cannot
+    // carry one — which is the whole reason the claim is on the wire rather than derived.
+    const lopsided = penContour({
+      nodes: [{ at: [-8, 0] }, { at: [3, 0], bulge: 5 }],
+      closed: true,
+    });
+    const e = encodeShell({ ...base(), contour: lopsided, contourSource: null, sandboxContour: lopsided });
+    expect(e.ok, e.ok ? "" : e.reason).toBe(true);
+    if (!e.ok) return;
+    const state = payloadOf(e.hash);
+    const forged = { ...(state.c as Record<string, unknown>), k: [1] };
+    const bad = decodeShell(rehash(e.hash, { ...state, c: forged }));
+    expect(bad?.ok).toBe(false);
+    if (bad !== null && !bad.ok) {
+      expect(bad.reason).toContain("centred at the origin");
+      expect(bad.reason).toContain("not the same distance");
+    }
+    // Out of range, which the list needs as much as the maps do.
+    const far = decodeShell(rehash(e.hash, { ...state, c: { ...(state.c as Record<string, unknown>), k: [7] } }));
+    expect(far?.ok).toBe(false);
+    if (far !== null && !far.ok) expect(far.reason).toContain("piece 7");
+  });
+
+  it("bounds an OPEN path's indices by its PIECES, which it has one fewer of than vertices", () => {
+    // **The refusal has to name the reason, not only refuse.** A three-vertex open path is two
+    // pieces, so index 2 is out of range — but bounding by the VERTEX count instead accepts it, and
+    // the link then fails a few lines later with "could not be rebuilt", which blames the geometry
+    // for a fault in the annotation map. Measured: the closed case cannot tell the two bounds apart,
+    // because a closed path has exactly as many pieces as vertices.
+    const open = penContour({ nodes: [{ at: [-1, -1] }, { at: [1, -1] }, { at: [0, 1] }], closed: false });
+    expect(open.pieces).toHaveLength(2);
+    const e = encodeShell({ ...base(), contour: open, contourSource: null, sandboxContour: open });
+    expect(e.ok, e.ok ? "" : e.reason).toBe(true);
+    if (!e.ok) return;
+    const state = payloadOf(e.hash);
+    state.c = { ...(state.c as Record<string, unknown>), r: { "2": "target" } };
+    const back = decodeShell(rehash(e.hash, state));
+    expect(back?.ok).toBe(false);
+    if (back !== null && !back.ok) {
+      expect(back.reason).toContain("piece 2");
+      expect(back.reason).toContain("has 2");
+      expect(back.reason, "the refusal blamed the geometry").not.toContain("could not be rebuilt");
+    }
+  });
+
+  it("costs NOTHING when nothing is annotated, so every link minted before step 4.4 is unchanged", () => {
+    // The diff rule, measured rather than asserted: a contour whose roles and names are exactly what
+    // its own recipe rebuilds carries neither map, so the bytes are the bytes they always were.
+    const bare = penContour({ nodes: [{ at: [-1, -1] }, { at: [1, -1] }, { at: [0, 1] }], closed: true });
+    const e = encodeShell({ ...base(), contour: bare, contourSource: null, sandboxContour: bare });
+    expect(e.ok).toBe(true);
+    if (!e.ok) return;
+    expect(Object.keys(payloadOf(e.hash).c as Record<string, unknown>).sort()).toEqual(["v"]);
+  });
+});
+
+describe("the stepper's place in the argument travels — M8 step 3.6", () => {
+  // **`stepRoundTrip`, not `roundTrip`** — the file already has one at module scope, and
+  // `no-shadow` is an ERROR for this app. It shipped shadowed in steps 3.6 and 4.1 because the gate
+  // harness reported the BUILD's exit code rather than lint's; see this step's findings.
+  const stepRoundTrip = (step: number | "all"): number | "all" => {
+    const e = encodeShell({ ...base(), mode: "gallery", record: "jordan-cosine-kernel", fixture: 0 }, step);
+    if (!e.ok) throw new Error(e.reason);
+    const d = decodeShell(e.hash);
+    if (d === null || !d.ok) throw new Error("the link did not decode");
+    return d.step;
+  };
+
+  it("carries a step, and absent means the whole argument at once", () => {
+    // **The one field on this wire that is not read out of `ShellState`.** M6.1 put the reader's
+    // place in an argument in the session and M7.4 made `resetTransient` clear it, both against a
+    // STALE step surviving a change of argument — which a link naming a step for its own argument
+    // is not. Until this field the plan's own Phase 3 gate clause, *a worked-example permalink at
+    // step 5 of A6*, named something that did not exist.
+    expect(stepRoundTrip(4)).toBe(4);
+    expect(stepRoundTrip(0)).toBe(0);
+    expect(stepRoundTrip("all")).toBe("all");
+  });
+
+  it("costs nothing when there is no step, so every other link is byte-identical", () => {
+    // `put`'s rule, checked rather than assumed: a field that appeared as `"all"` on the wire would
+    // grow every link in the app for the sake of the one state that does not use it.
+    const st = { ...base(), mode: "gallery" as const, record: "jordan-cosine-kernel", fixture: 0 };
+    const withNone = encodeShell(st);
+    const withAll = encodeShell(st, "all");
+    expect(withNone.ok && withAll.ok && withNone.hash).toBe(withAll.ok ? withAll.hash : "");
+  });
+
+  it("refuses a step that is not a whole number, and does NOT refuse one past the end", () => {
+    // The shape is the codec's business and the range is the card's: a step count changes with the
+    // record and the fixture, so `stepIndex` lands a stale index on the LAST step deliberately —
+    // an index that does not exist is the ordinary case rather than a broken link. A value that is
+    // not a non-negative whole number is a hash this codec never minted.
+    const bad = (v: unknown): string => {
+      const good = encodeShell({ ...base(), mode: "gallery", record: "jordan-cosine-kernel", fixture: 0 });
+      if (!good.ok) throw new Error(good.reason);
+      const env = JSON.parse(atob(good.hash.slice(4).replace(/-/g, "+").replace(/_/g, "/"))) as Record<string, unknown>;
+      const next = { ...env, state: { ...(env.state as object), st: v } };
+      const hash = `#vs=${btoa(JSON.stringify(next)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")}`;
+      const r = decodeShell(hash);
+      if (r === null) throw new Error("no link");
+      return r.ok ? "" : r.reason;
+    };
+    for (const v of [1.5, -1, "3", null]) expect(bad(v), `st: ${String(v)}`).toContain("not a whole number");
+    // 9,999 is past every record's step count in the corpus, and it is honoured.
+    expect(bad(9999)).toBe("");
   });
 });
 

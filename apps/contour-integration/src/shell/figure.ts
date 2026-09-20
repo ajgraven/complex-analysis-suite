@@ -24,6 +24,7 @@ import { integralRefusal, ledgerHeadline, type LedgerResult } from "../engine/le
 import type { ContourIntegral } from "../engine/contour/integrate.js";
 import type { ResidueTheoremResult } from "../engine/residueTheorem.js";
 import type { SolvedValue } from "../families/solveTarget.js";
+import type { FigurePlate } from "./stageView.js";
 
 /** Where each piece of the plate goes, in device pixels. */
 export interface FigureLayout {
@@ -153,7 +154,11 @@ export function figureCaption(input: {
 }
 
 /** The PNG `tEXt` entries a plate carries. */
-export function figureMetadata(permalink: string | null, caption: FigureCaption): Record<string, string> {
+export function figureMetadata(
+  permalink: string | null,
+  caption: FigureCaption,
+  plate: FigurePlate = "dark",
+): Record<string, string> {
   return {
     Software: "Contour Integration — Complex Analysis Suite",
     // `cas:state` is `@cas/export`'s DOCUMENTED key, and this is the second app to use it: of six
@@ -164,15 +169,35 @@ export function figureMetadata(permalink: string | null, caption: FigureCaption)
     // **The honest half.** The picture alone cannot say whether the argument closes, so the bytes do.
     "cas:verdict": `${caption.level} ${caption.verdict}`,
     "cas:value": caption.value,
+    // **Which plate this is**, so a figure found on its own says whether the portrait it shows is
+    // the app's or the export's: the light plate's field is washed onto paper and the print plate
+    // has no portrait at all, and neither is what a reader would see on opening `cas:state`.
+    "cas:theme": plate,
   };
 }
 
-/** Colours, read from the app's own CSS so the plate matches what was on screen. */
+/** Colours for the plate's ground and its caption. */
 export interface FigureTheme {
   readonly background: string;
   readonly text: string;
   readonly muted: string;
 }
+
+/**
+ * The three plates, and what each is FOR — M8 step 2.3.
+ *
+ * `dark` is the stage as the reader has it, including their own stage mode: the figure of a session.
+ * `light` is the same picture for a page that is not a screen — the portrait washed onto paper, the
+ * ink in the palette `inkTheme.ts` darkened for a light ground. `print` is the textbook plate: no
+ * portrait, axes and a unit grid, the contour in its piece colours, poles as ⊗ and the cuts dashed.
+ *
+ * **The caption's colours are the plate's, not the app's**, which the dark plate hid: it reads them
+ * off the shell's computed style, and on a light ground that is dark text on dark paper.
+ */
+export const FIGURE_THEMES: Readonly<Record<Exclude<FigurePlate, "dark">, FigureTheme>> = {
+  light: { background: "#f7f8fa", text: "#14181f", muted: "#4a5262" },
+  print: { background: "#ffffff", text: "#000000", muted: "#333333" },
+};
 
 /**
  * Draw the plate. The only part that needs a real 2-D context.

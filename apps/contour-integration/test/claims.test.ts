@@ -21,6 +21,7 @@ import {
   CLAIM_IDS,
   claimOf,
   certificateClaim,
+  certificateClaimAt,
   exactArg,
   pieceArg,
   renderArg,
@@ -107,6 +108,28 @@ const EXPECTED: Partial<
   ],
   "kill.no-lemma": [{ piece }, "the large arc: no bound is available for this integrand"],
   "cover.none": [{}, "no target is designated; the closed-contour integral is reported"],
+  // **The three the SANDBOX reaches and no record can** — M8 step 4.1. A declared lemma that does
+  // not apply cannot occur in the corpus, because every record's declaration is the one its own
+  // integrand satisfies (measured: all 28 agree with what the shape-driven chain picks, which is
+  // what made reading the declaration a no-op there and a check everywhere else). An undisposed
+  // piece cannot occur either: the corpus's only two `free` pieces are E3's and F2's, and both are
+  // ADR-0042 imports, which the KILL pass discharges with an `=`.
+  "cover.undisposed": [
+    { piece: { kind: "piece", id: "arc", name: "the arc", role: "free" } },
+    "the arc is neither bounded by a lemma nor carrying a known limit, so the target's value is not determined",
+  ],
+  "cover.undisposed-many": [
+    { n: { kind: "count", n: 2, noun: "piece" } },
+    "2 pieces are neither bounded by a lemma nor carrying a known limit, so the target's value is not determined",
+  ],
+  "kill.lemma-refused": [
+    {
+      piece: { kind: "piece", id: "arc", name: "the arc", role: "vanish" },
+      lemma: { kind: "text", text: "Jordan's lemma" },
+      why: { kind: "text", text: "this integrand carries no such factor" },
+    },
+    "the arc: declared to vanish by Jordan's lemma; not certified — this integrand carries no such factor",
+  ],
 };
 
 /** Every template the gallery actually produces, and the rows it produced them on. */
@@ -299,5 +322,60 @@ describe("the ledger's claims", () => {
   it("carries a certificate's own sentence through unchanged", () => {
     const text = "the semicircle → 0 as R → ∞, since |∫| ≤ 3.14/R";
     expect(renderClaim(certificateClaim(text))).toBe(text);
+  });
+
+  it("lifts the parameter out of the `at $… = value$` group, and out of no other numeral", () => {
+    // M8 step 3.2's locator, which nothing tested directly. It is deliberately narrow in two ways
+    // at once — the value must sit in an `at $… = ‹value›$` group with no `$` between the opener
+    // and it, AND the left-hand side of that `=` must be the parameter's own symbol — and either
+    // way it must fall back to the sentence the producer wrote rather than plant a scrub on a
+    // numeral that is not the parameter. In every case the rendered sentence is the ORIGINAL,
+    // character for character: the split is invisible to a reader by construction.
+    const R = { name: "R", value: 4 } as const;
+
+    // The positive control, without which the three refusals below are satisfied by a function
+    // that never splits anything.
+    const splits = "the semicircle → 0 as R → ∞, since |∫| ≤ 4.93e-2 at $R = 4$";
+    const claim = certificateClaimAt(splits, R);
+    expect(renderClaim(claim), "the split changed what a reader sees").toBe(splits);
+    expect(claim.args.param?.kind).toBe("param");
+    // Pinned as a PAIR: the head has to end on the unmatched `$` the card reopens by hand, and the
+    // tail on its partner — `claimText` slices on exactly that, so a cut one character off would
+    // print a stray delimiter and nothing here would have noticed.
+    expect([
+      renderArg(claim.args.head ?? { kind: "text", text: "" }),
+      renderArg(claim.args.tail ?? { kind: "text", text: "" }),
+    ]).toEqual(["the semicircle → 0 as R → ∞, since |∫| ≤ 4.93e-2 at $R = ", "$"]);
+
+    /** Did the sentence keep its number, or hand it over as a scrubbable parameter? */
+    const kindAt = (text: string): string =>
+      `${renderClaim(certificateClaimAt(text, R)) === text ? "same text" : "REWRITTEN"}, param ${certificateClaimAt(text, R).args.param?.kind}`;
+    expect(kindAt(splits), "the control").toBe("same text, param param");
+
+    // **A `$` between the opener and the `= 4$`**, which is what stops the search running out of
+    // the group it opened: the `4` here belongs to a degree gap two formulas later, and a scrub
+    // planted on it would write the contour's radius when a reader dragged a number that is not it.
+    expect(kindAt("at $R$ fixed, the degree gap $d = 4$"), "the search left its own group").toBe(
+      "same text, param text",
+    );
+    // **A different quantity that happens to equal the parameter** — `gaussianSide`'s own sentence,
+    // where the abscissa equals `R` on every E3 fixture. Measured before the symbol half was added:
+    // 18 rows took a scrub planted on the numeral in *Re z*, and only the RIGHT side of the
+    // rectangle did, because the left one prints `= -4$`.
+    expect(kindAt("at $\\operatorname{Re} z = 4$"), "a numeral that is not the parameter").toBe(
+      "same text, param text",
+    );
+
+    // MEASURED, and the reason this test pins the OUTCOME of both halves rather than one each:
+    // today the `$` half is SUBSUMED by the symbol half. `trim` removes whitespace only and no
+    // `paramSymbol` output contains a `$`, so any left-hand side carrying one already fails the
+    // symbol comparison — brute-forced over 111,110 sentences built from an atom grammar aimed at
+    // exactly this case (`at $`, `$`, `R`, `= 4$`, …), with zero disagreements. The `$` clause is
+    // kept because it is about the SHAPE of the group rather than its contents, and it predates
+    // the symbol clause; but a mutation deleting it is equivalent, and saying so here is cheaper
+    // than the next reader re-deriving it.
+    expect(
+      certificateClaimAt("at $R$ fixed, the degree gap $d = 4$", R).args.param,
+    ).toEqual({ kind: "text", text: "" });
   });
 });

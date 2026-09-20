@@ -25,7 +25,7 @@ It currently hosts **twelve** applications riding **thirteen** shared `@cas/*` p
 | **2D Hydrodynamics** (`apps/2d-hydrodynamics`)     | The hydrodynamic twin: ideal flow past a body as flow past the unit disk carried through a conformal map ψ: 𝔻* → ext(B) — the Joukowski/Kármán–Trefftz airfoil (the Kutta condition + Kutta–Joukowski lift) and a closed-form transplant gallery (flat plate, ellipse, deltoid, astroid, star), with `#vs=` permalinks + PNG export | Vite + TypeScript |
 | **Hele-Shaw Flow** (`apps/hele-shaw-flow`)         | Free-boundary flow in a Hele-Shaw cell as a conformal map of the disk evolving in time: the exact Graven–Makarov "twisting" quadrature domain (a complex charge grows it to a double point or a (3,2)-cusp), and a numerical interior-droplet Polubarinova–Galin evolver (injection smooths; suction fingers into a cusp) | Vite + TypeScript |
 | **Potential Theory** (`apps/potential-theory`)     | A compact set `K` as a grounded conductor: equilibrium charge, logarithmic capacity, and Green's-function equipotentials from the exterior conformal map, with Faber-polynomial zeros and Fekete/Leja points as two more roads to the equilibrium measure (exact `=` for SC polygons + closed forms, log-lightning `≈` for smooth blobs) | Vite + TypeScript |
-| **Contour Integration** (`apps/contour-integration`) | Contour integration and the residue theorem: a sandbox — drag the contour across a pole and watch `∮` jump by `2πi·Res` — and a **28-integral worked-example gallery**, each solved in closed form from `2πi Σ n(γ,aₖ)·Res` with exactly-decided windings, exact residues, certified arc bounds, and a **Closing Ledger** that answers *does this argument close?* | Vite + TypeScript |
+| **Contour Integration** (`apps/contour-integration`) | Contour integration and the residue theorem: a sandbox — drag the contour across a pole and watch `∮` jump by `2πi·Res` — and a **28-integral worked-example gallery**, each solved in closed form from `2πi Σ n(γ,aₖ)·Res` with exactly-decided windings, exact residues, certified arc bounds, and a **Closing Ledger** that answers *does this argument close?* — presented as two rails around the stage with every formula typeset, a front door of eight classics over an eight-group taxonomy, and a faded drill | Vite + TypeScript |
 
 The Correspondences tool was the **forcing function** for the whole suite: its
 requirements deliberately drove which shared packages got extracted, and in what order.
@@ -43,7 +43,7 @@ Quadrature-app-onto-Vite ESM-ification, and the shared-package extractions
 `@cas/dynamics`, and `@cas/export` on the ADR-0007 second-consumer rule, and `@cas/conformal`
 extracted *ahead* of its second consumer per [ADR-0018](docs/DECISIONS.md#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore))
 are all done; the Correspondences app exists through its parameter-space milestone plus a complete
-interactive mating visualizer. The whole workspace is green (**5895 Vitest tests** across 560
+interactive mating visualizer. The whole workspace is green (**6649 Vitest tests** across 593
 files, lint, typecheck, and per-app builds).
 
 What's **deferred / exploratory** (by design, not omission):

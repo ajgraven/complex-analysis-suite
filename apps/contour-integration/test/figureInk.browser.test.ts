@@ -6,11 +6,44 @@
 // single distinct colour where the ink layer read 44. The export therefore re-renders the stage
 // synchronously and composites in the same task — and if anyone removes that line the figure loses
 // its whole backdrop and merely looks plain, which no node test can see.
-import { describe, expect, it } from "vitest";
+//
+// **MOUNTED ON THE NEW SHELL SINCE M8 STEP 1.12**, which is where `mountApp` went. The export is the
+// same `figureBytes` — `stageView.drawNow`, then `drawFigure` over the two stage canvases and the
+// accumulator, then `injectPngText` — so every claim below is about the same code; what moved is the
+// route to it. Three things about the route are worth writing down, because each one is a way for
+// this file to end up measuring an artefact instead of the product:
+//
+//  - **The stylesheets are the app's own, all four of them.** `src/ui/app.css` went with the old
+//    shell; `theme.css` and `shell.css` are what `main.ts` loads now. Mounting without one does not
+//    give a plainer layout, it gives a DIFFERENT one, and the plate's size comes from the canvases'
+//    laid-out size — so a shell with no stylesheet exports a picture of a collapsed grid.
+//  - **The root is given a desktop box.** The browser harness's viewport is 1280 x 900 but its body
+//    has no size at all; M7.2 spent a slice discovering that a test aimed at an unsized stage is
+//    aimed at nothing.
+//  - **Every mount is destroyed.** A shell writes `#vs=` to the address bar 250 ms after its last
+//    change and the next one reads it at boot, so one test's parting state is the next one's
+//    subject — and since step 1.11 the shell also holds a `keydown` listener on the DOCUMENT.
+//
+// The cold start is now A6 (`∫dx/(1+x⁴)` by a semicircle) rather than the sandbox's circle at `1/z`,
+// which changes what the caption says and nothing about whether it is there.
+import { afterEach, describe, expect, it } from "vitest";
 import { readPngText } from "@cas/export";
-import { mountApp } from "../src/shell/app.js";
+import { mountShell2 } from "../src/shell/app.js";
 import { decodeShell } from "../src/shell/viewState.js";
 import { drawFigure, figureLayout, type FigureCaption } from "../src/shell/figure.js";
+
+// The stylesheets `main.ts` loads. `shell2.browser.test.ts` records why each one is load-bearing.
+import "katex/dist/katex.min.css";
+import "@cas/ui/nav.css";
+import "../src/ui/theme.css";
+import "../src/ui/shell.css";
+
+/** Every shell this file mounts, torn down after the test that mounted it. */
+const mounted: ReturnType<typeof mountShell2>[] = [];
+afterEach(() => {
+  for (const app of mounted.splice(0)) app.destroy();
+  if (window.location.hash !== "") window.history.replaceState(null, "", window.location.pathname);
+});
 
 /** A canvas filled with a known colour, as a stand-in for one of the app's layers. */
 function filled(w: number, h: number, colour: string, mark?: string): HTMLCanvasElement {
@@ -109,10 +142,9 @@ describe("drawFigure", () => {
 describe("the app's own exported figure", () => {
   it("CONTAINS THE PHASE PORTRAIT, and carries its permalink and verdict", async () => {
     const root = document.createElement("div");
-    root.style.width = "1200px";
-    root.style.height = "800px";
+    root.style.cssText = "position:fixed;inset:0;width:1280px;height:900px";
     document.body.replaceChildren(root);
-    mountApp(root);
+    mounted.push(mountShell2(root));
     // Two frames, so the stage has rendered and been composited at least once — which is exactly the
     // state in which a naive read of `canvas.gl` comes back blank.
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
@@ -123,6 +155,9 @@ describe("the app's own exported figure", () => {
     if (gl === null) return;
     expect(gl.width, "the stage has a drawing buffer").toBeGreaterThan(0);
 
+    // The bar's own button, by the prefix of its label — measured against `shell2/bar.ts`, where it
+    // reads "download this figure as a PNG carrying its own permalink". Driving `actions()` instead
+    // would skip the control, and the control is half of what "the app's own exported figure" means.
     const save = root.querySelector<HTMLButtonElement>('[aria-label^="download this figure"]');
     expect(save).not.toBeNull();
 

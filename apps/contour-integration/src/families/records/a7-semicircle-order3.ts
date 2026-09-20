@@ -187,7 +187,7 @@ export const a7SemicircleOrder3: Family = {
       numeric: 0.39269908169872414,
       verifiedTo: 1e-14,
       method:
-        "the Laurent route (c₋₁ of the truncated series in w = z−i, no factorial anywhere) cross-checked against the (m−1)-derivative route (1/2!)·d²[z²(z+i)⁻³]|_{z=i} and against a small-circle quadrature at r = 1e-4 — two routes that share no arithmetic, which is what makes the factorial trap detectable",
+        "the Laurent route (the $w^{-1}$ coefficient of the series in $w = z - i$, with no factorial anywhere) cross-checked against the derivative route $\\tfrac{1}{2!}\\,d^2[z^2(z+i)^{-3}]$ at $z = i$, and against a small-circle quadrature at $r = 10^{-4}$: two routes that share no arithmetic, which is what makes a dropped factorial visible",
     },
     {
       params: { halfRange: true },
@@ -196,7 +196,7 @@ export const a7SemicircleOrder3: Family = {
       numeric: 0.19634954084936207,
       verifiedTo: 1e-14,
       method:
-        "the even-integrand half-range corollary ∫₀^∞ = ½∫_ℝ, guarded by traps.half-range-requires-even",
+        "the half-range corollary $\\int_0^{\\infty} = \\tfrac12\\int_{\\mathbb{R}}$, which holds because the integrand is even",
     },
   ],
 };

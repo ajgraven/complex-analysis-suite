@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 import { assembleVerdict, refuse } from "@cas/rigor";
 import { PNG_SIGNATURE, injectPngText, pngChunk, readPngText } from "@cas/export";
-import { figureCaption, figureLayout, figureMetadata } from "../src/shell/figure.js";
+import { FIGURE_THEMES, figureCaption, figureLayout, figureMetadata } from "../src/shell/figure.js";
 import { compile, defaultState, offeredCorpus, resolveState, type ShellState } from "../src/shell/state.js";
 import { TEMPLATES } from "../src/shell/templates.js";
 import { decodeShell, encodeShell } from "../src/shell/viewState.js";
@@ -235,5 +235,46 @@ describe("the metadata survives the PNG", () => {
     }
     // And the guard is not vacuous: most records' metadata genuinely needs more than Latin-1.
     expect(withMaths).toBeGreaterThan(20);
+  });
+});
+
+describe("the three plates", () => {
+  /** WCAG's relative luminance, and its contrast ratio. The one arithmetic a palette claim needs. */
+  const luminance = (hex: string): number => {
+    const n = Number.parseInt(hex.replace("#", ""), 16);
+    const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => {
+      const c = v / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+  };
+  const contrast = (a: string, b: string): number => {
+    const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p);
+    return (x + 0.05) / (y + 0.05);
+  };
+
+  it("captions each plate in ink its own ground can carry", () => {
+    // **The dark plate reads its colours off the shell's computed style and the other two cannot**:
+    // a light plate captioned in `--g-text` is near-white text on paper. These are the palettes that
+    // replace them, and the claim about them is the one a palette can be wrong about — WCAG AA for
+    // the value line, and the 3:1 a secondary line needs to stay legible.
+    for (const [name, t] of Object.entries(FIGURE_THEMES)) {
+      expect(contrast(t.text, t.background), `${name}: the caption's value line`).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(t.muted, t.background), `${name}: the caption's title and verdict`).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it("stamps which plate it is, and defaults to the one the reader is looking at", () => {
+    const caption = { title: "t", value: "= 2πi", verdict: "v", level: "=" } as const;
+    expect(figureMetadata(null, caption)["cas:theme"]).toBe("dark");
+    expect(figureMetadata(null, caption, "light")["cas:theme"]).toBe("light");
+    expect(figureMetadata(null, caption, "print")["cas:theme"]).toBe("print");
+    // Everything else is the plate's argument, not its treatment, so it does not move.
+    const without = (plate: "dark" | "print"): Record<string, string> => {
+      const all = { ...figureMetadata("https://e/#vs=a", caption, plate) };
+      delete all["cas:theme"];
+      return all;
+    };
+    expect(without("print")).toEqual(without("dark"));
   });
 });

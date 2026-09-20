@@ -13,15 +13,35 @@
 // lying in the most legible place on the screen.
 import { evaluate, parse, type Complex } from "@cas/expr";
 
-import type { Family, FamilyTarget, Golden } from "./schema.js";
+import { fmt } from "../kernel/decimal.js";
 
-/** The real quantity a record is about: `∫ (0 → 2π)  1/(a + b*cos(theta))  dtheta`. */
-export function targetText(t: FamilyTarget): string {
+import type { Citation, Family, FamilyTarget, Golden } from "./schema.js";
+
+/** Substitute a fixture's bindings into an expression before printing it. */
+export function withParams(src: string, params: Golden["params"] | undefined): string {
+  if (params === undefined) return src;
+  let out = src;
+  for (const [name, value] of Object.entries(params)) {
+    if (typeof value === "boolean") continue;
+    out = out.replace(new RegExp(`(?<![A-Za-z0-9_])${name}(?![A-Za-z0-9_])`, "g"), `(${value})`);
+  }
+  return out;
+}
+
+/**
+ * The real quantity a record is about: `∫ (0 → 2π)  1/(a + b*cos(theta))  dtheta`.
+ *
+ * `at` substitutes the fixture's numbers, exactly as `targetLatex` does — **and it has to, because
+ * the two are a pair**: this is the spoken form of that formula, and step 2.2 found them apart the
+ * moment the Target card started passing an explicit label. The picture said `1/(1 + 1\cdot\cos)`
+ * and the accessible name said `1/(a + b*cos(theta))`, which is the one place a reader who cannot
+ * see the formula would have been told the symbols were still there.
+ */
+export function targetText(t: FamilyTarget, opts: { readonly at?: Golden["params"] } = {}): string {
   const bound = (x: string): string => (x === "inf" ? "∞" : x === "-inf" ? "−∞" : x);
   const range = `(${bound(t.lower)} → ${bound(t.upper)})`;
-  return t.kind === "sum"
-    ? `Σ ${t.variable} ${range}  ${t.summand ?? "?"}`
-    : `∫ ${range}  ${t.integrand ?? "?"}  d${t.variable}`;
+  const body = withParams((t.kind === "sum" ? t.summand : t.integrand) ?? "?", opts.at);
+  return t.kind === "sum" ? `Σ ${t.variable} ${range}  ${body}` : `∫ ${range}  ${body}  d${t.variable}`;
 }
 
 /**
@@ -190,4 +210,39 @@ function conditionHolds(condition: string, params: Golden["params"]): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * How a fixture reads in the picker: `a = 2, b = 1`, `half-range corollary`, `a = 0.75, one-sided sum`.
+ *
+ * A variant fixture's `params` carry a FLAG rather than a binding, so the flag is printed from the
+ * golden's own `label` and the key is skipped — `halfRange = true` named the implementation where a
+ * reader is choosing between alternative derivations. Real bindings still come from `params`, so a
+ * fixture carrying both (`series-cot-kernel` at `a = 0.75`) prints the number once, from one place.
+ *
+ * Moved here from `src/shell/app.ts` at M8 step 1.4 on the second-consumer rule: the new shell's
+ * Target card is the second reader, and it sits beside {@link isVariant}, which decides the same
+ * question about the same pair.
+ */
+export function fixtureLabel(family: Family, g: Golden): string {
+  const declared = new Set(family.parameters.map((p) => p.name));
+  for (const t of family.targets) for (const name of Object.keys(t.symbols)) declared.add(name);
+  const parts = Object.entries(g.params)
+    .filter(([k]) => declared.has(k))
+    .map(([k, v]) => `${k} = ${typeof v === "number" ? fmt(v) : String(v)}`);
+  if (g.label !== undefined) parts.push(g.label);
+  return parts.length > 0 ? parts.join(", ") : "no parameters";
+}
+
+/**
+ * `Ahlfors, Ch. 4 §5.3 — Jordan's lemma`, with the covering phrase only where the record gives one.
+ *
+ * **Here on the second-consumer rule**, having been a module const in `shell2/cards/target.ts` until
+ * the front door's cards wanted the same line. Three fields composed one way is exactly the kind of
+ * thing two readers come to disagree about — `Citation.text` may be empty, and a second copy is one
+ * `?? ""` away from printing a trailing dash — and this file is where the schema's own vocabulary is
+ * turned into sentences.
+ */
+export function citationLine(c: Citation): string {
+  return c.text === "" ? `${c.book}, ${c.where}` : `${c.book}, ${c.where} — ${c.text}`;
 }

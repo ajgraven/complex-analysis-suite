@@ -21,9 +21,10 @@ import {
   type Verdict,
 } from "@cas/rigor";
 import { Frac, SqrtExt } from "@cas/exact";
-import { HEADLINES, headlineFails, type ConstraintId } from "./vocabulary.js";
+import { HEADLINES, headlineFails, lemmaLabel, type ConstraintId } from "./vocabulary.js";
 import {
   certificateClaim,
+  certificateClaimAt,
   claimOf,
   pieceArg,
   renderClaim,
@@ -32,7 +33,7 @@ import {
 } from "./claims.js";
 import type { Node } from "@cas/expr";
 import type { Cx, Resolved } from "../kernel/geom.js";
-import { arcLength, endPoint, isClosed, startPoint } from "../kernel/geom.js";
+import { arcLength, endPoint, isClosed, isOriginCentred, startPoint } from "../kernel/geom.js";
 import { clearance, windingNumber } from "../kernel/winding.js";
 import { checkAdmissibility } from "../kernel/branch/admissibility.js";
 import { classifyAgainstCut, needsSide } from "../kernel/branch/crossing.js";
@@ -65,12 +66,12 @@ import { branchArcBound, dogboneArcBound } from "../kernel/bounds/branchArc.js";
 import { logArcBound } from "../kernel/bounds/logArc.js";
 import type { LogFactor } from "../kernel/logResidue.js";
 import type { MultiPowerFactor, PowerFactor } from "../kernel/branchResidue.js";
-import type { Piece } from "./contour/model.js";
+import type { Geom, Piece, Scalar } from "./contour/model.js";
 import type { ContourIntegral } from "./contour/integrate.js";
 import type { PoleReport } from "../kernel/poles.js";
 import { smallArcLimit } from "../kernel/bounds/smallArc.js";
 import { largeArcLimit } from "../kernel/bounds/largeArcLimit.js";
-import type { ExpSum } from "../kernel/expSum.js";
+import { formatPiExpSum, type ExpSum } from "../kernel/expSum.js";
 import type { ResidueTheoremResult } from "./residueTheorem.js";
 
 // Declared in `vocabulary.ts` (M8 step 0.2) so the ids and their labels sit together, and
@@ -92,6 +93,17 @@ export interface LedgerRow {
   /** The same assertion as data: a template id and its typed arguments. */
   readonly claimData: Claim;
   readonly evidence: Certificate;
+  /**
+   * The certified bound this row reports, as three numbers — M8 step 3.2.
+   *
+   * Only a KILL row that a `kernel/bounds/` module disposed of has one; see
+   * {@link ArcBound.evaluated}. It is carried BESIDE the claim rather than only inside it because
+   * `certificateClaimAt` can lift the parameter into the sentence for five of the nine producers
+   * and not for the four that print `toExponential(3)` or a formatted fraction — so a reader of the
+   * claim alone would find the scrubbable number on some rows and not on others, which is exactly
+   * the accident a card must not be built on.
+   */
+  readonly evaluated?: ArcBound["evaluated"];
   /** What to do about it, when it failed. */
   readonly repair?: string;
 }
@@ -124,6 +136,30 @@ export interface LedgerResult {
     readonly pieceId: string;
     readonly contribution: ExpSum;
   }[];
+  /**
+   * What the TARGET piece comes to in the limit — the sandbox's first real-integral answer (M8 4.1).
+   *
+   * `∮ f dz` is the sum over the pieces, so with exactly one `target` and every other piece
+   * certified the identity reads backwards: the target's integral is `∮` minus the limits the other
+   * pieces carry. That is one subtraction in units of π, where `∮/π` is the theorem's `piUnits` and
+   * each known limit is already in those units — so nothing here evaluates π and the answer is
+   * exact wherever the residues are.
+   *
+   * **Present only when every clause of that sentence holds**, which is what makes it an answer
+   * rather than a number: one target, no `free` piece (an undisposed piece is a term nobody has
+   * bounded), no `reproduces` piece (its coefficient needs a solve, which is the family loader's —
+   * the plan's own recorded scope limit for Phase 4), KILL did not fail, and the theorem's value is
+   * exact. A gallery record has Pass 5 for this and does not need it; it is computed for both
+   * anyway, because the two agreeing on every record it applies to is the check that it is right.
+   */
+  readonly target?: {
+    readonly pieceId: string;
+    /** In units of π, like {@link pieceLimits} — the caller formats, so no π is ever evaluated. */
+    readonly piUnits: ExpSum;
+    readonly text: string;
+    readonly latex: string;
+    readonly numeric: Cx;
+  };
 }
 
 /**
@@ -184,7 +220,11 @@ function arcRadius(g: Resolved): Frac | null {
   // happened to be centred at 0, so the hypothesis was true by accident; the dogbone's end caps sit
   // at its branch points and are the first that are not. Returning null here reports honestly that
   // no bound of this shape applies, instead of certifying one that does not.
-  if (g.center[0] !== 0 || g.center[1] !== 0) return null;
+  // {@link isOriginCentred} rather than the comparison written out here, because three modules ask
+  // this question — this one to decide whether a bound applies, the pen's snap to decide whether to
+  // fire, and `penPath` to decide whether the claim may be carried in a link — and the first time
+  // the three spellings disagreed, one of them would be promising a `≤` the geometry cannot carry.
+  if (!isOriginCentred(g)) return null;
   const r = g.radius;
   if (!Number.isFinite(r) || r <= 0) return null;
   // The radius comes from a slider, so it is a double; the simplest rational that round-trips is the
@@ -232,25 +272,162 @@ function asExactRadius(r: number): Frac | null {
 }
 
 /**
- * Dispose of one `vanish` piece: pick the lemma the integrand's *shape* calls for, and report what
- * the bound does in the limit.
+ * The contour parameter a piece's geometry is bound to — the name a scrub is allowed to write.
  *
- * Jordan when there is an `e^{iaz}` factor, plain ML otherwise. That is not a preference — a
- * rational integrand has no frequency and Jordan has nothing to say about it, while for `g·e^{iaz}`
- * the plain ML bound is off by the whole factor `|a|R` and fails on integrands that converge.
+ * Read off `Geom` rather than off the contour's parameter table, because the ledger never sees the
+ * table: `LedgerInput` carries the RESOLVED geometry and the piece specs, which is the right
+ * layering — a bound is about the picture rather than about a slider. An arc answers with its
+ * RADIUS's parameter and a segment with the one its endpoints share.
+ *
+ * **`mul` is deliberately not scanned.** F1's return ray is `R·wedgeX`, a product of two parameters,
+ * and only the first is live — a `derived` coefficient is computed once at instantiation and never
+ * moves under a drag (`model.ts`'s own note). Counting it would make the ray's name ambiguous and
+ * lose `R`, which is the one a reader scrubs.
+ *
+ * `undefined` where there is no parameter or where two differ; the producers then fall back to the
+ * symbol their own sentences print. Measured over the 28-record corpus: every bounded piece answers,
+ * so the fallback belongs to the sandbox's hand-drawn contours alone.
  */
-function disposeArc(ast: Node, g: Resolved): ArcBound | null {
+function boundParam(geom: Geom): string | undefined {
+  const names = new Set<string>();
+  const scan = (x: Scalar): void => {
+    if (typeof x === "number") return;
+    names.add(x.param);
+    if (x.add !== undefined) scan(x.add);
+  };
+  if (geom.kind === "arc") scan(geom.radius);
+  else {
+    for (const point of [geom.from, geom.to]) {
+      scan(point.x);
+      scan(point.y);
+    }
+  }
+  return names.size === 1 ? [...names][0] : undefined;
+}
+
+/**
+ * A DECLARED lemma whose hypothesis does not hold — M8 step 4.1.
+ *
+ * Distinct from `null`, which means *this reader has nothing to say about this piece* and lets the
+ * next one try. A refusal is a finding: the reader CHOSE this lemma, and the engine has looked at
+ * the integrand in front of it and can name which hypothesis fails.
+ */
+export interface LemmaRefusal {
+  readonly missing: string;
+}
+
+const isRefusal = (x: ArcBound | LemmaRefusal | null): x is LemmaRefusal =>
+  x !== null && (x as LemmaRefusal).missing !== undefined;
+
+/**
+ * Dispose of one `vanish` piece: honour the DECLARED lemma, or pick the one the integrand's *shape*
+ * calls for, and report what the bound does in the limit.
+ *
+ * **THE CORPUS HAS DECLARED ITS LEMMA SINCE M3, AND THIS FILE HAS BEEN GUESSING ANYWAY.** Measured
+ * over all 28 records: every vanishing piece carries a `lemma`, and every one of them agrees with
+ * what the shape-driven chain below picks — A6's arc says `L2` and gets the ML estimate, B1's says
+ * `L3` and gets Jordan, `wedge-fresnel`'s says `L6` and gets the wedge bound. The agreement was
+ * never checked, so it held by the guess happening to be right, which is the shape of *true by
+ * accident* this project keeps finding. Reading the declaration makes it a CHECK, and gives the
+ * sandbox the thing step 4.1 is for: a reader may choose a lemma, and be told by name when the one
+ * they chose does not apply.
+ *
+ * **Jordan at zero frequency is not a failed hypothesis — it is a degenerate one.** B1's family
+ * runs through `a = 0`, where `e^{iaz} = 1` and what is left is an ordinary rational integrand;
+ * Jordan's constant `π/|a|` is then `∞` and says nothing, while the plain ML bound discharges the
+ * arc perfectly. The record's own trap says an engine treating `π/0` as a failure *"will paper over
+ * exactly the case it was built to catch"*. So `L3` with a zero frequency falls through to the ML
+ * estimate rather than refusing — and it is distinguishable from the case the plan asks be refused,
+ * *Jordan declared on a rational integrand*, because `asExponentialTimesRational` returns **null**
+ * for `1/(1+z^2)` and a form with `a = 0` for `e^{i\cdot 0\cdot z}/(1+z^2)`. Measured, not assumed:
+ * the factor being PRESENT with frequency zero and the factor being ABSENT are two different facts.
+ */
+function disposeArc(
+  ast: Node,
+  g: Resolved,
+  param?: string,
+  declared?: Piece["lemma"],
+): ArcBound | LemmaRefusal | null {
   if (g.kind !== "arc") return null; // only a circular arc has a certified bound of this shape
   const R = arcRadius(g);
   const extent = arcExtent(g);
   if (!R || !extent) return null;
 
   const exponential = asExponentialTimesRational(ast);
+
+  // ---- the declared routes -----------------------------------------------------------------
+  // Only the lemmas a reader can CHOOSE between are routed here. `L4` and `L5` are handled above
+  // (they do not vanish), and `L7` and `L8` are not vanishing lemmas at all — refused by name in
+  // the KILL pass rather than here, because the refusal is about the ROLE and not about the arc.
+  if (declared === "L3") {
+    if (exponential === null) {
+      return {
+        missing:
+          "Jordan's lemma is about $g(z)e^{iaz}$, and this integrand carries no such factor — the ML estimate is the bound for a rational one",
+      };
+    }
+    if (!exponential.a.isZero()) {
+      const mid = (g.theta0 + g.theta1) / 2;
+      const half = Math.sin(mid) >= 0 ? "upper" : "lower";
+      return jordanArcBound(exponential.num, exponential.den, exponential.a, half, R, param);
+    }
+    // The degenerate case above: the factor is there and its frequency is zero, so the hypothesis
+    // `a > 0` is vacuous rather than violated and what remains is the ML estimate.
+    return mlArcBound(exponential.num, exponential.den, R, extent, param);
+  }
+  if (declared === "L6") {
+    const declaredWedge = asExponentialOfPower(ast);
+    if (declaredWedge === null) {
+      // **And it names the one that DOES apply where there is one**, which is what makes a refusal
+      // a repair rather than a dead end: on a rational integrand the plain ML estimate discharges
+      // the same arc, and a reader who has chosen the wedge bound because the contour is a wedge
+      // has confused the SHAPE with the integrand.
+      const insteadRational = toExactRational(ast).ok;
+      return {
+        missing:
+          "the wedge bound is about $\\lambda e^{w z^n}$, and this integrand is not of that form" +
+          (insteadRational ? " — the ML estimate is the one that applies to a rational integrand" : ""),
+      };
+    }
+    const from = asPiMultiple(g.theta0);
+    const to = asPiMultiple(g.theta1);
+    if (from === null || to === null) {
+      return {
+        missing: `the wedge bound is stated on a sector measured from the positive real axis, and this arc's angles are not exact multiples of $\\pi$ with denominator at most ${MAX_PI_DENOMINATOR}`,
+      };
+    }
+    return wedgeArcBound(declaredWedge, R, { from, to }, param);
+  }
+  if (declared === "L1" || declared === "L2") {
+    // **The ML estimate refuses a live frequency, and that is the plan's own test.** On B1's
+    // sandbox twin `e^{iz}/(1+z^2)` the ML bound is off by the whole factor `|a|R`: `max|f|` on the
+    // upper arc is `O(R^{-2})` only because `|e^{iz}| \le 1` there, and on the lower arc it is
+    // `e^{R}`. A reader who picks it has picked a bound that either fails or is true for the wrong
+    // reason. No record does this — every one declaring `L1`/`L2` on an arc is rational or goes
+    // through the branch and log seats below — so the refusal is the sandbox's alone.
+    if (exponential !== null && !exponential.a.isZero()) {
+      return {
+        missing:
+          "the ML estimate bounds $\\max|f|$ on the whole arc, and this integrand carries a factor $e^{iaz}$, which is bounded on one half-plane and grows on the other — Jordan's lemma is the one that applies",
+      };
+    }
+    if (exponential !== null) return mlArcBound(exponential.num, exponential.den, R, extent, param);
+    const declaredRational = toExactRational(ast);
+    if (!declaredRational.ok) {
+      return {
+        missing:
+          "the ML estimate reasons on a rational integrand's degree gap, and this integrand is not rational",
+      };
+    }
+    return mlArcBound(declaredRational.value.num, declaredRational.value.den, R, extent, param);
+  }
+
+  // ---- the shape-driven chain, unchanged ---------------------------------------------------
   if (exponential && !exponential.a.isZero()) {
     // Which half the arc lies in decides everything; read it off the arc's own midpoint.
     const mid = (g.theta0 + g.theta1) / 2;
     const half = Math.sin(mid) >= 0 ? "upper" : "lower";
-    return jordanArcBound(exponential.num, exponential.den, exponential.a, half, R);
+    return jordanArcBound(exponential.num, exponential.den, exponential.a, half, R, param);
   }
 
   // A ZERO FREQUENCY MUST SWITCH LEMMAS, not report an infinite bound. Jordan's constant is π/|a|,
@@ -259,7 +436,7 @@ function disposeArc(ast: Node, g: Resolved): ArcBound | null {
   // plain ML bound discharges it whenever the degree gap allows. Gallery B1's `a = 0` fixture is
   // this case, and its trap is explicit that an engine treating π/0 as a failure "will paper over
   // exactly the case it was built to catch".
-  if (exponential) return mlArcBound(exponential.num, exponential.den, R, extent);
+  if (exponential) return mlArcBound(exponential.num, exponential.den, R, extent, param);
 
   // **L6 — the wedge lemma (M5.2).** Nothing above reaches `e^{±zⁿ}` for `n ≥ 2`: Jordan's reader
   // wants a LINEAR exponent and declines, and the exact rational reader declines a `call`, so until
@@ -272,12 +449,12 @@ function disposeArc(ast: Node, g: Resolved): ArcBound | null {
     const from = asPiMultiple(g.theta0);
     const to = asPiMultiple(g.theta1);
     if (from === null || to === null) return null;
-    return wedgeArcBound(wedge, R, { from, to });
+    return wedgeArcBound(wedge, R, { from, to }, param);
   }
 
   const rational = toExactRational(ast);
   if (!rational.ok) return null;
-  return mlArcBound(rational.value.num, rational.value.den, R, extent);
+  return mlArcBound(rational.value.num, rational.value.den, R, extent, param);
 }
 
 /**
@@ -288,7 +465,11 @@ function disposeArc(ast: Node, g: Resolved): ArcBound | null {
  * origin. The check is not bureaucracy — `sup|cot πz| = coth(π(N+½))` is a statement about that
  * geometry, and a side of some other rectangle gets the right formula on the wrong figure.
  */
-function disposeSquareSide(kernel: SummationKernel, g: Resolved): ArcBound | null {
+function disposeSquareSide(
+  kernel: SummationKernel,
+  g: Resolved,
+  param?: string,
+): ArcBound | null {
   if (g.kind !== "segment") return null;
   const [x0, y0] = g.from;
   const [x1, y1] = g.to;
@@ -307,7 +488,7 @@ function disposeSquareSide(kernel: SummationKernel, g: Resolved): ArcBound | nul
   if (!centred || Math.abs(span - 2 * offset) > 1e-9) return null;
   const halfWidth = asExactRadius(offset);
   if (halfWidth === null) return null;
-  return squareSideBound(kernel.kind, kernel.num, kernel.den, halfWidth);
+  return squareSideBound(kernel.kind, kernel.num, kernel.den, halfWidth, param);
 }
 
 /**
@@ -324,7 +505,7 @@ function disposeSquareSide(kernel: SummationKernel, g: Resolved): ArcBound | nul
  * E1's first trap: it is a translate of the bottom, so its ML bound is proportional to the length
  * `2R` and DIVERGES.
  */
-function disposeStripSide(ast: Node, g: Resolved): ArcBound | null {
+function disposeStripSide(ast: Node, g: Resolved, param?: string): ArcBound | null {
   if (g.kind !== "segment") return null;
   const [x0, y0] = g.from;
   const [x1, y1] = g.to;
@@ -337,6 +518,7 @@ function disposeStripSide(ast: Node, g: Resolved): ArcBound | null {
     R: Math.abs(x0),
     length: Math.abs(y1 - y0),
     imagRange: [Math.min(y0, y1), Math.max(y0, y1)],
+    ...(param === undefined ? {} : { param }),
   });
 }
 
@@ -352,7 +534,7 @@ function disposeStripSide(ast: Node, g: Resolved): ArcBound | null {
  * `Re z` with no `R → ∞` hidden in a lattice, so `Re z = 0` is a perfectly ordinary place for a
  * segment to be and the bound there is simply large.
  */
-function disposeGaussianSide(ast: Node, g: Resolved): ArcBound | null {
+function disposeGaussianSide(ast: Node, g: Resolved, param?: string): ArcBound | null {
   if (g.kind !== "segment") return null;
   const [x0, y0] = g.from;
   const [x1, y1] = g.to;
@@ -363,7 +545,12 @@ function disposeGaussianSide(ast: Node, g: Resolved): ArcBound | null {
   const a = asExactCoordinate(y0);
   const b = asExactCoordinate(y1);
   if (c === null || a === null || b === null) return null;
-  return gaussianSideBound(form.q, form.lambda, { c, y0: a, y1: b });
+  return gaussianSideBound(form.q, form.lambda, {
+    c,
+    y0: a,
+    y1: b,
+    ...(param === undefined ? {} : { param }),
+  });
 }
 
 /**
@@ -378,6 +565,7 @@ function disposeBranchArc(
   power: { readonly factor: PowerFactor; readonly rational: Node },
   g: Resolved,
   lemma: Piece["lemma"],
+  param?: string,
 ): ArcBound | null {
   if (g.kind !== "arc") return null;
   const R = arcRadius(g);
@@ -390,6 +578,7 @@ function disposeBranchArc(
   return branchArcBound(power.factor.alpha, rational.value.num, rational.value.den, R, {
     limit,
     piMultiple: extent,
+    ...(param === undefined ? {} : { param }),
   });
 }
 
@@ -404,6 +593,7 @@ function disposeLogArc(
   log: { readonly factor: LogFactor; readonly rational: Node },
   g: Resolved,
   lemma: Piece["lemma"],
+  param?: string,
 ): ArcBound | null {
   if (g.kind !== "arc") return null;
   const R = arcRadius(g);
@@ -417,6 +607,7 @@ function disposeLogArc(
     limit,
     piMultiple: extent,
     argRange: log.factor.argRange,
+    ...(param === undefined ? {} : { param }),
   });
 }
 
@@ -433,6 +624,7 @@ function disposeDogboneArc(
   multi: { readonly factor: MultiPowerFactor; readonly rational: Node },
   g: Resolved,
   lemma: Piece["lemma"],
+  param?: string,
 ): ArcBound | null {
   if (g.kind !== "arc" || lemma !== "L1") return null;
   const radius = g.radius;
@@ -487,6 +679,7 @@ function disposeDogboneArc(
     den: rational.value.den.shift(centre),
     eta,
     piMultiple: extent,
+    ...(param === undefined ? {} : { param }),
   });
 }
 
@@ -505,6 +698,7 @@ export const rowFrom = (
   evidence: Certificate,
   pieceId?: string,
   repair?: string,
+  evaluated?: ArcBound["evaluated"],
 ): LedgerRow => ({
   constraint,
   status,
@@ -513,6 +707,7 @@ export const rowFrom = (
   evidence,
   pieceId,
   repair,
+  evaluated,
 });
 
 export interface LedgerInput {
@@ -1077,7 +1272,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
             )
           : sumExact
             ? exact(
-                "the residue SUM",
+                "the residue sum",
                 "the residue sum over the $n$-th roots is computed as a geometric sum, without naming a root",
                 {
                   provenance: [
@@ -1202,7 +1397,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
             claimOf("kill.l5-unreadable", { piece: pieceArg(piece) }),
             unknown(
               piece.name,
-              "L5 needs z·f(z)'s limit, which needs that decomposition",
+              "this lemma needs the limit of $z\\,f(z)$, which needs that decomposition",
             ),
             piece.id,
           ),
@@ -1330,19 +1525,53 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
       continue;
     }
 
-    const disposal =
-      input.multi !== undefined
-        ? disposeDogboneArc(input.multi, geom, piece.lemma)
+    const scrub = boundParam(piece.geom);
+    // **A lemma that does not VANISH, declared on a piece that must** — M8 step 4.1. `L7` is the
+    // periodic-side cancellation, which makes a piece reproduce the target, and `L8` is
+    // Sokhotski–Plemelj, a statement about the whole integral; neither is a bound on a piece, so
+    // neither can be tried and failed. Refused here rather than inside `disposeArc`, because what
+    // is wrong is the pairing of the lemma with the ROLE and not anything about the geometry.
+    const wrongKind = piece.lemma === "L7" || piece.lemma === "L8";
+    const disposal: ArcBound | LemmaRefusal | null = wrongKind
+      ? {
+          missing:
+            piece.lemma === "L7"
+              ? "the periodic-side cancellation does not make a piece vanish — it makes it a multiple of the target, which is the `reproduces` role"
+              : "Sokhotski–Plemelj is a distributional identity about the whole integral, not a bound on one piece",
+        }
+      : input.multi !== undefined
+        ? disposeDogboneArc(input.multi, geom, piece.lemma, scrub)
         : input.log !== undefined
-          ? disposeLogArc(input.log, geom, piece.lemma)
+          ? disposeLogArc(input.log, geom, piece.lemma, scrub)
           : input.power === undefined
-            ? (disposeArc(ast, geom) ??
+            ? (disposeArc(ast, geom, scrub, piece.lemma) ??
               (input.summation === undefined
                 ? null
-                : disposeSquareSide(input.summation.kernel, geom)) ??
-              disposeStripSide(ast, geom) ??
-              disposeGaussianSide(ast, geom))
-            : disposeBranchArc(input.power, geom, piece.lemma);
+                : disposeSquareSide(input.summation.kernel, geom, scrub)) ??
+              disposeStripSide(ast, geom, scrub) ??
+              disposeGaussianSide(ast, geom, scrub))
+            : disposeBranchArc(input.power, geom, piece.lemma, scrub);
+    if (isRefusal(disposal)) {
+      // A declared lemma that does not apply is a FAILED row, not an unknown one: the argument as
+      // written does not close, and the repair is the reader's own — choose the lemma that does,
+      // or change the integrand. `killFailed` follows, so no target value is reported off it.
+      killFailed = true;
+      push(
+        rowFrom(
+          "KILL",
+          "failed",
+          claimOf("kill.lemma-refused", {
+            piece: pieceArg(piece),
+            lemma: { kind: "text", text: lemmaLabel(piece.lemma ?? "L1") },
+            why: { kind: "text", text: disposal.missing },
+          }),
+          refuse(piece.name, disposal.missing),
+          piece.id,
+          "choose the lemma this piece's integrand satisfies, or change the integrand",
+        ),
+      );
+      continue;
+    }
     if (!disposal) {
       killFailed = true;
       // **WHICH OF THE TWO FAILED, THE INTEGRAND OR THE GEOMETRY?** Until M5.4b this row said "no
@@ -1363,12 +1592,12 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
           unknown(
             `the arc ${piece.name}`,
             geom.kind === "arc" && (geom.center[0] !== 0 || geom.center[1] !== 0)
-              ? "every certified arc bound here reasons on |z| = R about the ORIGIN, and this arc is centred elsewhere — a dogbone's end caps need the bound taken about their own branch point instead"
+              ? "every certified arc bound here reasons on $|z| = R$ about the origin, and this arc is centred elsewhere — a dogbone's end caps need the bound taken about their own branch point instead"
               : unreadable
                 ? `an ML bound is the sweep times the radius times max|f|, so the sweep enters the number: it is read as an exact p/q·π with q ≤ ${MAX_PI_DENOMINATOR}, and this arc's is not one — a degenerate sweep included, whose bound would be a vacuous ≤ 0`
                 : input.power === undefined && input.log === undefined
                   ? "the certified bounds cover a rational integrand, one times e^{iaz}, λ·e^{w zⁿ} on a wedge measured from the positive real axis, or e^{az}·N(e^z)/D(e^z) on a vertical side of a strip; this is none of them"
-                  : "a branch factor's arc bound needs the lemma declared as L1 (ε → 0) or L2 (R → ∞), and a rational cofactor",
+                  : "a branch factor's arc bound needs the piece declared as a small arc ($\\varepsilon \\to 0$) or a large arc ($R \\to \\infty$), and a rational cofactor",
           ),
           piece.id,
           "the numeric value still stands, but the limit is not established",
@@ -1383,7 +1612,15 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
       rowFrom(
         "KILL",
         ok ? "satisfied" : "failed",
-        certificateClaim(disposal.certificate.claim),
+        // The sentence is the bound module's, unchanged; what the row adds is the ONE numeral in it
+        // a reader may drag. `certificateClaimAt` refuses to split where the printed form is not the
+        // plain decimal, so nothing here can move a character of it.
+        disposal.evaluated === undefined
+          ? certificateClaim(disposal.certificate.claim)
+          : certificateClaimAt(disposal.certificate.claim, {
+              name: disposal.evaluated.param,
+              value: disposal.evaluated.at,
+            }),
         disposal.certificate,
         piece.id,
         ok
@@ -1391,6 +1628,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
           : disposal.asymptotics === "diverges"
             ? "close the contour through the other half-plane"
             : "The ML-estimate does not vanish; Jordan's lemma or an indentation may still apply.",
+        disposal.evaluated,
       ),
     );
   }
@@ -1434,6 +1672,36 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
     ),
   );
 
+  // **A TERM NOBODY HAS BOUNDED** — M8 step 4.1, and only where an unknown was actually named.
+  //
+  // An `imported` free piece is NOT undisposed: ADR-0042's value is exactly known and comes from
+  // outside the argument, which the KILL pass has already said with an `=`. E3 and F2 are the
+  // corpus's only free pieces and both are imports, so this row is the sandbox's alone — measured
+  // rather than assumed, and `test/ledgerDump.test.ts` is byte-identical across the whole corpus
+  // because of it.
+  const undisposedFree = spec.filter(
+    (p) => p.role === "free" && input.imported?.some((x) => x.pieceId === p.id) !== true,
+  );
+  if (onContour && undisposedFree.length > 0) {
+    push(
+      rowFrom(
+        "COVER",
+        "unknown",
+        undisposedFree.length === 1
+          ? claimOf("cover.undisposed", { piece: pieceArg(undisposedFree[0]) })
+          : claimOf("cover.undisposed-many", {
+              n: { kind: "count", n: undisposedFree.length, noun: "piece" },
+            }),
+        unknown(
+          undisposedFree.map((p) => p.name).join(", "),
+          "give each piece a role: a lemma that kills it, or the indentation limit it carries",
+        ),
+        undisposedFree.length === 1 ? undisposedFree[0].id : undefined,
+        "assign a vanishing lemma to the piece, or make it the target",
+      ),
+    );
+  }
+
   // ---- SOLVE + VERDICT ----------------------------------------------------------------------
   const closes =
     !killFailed &&
@@ -1448,9 +1716,37 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
 
   certificates.push(...theorem.verdict.certificates);
 
+  // ---- the target's own value ---------------------------------------------------------------
+  // Every clause is a reason, and the reasons are on the field's doc above. `free` is checked over
+  // the SPEC rather than over the rows, because a free piece produces a satisfied KILL row saying
+  // it was evaluated numerically — which is true, and is not a bound.
+  const targets = spec.filter((p) => p.role === "target");
+  const undisposed = spec.filter((p) => p.role === "free" || p.role === "reproduces");
+  // **No `!killFailed` here, and the sweep is why.** It was in the first draft and it is dead: the
+  // value is handed out as `closes ? target : undefined` below, and `closes` already requires
+  // `!killFailed` AND no failed row AND an exact `∮`. A condition that cannot be observed is a
+  // second statement of a rule, and the two would drift.
+  const target =
+    targets.length === 1 && undisposed.length === 0 && theorem.piUnits !== undefined
+      ? (() => {
+          const only = targets[0];
+          let piUnits = theorem.piUnits;
+          for (const limit of pieceLimits) piUnits = piUnits.sub(limit.contribution);
+          const [re, im] = piUnits.toTuple();
+          return {
+            pieceId: only.id,
+            piUnits,
+            text: formatPiExpSum(piUnits),
+            latex: formatPiExpSum(piUnits, LATEX),
+            numeric: [re * Math.PI, im * Math.PI] as Cx,
+          };
+        })()
+      : undefined;
+
   return {
     rows,
     closes,
+    target: closes ? target : undefined,
     value: closes ? value : undefined,
     verdict: assembleVerdict(certificates),
     failedAt:

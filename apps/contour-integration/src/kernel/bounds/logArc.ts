@@ -38,6 +38,8 @@ export interface LogArcOptions {
   readonly piMultiple: Frac;
   /** The determination, as multiples of π. `|log z| ≤ |ln ρ| + max(|lo|,|hi|)·π` on the circle. */
   readonly argRange: readonly [Frac, Frac];
+  /** The contour parameter this arc's radius is bound to — `branchArc.ts`'s field, same default. */
+  readonly param?: string;
 }
 
 /** `|∫ over the arc| ≤ extent·ρ·(|ln ρ| + A)^m·max|R|`, with the asymptotic verdict. */
@@ -112,6 +114,11 @@ export function logArcBound(
     Math.pow(Math.abs(Math.log(rhoValue)) + a, power) *
     maxModulus.toNumber();
 
+  const evaluated = {
+    param: opts.param ?? (opts.limit === "inf" ? "R" : "eps"),
+    at: rhoValue,
+    bound: value,
+  };
   const at = `at $\\rho = ${rhoValue.toExponential(3)}$`;
   const claim = `the arc: $\\left|\\int f\\,dz\\right| \\le ${value.toExponential(3)}$ ${at}`;
   const heading = opts.limit === "inf" ? "$R \\to \\infty$" : "$\\varepsilon \\to 0^+$";
@@ -143,6 +150,7 @@ export function logArcBound(
 
   return {
     R: rho,
+    evaluated,
     asymptotics,
     exponent,
     degreeGap,

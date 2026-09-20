@@ -18,7 +18,8 @@
 import { describe, expect, it } from "vitest";
 import { compileF, makeComplexFn } from "@cas/expr";
 import { COMPLEX_DERIVED_GLSL, COMPLEX_SINGLE_GLSL, createProgram } from "@cas/gpu";
-import { buildPhaseFrag, PHASE_VERT } from "../src/ui/stage/phase.glsl.js";
+import { buildPhaseFrag, PHASE_VERT, STAGE_MODE_CODE } from "../src/ui/stage/phase.glsl.js";
+import { cetC6Bytes } from "../src/ui/stage/cetC6.js";
 import { CUT_GLSL } from "../src/ui/stage/cut.glsl.js";
 import { declaredProductGlsl } from "../src/ui/stage/declared.glsl.js";
 import { evaluateDeclared, type DeclaredProduct } from "../src/kernel/branch/declared.js";
@@ -88,6 +89,7 @@ void main() { fragColor = ${body}; }
   const buffer = gl.createBuffer();
   const texture = gl.createTexture();
   const fbo = gl.createFramebuffer();
+  const ramp = rampTexture(gl);
   try {
     gl.bindVertexArray(vao);
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
@@ -96,8 +98,11 @@ void main() { fragColor = ${body}; }
     gl.enableVertexAttribArray(aPos);
     gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
 
+    gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 1, 1, 0, gl.RGBA, gl.FLOAT, null);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, ramp);
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
     gl.viewport(0, 0, 1, 1);
@@ -121,6 +126,7 @@ void main() { fragColor = ${body}; }
     gl.deleteVertexArray(vao);
     gl.deleteBuffer(buffer);
     gl.deleteTexture(texture);
+    gl.deleteTexture(ramp);
     gl.deleteFramebuffer(fbo);
   }
 }
@@ -163,6 +169,20 @@ function gridFor(product: DeclaredProduct, step = 0.53, reach = 3): Cx[] {
 
 const abs = (z: readonly [number, number]): number => Math.hypot(z[0], z[1]);
 
+/** CET-C6 on a 256×1 texture — exactly what `GLStage.initRamp` uploads, for the same sampler. */
+function rampTexture(gl: WebGL2RenderingContext): WebGLTexture {
+  const tex = gl.createTexture();
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 256, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, cetC6Bytes());
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  if (tex === null) throw new Error("could not create the colour-map texture");
+  return tex;
+}
+
 /**
  * One PIXEL of the real phase program at one point — the colour, end to end.
  *
@@ -172,12 +192,25 @@ const abs = (z: readonly [number, number]): number => Math.hypot(z[0], z[1]);
  * cut is the stage drawing the principal branch after all.
  *
  * The viewport is 1×1, so `vUv` is (0.5, 0.5) and the sampled point is the range's centre.
+ *
+ * **The colour map is a TEXTURE since M8 step 1.9, and that broke this harness in a way worth
+ * recording.** The probe binds its own RGBA32F render target to `TEXTURE_2D` on unit 0 in order to
+ * attach it to the framebuffer, and left it bound across the draw — which was harmless while the
+ * program sampled nothing and became a *feedback loop* the moment `uRamp` started reading unit 0.
+ * Every colour came back black, `inkAt`'s `base < 1e-6` guard returned 0, and twelve assertions
+ * about the DETERMINATION failed reporting "no ink" — a defect in the harness wearing the costume
+ * of a defect in the shader. The render target goes on unit 1 and CET-C6 on unit 0.
+ *
+ * It renders in `full`, which is the mapping every claim in this file was written against: the
+ * modes scale chroma and lightness, and a comparison of two determinations must not be run through
+ * a dial that shrinks the difference it is looking for.
  */
 function pixelAt(gl: WebGL2RenderingContext, program: WebGLProgram, z: Cx, iso = 0): Float32Array {
   const vao = gl.createVertexArray();
   const buffer = gl.createBuffer();
   const texture = gl.createTexture();
   const fbo = gl.createFramebuffer();
+  const ramp = rampTexture(gl);
   try {
     gl.bindVertexArray(vao);
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
@@ -185,8 +218,12 @@ function pixelAt(gl: WebGL2RenderingContext, program: WebGLProgram, z: Cx, iso =
     const aPos = gl.getAttribLocation(program, "aPos");
     gl.enableVertexAttribArray(aPos);
     gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+    // The render target goes on unit 1 and CET-C6 on unit 0 — see the note above.
+    gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 1, 1, 0, gl.RGBA, gl.FLOAT, null);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, ramp);
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
     gl.viewport(0, 0, 1, 1);
@@ -201,6 +238,8 @@ function pixelAt(gl: WebGL2RenderingContext, program: WebGLProgram, z: Cx, iso =
     gl.uniform1f(gl.getUniformLocation(program, "uGridStrength"), 0);
     gl.uniform1f(gl.getUniformLocation(program, "uIsoStrength"), iso);
     gl.uniform1i(gl.getUniformLocation(program, "uCutCount"), 0);
+    gl.uniform1i(gl.getUniformLocation(program, "uRamp"), 0);
+    gl.uniform1i(gl.getUniformLocation(program, "uMode"), STAGE_MODE_CODE.full);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     const px = new Float32Array(4);
     gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, px);
@@ -209,6 +248,7 @@ function pixelAt(gl: WebGL2RenderingContext, program: WebGLProgram, z: Cx, iso =
     gl.deleteVertexArray(vao);
     gl.deleteBuffer(buffer);
     gl.deleteTexture(texture);
+    gl.deleteTexture(ramp);
     gl.deleteFramebuffer(fbo);
   }
 }

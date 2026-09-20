@@ -217,7 +217,7 @@ export const b3JordanQuartic: Family = {
       numeric: 1.544276009618136,
       verifiedTo: 1e-15,
       method:
-        "the two upper residues are −α e^{iα}/4 at α = e^{±iπ/4}, carried exactly as (π√2/4 ∓ πi√2/4)·e^{−√2/2 ± i√2/2}; the form is `=` and the decimal is `≈` because certifying exp/cos/sin at 1/√2 needs enclosures PLAN §3.2 deferred to tier 3. Cross-checked against the contour quadrature",
+        "the two upper residues are $-\\alpha e^{i\\alpha}/4$ at $\\alpha = e^{\\pm i\\pi/4}$, carried exactly as $(\\pi\\sqrt2/4 \\mp \\pi i\\sqrt2/4)\\,e^{-\\sqrt2/2 \\pm i\\sqrt2/2}$; the form is exact and the decimal is an estimate, because certifying $\\exp$, $\\cos$ and $\\sin$ at $1/\\sqrt2$ needs interval enclosures this engine does not carry. Cross-checked against the contour quadrature",
     },
     {
       params: { companion: "sin" },
@@ -226,7 +226,7 @@ export const b3JordanQuartic: Family = {
       numeric: 0,
       verifiedTo: 1e-14,
       method:
-        "the free companion ∫_ℝ sin x/(1+x⁴) dx = Im of the same contour value = 0; the cancellation of the two residues' real parts IS the parity statement",
+        "the free companion $\\int_{\\mathbb{R}} \\sin x/(1+x^4)\\,dx$, which is the imaginary part of the same contour value and is 0; the cancellation of the two residues' real parts is the parity statement",
     },
   ],
 };

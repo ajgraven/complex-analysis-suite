@@ -120,6 +120,20 @@ export interface Piece {
   readonly colour: 0 | 1 | 2 | 3 | 4 | 5;
 }
 
+/**
+ * The lattice a parameter is confined to, when it is confined to one.
+ *
+ * One member, and the name is about the PARAMETER rather than about the contour it draws.
+ * `families/schema.ts` says `through: "halfIntegers"`, which is a statement about tier G's `Γ_N` —
+ * its HALF-WIDTH is `N + ½` — while the number a control moves is `N`, an integer. The translation
+ * between the two vocabularies happens once, in `families/instantiate.ts`, so that no reader of a
+ * `Param` has to know that `squareTemplate` adds the half.
+ */
+export type Admissible = "integers";
+
+/** Each lattice's spacing, in the parameter's own units — the one place the enum is read. */
+const SPACING: Readonly<Record<Admissible, number>> = { integers: 1 };
+
 export interface Param {
   readonly name: string;
   readonly value: number;
@@ -127,6 +141,71 @@ export interface Param {
   readonly scale: "linear" | "log";
   /** The limit this parameter is heading to in the argument, if any — what lets the UI animate R → ∞. */
   readonly limit?: { readonly to: "inf" | "0+" | number };
+  /**
+   * The values this parameter may take, when it may not take every real one — M8 step 3.2.
+   *
+   * **Absent for all but three parameters in the corpus, and it must stay that way**: every other
+   * one is genuinely continuous, and a lattice imposed on `R` would take the sweep's own
+   * measurement (five and a half decades of ease-out) and quantise it.
+   *
+   * It is here because step 3.2 gave the app two controls that can put a parameter anywhere — the
+   * limit sweep's ladder and the scrubbable number's drag — and tier G's `N` is not anywhere.
+   * Measured over `series-cot-kernel`, `series-cot-collision` and `series-csc-kernel-collision`:
+   * the ladder's first rung off `start: 4` is 9.19 as interpolated, and at that value all four
+   * sides of `Γ_N` FAIL, because `kernel/bounds/squareSide.ts` refuses any half-width that is not `N + ½` (at an
+   * integer the kernel's sup is infinite, and in between it is finite for one contour but not
+   * uniformly so as the width approaches an integer). The scrub's arrow key is worse: one stop of
+   * a thousand over `[0.25, 256]` is a factor of 1.0070, so the FIRST press leaves the lattice.
+   *
+   * **That refusal is not relaxed and must not be** — it is read off the geometry, so it catches a
+   * contour the reader has dragged, which no declaration can. What this field changes is the other
+   * side: the controls stop producing values the bound has to refuse.
+   */
+  readonly admits?: Admissible;
+}
+
+/**
+ * The nearest value the lattice admits — and, given a range, the nearest one INSIDE it.
+ *
+ * The identity on a continuous parameter, which is what lets both controls route every value they
+ * produce through it rather than branching on `admits` at each site.
+ *
+ * The range is not a clamp to its endpoints: `N`'s range starts at 0.25, so rounding 0.3 gives 0 and
+ * a clamp would hand back 0.25 — a number outside the lattice, from the function whose name promises
+ * otherwise. It returns the first admissible value instead.
+ */
+export function admissibleValue(
+  v: number,
+  admits: Admissible | undefined,
+  range?: readonly [number, number],
+): number {
+  if (admits === undefined || !Number.isFinite(v)) return v;
+  const s = SPACING[admits];
+  const snapped = Math.round(v / s) * s;
+  if (range === undefined) return snapped;
+  const [lo, hi] = range;
+  const first = Math.ceil(lo / s) * s;
+  const last = Math.floor(hi / s) * s;
+  // A range containing no admissible value at all is left alone rather than snapped out of itself:
+  // a parameter pinned to one value is a thing a template may legitimately declare, and a control
+  // that moved it outside its own bounds would be worse than one that does not move it.
+  if (!(first <= last)) return Math.min(hi, Math.max(lo, v));
+  return Math.min(last, Math.max(first, snapped));
+}
+
+/** The next admissible value strictly past `v` in `direction` — one arrow press, one ladder nudge. */
+export function admissibleStep(
+  v: number,
+  admits: Admissible,
+  direction: -1 | 1,
+  range?: readonly [number, number],
+): number {
+  if (!Number.isFinite(v)) return v;
+  const s = SPACING[admits];
+  // Floor/ceil rather than round, so a value already ON the lattice advances by exactly one spacing
+  // and one off it advances to the next in that direction rather than back to the one it is nearest.
+  const next = direction > 0 ? Math.floor(v / s) * s + s : Math.ceil(v / s) * s - s;
+  return admissibleValue(next, admits, range);
 }
 
 export type Params = Readonly<Record<string, Param>>;

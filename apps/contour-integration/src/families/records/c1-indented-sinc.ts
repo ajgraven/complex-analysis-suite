@@ -247,7 +247,7 @@ export const c1IndentedSinc: Family = {
       numeric: 1.5707963267948966,
       verifiedTo: 3e-16,
       method:
-        "the residue sum is EMPTY and the whole value is L4's iα·Res at α = −π: Res(e^{iz}/z, 0) = 1, so p.v.∫_ℝ e^{ix}/x dx = iπ and the target is Im(iπ)/2 = π/2. Independently verified two ways in research: (a) half-period decomposition at multiples of π with repeated-averaging acceleration of the alternating tail; (b) 64-point Gauss–Legendre per half period to A = 40π plus the alternating asymptotic tail — both give 1.5707963267948961, relative 2.8e-16",
+        "the residue sum is empty and the whole value is the indentation's $i\\alpha\\operatorname{Res}$ at $\\alpha = -\\pi$: $\\operatorname{Res}(e^{iz}/z, 0) = 1$, so $\\mathrm{p.v.}\\int_{\\mathbb{R}} e^{ix}/x\\,dx = i\\pi$ and the target is $\\operatorname{Im}(i\\pi)/2 = \\pi/2$. Verified independently two ways: half-period decomposition at multiples of $\\pi$ with repeated-averaging acceleration of the alternating tail, and 64-point Gauss–Legendre per half period out to $40\\pi$ plus the alternating asymptotic tail. Both give $1.5707963267948961$, relative $2.8\\times10^{-16}$",
     },
     {
       params: { form: "pv" },
@@ -256,7 +256,7 @@ export const c1IndentedSinc: Family = {
       numeric: [0, 3.141592653589793],
       verifiedTo: 1e-5,
       method:
-        "the auxiliary's own value, p.v.∫_ℝ e^{ix}/x dx = iπ, before Im and the evenness fold — the fixture that separates the auxiliary's principal value from the target's ordinary convergence",
+        "the auxiliary's own value, $\\mathrm{p.v.}\\int_{\\mathbb{R}} e^{ix}/x\\,dx = i\\pi$, before the imaginary part is taken and the evenness folded — which separates the auxiliary's principal value from the target's ordinary convergence",
     },
   ],
 };

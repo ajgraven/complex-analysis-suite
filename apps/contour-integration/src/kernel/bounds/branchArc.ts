@@ -44,6 +44,16 @@ export interface BranchArcOptions {
   readonly limit: "inf" | "0+";
   /** The arc's angular extent as a multiple of π — `2` for a full circle. */
   readonly piMultiple: Frac;
+  /**
+   * The contour parameter this arc's radius is bound to, for {@link ArcBound.evaluated}.
+   *
+   * Supplied by the ledger off the piece's own geometry. Absent it is read from {@link limit}, which
+   * is the honest default here and not a guess: the two circles of a keyhole are told apart by
+   * nothing else — measured, `disposeBranchArc` itself decides which is which from the DECLARED
+   * lemma rather than from the radius, because D1's two are 1e9 apart at one fixture and adjacent at
+   * another. `keyholeTemplate` names them `R` and `eps`.
+   */
+  readonly param?: string;
 }
 
 /**
@@ -109,6 +119,11 @@ export function branchArcBound(
     maxModulus.toNumber() *
     (opts.piMultiple.toNumber() / 2);
 
+  const evaluated = {
+    param: opts.param ?? (opts.limit === "inf" ? "R" : "eps"),
+    at: rho.toNumber(),
+    bound: value,
+  };
   const at = `at $\\rho = ${rho.toNumber().toExponential(3)}$`;
   const claim = `the arc: $\\left|\\int f\\,dz\\right| \\le ${value.toExponential(3)}$ ${at}`;
   const rho_ = opts.limit === "inf" ? "$R \\to \\infty$" : "$\\varepsilon \\to 0^+$";
@@ -133,6 +148,7 @@ export function branchArcBound(
 
   return {
     R: rho,
+    evaluated,
     asymptotics,
     exponent,
     degreeGap,
@@ -199,6 +215,8 @@ export interface DogboneArcInput {
   readonly eta: Frac;
   /** The arc's angular extent as a multiple of π — `2` for the full turn a dogbone's cap makes. */
   readonly piMultiple: Frac;
+  /** The contour parameter the cap's radius is bound to. `dogboneTemplate` names it `eta`. */
+  readonly param?: string;
 }
 
 export function dogboneArcBound(input: DogboneArcInput): ArcBound {
@@ -268,6 +286,7 @@ export function dogboneArcBound(input: DogboneArcInput): ArcBound {
     product;
 
   const exponentText = `${rationalExponent.n}/${rationalExponent.d}`;
+  const evaluated = { param: input.param ?? "eta", at: etaValue, bound: value };
   const at = `at $\\eta = ${etaValue.toExponential(3)}$`;
   const claim = `the cap: $\\left|\\int f\\,dz\\right| \\le ${value.toExponential(3)}$ ${at}`;
   const because = vanishes
@@ -300,6 +319,7 @@ export function dogboneArcBound(input: DogboneArcInput): ArcBound {
 
   return {
     ...base,
+    evaluated,
     certificate: vanishes
       ? bound(
           "≤",

@@ -59,7 +59,7 @@ describe("D7's residue at infinity", () => {
     expect(steps).toMatch(/\\frac\{1\}\{2\}\\pi\$ at z = 0, \$-\\frac\{1\}\{2\}\\pi\$ at z = b/);
     expect(steps).toMatch(/an exact rational, so the constant is a root of unity and not a fit/);
     expect(steps).toMatch(/\\sum_j \\alpha_j = 1 \\in \\mathbb\{Z\}\$, so the monodromy round a large circle is \$1\$/);
-    expect(steps).toMatch(/NOT enough to make the residue vanish/);
+    expect(steps).toMatch(/not enough to make the residue vanish/);
   });
 
   it("agrees with `c − νb` at every exponent the record declares", () => {

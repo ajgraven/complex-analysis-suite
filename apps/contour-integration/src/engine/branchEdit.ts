@@ -17,11 +17,70 @@ import { buildDeclaration, type DeclaredOrder } from "../kernel/branch/declarati
 import type { Cx } from "../kernel/geom.js";
 import {
   INFINITY,
+  cutPolyline,
   type BranchChoice,
   type BranchOrder,
   type BranchPoint,
   type CutArc,
 } from "../kernel/branch/model.js";
+import { checkAdmissibility } from "../kernel/branch/admissibility.js";
+import { jumpWeights } from "../kernel/branch/correction.js";
+import { formatFrac } from "../kernel/formatExact.js";
+import type { View, Viewport } from "../kernel/camera.js";
+
+/**
+ * Whether two grabs name the same draggable thing.
+ *
+ * Shared by both shells (ADR-0007) — the keyboard's grab cycling and the ink layer's "which handle
+ * is held" both ask it, and two readings of "the same handle" would let a key press move one handle
+ * while the highlight sat on another.
+ */
+export function sameBranchGrab(a: BranchGrab, b: BranchGrab): boolean {
+  // The base grab has no id: there is exactly one base point, so the kind identifies it.
+  if (a.kind !== b.kind) return false;
+  if (a.kind === "base") return true;
+  if (a.kind === "point") return b.kind === "point" && a.id === b.id;
+  return b.kind === "cut" && a.id === b.id && a.index === b.index;
+}
+
+/** A cut, reduced to what the ink layer draws: a finite polyline, a legality colour and a label. */
+export interface DrawnCut {
+  readonly points: readonly Cx[];
+  readonly refused: boolean;
+  readonly label?: string;
+}
+
+/**
+ * Every cut in the system, as finite polylines clipped beyond the view.
+ *
+ * **Shared by both shells, which is why it is here rather than in one of them** (ADR-0007's
+ * second-consumer rule, and its own comment's insistence): the legality colour comes from ONE
+ * reading of `checkAdmissibility`, so the ledger's LEGALITY row and the colour of the cut on screen
+ * can never disagree, and the label is the same `jumpWeights` the correction sums over rather than a
+ * second computation of it. A copy in the new shell would be exactly the drift both rules forbid.
+ *
+ * `null` from `jumpWeights` is a LOG's side: infinite-order monodromy has no finite jump, so the
+ * label says so instead of printing a number for it.
+ */
+export function drawnCuts(branch: BranchChoice, view: View, vp: Viewport): readonly DrawnCut[] {
+  if (branch.cuts.length === 0) return [];
+  // Far enough that a ray to infinity leaves the canvas at every corner, at this zoom.
+  const reach =
+    4 *
+    (Math.hypot(view.center[0], view.center[1]) +
+      view.halfHeight * (1 + Math.max(1, vp.width) / Math.max(1, vp.height)));
+  const refused = !checkAdmissibility(branch).ok;
+  const weights = jumpWeights(branch);
+  const out: DrawnCut[] = [];
+  for (const cut of branch.cuts) {
+    const poly = cutPolyline(branch, cut, reach);
+    if (poly === null) continue;
+    const jump = weights.get(cut.id);
+    const label = jump === undefined ? undefined : jump === null ? "J = ∞" : `J = ${formatFrac(jump)}`;
+    out.push({ points: poly, refused, ...(label === undefined ? {} : { label }) });
+  }
+  return out;
+}
 
 /** The orders the sandbox offers. Every one of them appears in the tier-D gallery. */
 export const OFFERED_ORDERS: readonly { readonly label: string; readonly order: BranchOrder }[] = [

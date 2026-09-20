@@ -102,7 +102,7 @@ describe("the residue at infinity carries the answer", () => {
   });
 
   it("is what D6's row is NOT: the same computation, a non-zero answer", () => {
-    expect(reasons()).toMatch(/NOT enough to make the residue vanish/);
+    expect(reasons()).toMatch(/not enough to make the residue vanish/);
     expect(reasons()).toMatch(/1\/z is regular there and has Res = −1/);
     expect(reasons()).toMatch(/binomial series of the fractional powers/);
   });

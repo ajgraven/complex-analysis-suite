@@ -27,6 +27,7 @@ import {
   type Step,
   type Verdict,
 } from "@cas/rigor";
+import type { Claim } from "./claims.js";
 import type { Cx } from "../kernel/geom.js";
 import { formatPiExpSum } from "../kernel/expSum.js";
 import type { PoleReport } from "../kernel/poles.js";
@@ -104,6 +105,18 @@ export interface Statement {
 /** One claim, with the evidence for it. Every field is read off a certificate. */
 export interface DerivationLine {
   readonly text: string;
+  /**
+   * The same sentence as typed ARGUMENTS — M8 step 3.2.
+   *
+   * `text` is `renderClaim(claim)` and stays the line's display string; this is beside it so the
+   * Derivation card can typeset a piece name as a name and put a scrub on a parameter's value,
+   * instead of parsing a sentence back into its parts. Absent on the lines that come from a whole
+   * VERDICT rather than from a ledger row — `lineFromVerdict` composes its text here and has no
+   * claim to carry.
+   */
+  readonly claim?: Claim;
+  /** The bound this line reports, as three numbers — see `LedgerRow.evaluated`. What a scrub writes. */
+  readonly evaluated?: LedgerRow["evaluated"];
   readonly level: Level;
   readonly method: string;
   readonly status: "satisfied" | "failed" | "unknown";
@@ -111,6 +124,14 @@ export interface DerivationLine {
   readonly provenance: readonly Step[];
   /** The piece this is about, when it is about one. */
   readonly pieceName?: string;
+  /**
+   * The same piece's ID — added at M8 step 1.5b so a derivation line can HIGHLIGHT its piece.
+   *
+   * The name is what a reader sees and the id is what the three surfaces agree on: the piece list,
+   * the stage and the accumulator all key their highlight on `Piece.id`, and matching by name would
+   * make the link break the first time two pieces were named alike (a keyhole's two lips are).
+   */
+  readonly pieceId?: string;
   readonly repair?: string;
 }
 
@@ -197,6 +218,8 @@ function lineFromRow(row: LedgerRow, spec: readonly Piece[]): DerivationLine {
     row.pieceId === undefined ? undefined : spec.find((p) => p.id === row.pieceId);
   return {
     text: row.claim,
+    claim: row.claimData,
+    ...(row.evaluated === undefined ? {} : { evaluated: row.evaluated }),
     level: row.evidence.level,
     method: row.evidence.method,
     status: row.status,
@@ -204,7 +227,7 @@ function lineFromRow(row: LedgerRow, spec: readonly Piece[]): DerivationLine {
       ? {}
       : { restriction: row.evidence.restriction }),
     provenance: row.evidence.provenance,
-    ...(piece === undefined ? {} : { pieceName: piece.name }),
+    ...(piece === undefined ? {} : { pieceName: piece.name, pieceId: piece.id }),
     ...(row.repair === undefined ? {} : { repair: row.repair }),
   };
 }

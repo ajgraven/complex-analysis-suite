@@ -9,7 +9,8 @@
 // faintly, on the same axes, and `Σ Δz` closing to the origin on a closed contour is the cheapest
 // striking thing in the whole app.
 import type { Cx } from "../kernel/geom.js";
-import type { Accumulation } from "../engine/contour/accumulate.js";
+import type { InkTheme } from "./inkTheme.js";
+import type { Accumulation, AccumulationStep } from "../engine/contour/accumulate.js";
 import { PIECE_COLOURS } from "./stage/ink.js";
 
 export type ContrastMode = "none" | "sumZ" | "sumFz" | "sumDz";
@@ -22,9 +23,23 @@ export const CONTRAST_LABELS: Record<ContrastMode, string> = {
 };
 
 export interface AccumulatorOptions {
+  /** The palette — required, for the reason `InkOptions.theme` is (see `inkTheme.ts`). */
+  readonly theme: InkTheme;
   readonly upTo: number;
   readonly contrast: ContrastMode;
   readonly pieceColours: readonly number[];
+  /** The piece INDEX to emphasise, or `undefined` for none. Matches `AccumulationStep.piece`. */
+  readonly highlight?: number;
+  /**
+   * The STEP index whose segment is the amplitwist detail's — M8 step 3.3.
+   *
+   * A different question from {@link highlight}, which names a PIECE (a whole arc of the contour,
+   * dozens of terms). This is one term, and it is the same term the stage draws as its second
+   * arrow: `f(z_k)·Δz_k` is a length in the value plane, which is the plane this canvas is in, so
+   * here it needs no magnification and is drawn exactly. Emphasising it is what makes the two
+   * pictures one object.
+   */
+  readonly step?: number;
 }
 
 export interface Frame {
@@ -35,6 +50,25 @@ export interface Frame {
 }
 
 const PAD = 18;
+
+/** The trail's stroke, and the same under `AccumulatorOptions.highlight`. */
+const TRAIL_WIDTH = 2;
+const EMPHASIS_WIDTH = 3.2;
+
+/**
+ * How near the pointer has to be to a segment, in CSS pixels, before it names a step.
+ *
+ * Measured over the 28 loaded records in the panel's real 860 × 255 box: 6,524 segments whose
+ * consecutive vertices are a **median of 1.11 px apart** (mean 3.38, max 121.6 — `mellin-keyhole`'s
+ * outer circle against its lips). So the tolerance is never about resolving one step from its
+ * neighbour, which no pointer could aim at; it is about how far OFF the trail still counts.
+ *
+ * The stroke is 2 px, so 8 is four half-widths — grabbable at mouse precision, and small enough that
+ * it is not simply the whole panel: a uniform 40 × 12 grid of probes over every record lands within
+ * 8 px of some drawn segment **3.5%** of the time (1.7% at 4, 9.7% at 12, 13.5% at 20), so a miss
+ * stays the common case and `null` is a real answer rather than a rare one.
+ */
+const HIT_TOLERANCE = 8;
 
 /**
  * Below this a span is numerical noise rather than a picture.
@@ -119,6 +153,103 @@ export function accumulatorFrame(points: readonly Cx[], w: number, h: number): F
   };
 }
 
+/**
+ * Precisely what is on screen for a given `upTo`/`contrast`: the slice of steps drawn, the contrast
+ * walk drawn beside them, and the frame both are drawn in.
+ *
+ * `drawAccumulator` and `stepNear` both go through this rather than each deriving the mapping, so a
+ * point over a segment and the segment under it cannot disagree about where that segment is. Two
+ * mappings that usually agree is the defect this repo keeps finding.
+ */
+function walkOnScreen(
+  acc: Accumulation,
+  w: number,
+  h: number,
+  upTo: number,
+  mode: ContrastMode,
+): { shown: readonly AccumulationStep[]; contrast: readonly Cx[]; frame: Frame } {
+  const count = Math.max(1, Math.round(upTo * acc.steps.length));
+  const contrast = mode === "none" ? [] : acc.contrasts[mode].slice(0, count);
+  // The frame fits EVERY step's running total, not just the shown prefix, so scrubbing `upTo` moves
+  // the head along a fixed picture instead of rescaling it under the reader.
+  const frame = accumulatorFrame([...acc.steps.map((s) => s.running), ...contrast], w, h);
+  return { shown: acc.steps.slice(0, count), contrast, frame };
+}
+
+/** Distance from `(px, py)` to the segment `(ax, ay) → (bx, by)`, all in canvas pixels. */
+function distanceToSegment(
+  px: number,
+  py: number,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+): number {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  // A zero-length segment is a point, and the corpus has them: a step whose term is far below the
+  // frame's scale rounds both ends to the same pixel.
+  const t = len2 === 0 ? 0 : Math.min(1, Math.max(0, ((px - ax) * dx + (py - ay) * dy) / len2));
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+
+/**
+ * The step index nearest to a point on the canvas, or `null` when the walk is empty or the point is
+ * far from every segment.
+ *
+ * **It hits the real trail only** — `f·Δz`, the segments `drawAccumulator` strokes in piece colour —
+ * and never a contrast walk, even though the contrast walks are the SAME steps and so would answer
+ * the caller's question ("which piece is this part of the trail?") with the same index. Two reasons,
+ * and the second is the one that decides it. A contrast is drawn as a single faint dashed polyline
+ * with no per-piece colour precisely because it is a foil rather than one of the three linked
+ * representations, so making it hoverable would link a curve that carries no piece identity. And
+ * the two walks cross: `Σ Δz` returns to the origin on a closed contour and passes through the real
+ * trail on the way, so a pointer in that neighbourhood would name whichever happened to be nearer —
+ * a hover that flickers between two curves for reasons the reader cannot see. `contrast` is still an
+ * input because it decides the FRAME: the fit spans both walks, so the same point is over a
+ * different segment with the contrast shown and hidden.
+ *
+ * A segment the drawing did not draw is never returned: the slice is `upTo`'s, exactly as drawn, and
+ * a step whose running total is non-finite yields a `NaN` distance that no comparison accepts —
+ * which matches the canvas, where a `moveTo`/`lineTo` at `NaN` lays down nothing.
+ */
+export function stepNear(
+  acc: Accumulation,
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+  opts: { readonly upTo: number; readonly contrast: ContrastMode; readonly tolerance?: number },
+): number | null {
+  if (acc.steps.length === 0) return null;
+  const { shown, frame } = walkOnScreen(acc, width, height, opts.upTo, opts.contrast);
+  const tol = opts.tolerance ?? HIT_TOLERANCE;
+
+  let best: number | null = null;
+  let bestDist = Infinity;
+  let from: Cx = [0, 0];
+  for (let k = 0; k < shown.length; k++) {
+    const to = shown[k].running;
+    const d = distanceToSegment(
+      x,
+      y,
+      frame.toX(from[0]),
+      frame.toY(from[1]),
+      frame.toX(to[0]),
+      frame.toY(to[1]),
+    );
+    from = to;
+    // Ties go to the EARLIER step, which is what makes a point on a vertex belong to the segment
+    // that arrives there rather than to the one leaving it.
+    if (d <= tol && d < bestDist) {
+      bestDist = d;
+      best = k;
+    }
+  }
+  return best;
+}
+
 function polyline(ctx: CanvasRenderingContext2D, pts: readonly Cx[], f: Frame): void {
   ctx.beginPath();
   ctx.moveTo(f.toX(0), f.toY(0));
@@ -132,20 +263,16 @@ export function drawAccumulator(
   h: number,
   opts: AccumulatorOptions,
 ): void {
+  const t = opts.theme.accumulator;
   ctx.clearRect(0, 0, w, h);
   if (acc.steps.length === 0) return;
 
-  const count = Math.max(1, Math.round(opts.upTo * acc.steps.length));
-  const shown = acc.steps.slice(0, count);
-  const contrast =
-    opts.contrast === "none" ? [] : acc.contrasts[opts.contrast].slice(0, count);
-
   // One frame for everything on screen, so the contrast trail is drawn to the same scale as the
   // real one. Comparing two walks at different scales would be a lie by presentation.
-  const frame = accumulatorFrame([...acc.steps.map((s) => s.running), ...contrast], w, h);
+  const { shown, contrast, frame } = walkOnScreen(acc, w, h, opts.upTo, opts.contrast);
 
   // Axes.
-  ctx.strokeStyle = "rgba(231, 233, 238, 0.16)";
+  ctx.strokeStyle = t.axes;
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(0, frame.toY(0));
@@ -156,7 +283,7 @@ export function drawAccumulator(
 
   if (contrast.length > 0) {
     polyline(ctx, contrast, frame);
-    ctx.strokeStyle = "rgba(231, 233, 238, 0.42)";
+    ctx.strokeStyle = t.trail;
     ctx.setLineDash([4, 4]);
     ctx.lineWidth = 1.25;
     ctx.stroke();
@@ -165,29 +292,68 @@ export function drawAccumulator(
     const end = contrast[contrast.length - 1];
     ctx.beginPath();
     ctx.arc(frame.toX(end[0]), frame.toY(end[1]), 3, 0, 2 * Math.PI);
-    ctx.fillStyle = "rgba(231, 233, 238, 0.6)";
+    ctx.fillStyle = t.dots;
     ctx.fill();
   }
 
   // The real trail, in per-piece colour so a segment of the walk can be traced back to the arc that
   // produced it — one of the three linked representations (arc ↔ term ↔ accumulator segment).
-  ctx.lineWidth = 2;
+  //
+  // `highlight` thickens the segments of one piece and leaves everything else alone, which is the
+  // stage's own idiom for the same hover: `stage/ink.ts`'s `drawContour` strokes an emphasised piece
+  // at 4 against 2.5. The RATIO is what carries over, not the numbers — a stage stroke is 2.5 px and
+  // a trail segment is 2 — so 1.6× gives 3.2 here. With `highlight` undefined no `step.piece` can
+  // equal it, so every iteration sets `lineWidth = 2` and the output is what it was before the
+  // option existed.
   let from: Cx = [0, 0];
-  for (const step of shown) {
+  let detail: { readonly a: Cx; readonly b: Cx } | null = null;
+  for (let k = 0; k < shown.length; k += 1) {
+    const step = shown[k] as AccumulationStep;
     ctx.beginPath();
     ctx.moveTo(frame.toX(from[0]), frame.toY(from[1]));
     ctx.lineTo(frame.toX(step.running[0]), frame.toY(step.running[1]));
     ctx.strokeStyle = PIECE_COLOURS[(opts.pieceColours[step.piece] ?? step.piece) % PIECE_COLOURS.length];
+    ctx.lineWidth = step.piece === opts.highlight ? EMPHASIS_WIDTH : TRAIL_WIDTH;
     ctx.stroke();
+    if (k === opts.step) detail = { a: from, b: step.running };
     from = step.running;
   }
 
   // Where the sum has got to.
   ctx.beginPath();
   ctx.arc(frame.toX(from[0]), frame.toY(from[1]), 4.5, 0, 2 * Math.PI);
-  ctx.fillStyle = "#ffffff";
-  ctx.strokeStyle = "rgba(8, 10, 14, 0.9)";
+  ctx.fillStyle = t.headFill;
+  ctx.strokeStyle = t.headRing;
   ctx.lineWidth = 1.5;
   ctx.fill();
   ctx.stroke();
+
+  // **Over the trail AND over the head**, in the stage's own term colour. Both halves of that were
+  // measured rather than reasoned.
+  //
+  // After the loop rather than inside it, because the next segment would otherwise paint over half
+  // of it — which is what the first draft did and what made the emphasis invisible at every step
+  // but the last. And after the HEAD, which the second draft got wrong in the other direction: the
+  // emphasised segment is always the LAST drawn one (the strip passes `stepIndex(scrub, …)` and
+  // this function slices the walk at the same `scrub`, so `opts.step` is `shown.length - 1` by
+  // construction), and the head is a 9 px disc filled on that segment's far end. So the emphasis
+  // showed only where the term was longer than the disc. Swept over A6: **0 painted pixels at
+  // scrub 0.05, 0.1 and every position from 0.3 to 1.0, and 45 at 0.2** — invisible at the default
+  // scrub of 1, with the whole wire correctly connected. The same sweep after the reorder reads
+  // **4, 6, 58, 7, 5, 4, 4**: present everywhere, and small exactly where the term is small.
+  //
+  // The round cap is what makes that repair work rather than merely reorder it: a term too short
+  // to be a line still paints a dot, and a dot is the honest mark here, because what this says is
+  // WHICH term the arrows are about and not how long it is. `theme.stepArrow.term` rather than a
+  // piece colour: the stage's second arrow and this segment are the same vector.
+  if (detail !== null) {
+    ctx.beginPath();
+    ctx.moveTo(frame.toX(detail.a[0]), frame.toY(detail.a[1]));
+    ctx.lineTo(frame.toX(detail.b[0]), frame.toY(detail.b[1]));
+    ctx.strokeStyle = opts.theme.stepArrow.term;
+    ctx.lineWidth = EMPHASIS_WIDTH;
+    ctx.lineCap = "round";
+    ctx.stroke();
+    ctx.lineCap = "butt";
+  }
 }

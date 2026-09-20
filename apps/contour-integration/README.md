@@ -10,8 +10,15 @@ whether the whole thing closes.
 
 ## Status
 
-**Through Milestone 7 and published. THE GALLERY IS COMPLETE — all 28 records load, and every one
-of them is executed against the engine in the test suite.** M5.0 (tier D's quadrature cross-check),
+**Through Milestone 8 and published. THE GALLERY IS COMPLETE — all 28 records load, and every one
+of them is executed against the engine in the test suite.** **M8 — the shell rebuild
+([ADR-0043](../../docs/DECISIONS.md)) — is COMPLETE:** all five phases landed (Phase 0 merged alone,
+Phases 1–5 in one merge), so `src/shell/` is the rebuilt shell and the old one is deleted. Anything
+below that describes the SCREEN before M8 describes a shell that no longer exists — the four M8
+paragraphs near the end of this file are the current word, what survived the rebuild and what
+deliberately did not is [`M8/parity.md`](../../docs/contour-integration/M8/parity.md) row by row, and
+[`M8/STATUS.md`](../../docs/contour-integration/M8/STATUS.md) is the step-by-step record. The
+MATHEMATICS is unchanged by M8. M5.0 (tier D's quadrature cross-check),
 M5.1 (the sandbox declares a branch factor), M5.2 (one predicate for L3 and L6, and the corrected
 L6), M5.3 (tier E's E1 and E2), M5.4 (tier F's F1, on the wedge), M5.5 (tier G's machinery — the
 square, the summation kernels and the corrected bound), M5.6 (tier G's solve, and G2), M5.7 (the
@@ -24,8 +31,11 @@ two records E3 and F2) are all done. See the milestone table in
   `1/(1+z⁴)` reads `π√2/2`. Numerical quadrature is demoted to an independent **cross-check**.
 - Arc bounds are certified in exact ℚ with **no floating point in the chain**, including certified
   rational brackets on π. `deg Q ≥ deg P + 2` is *derived* from the exponent, never asserted.
-- The **Closing Ledger** (COVER / KILL / CATCH / LEGALITY) answers "does this argument close?", and
-  a wrong contour fails diagnostically.
+- The **Closing Ledger** answers "does this argument close?", and a wrong contour fails
+  diagnostically. On screen its four groups read **Hypotheses · Residues · Boundary terms ·
+  Target**; `LEGALITY / CATCH / KILL / COVER` are the ids the engine keys them by and are not
+  shown to a reader (ADR-0043, M8 step 0.3). This file uses the ids where it is describing the
+  engine and the labels where it is describing the screen.
 - The **Family loader** and its four invariants run the gallery records as data. **All 28 load and
   are executed against the engine in the test suite** — every entry in every tier. The thirteen of
   tiers A–C are:
@@ -662,12 +672,13 @@ is not the posed one), the closed form the engine derives, and whether that agre
 value. A fixture that selects an alternative *derivation* rather than binding parameters is offered
 as not executable instead of offered and then failing.
 
-Each one also comes with its **derivation**: the argument in order — LEGALITY, CATCH, KILL, COVER,
-SOLVE, VERDICT — with every line badged from its own certificate and carrying the method that
-established it and its ✓/✗ audit trail. It is a view over evidence the engine already produced, not a
-second narration of it. An argument that does not close opens the panel by itself, shows the failed
-step inline, and offers the repair: closing `∫cos x/(1+x²)` downward shows the bound diverging, names
-KILL, and says to close through the other half-plane.
+Each one also comes with its **derivation**: the argument in order — hypotheses, residues, boundary
+terms, target, then the solve and the verdict — with every line badged from its own certificate and
+carrying the method that established it and its ✓/✗ audit trail. It is a view over evidence the
+engine already produced, not a second narration of it. An argument that does not close opens the
+panel by itself, shows the failed step inline, and offers the repair: closing `∫cos x/(1+x²)`
+downward shows the bound diverging, names the boundary term that will not vanish, and says to close
+through the other half-plane.
 
 Every badge in the app is computed from a verdict. There are no literal labels left: the one that had
 to be hand-written was a symptom of `applyResidueTheorem` folding the *agreeing* quadrature's `≤`
@@ -754,8 +765,8 @@ has no recipe, so `#vs=` carries its **vertices** (a twelve-corner path is 292 c
 2,028 as a piece list) and verifies on encode that they rebuild the shape on screen.
 
 **M7.3 — the faded drill.** A **Drill** button practises the one thing the app is for: choosing a
-contour. Four rungs, each supplying less — the worked argument; then the ledger's **KILL column**
-masked and filled in (what is each piece FOR: the target, something that vanishes, something that
+contour. Four rungs, each supplying less — the worked argument; then the ledger's **Boundary terms**
+column masked and filled in (what is each piece FOR: the target, something that vanishes, something that
 contributes a known limit, something that reproduces the target); then the contour masked too and a
 menu of four to pick from, which the ledger passes or fails in its own words; then a blank plane and
 the pen. Where a task opens is where it was left off, remembered in a versioned `localStorage` key.
@@ -784,6 +795,73 @@ passing**: a round trip that is consistently lossy is still a fixed point, so 11
 survived it. The test now restores a state the app is **not** in and requires it to land on the state
 that was applied — 20/20.
 
+**M8 (the shell rebuild, ADR-0043) — Phase 1 is cut over.** The presentation layer is rebuilt on the
+same engine: two rails, KaTeX throughout, textbook vocabulary, a front door over the 28 records, four
+stage modes on Kovesi's CET-C6, a hover readout, one hover identifier linking the piece list, the
+contour and the accumulator's trail, and undo/redo. At step 1.12 `src/main.ts` stopped choosing —
+`src/shell/app.ts`, `src/ui/app.css` and the three old jsdom specs are deleted, `src/shell2/` has
+become `src/shell/`, and the stylesheet budget is `theme.css` + `shell.css`. Below 900 px the grid is
+replaced by a notice naming a desktop, which is the honest form of a decision the old shell met with
+two media queries and 656 px of sideways scroll. What survived the rebuild and what deliberately did
+not is [`M8/parity.md`](../../docs/contour-integration/M8/parity.md), row by row; the live state is
+[`M8/STATUS.md`](../../docs/contour-integration/M8/STATUS.md).
+
+**M8 Phase 2 — presentation and prose.** The screen's own words are rewritten to the five rules of
+step 0.5a and decided in one place: `engine/vocabulary.ts` holds the ledger's four display labels
+alongside the template, disposal and tag maps, and a two-part denylist — one half reading every
+string literal in `src/shell/` and `src/engine/` out of the TypeScript AST, the other mounting the
+app across 43 states and reading what is actually on screen — keeps a house id from reaching a
+reader. Every `Golden.method` in the corpus is rewritten for a reader and typeset, and the Target
+card shows it, together with `description.point`: both were required by the schema and rendered
+nowhere. The figure export offers three plates — **dark** (the stage as shown), **light** (the
+portrait washed onto paper) and **print** (the textbook plate: no portrait, axes, a unit grid, the
+contour in its piece colours) — each stamped with its own permalink, value, verdict and
+`cas:theme`. And `src/shell/errors.ts` is the one module every machine message a reader can meet
+goes through: the parser's sentences, the codec's refusals on both sides, the action failures, and
+the empty states. The codec's forty-odd refusal reasons collapse to eight sentences and one
+fallback, because all but a handful differ only in which wire field was wrong — a fact about the
+program rather than anything a reader can act on.
+
+**M8 Phase 3 — the teaching layer.** The Derivation card becomes a **stepper**: the argument in the
+order a lecturer gives it (the problem, the hypotheses, the residues, the boundary terms, the limit,
+the solution, the conclusion), one step at a time or all at once, with the stage reading the step and
+emphasising the piece it is about. A limit is a **swept ladder** rather than a sentence — the
+`R → ∞` step plays, and its checkpoint table shows the bound shrinking at each radius — and the
+**amplitwist** detail draws `f(z)dz` as the product it is, an arrow scaled and turned. The contrast
+ladder stops being a modal and becomes a strip above the stage, five cases each naming in words the
+check that moved and what it did; measured, the modal cost the stage 335 px of panel against a 328 px
+stage. The faded drill is rehoused as a right-rail card, and rung iii **asks before it offers** — the
+prediction comes first, then the menu. The step rides in the permalink (`Wire.st`), which is what
+made the stepper's bodies auditable at all: the roster audits a page in the state a link opens it in,
+so a surface no link could reach was a surface nothing checked.
+
+**M8 Phase 4 — the editor.** The contour is an object you can restructure: seven actions on the
+Contour card's rows (role, status, rename in place, delete, insert, reverse, reorder) over pure
+operations in `engine/contour/edit.ts`, plus an eighth reached by **Shift-dragging the curve**, which
+inserts a vertex and drags it in one gesture and one undo entry. A division is carried as a
+**fraction** so that it replays onto a contour whose slider has since moved, a segment's join point is
+symbolic, and an arc is divided **on its own circle** because `arcRadius` refuses any centre that is
+not exactly the origin. A drawn contour is a first-class argument — a `PenNode` carries a role and a
+lemma — and the ledger **stops guessing** which vanishing lemma kills a piece: all 28 records have
+declared one since M3, all 28 agree with the old shape-driven guess, and a declared lemma now routes
+to its own reader and refuses by name. The permalink carries an edited template as **what was done to
+it** (six replayable operations on the recipe) rather than as its piece list, which keeps the
+parameters, the symbolic geometry and the exactly-centred arcs; the plan's own carrier was measured
+and would have changed the ledger for four of the ten templates.
+
+**M8 Phase 5 — the close.** A browser pass under software WebGL2, recorded per item as the owner's
+click-through checklist ([`M8/browser-pass.md`](../../docs/contour-integration/M8/browser-pass.md)):
+four stage modes on four records with no page errors, a drag across a pole, the pen, the keyhole's
+cut drag refusing by name, the three figure plates opened, the front door by keyboard alone, the
+drill end to end, a worked example stepped and played. It found the Result card saying *There is no
+integrand* about a REFUSED DECLARATION with the integrand still in the box, and printing a refused
+claim raw above a typeset copy of itself — both fixed. The accessibility baseline is **zero axe rules
+and zero nodes** on all four audited states, and `scripts/a11y-audit.mjs` now walks each page's
+accessibility TREE beside axe: **57 / 71 / 50 / 54 interactive nodes on the four states and 0
+unnamed**, 845 across the whole suite. That walk earns its place by measurement — a
+`<div tabindex="0">` with no role and no text is a tab stop a screen reader announces as nothing, and
+axe reports the page clean.
+
 ## Documentation
 
 | document | what it is for |
@@ -801,11 +879,19 @@ Four layers, strictly downward-depending, with the boundary enforced by this pac
 ```
 src/kernel/   pure maths — no DOM, no upward imports. Where the golden corpus points.
               `branch/` is the cut system: model, admissibility, argument lift, crossings.
+              `bounds/` is the certified arc and segment lemmas.
               `exponent.ts` / `sineForm.ts` / `cyclotomic.ts` are tier D's output basis.
-src/engine/   problem semantics: contour, substitution, residue theorem, ledger.
-src/families/ the gallery records as data: schema, loader + invariants, Pass-5 solve.
-src/ui/       Stage (WebGL2) and panels.
-src/shell/    app wiring, URL state, workers, figure export.
+src/engine/   problem semantics: `contour/` (model, templates, editing, the pen's geometry,
+              integration, accumulation), substitution, the six theorems, the ledger, the
+              derivation, and `vocabulary.ts` — the one place the screen's words are decided.
+src/families/ the gallery records as data: schema, loader + invariants, Pass-5 solve,
+              `records/` (the 28), and the LaTeX and spoken twins of each record's prose.
+src/ui/       the WebGL2 stage (`stage/`, including the generated cut and declared-product
+              shaders), the accumulator's ink, the ink themes, and the two stylesheets.
+src/shell/    the browser shell — `cards/` (the two rails' ten cards), the keyed DOM builder,
+              the stage controller, the strip, the bar, the front door, the contrast grid, the
+              drill, undo, `state.ts`, the `#vs=` codec, `errors.ts` and the figure export.
+              Rebuilt at M8 Phase 1; `src/shell2/` became this directory at step 1.12.
 ```
 
 `src/families/` is where the 28 gallery entries become executable. A record is **dropped, not

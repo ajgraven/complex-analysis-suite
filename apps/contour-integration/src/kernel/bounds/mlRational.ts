@@ -23,6 +23,18 @@ import { fracCmp, sqrtDown, sqrtUp } from "./ratBound.js";
 /** What happens to the bound as the limit parameter runs to its limit. */
 export type ArcAsymptotics = "vanishes" | "bounded" | "diverges";
 
+/**
+ * The name {@link ArcBound.evaluated} uses when the caller does not supply one.
+ *
+ * Every producer here is handed a RADIUS and no name — the ledger reads the geometry, not the
+ * contour's parameter table — so the name is passed down from `ledger.ts`, which takes it off the
+ * piece's own `Geom` (`radius: {param: "R"}`). This is the fallback for a piece whose geometry is a
+ * literal, which over the 28-record corpus is none of them: it is reached by the sandbox, where a
+ * hand-drawn arc has no parameter at all. `"R"` rather than `""` because it is the symbol these
+ * producers' own sentences already print.
+ */
+export const DEFAULT_RADIUS_PARAM = "R";
+
 export interface ArcBound {
   /** The radius the bound was evaluated at. */
   readonly R: Frac;
@@ -41,6 +53,22 @@ export interface ArcBound {
    * be read as "not applicable".
    */
   readonly degreeGap?: number;
+  /**
+   * The bound as three numbers a reader can watch move — M8 step 3.2.
+   *
+   * `param` is the contour parameter the bound was taken at, `at` its value there, `bound` the
+   * numeric value of the certified bound.
+   *
+   * **Present exactly when a bound was ESTABLISHED, which is a strict superset of {@link value}.**
+   * Measured over this directory: four producers put their bound in `value` (`mlArcBound`,
+   * `jordanArcBound`, `wedgeArcBound`, `squareSideBound`) and five do not — `branchArc`'s two forms,
+   * `logArc`, `stripSide` and `gaussianSide` compute `ρ^α`, `ln ρ` or `e^{κR}`, and `value` is
+   * documented as an EXACT `Frac`, so each of them deliberately omits it and puts the float in its
+   * own sentence. Those five are precisely the records whose bound a reader most wants to watch
+   * shrink, so gating `evaluated` on `value` would have left tier D, E and F with nothing to scrub.
+   * `bound` is a `number` for the same reason, and equals `value.toNumber()` wherever both exist.
+   */
+  readonly evaluated?: { readonly param: string; readonly at: number; readonly bound: number };
   readonly certificate: Certificate;
 }
 
@@ -136,7 +164,13 @@ const positive = (f: Frac): boolean => f.n > 0n;
  * `@cas/exact`'s certified bracket, so the arc length is bounded above without a floating constant
  * anywhere in the chain.
  */
-export function mlArcBound(num: QiPoly, den: QiPoly, R: Frac, piMultiple: Frac): ArcBound {
+export function mlArcBound(
+  num: QiPoly,
+  den: QiPoly,
+  R: Frac,
+  piMultiple: Frac,
+  param = DEFAULT_RADIUS_PARAM,
+): ArcBound {
   const degP = num.degree();
   const degQ = den.degree();
   const degreeGap = degQ - degP;
@@ -175,6 +209,7 @@ export function mlArcBound(num: QiPoly, den: QiPoly, R: Frac, piMultiple: Frac):
   const value = piMultiple.mul(piUpper()).mul(R).mul(maxModulus);
 
   const claim = `the arc: $\\left|\\int f\\,dz\\right| \\le ${value.toNumber().toExponential(3)}$ at $R = ${R.toNumber()}$`;
+  const evaluated = { param, at: R.toNumber(), bound: value.toNumber() };
   const because =
     asymptotics === "vanishes"
       ? `and $\\to 0$ as $R \\to \\infty$, since $\\deg Q - \\deg P = ${degreeGap} \\ge 2$ makes the bound $O(R^{${exponent}})$`
@@ -185,6 +220,7 @@ export function mlArcBound(num: QiPoly, den: QiPoly, R: Frac, piMultiple: Frac):
   return {
     R,
     value,
+    evaluated,
     asymptotics,
     exponent,
     degreeGap,
@@ -228,6 +264,7 @@ export function jordanArcBound(
   a: Frac,
   half: "upper" | "lower",
   R: Frac,
+  param = DEFAULT_RADIUS_PARAM,
 ): ArcBound {
   const degreeGap = gDen.degree() - gNum.degree();
   const correctHalf = (a.n > 0n && half === "upper") || (a.n < 0n && half === "lower");
@@ -296,6 +333,7 @@ export function jordanArcBound(
   return {
     R,
     value,
+    evaluated: { param, at: R.toNumber(), bound: value.toNumber() },
     asymptotics,
     exponent: -degreeGap,
     degreeGap,

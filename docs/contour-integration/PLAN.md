@@ -95,16 +95,22 @@ And one generalisation that covers essentially every standard example:
 That is short, true, and — critically — **checkable**, hence implementable.
 
 **The synthesis.** The four constraints and the four roles are the same object. The Closing Ledger
-is the app's primary UI surface *and* its primary data structure:
+is the app's primary UI surface *and* its primary data structure.
+
+**The four names above are the DATA KEYS and are not what a reader sees** — ADR-0043, built at M8
+step 0.3. On screen the groups read *Hypotheses · Residues · Boundary terms · Target*; `LEGALITY /
+CATCH / KILL / COVER` remain the `ConstraintId` union the engine keys rows by, and
+`engine/vocabulary.ts` is the one place the translation happens. This document uses the ids,
+because it is describing the engine. What a reader actually sees is nearer to:
 
 ```
-COVER      ✓  piece "real axis"        role=target
-KILL       ✓  piece "arc C_R"          role=vanish   |∫| ≤ 3.2e−4 at R=50, O(R⁻²) → 0   [≤]
-           ✓  piece "indent at 0"      role=vanish   → iπ·Res = iπ                      [=]
-CATCH      ✓  1 pole enclosed: z=i, order 1, Res = −i/2, n(γ,i)=+1                      [=]
-LEGALITY   ✓  no cuts crossed; orientation ccw
-────────────────────────────────────────────────────────────────────────────────────────
-THIS ARGUMENT CLOSES.        ∫ = π/2                                                     [=]
+Hypotheses       ✓  no cuts crossed; orientation ccw
+Residues         ✓  1 pole enclosed: z = i, order 1, Res = −i/2, Ind_γ(i) = +1           [=]
+Boundary terms   ✓  Γ_R            → 0            |∫| ≤ 3.2e−4 at R = 50, O(R⁻²) → 0   [≤]
+                 ✓  γ_ε at 0       a known limit   → iπ·Res = iπ                        [=]
+Target           ✓  the real axis  the target
+─────────────────────────────────────────────────────────────────────────────────────────
+The argument is complete.        ∫ = π/2                                                 [=]
 ```
 
 When a constraint fails, the ledger says *which* and suggests the repair ("add an ε-indent at
@@ -359,6 +365,31 @@ disagreement beyond the estimator's bound is a bug signal worth logging.
 ---
 
 ## 5. UI specification
+
+> **The region table below is SUPERSEDED by [ADR-0043](../DECISIONS.md#adr-0043-contour-integration-rebuilds-its-shell--two-rails-a-keyed-renderer-katex-textbook-vocabulary)
+> and built as M8 describes it** ([`M8-plan.md`](M8-plan.md) §0, §4). What shipped is **Layout B**:
+> the left rail is *what is being integrated* (target · integrand · parameters · contour pieces ·
+> cuts · singularities) and the right rail is *what it proves* (result · derivation · share), with
+> the stage between them and the accumulator beneath; worked-example mode is the same screen with
+> the left rail collapsed. The gallery is not a rail panel at all — it is a **front door** of eight
+> classics over an eight-group taxonomy ([`GALLERY.md`](GALLERY.md) §0). And the ledger's four
+> groups are shown as **Hypotheses · Residues · Boundary terms · Target**; the ids in the table
+> below (`COVER / KILL / CATCH / LEGALITY`) stay as data keys and never reach a reader.
+>
+> **§5.1 (the ten interaction rules), §5.2 (the P0 pedagogical constraints) and §5.3 (colour and
+> type) stand**, and ADR-0043 says so explicitly. Two notes measured since: rule 7's
+> `prefers-reduced-motion` clause is satisfied *vacuously* — the app has no `transition`,
+> `animation` or `@keyframes` rule and both its `requestAnimationFrame` calls are draw coalescers,
+> so there is nothing to start paused — measured at M6.4 on the old stylesheet and re-measured at
+> M8 step 2.5 on `theme.css` + `shell.css`; and §5.3's CET-C6 is now the real Kovesi map rather than
+> the documented approximation (M8 step 1.9).
+>
+> **Completed at M8 step 5.3, with the rest of the milestone:** the table's *Derivation* row is now
+> a **stepper** (the argument in a lecturer's order, one step at a time, the stage reading the step),
+> its *Contour* row is **editable** (seven actions on the rows plus a Shift-drag division, over pure
+> operations), and its *Figure & share* row ships three plates rather than element toggles. The four
+> stage modes (quiet / full / isolines / a textbook plate with no portrait) were not in the table at
+> all. §7's M8 entry carries the gate.
 
 Full-bleed **Stage**, two collapsible rails, one bottom strip. Rails named by **job, not technique**
 — the correction QD's own sidebar review had to make.
@@ -932,6 +963,38 @@ hand-drawn contour closes and its ledger is indistinguishable in kind from a tem
 > the first two and in two places for the third. The plan also surfaces two items scoped in earlier
 > milestones and never built: the **pen tool** (M1) and the **Pólya work/flux toggle** (M3, which the
 > M3 gate note does not mention).
+
+### M8 — the shell rebuild · *L*
+**Not in the original runbook.** A review of the app at M7 found the engine sound and the
+presentation layer the liability, and [ADR-0043](../DECISIONS.md#adr-0043-contour-integration-rebuilds-its-shell--two-rails-a-keyed-renderer-katex-textbook-vocabulary)
+decided to rebuild the shell rather than patch it: a keyed renderer over the existing
+`ShellState → resolveState` contract, two rails (§5's table superseded — see the note there),
+KaTeX throughout, textbook vocabulary in place of the house ids, a front door of eight classics,
+four stage modes on the real CET-C6, and the corpus's four-line descriptions as schema data. The
+engine is unchanged apart from the hooks the plan names. Phases: 0 invisible foundations (merged
+to `master` alone), 1 the shell, 2 presentation and prose, 3 the teaching layer, 4 the editor,
+5 the close. **Gate:** each phase's own gate, then the full gate, the browser suite, `pnpm a11y`
+and screenshots. Plan: [`M8-plan.md`](M8-plan.md); the step-by-step record is
+[`M8/STATUS.md`](M8/STATUS.md).
+
+> **✅ GATE MET.** All five phases landed — Phase 0 merged to `master` alone
+> ([#340](https://github.com/ajgraven/complex-analysis-suite/pull/340)), Phases 1–5 in one merge.
+> `src/shell/` is the rebuilt shell and the old one is deleted; what survived and what deliberately
+> did not is [`M8/parity.md`](M8/parity.md), row by row. The full gate is green at **586 files /
+> 6,475 tests** with lint, typecheck and build silent; the app's browser suite is 20 files / 220
+> tests; the a11y roster is **zero rules and zero nodes** on all four audited contour states with
+> `{}` baselines, and `scripts/a11y-audit.mjs` now walks each page's accessibility TREE beside axe
+> (**0 unnamed** of 845 interactive nodes across the suite). The browser pass is
+> [`M8/browser-pass.md`](M8/browser-pass.md), recorded per item.
+>
+> **Three things the milestone established that outlive it.** (1) **The gates were the weakest part
+> of the work, twice** — M6.1's *"`applyState(currentState())` is a fixed point"* survived 11 of 20
+> mutants because a consistently LOSSY round trip is still a fixed point, and step 3.6's own clause
+> named a permalink that could not exist. A gate has to be swept like anything else. (2) **The
+> plan's carriers had to be measured, not adopted** — serialising an edited template as a pen wire
+> changes the LEDGER for four of the ten templates, so the recipe carries the reader's six
+> operations instead. (3) **The accessibility tree is the instrument and a DOM walk is not**, which
+> this app has now had to learn at M6.4, 5.1 and 5.2.
 
 ### Deferred (explicitly out of v1)
 **Pólya work/flux toggle** — scoped into M3 (round 3), never built, dropped on the record in

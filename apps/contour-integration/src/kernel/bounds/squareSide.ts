@@ -114,6 +114,7 @@ export function squareSideBound(
   num: QiPoly,
   den: QiPoly,
   halfWidth: Frac,
+  param = "N",
 ): ArcBound {
   const n = asHalfInteger(halfWidth);
   if (n === null) {
@@ -165,6 +166,11 @@ export function squareSideBound(
   return {
     R: halfWidth,
     value,
+    // **`at` IS `N`, NOT THE HALF-WIDTH.** The contour's parameter is `N` and the geometry is
+    // `N + ½`, so a scrub handed `halfWidth` would write 3.5 into a field whose slider reads 3 and
+    // move the square by half a unit on the first drag. `asHalfInteger` has already decided the
+    // question exactly, and the claim beside it prints `at $N = ${n}$` for the same reason.
+    evaluated: { param, at: Number(n), bound: value.toNumber() },
     asymptotics: vanishes ? "vanishes" : "bounded",
     exponent,
     degreeGap: gap,

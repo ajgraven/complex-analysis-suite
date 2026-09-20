@@ -51,6 +51,26 @@ export interface PieceIntegral {
   readonly certificate: Certificate;
 }
 
+/**
+ * Did a piece's own successive refinement support the value it returned? — M8 step 3.2.
+ *
+ * The threshold was written once, inside `integratePiece`'s certificate, and the sweep's table is
+ * its second reader: a row is three numbers taken at one value of the limit parameter, and the two
+ * quadrature columns must not print a number the quadrature itself does not stand behind. Measured
+ * on A6 along the sweep's own ladder, at the full budget: the target's `errorEstimate` is 8.9e-16
+ * at `R = 587`, 2.8e-12 at 7016, **7.8e-4 at 83763 and 8.0e-1 at 1e6**, where the value has drifted
+ * from 2.22144 to 2.0766 — a uniform rule over a segment that long cannot see the integrand's
+ * support at all. At the DRAFT budget it goes wrong three rungs earlier, which is what a reader of
+ * the table would have seen: a target column falling 2.221, 2.205, 0.396, 0.00024, 1.4e-7 beside a
+ * bound column shrinking exactly as the argument says it must.
+ *
+ * `capped` is in it because a budget that bound the resolution means the spacing rule was never
+ * met, so the refinement is comparing two under-resolved answers to each other.
+ */
+export function converged(p: Pick<PieceIntegral, "value" | "errorEstimate" | "capped">): boolean {
+  return !p.capped && p.errorEstimate < 1e-10 * Math.max(1, Math.hypot(p.value[0], p.value[1]));
+}
+
 export interface ContourIntegral {
   /** Absent when the integral was refused. */
   readonly value?: Cx;
@@ -170,7 +190,9 @@ export function integratePiece(
           text: `nearest singularity at distance ${nearest === Infinity ? "∞" : nearest.toPrecision(4)}`,
         },
         {
-          ok: errorEstimate < 1e-10 * Math.max(1, Math.hypot(fine[0], fine[1])),
+          // Through `converged`, so the threshold is written once and the sweep's table withholds
+          // exactly the cells this row declines to certify.
+          ok: converged({ value: fine, errorEstimate, capped }),
           text: `successive refinement differs by ${errorEstimate.toExponential(2)}`,
         },
         ...(capped

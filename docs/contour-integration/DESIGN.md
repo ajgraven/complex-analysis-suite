@@ -57,6 +57,19 @@ packages/rigor/                    new shared package — §5
 may import anything below them; nothing imports upward. This is the app-internal echo of
 ARCHITECTURE.md §4 and is worth wiring on day one, when it costs nothing.
 
+> **As built (M8 step 2.5).** The four layers and the dependency rule are exactly as specified and
+> are enforced by the app's `eslint.config.js`. The FILE TREE above is the design-time sketch and
+> is not what to read for the current layout — that is
+> [`../../apps/contour-integration/README.md`](../../apps/contour-integration/README.md) § Layout.
+> Three differences are worth naming because they are decisions rather than drift. **There is no
+> `worker/` and no `aaa.ts`** — see §7 below. **`ui/panels/gallery/ function/ contour/ cuts/
+> ledger/ derivation/ result/ figure/` is the pre-M8 rail** and does not exist: the cards live in
+> `shell/cards/` under ADR-0043's two-rail split, and the gallery is a front door rather than a
+> panel. And `shell/url.ts` is `shell/viewState.ts`, `shell/keys.ts` folded into the stage
+> controller and the bar. `kernel/exact/` stayed largely in `@cas/exact` (ADR-0007), and the
+> per-tier modules the milestones added — `branch/`, `bounds/`, `exponent.ts`, `sineForm.ts`,
+> `cothForm.ts`, `summationKernel.ts` — were not foreseeable from here.
+
 ---
 
 ## 2. Core types
@@ -724,6 +737,22 @@ last good model for pole subtraction in the meantime.
 tautological when both call the same function; the test must pin the *outcome* against an
 independently-computed fixture.
 
+> **As built (M8 step 2.5): NONE OF THIS EXISTS, and it is not an oversight.** Measured — the word
+> `Worker` does not appear anywhere in `src/`, and there is no `runJob`, no `JobKind` and no AAA.
+> Every compute in the app is synchronous on the main thread, and it is fast enough because the
+> two things this section was written to offload never arrived: **AAA rational approximation** was
+> for pole-subtracted quadrature, and quadrature was demoted to a cross-check at M3 (the value
+> comes from `2πi Σ n·Res`, a formula), so nothing needs a rational model of `f`; and the heavy
+> exact solves are the ledger's, which run in milliseconds over ℚ(i) because the corpus's
+> polynomials are small. What DOES cost visible time is a parameter drag, and that is answered by
+> a **draft evaluation budget** keyed on `Session.scrubbing` and `Session.gesture` rather than by
+> moving the work — a cheaper computation, not the same one somewhere else.
+>
+> The section stays because its two rules are still the ones a worker would have to follow if one
+> is ever added — provisional results never borrow the previous model's label, and a differential
+> test must pin the outcome — and because "there is no worker" is worth saying where a reader
+> would otherwise go looking for one.
+
 ---
 
 ## 8. State, URL and undo
@@ -742,6 +771,57 @@ key on restore, and remember that navigating to a new `#vs=` is a **hashchange, 
 **Undo** is object-level over geometry and problem edits: one drag = one entry, committed on
 `pointerup`, not per frame. The store keeps a bounded stack of inverse operations produced by
 `contour/edit.ts`'s pure editing functions — which is why those functions are pure.
+
+> **As built (M8 step 2.5).** The direction and the derived-values rule are as specified; the
+> shapes are not, and four of the differences were measured rather than chosen.
+>
+> **The store is TWO objects, and the split is what the app is about.** `ShellState`
+> (`shell/state.ts`) is *the argument* — mode, expression, declaration, branch, contour, record and
+> fixture, bindings, geometry, view, contrast, scrub, stage mode — and `Session` (`shell/session.ts`)
+> is *where the reader's hands are* — the gesture, a half-drawn pen path, what the arrow keys hold,
+> hover, the rails' collapse, which disclosures are open, the undo and redo stacks, a transient
+> notice. A permalink carries the first and none of the second, which is the rule that decides every
+> new field: a restored state must not arrive claiming a link was copied or holding a modal open
+> over what the reader came to see. Derived values (`resolution`, `poles`, the ledger, the
+> derivation) are computed by one pure `resolveState` and never stored.
+>
+> **The URL is `encodeViewState("ci", …)` as specified, and the contour is NOT a piece list.**
+> The piece list is already sample-free — `engine/contour/model.ts` has no sampled-point
+> representation at all — but it is still the expensive form: measured at M7.2, a twelve-corner
+> hand-drawn path costs **2,028** base64 characters as a piece list against **292** as the path's
+> vertices with a per-piece kind tag, because ids, names, colours and every shared endpoint are
+> derived. So the contour is carried as the RECIPE that produced it (`{template, params, shift}`),
+> as the pen's vertices, or — in gallery mode — as **nothing at all**, because the record rebuilds
+> it from `(record, fixture, bindings, geometry)` on every run. The recipe is rebuilt and compared
+> against the live contour before a link is minted, and refuses rather than opening a different
+> shape. Re-measured on the M8 shell **in a browser, against the built `dist`** (step 2.6): the
+> cold start's link is **123** characters of fragment, the sandbox's **99**, and the longest of the
+> front door's eight classics **139** (F2, the Fresnel wedge). Measuring `encodeShell` on a
+> synthetic default state instead gives 84, and the difference is the **camera** — the app fits the
+> contour on arrival, so the `view` a reader is actually looking at is never the default one. The
+> app writes no fragment at all until the reader acts, so a cold start's address bar is bare and
+> the Copy link button mints the link itself.
+>
+> **Two of this section's own rules were measured and NOT taken.** Quantising coordinates to ~6
+> significant figures is worth **4.0 %** of the payload, because the bulk is structural (piece ids,
+> roles, the `params` record) rather than decimal — so floats are carried whole and the saving was
+> taken on the contour instead. And the branch choice is not diffed against a named convention: it
+> is **omitted entirely** unless the state has branch points or is in shadow mode, and written in
+> full when it is not, because a partial branch is the one thing a link must never restore (M5.1's
+> shadowed-`branch` bug restored the same picture computing a different integral).
+>
+> **`history.replaceState` is coalesced on a 250 ms timer, not on rAF.** Keyboard pan/zoom and
+> wheel zoom run outside any gesture and a wheel has no end event, so per-event writing is unsafe:
+> `replaceState` is rate-limited by the browser and would silently stop. Every caller says only
+> "this changed" and `syncHash` decides when to write.
+>
+> **Undo holds whole `ShellState`s, not inverse operations.** A `ShellState` is plain data and
+> every commit already replaces it wholesale, so an entry is the object that was current a moment
+> ago and restoring it is a commit; a diff would have to know which fields exist, which is the one
+> thing about this state that keeps changing. `shell/undo.ts` is the question *was that an edit?* —
+> a change key groups a drag's dozens of commits into one entry, a camera-only change is never an
+> entry, and a commit that changed nothing is not one either. The stacks are session-local and an
+> arriving link clears both.
 
 ---
 

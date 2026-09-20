@@ -65,6 +65,7 @@ import type { Cx } from "../kernel/geom.js";
 import { CONTRAST_CELLS } from "./contrastGrid.js";
 import { defaultState, type DrillState, type ShellState } from "./state.js";
 import { TEMPLATES, type TemplateId } from "./templates.js";
+import { templateLabel, type Disposal } from "../engine/vocabulary.js";
 
 /**
  * The rung. 1 is the worked example; 4 is a blank plane and a pen.
@@ -89,18 +90,9 @@ export const DRILL_STAGES: readonly DrillStage[] = [1, 2, 3, 4];
  * do — not vanish, but contribute a known amount exactly (C1's indentation and its `iα·Res`), which
  * is the entry that makes `∮` stop being the answer.
  */
-export type Disposal = "target" | "vanishes" | "limit" | "reproduces" | "fails";
+export type { Disposal };
 
 export const DISPOSALS: readonly Disposal[] = ["target", "vanishes", "limit", "reproduces", "fails"];
-
-/** One line of the offered vocabulary, for a picker. Not a lesson: a label. */
-export const DISPOSAL_LABEL: Readonly<Record<Disposal, string>> = {
-  target: "is the target",
-  vanishes: "vanishes in the limit",
-  limit: "contributes a known limit",
-  reproduces: "reproduces the target",
-  fails: "cannot be disposed of",
-};
 
 /**
  * The ledger's own decision about one piece.
@@ -227,13 +219,103 @@ export function menuVerdict(run: FamilyRun, template: TemplateId): MenuVerdict {
   const bad = a.ledger.rows.find((r) => r.status !== "satisfied");
   return {
     template,
-    label: spec.label,
+    label: templateLabel(template),
     answers: a.ledger.closes && a.ledger.hasTarget,
     closes: a.ledger.closes,
     hasTarget: a.ledger.hasTarget,
     failedAt: a.ledger.failedAt,
     why: bad?.claim ?? null,
     value: a.ledger.value?.text ?? null,
+  };
+}
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+// Rung iii's PREDICTION — M8 step 3.4.
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * One forced choice, asked before the contour menu opens.
+ *
+ * Research 02 §7's prediction step: commit to an answer, then be shown the argument. One question,
+ * three options at most, no free text — a reader who has to compose a sentence is being asked to
+ * write rather than to decide, and what the rung is for is the decision.
+ *
+ * **Everything here is DERIVED from ledgers, including which question is asked.** The plan named
+ * the two questions per task ("the half-plane one, except the indented task gets the enclosure
+ * one"), and declaring that would be a fifth thing to keep in step with the corpus. Instead both
+ * semicircles are run over the task's own integrand and the answer is read off the two verdicts:
+ * if either closes with the target on it there is a half-plane to choose, and if neither does there
+ * is no side to ask about — which is exactly the indented task, whose pole sits ON the real axis so
+ * both semicircles fail LEGALITY before any limit is taken. Measured over the four tasks: `rational`
+ * answers in BOTH (π either way — nothing forces the side without a kernel), `oscillatory` upper
+ * only, `forced-downward` lower only, `indented` neither.
+ *
+ * **And the reason is the ledger's own row**, never a sentence composed here, wherever the ledger
+ * has one: the losing side's failure is *"the lower semicircle diverges for $a = 1$"* in the
+ * corpus's own words. Where both sides answer there IS no failing row, and the honest reason is
+ * then the two values — which is also the only form in which "either" is a claim rather than a
+ * shrug.
+ */
+export interface Prediction {
+  /** Which question — for the panel's `data-` hook and for the test that pins the routing. */
+  readonly kind: "half-plane" | "encloses";
+  /** The question, typeset. */
+  readonly question: string;
+  readonly options: readonly { readonly id: string; readonly label: string }[];
+  /** The option id that is right, decided by the ledgers below. */
+  readonly answer: string;
+  /** Why, in the ledger's own words where it has them. Typeset. */
+  readonly because: string;
+}
+
+const HALF_PLANE_OPTIONS = [
+  { id: "upper", label: "the upper half-plane" },
+  { id: "lower", label: "the lower half-plane" },
+  { id: "either", label: "either — nothing forces it" },
+] as const;
+
+const ENCLOSES_OPTIONS = [
+  { id: "yes", label: "yes" },
+  { id: "no", label: "no" },
+] as const;
+
+export function predictionFor(run: FamilyRun): Prediction {
+  const up = menuVerdict(run, "semicircle");
+  const down = menuVerdict(run, "semicircleDown");
+  if (up.answers || down.answers) {
+    const answer = up.answers && down.answers ? "either" : up.answers ? "upper" : "lower";
+    // The losing side's own row, or — where there is no loser — both values, which is what makes
+    // "either" a measurement. `up.value`/`down.value` are the ledger's formatted closed forms.
+    const because =
+      answer === "either"
+        ? `Both close, and both report $${up.value ?? "?"}$: with no kernel there is nothing to force the side.`
+        : ((answer === "upper" ? down.why : up.why) ?? "the other side does not close");
+    return {
+      kind: "half-plane",
+      question: "In which half-plane must the arc lie for the boundary term to vanish?",
+      options: HALF_PLANE_OPTIONS,
+      answer,
+      because,
+    };
+  }
+  // **No side closes, so there is no side to ask about.** What is worth predicting here is the
+  // thing this task exists to deny: a contour whose whole value comes from an indentation encloses
+  // NOTHING, and a reader who expects a residue is exactly the reader the record is for. Decided
+  // from the record's own winding numbers rather than from a field, and an UNDECIDED winding is not
+  // a zero — it is a contour passing through its own singularity, which is a different answer from
+  // "it encloses none".
+  const wound = run.integral.windings.filter((w) => w.decided && w.n !== 0).length;
+  const undecided = run.integral.windings.some((w) => !w.decided);
+  return {
+    kind: "encloses",
+    question: "Does the closed contour enclose a pole?",
+    options: ENCLOSES_OPTIONS,
+    answer: wound > 0 ? "yes" : "no",
+    because: undecided
+      ? "A winding number could not be decided: the contour passes through a singularity."
+      : wound > 0
+        ? `The contour winds about ${wound === 1 ? "one singularity" : `${wound} singularities`}.`
+        : "No singularity is enclosed: the whole value comes from the limit the indentation takes.",
   };
 }
 
@@ -268,8 +350,11 @@ export interface DrawResult {
   readonly rows: readonly { readonly at: Cx; readonly want: number | null; readonly got: number; readonly decided: boolean }[];
 }
 
+// **ASCII `-`, not the typographic minus**, since M8 step 2.1: every caller wraps the result in
+// `$…$`, and in maths mode KaTeX sets a `-` as a proper minus while a U+2212 is a Unicode character
+// in maths mode — which its `strict` setting exists to complain about.
 const fmtAt = (at: Cx): string =>
-  `${at[0] === 0 ? "" : String(Number(at[0].toFixed(3)))}${at[1] === 0 ? (at[0] === 0 ? "0" : "") : `${at[1] > 0 ? (at[0] === 0 ? "" : "+") : "−"}${Math.abs(at[1]) === 1 ? "" : String(Number(Math.abs(at[1]).toFixed(3)))}i`}`;
+  `${at[0] === 0 ? "" : String(Number(at[0].toFixed(3)))}${at[1] === 0 ? (at[0] === 0 ? "0" : "") : `${at[1] > 0 ? (at[0] === 0 ? "" : "+") : "-"}${Math.abs(at[1]) === 1 ? "" : String(Number(Math.abs(at[1]).toFixed(3)))}i`}`;
 
 /**
  * Check a drawn contour's enclosure against the task's declared rule.
@@ -288,7 +373,7 @@ export function checkDrawing(
   if (undecided !== undefined) {
     return {
       ok: false,
-      why: `the winding number about ${fmtAt(undecided.at)} could not be decided — the contour passes too close to it`,
+      why: `$\\operatorname{Ind}_\\gamma(${fmtAt(undecided.at)})$ could not be decided; the contour passes too close`,
       rows: drawn.map((w) => ({ at: w.at, want: null, got: w.n, decided: w.decided })),
     };
   }
@@ -300,10 +385,13 @@ export function checkDrawing(
       why: ok
         ? null
         : wound.length === 0
-          ? "no singularity is enclosed, so the residue theorem has nothing to give back"
+          ? "no singularity is enclosed"
+          // **"their residues cancel" is true of this task's integrand and not of the sentence.**
+          // $1/(z^2+1)$ has conjugate residues, so enclosing both gives zero; a generic pair does
+          // not, and a sentence that says otherwise teaches a false rule for the sake of one cell.
           : wound.length > 1
-            ? `${wound.length} singularities are enclosed — their residues cancel here, and the target is not what is left`
-            : `the contour winds ${wound[0].n} times about ${fmtAt(wound[0].at)}; once is what the argument uses`,
+            ? `both singularities are enclosed; for this integrand their residues cancel`
+            : `$\\operatorname{Ind}_\\gamma(${fmtAt(wound[0].at)}) = ${wound[0].n}$; the argument needs 1`,
       rows: drawn.map((w) => ({ at: w.at, want: null, got: w.n, decided: w.decided })),
     };
   }
@@ -322,8 +410,8 @@ export function checkDrawing(
     return {
       ok: false,
       why:
-        `${fmtAt(missing.at)} is a singularity of the worked integrand and is not one of this ` +
-        "contour's — the enclosure cannot be compared",
+        `$${fmtAt(missing.at)}$ is a singularity of the worked integrand and not of this one, ` +
+        "so the enclosure cannot be compared",
       rows,
     };
   }
@@ -334,8 +422,8 @@ export function checkDrawing(
       wrong === undefined
         ? null
         : wrong.want === null
-          ? `${fmtAt(wrong.at)} is not one of the singularities the worked contour was measured against`
-          : `the contour winds ${wrong.got} times about ${fmtAt(wrong.at)}, where the argument needs ${wrong.want}`,
+          ? `$${fmtAt(wrong.at)}$ is not one of the singularities the worked contour was measured against`
+          : `$\\operatorname{Ind}_\\gamma(${fmtAt(wrong.at)}) = ${wrong.got}$; the argument needs ${wrong.want}`,
     rows,
   };
 }
@@ -358,6 +446,8 @@ export interface DrillTask {
   readonly id: string;
   /** The integral, as the cell writes it. */
   readonly label: string;
+  /** {@link ContrastCell.labelText} — the spoken twin, for an `aria-label`. */
+  readonly labelText: string;
   readonly record: string;
   readonly bindings: Bindings;
   /**
@@ -379,7 +469,7 @@ export interface DrillTask {
 /** The menu, one list for every task: what changes between tasks is which option works. */
 const MENU: readonly TemplateId[] = ["semicircle", "semicircleDown", "indented", "circle"];
 
-const DECLARED: Readonly<Record<string, Omit<DrillTask, "id" | "label" | "record" | "bindings">>> = {
+const DECLARED: Readonly<Record<string, Omit<DrillTask, "id" | "label" | "labelText" | "record" | "bindings">>> = {
   rational: {
     twin: "1/(z^2 + 1)",
     menu: MENU,
@@ -409,9 +499,8 @@ const DECLARED: Readonly<Record<string, Omit<DrillTask, "id" | "label" | "record
     alsoAnswers: [],
     drawCheck: {
       none:
-        "C1 encloses no singularity at all — its whole value comes from the indentation's $i\\alpha\\operatorname{Res}$, " +
-        "which is a limit a fixed drawn curve cannot take. There is nothing here to check about the " +
-        "enclosure that any loop missing the origin would not also satisfy.",
+        "This integral encloses no singularity; its value comes from a limit (the indentation) that a " +
+        "fixed drawn curve cannot take, so there is nothing to check here.",
     },
   },
 };
@@ -422,7 +511,9 @@ export const DRILL_TASKS: readonly DrillTask[] = CONTRAST_CELLS.flatMap((cell) =
   if (declared === undefined) return [];
   const state = cell.state();
   if (state.mode !== "gallery" || state.record === null) return [];
-  return [{ id: cell.id, label: cell.label, record: state.record, bindings: state.bindings, ...declared }];
+  return [
+    { id: cell.id, label: cell.label, labelText: cell.labelText, record: state.record, bindings: state.bindings, ...declared },
+  ];
 });
 
 export const taskById = (id: string): DrillTask | null => DRILL_TASKS.find((t) => t.id === id) ?? null;
@@ -451,6 +542,11 @@ export function taskState(task: DrillTask, stage: DrillStage): ShellState {
   const contour = TEMPLATES[0].build();
   return {
     ...defaultState(contour),
+    // **Pinned, and inherited before.** Rung iv IS the sandbox — it is where the pen lives, and the
+    // Contour card offers the pen in the sandbox alone — but this spread `defaultState` and so was
+    // the sandbox only for as long as the app booted into one. See `contrastGrid.ts`'s `sandboxCell`.
+    mode: "sandbox",
+    record: null,
     expr: task.twin,
     drill: { task: task.id, stage },
   };
@@ -463,6 +559,10 @@ export function pickState(task: DrillTask, template: TemplateId): ShellState {
   const contour = spec.build();
   return {
     ...defaultState(contour),
+    // Pinned for `taskState`'s reason: a pick puts an ORDINARY sandbox state on screen, which is
+    // what stops `drillMask` masking the reply to the reader's own move.
+    mode: "sandbox",
+    record: null,
     expr: task.twin,
     contourSource: { template, shift: [0, 0] },
     sandboxContour: contour,

@@ -12,7 +12,7 @@
 // modules need the labels and a type-only import back would be a cycle (`.dependency-cruiser.cjs`'s
 // `no-circular` runs over type-only edges too). Each re-exports its own id type, so no consumer
 // changed.
-import type { PieceRole } from "./contour/model.js";
+import type { LemmaId, PieceRole } from "./contour/model.js";
 
 /** One of the Closing Ledger's four constraints. A DATA KEY: see {@link constraintLabel}. */
 export type ConstraintId = "LEGALITY" | "CATCH" | "KILL" | "COVER";
@@ -116,6 +116,63 @@ export function headlineFails(id: ConstraintId): string {
  * told that finished work was outstanding — and a review document that misreports the code is worse
  * than none, because it is believed.
  */
+/**
+ * The cards the two rails hold, by id.
+ *
+ * M8 step 1.1. Here for the reason the constraint labels and the derivation titles are here: this
+ * file is the one place the reader's words are decided, so a heading and the rows beneath it cannot
+ * drift (step 0.2's decision). The scaffold builds these as empty cards and Phase 1 fills them in
+ * one at a time; a card whose title lived in its own module would be a title nothing could survey.
+ */
+export type CardId =
+  | "target"
+  | "integrand"
+  | "parameters"
+  | "contour"
+  | "cuts"
+  | "singularities"
+  | "result"
+  | "derivation"
+  | "share"
+  /**
+   * The drill's task card — M8 step 1.7.
+   *
+   * Not in {@link RIGHT_CARDS}: it is the right rail's TOP SLOT and appears only while a rung is
+   * open, where every other card is always present. A card that renders `null` inside a `map` would
+   * make the list's contract "a card, or nothing" for one member's sake.
+   */
+  | "drill";
+
+const CARD_TITLES: Readonly<Record<CardId, string>> = {
+  target: "Target",
+  integrand: "Integrand",
+  parameters: "Parameters",
+  contour: "Contour",
+  cuts: "Branch cuts",
+  singularities: "Singularities",
+  result: "Result",
+  derivation: "Derivation",
+  share: "Share",
+  drill: "Drill",
+};
+
+/** The cards of the LEFT rail — what is being integrated — in the order they are read. */
+export const LEFT_CARDS: readonly CardId[] = [
+  "target",
+  "integrand",
+  "parameters",
+  "contour",
+  "cuts",
+  "singularities",
+];
+
+/** The cards of the RIGHT rail — what the argument proves. */
+export const RIGHT_CARDS: readonly CardId[] = ["result", "derivation", "share"];
+
+export function cardTitle(id: CardId): string {
+  return CARD_TITLES[id];
+}
+
 export const HEADLINES = {
   /** A record: the argument determines the integral it set out to determine. */
   closes: "The argument is complete.",
@@ -124,3 +181,205 @@ export const HEADLINES = {
   /** It does not close, and no single constraint is the one that stopped it. */
   incomplete: "The argument is incomplete.",
 } as const;
+
+/**
+ * One of the contour templates the sandbox offers — M8 step 2.1.
+ *
+ * Declared here for {@link ConstraintId}'s reason: `shell/templates.ts` re-exports it, so no
+ * consumer changed, and the label and the id cannot drift apart across a module boundary.
+ */
+export type TemplateId =
+  | "circle"
+  | "semicircle"
+  | "semicircleDown"
+  | "indented"
+  | "rectangle"
+  | "keyhole"
+  | "dogbone"
+  | "strip"
+  | "wedge"
+  | "square";
+
+/**
+ * What each template is called on screen.
+ *
+ * **This map and {@link disposalLabel}'s are the app's two PICKER vocabularies, and the one place
+ * the wording pass's "every formula inside `$…$`" cannot apply.** Both are rendered as the text of
+ * an `<option>`, and an `<option>` renders no markup at all — a `$2\pi$` in one would be seen, and
+ * read out, as four characters and a backslash. So their symbols are Unicode. Every other sentence
+ * in the app is typeset.
+ *
+ * `wedge` names the angle it actually builds rather than a general `2π/n`: the picker's entry is a
+ * shape you get, not a family you parameterise, and `wedgeTemplate(3, …)` gives the third.
+ */
+const TEMPLATE_LABEL: Readonly<Record<TemplateId, string>> = {
+  circle: "circle",
+  semicircle: "upper semicircle",
+  semicircleDown: "lower semicircle",
+  indented: "indented semicircle",
+  rectangle: "rectangle",
+  strip: "rectangle of height 2π",
+  wedge: "sector of angle 2π/3",
+  square: "square Γ_N",
+  keyhole: "keyhole",
+  dogbone: "dogbone",
+};
+
+export function templateLabel(id: TemplateId): string {
+  return TEMPLATE_LABEL[id];
+}
+
+/**
+ * What the drill offers as the job a piece of the contour does — M8 step 2.1.
+ *
+ * Declared here rather than in `shell/drill.ts` for the reason above; that module re-exports it.
+ * The five are a noun phrase each, because the reader picks one from a menu to complete the sentence
+ * *this piece is …*, and a verb there (`vanishes in the limit`, `cannot be disposed of`) made two of
+ * them read as a claim the reader was asserting rather than a role they were naming.
+ */
+export type Disposal = "target" | "vanishes" | "limit" | "reproduces" | "fails";
+
+const DISPOSAL: Readonly<Record<Disposal, string>> = {
+  target: "the target",
+  vanishes: "→ 0",
+  limit: "a known limit",
+  reproduces: "a constant multiple of the target",
+  fails: "no estimate",
+};
+
+export function disposalLabel(id: Disposal): string {
+  return DISPOSAL[id];
+}
+
+/**
+ * The small tags the rails hang on a value, a parameter, a pole or a winding number — step 2.1.
+ *
+ * They were nine strings in four card modules, each written where it was rendered, and two of them
+ * said the same thing in different words (`undecided` on a winding in the Singularities card, and
+ * again in the Derivation card's pole table). One map, so a tag means one thing.
+ *
+ * `numerical` replaces `located numerically`: the column it sits in is the pole's position, so the
+ * word *located* was carried by the column and the tag only had to say how.
+ */
+export type TagId =
+  | "derived"
+  | "not-sampled"
+  | "quadrature-capped"
+  | "winding-undecided"
+  | "numerical"
+  | "possibly-removable"
+  | "order-uncertain";
+
+const TAG: Readonly<Record<TagId, string>> = {
+  derived: "derived",
+  "not-sampled": "not sampled",
+  "quadrature-capped": "quadrature capped",
+  "winding-undecided": "$\\operatorname{Ind}_\\gamma$ undecided",
+  numerical: "numerical",
+  "possibly-removable": "possibly removable",
+  "order-uncertain": "order uncertain",
+};
+
+export function tagLabel(id: TagId): string {
+  return TAG[id];
+}
+
+/**
+ * The tag on a parameter the argument takes to a limit — `$\to\infty$`, `$\to 0^+$`.
+ *
+ * **The plan's own replacement for this tag is wrong twice, and both are measurements.** It names
+ * them `$R\to\infty$` and `$\rho\to0^+$`, which are right for the record the reviewer had open:
+ * over the corpus the parameters carrying a limit are named `R`, `R_lim`, `N`, `eps`, `eta` and
+ * `rho`, so a literal `R` mislabels three of the six and a literal `\rho` two. And naming the
+ * parameter at all is redundant here, because the tag sits in the same row as the readout that has
+ * just named it: `R = 4` followed by `R → ∞` says `R` twice in four centimetres. What the tag adds
+ * is the limit, so the limit is all it carries.
+ *
+ * `to` is the schema's own word for where the parameter goes: `"inf"`, `"0+"`, or a number as text.
+ */
+export function limitTag(to: string): string {
+  return `$${limitArrow(to)}$`;
+}
+
+/**
+ * The same arrow WITHOUT its delimiters — M8 step 3.1b.
+ *
+ * Its second consumer is the stepper's limit step, whose title is one formula (*Let $R \\to
+ * \\infty$*) rather than a word beside a tag. Composing that from `limitTag` meant `Let $R$ $\\to
+ * \\infty$` — two math spans where a reader sees one statement — and slicing the delimiters back
+ * off at the call site would put the convention in two places.
+ */
+export function limitArrow(to: string): string {
+  return `\\to ${to === "inf" ? "\\infty" : to === "0+" ? "0^+" : to}`;
+}
+
+/**
+ * A contour parameter's NAME as mathematics — M8 step 3.1c.
+ *
+ * **A parameter's id is an identifier and its symbol is a letter, and putting the id in `$…$` prints
+ * neither.** Found on the stage: the limit step's callout read `eps \to 0^+`, which KaTeX sets as
+ * the product *e·p·s*, and its heading read `Let eps→0+` — beside a piece the record itself calls
+ * *the ε→0 circle*, and beside a bound that calls the same parameter `\varepsilon`. `R_lim` is the
+ * same defect in the other direction: `R_lim` subscripts the `l` alone and leaves `im` upright.
+ *
+ * Measured over the corpus, which is what makes this a short map rather than a guess. The
+ * parameters carrying a limit are `R`, `R_lim`, `N`, `eps`, `eta` and `rho` — the same six
+ * {@link limitTag}'s note records — of which FOUR need an entry; the twenty names in all add
+ * `alpha`, `mu`, `xi` (entries too, because step 3.2 typesets a parameter that is not a limit),
+ * `saddle`, `sgnA`, `wedgeAngle`, `wedgeX`, `wedgeY` and eight single ASCII letters, which the
+ * rule below covers without naming them.
+ *
+ * **`R_lim` is `R`, and that is not a shortening.** Tier B renames its radius `R_lim` so a record's
+ * limit parameter cannot collide with a template's `R` — an internal disambiguation — and B1's own
+ * KILL line already states its bound *at $R = 4$, and $\to 0$ as $R \to \infty$*. Printing
+ * `R_{\mathrm{lim}}` on the step beside it would introduce a second name for one quantity at the
+ * one place the two are read together.
+ *
+ * Anything else with more than one character is set UPRIGHT rather than as a product of italics,
+ * which is the general form of the same defect: `wedgeAngle` is a name, not nine factors.
+ */
+const PARAM_SYMBOL: Readonly<Record<string, string>> = {
+  R_lim: "R",
+  eps: "\\varepsilon",
+  eta: "\\eta",
+  rho: "\\rho",
+  alpha: "\\alpha",
+  mu: "\\mu",
+  xi: "\\xi",
+};
+
+export function paramSymbol(name: string): string {
+  const known = PARAM_SYMBOL[name];
+  if (known !== undefined) return known;
+  return name.length === 1 ? name : `\\mathrm{${name}}`;
+}
+
+/**
+ * The eight lemmas of research 03 §14, by the names a reader knows them by — M8 step 4.1.
+ *
+ * **Step 0.2's decision, applied to the last family of ids the app still spelled out loud.** `L3`
+ * is an identifier; *Jordan's lemma* is what a reader calls it, and until this step the only place
+ * either appeared on screen was inside a sentence a bound module had written by hand — so the two
+ * vocabularies were kept in step by nobody. A declared lemma is now something the reader CHOOSES
+ * (step 4.3's role menu), and a menu of `L1 … L8` would be a menu of this program's filing system.
+ *
+ * **L7 and L8 are in the catalogue and are NOT vanishing lemmas**, which is worth saying here
+ * rather than discovering at the menu: L7 is the periodic-side cancellation — the `reproduces`
+ * role, where the piece returns a multiple of the target instead of dying — and L8 is
+ * Sokhotski–Plemelj, a distributional identity about the whole integral rather than a bound on a
+ * piece. They are named so a declaration carrying one can be refused BY NAME.
+ */
+const LEMMA_LABEL: Readonly<Record<LemmaId, string>> = {
+  L1: "the ML estimate",
+  L2: "the large-arc decay lemma",
+  L3: "Jordan's lemma",
+  L4: "the indentation lemma",
+  L5: "the large-arc residue lemma",
+  L6: "the wedge bound",
+  L7: "the periodic-side cancellation",
+  L8: "Sokhotski–Plemelj",
+};
+
+export function lemmaLabel(id: LemmaId): string {
+  return LEMMA_LABEL[id];
+}

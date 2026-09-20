@@ -149,7 +149,7 @@ export const a3CircleCosNTheta: Family = {
       numeric: 0.5235987755982988,
       verifiedTo: 1e-14,
       method:
-        "Σ over the two ENCLOSED poles: Res(f,1/2) = −17i/24 and the order-2 origin Res(f,0) = 5i/8, giving Σ = −i/12; cross-checked against a small-circle quadrature at r = 1e-4 (0.624999999999944 i at the origin) and against the contour quadrature",
+        "the sum over the two enclosed poles: $\\operatorname{Res}(f, 1/2) = -17i/24$ and the order-2 origin $\\operatorname{Res}(f, 0) = 5i/8$, giving $\\Sigma = -i/12$; cross-checked against a small-circle quadrature at $r = 10^{-4}$ ($0.624999999999944\\,i$ at the origin) and against the contour quadrature",
     },
     {
       params: { n: 0 },
@@ -157,7 +157,7 @@ export const a3CircleCosNTheta: Family = {
       numeric: 2.0943951023931953,
       verifiedTo: 1e-14,
       method:
-        "the base case of 'order = n': at n = 0 the origin is NOT a pole at all and the enclosed set has one member",
+        "the base case of order $= n$: at $n = 0$ the origin is not a pole at all and the enclosed set has one member",
     },
     {
       params: { n: 1 },
@@ -172,7 +172,7 @@ export const a3CircleCosNTheta: Family = {
       numeric: 0.2617993877991494,
       verifiedTo: 1e-14,
       method:
-        "order 3, where the derivative route needs d²/dz² and the Laurent route needs no factorial",
+        "order 3, where the derivative route needs $d^2/dz^2$ and the Laurent route needs no factorial",
     },
     {
       params: { n: 4 },
@@ -180,7 +180,7 @@ export const a3CircleCosNTheta: Family = {
       numeric: 0.1308996938995747,
       verifiedTo: 1e-14,
       method:
-        "order 4, and with n = 0..4 together the ladder 2π/3 · 2⁻ⁿ makes 'the manufactured order equals the harmonic index' a tested statement rather than an anecdote",
+        "order 4; with $n = 0$ to $4$ together, the ladder $(2\\pi/3)\\cdot 2^{-n}$ makes 'the manufactured order equals the harmonic index' a tested statement rather than an anecdote",
     },
   ],
 };

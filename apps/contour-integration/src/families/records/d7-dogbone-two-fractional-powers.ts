@@ -68,7 +68,7 @@ export const d7DogboneTwoFractionalPowers: Family = {
   auxiliary: {
     integrand: "z^mu * (b-z)^(1-mu) / (c-z)",
     relation: "Re",
-    note: "the upper edge is the target itself; the lower edge is the target times −e^{2πiμ}, which at μ = 3/4 is +i — so the two edges neither cancel nor add, and the solve divides by 1 + i",
+    note: "the upper edge is the target itself; the lower edge is the target times −e^{2πiμ}, which at μ = 3/4 is +i — so the two edges neither cancel nor add, and the identity is divided by 1 + i",
   },
 
   parameters: [
@@ -294,7 +294,7 @@ export const d7DogboneTwoFractionalPowers: Family = {
       numeric: 1.2157787268935614,
       verifiedTo: 2e-15,
       method:
-        "(a) tanh-sinh on [0, b] with the two endpoint powers from the transform's own cancellation-free distances; (b) x = b u^2 then 1 - u = v^4, desingularising both endpoints, then composite 60-pt Gauss-Legendre. 40^(3/4) = 15.905414575341013 = 4*250^(1/4), and Res(f,5) + Res(f,inf) = exp(-i pi/4)*(17/4 - 250^(1/4))",
+        "two routes: tanh-sinh on $[0, b]$, with the two endpoint powers from the transform's own cancellation-free distances; and $x = bu^2$ followed by $1 - u = v^4$, which desingularises both endpoints, then composite 60-point Gauss–Legendre. Here $40^{3/4} = 15.905414575341013 = 4\\cdot250^{1/4}$, and $\\operatorname{Res}(f,5) + \\operatorname{Res}(f,\\infty) = e^{-i\\pi/4}(17/4 - 250^{1/4})$",
     },
     {
       params: { mu: 0.25, b: 3, c: 5 },
@@ -305,7 +305,7 @@ export const d7DogboneTwoFractionalPowers: Family = {
       // `2^{3/4}·5^{1/4}` in floats, which costs a few ulps that the flagship fixture's `2^{1/4}`
       // happens not to.
       verifiedTo: 3e-15,
-      method: "as above; the mirror exponent, where nu = 3/4 carries the endpoint at z = b instead",
+      method: "as above; the mirror exponent, where $\\nu = 3/4$ carries the endpoint at $z = b$ instead",
     },
     {
       params: { mu: 0.5, b: 2, c: 7 },
@@ -313,14 +313,14 @@ export const d7DogboneTwoFractionalPowers: Family = {
       numeric: 0.26364313690190516,
       verifiedTo: 1.2e-14,
       method:
-        "as above; at mu = 1/2 the crossing phase is exp(i pi) = -1 and the coefficient 1 - (-1) = 2 is REAL, which is the fixture where a lost i would not show as a complex answer",
+        "as above; at $\\mu = 1/2$ the crossing phase is $e^{i\\pi} = -1$ and the coefficient $1 - (-1) = 2$ is real, so a lost factor of $i$ would not show up as a complex answer",
     },
     {
       params: { mu: 0.25, b: 4, c: 10 },
       value: "(pi/sin(pi/4))*(10 - 3 - 10^(1/4)*6^(3/4))",
       numeric: 0.81164274340719644,
       verifiedTo: 8e-15,
-      method: "as above, with b and c moved so that neither the pole's modulus nor the gap c − b is shared with another fixture",
+      method: "as above, with $b$ and $c$ moved so that neither the pole's modulus nor the gap $c - b$ is shared with another point",
     },
   ],
 };

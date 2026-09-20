@@ -223,28 +223,28 @@ export const e1StripExponentialQuasiperiod: Family = {
       numeric: 3.8832220774509327,
       verifiedTo: 1.2e-16,
       method:
-        "composite 40-pt Gauss-Legendre on [-60,60] + exact geometric tail series; cross-checked by tanh-sinh on the Beta form int_0^1 u^(a-1)(1-u)^(-a) du (rel 1.4e-15)",
+        "composite 40-point Gauss–Legendre on $[-60, 60]$ plus the exact geometric tail series; cross-checked by tanh-sinh on the Beta form $\\int_0^1 u^{a-1}(1-u)^{-a}\\,du$ (relative $1.4\\times10^{-15}$)",
     },
     {
       params: { a: 0.5 },
       value: "pi",
       numeric: 3.1415926535897931,
       verifiedTo: 0,
-      method: "same; exact agreement in float64, since sin(pi/2) = 1 leaves the sine out of the answer",
+      method: "the same pair of routes; they agree exactly in float64, since $\\sin(\\pi/2) = 1$ leaves the sine out of the answer",
     },
     {
       params: { a: 0.91 },
       value: "pi/sin(pi*a)",
       numeric: 11.260547686233595,
       verifiedTo: 7.9e-16,
-      method: "same (near the a -> 1- edge where the closed form blows up)",
+      method: "the same pair of routes, near the $a \\to 1^-$ edge where the closed form blows up",
     },
     {
       params: { a: 0.05 },
       value: "pi/sin(pi*a)",
       numeric: 20.082484079079745,
       verifiedTo: 3.5e-16,
-      method: "same (near the a -> 0+ edge)",
+      method: "the same pair of routes, near the $a \\to 0^+$ edge",
     },
   ],
 };

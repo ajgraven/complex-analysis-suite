@@ -90,7 +90,7 @@ export function applyStripTheorem(input: StripTheoremInput): ResidueTheoremResul
         verdict: assembleVerdict([
           refuse(
             "∮ f dz",
-            `the contour encloses z = 2πi·${outside.turns.n}/${outside.turns.d}, which lies OUTSIDE the declared strip — ` +
+            `the contour encloses z = 2πi·${outside.turns.n}/${outside.turns.d}, which lies outside the declared strip — ` +
               "so the declared strip is not the set of poles this contour actually catches, and summing the " +
               "declared ones would report a number for a different contour",
           ),

@@ -1,0 +1,1279 @@
+/* The new shell's layout — M8 steps 1.1 and 1.2. Grid, rails, stage, strip.
+ *
+ * Everything COLOURED here reads a token from `theme.css`; nothing declares a colour of its own.
+ * That split is what lets the light theme be one block of overrides rather than a second stylesheet.
+ *
+ * No breakpoints below 1024px — the owner's decision is desktop and laptop, and below 900px the page
+ * shows the phone notice (step 1.12) rather than a grid that cannot hold two rails.
+ */
+:root {
+  --rail-left: 19rem;
+  --rail-right: 24rem;
+  --rail-folded: 38px;
+  --bar2: 3.25rem;
+  --strip2: 12rem;
+}
+
+/* The nav's host. Its own name rather than the old shell's `.navHost`, for the reason at the foot
+   of this file; `display: contents` because `.cas-nav` is `position: fixed` and the host occupies
+   nothing. */
+.shell2Nav {
+  display: contents;
+}
+
+/* The link refusal (M6.2's third finding), between the nav and the shell so that it is neither
+   inside the page's one landmark nor competing with the bar for width. It is `hidden` almost
+   always. When it is not, it takes a row of its own and the page scrolls by exactly its height,
+   because `.shell2` below is `calc(100vh - nav)` and nothing tells it about this element — which is
+   the right trade here rather than a defect worked around: the banner is showing only until the
+   reader's first action (`writeHash` clears it), a fixed overlay would cover the bar exactly as the
+   suite nav once did, and a scroll a reader can see is better than a sentence they cannot. */
+.linkRefusal {
+  margin: var(--cas-nav-h, 0px) 0 0;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--g-line, #2a2f3a);
+  background: color-mix(in srgb, var(--g-warn, #d8a657) 12%, transparent);
+  color: var(--g-text, #e7e9ee);
+  font-size: 0.85rem;
+}
+
+/* …and the shell starts directly below the banner rather than taking the nav's offset a second
+   time — the banner has already reserved it. An adjacent-sibling selector, so this costs nothing
+   while the banner is hidden. */
+.linkRefusal:not([hidden]) + .shell2 {
+  margin-top: 0;
+}
+
+/* **The shell's nav offset must stay INSIDE its parent.** `.shell2`'s `margin-top` is the first
+   thing in its containing block, so with nothing establishing a formatting context there it
+   collapses straight out through `#app` and moves the BODY down instead — measured at 1440 × 900:
+   the body laid out from y = 32 to y = 932, `scrollHeight` 932 against a 900 px viewport, the page
+   scrolling by exactly the nav's height on the default view. `flow-root` is the minimum that stops
+   it, and the selector asks for the shell's parent rather than naming `#app`, so a host element
+   with another id keeps the fix. */
+:has(> .shell2) {
+  display: flow-root;
+}
+
+.shell2 {
+  display: grid;
+  /* **The suite nav is `position: fixed` and publishes its own height as `--cas-nav-h`.** A shell
+     anchored at y = 0 runs UNDERNEATH it — which this app already did once: it adopted the nav
+     without the offset and the top 32 px of its bar was covered, and because the nav sits at
+     z-index 6 it swallowed every click in that band too. The first draft of this file used
+     `height: 100%` and reproduced it exactly, with the stage collapsing to 186 px besides, because
+     a percentage height needs a sized ancestor and `#app` is not one. Reserve the strip and take it
+     off the height, so the shell fills what is left and nothing scrolls. The `0px` fallback keeps a
+     page that does not load `nav.css` where it was. */
+  margin-top: var(--cas-nav-h, 0px);
+  height: calc(100vh - var(--cas-nav-h, 0px));
+  min-height: 0;
+  grid-template-columns: var(--rail-left) minmax(0, 1fr) var(--rail-right);
+  /* The bar's row is a MINIMUM rather than a fixed height — M8 step 1.9. See the note beside
+     `.bar2`'s wrapping rule: at 1024 px the bar's controls no longer fit on one line, and a fixed
+     row is what made the old `nowrap` decision the right one. With the row free to grow, a wrapped
+     second line is visible instead of spilling under the stage. */
+  /* The ladder's row is `auto` and its element is `hidden` when the panel is shut, so the row is
+     zero and the stage keeps every pixel it had — M8 step 3.5. */
+  grid-template-rows: minmax(var(--bar2), auto) auto minmax(0, 1fr) var(--strip2);
+  grid-template-areas:
+    "bar bar bar"
+    "ladder ladder ladder"
+    "left stage right"
+    "left strip right";
+}
+
+/* A folded rail keeps its grid column and shrinks to a labelled strip, so the stage grows and
+   nothing below it reflows — the reader's eye stays where it was. */
+.shell2[data-left="folded"] {
+  grid-template-columns: var(--rail-folded) minmax(0, 1fr) var(--rail-right);
+}
+.shell2[data-right="folded"] {
+  grid-template-columns: var(--rail-left) minmax(0, 1fr) var(--rail-folded);
+}
+.shell2[data-left="folded"][data-right="folded"] {
+  grid-template-columns: var(--rail-folded) minmax(0, 1fr) var(--rail-folded);
+}
+
+/* ---- bar ---- */
+.shell2 > .bar2 {
+  grid-area: bar;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0 0.85rem;
+  background: var(--g-panel);
+  /* One hairline under the bar and none between the rails and the stage: the panel grounds already
+     divide those, and a rule on every seam is four lines doing one line's work. */
+  border-bottom: 1px solid var(--g-border);
+}
+
+/* The bar's controls sit at its right end, away from the title.
+ *
+ * **`margin-left: auto` on more than one child does not push them right, it SHARES the free space**
+ * — flexbox splits it equally among every auto margin on the line, so a second `.barBtn` strews the
+ * controls across the bar instead of clustering them. Exactly one child carries it, and that child
+ * is the wrapper holding the tool buttons. */
+.shell2 > .bar2 > .barBtn {
+  margin-left: auto;
+}
+
+/* **The plan says bar overflow is "impossible by construction". Measured, it is not.**
+ *
+ * In real Chromium at 1024px — the app's narrowest supported width — the fixed parts (brand,
+ * segmented control, Sandbox, tool cluster, gaps, padding) take about 847 px, leaving ~177 px for
+ * the record button, whose typeset target runs from 65 px to 235 px across the corpus: 9 of 94
+ * (record, fixture) pairs did not fit. At 1280 and 1440 none did. And the failure was SILENT — the
+ * tool cluster inherits `.btnRow`'s `flex-wrap: wrap`, which is right in a rail card and wrong in a
+ * bar whose grid row is a fixed 3.25rem: the second line spilled about 5 px under the stage instead
+ * of announcing itself. So the bar did not wrap, and the one elastic thing in it was the record
+ * button — the only control whose width is content the app cannot choose.
+ *
+ * **Step 1.9's stage-mode control took that arrangement past what one line can hold**, and the
+ * numbers say so rather than a preference: measured at 1024 px the fixed parts are now brand 146 +
+ * modes 223 + Sandbox 71 + stage modes 226 + tools 329 + five gaps 64 + padding 27 = 1086, so the
+ * bar overflows by 62 px with the record button squeezed to NOTHING, and the page grew a horizontal
+ * scrollbar (`scrollWidth` 1093 against a 1024 client). Ellipsis on the elastic child cannot fix a
+ * line whose inelastic children already exceed it.
+ *
+ * The objection to wrapping was never the second line, it was that the second line was INVISIBLE —
+ * and that was a property of the fixed grid row, which is now `minmax(var(--bar2), auto)`. So the
+ * bar wraps, the row grows to hold it, and the stage is laid out below whatever height the bar
+ * actually took. The record button stays the elastic one, because truncating a formula is still
+ * better than wrapping at 1152 where everything does fit. */
+.shell2 > .bar2 {
+  flex-wrap: wrap;
+  row-gap: 0.4rem;
+  /* Vertical padding so a wrapped bar is not flush against its own hairline, and a min-height so
+     the one-line case is exactly the 3.25rem it has always been. */
+  padding-block: 0.3rem;
+  min-height: var(--bar2);
+  align-content: center;
+}
+.shell2 > .bar2 > .barBtn {
+  flex-wrap: nowrap;
+  flex: none;
+}
+.shell2 > .bar2 > .barRecord {
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shell2 > .bar2 > .brand2,
+.shell2 > .bar2 > .segmented {
+  flex: none;
+}
+
+/* ---- rails ---- */
+.shell2 > .rail2 {
+  overflow: auto;
+  min-height: 0;
+  padding: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: var(--g-panel-2);
+}
+/* **A card keeps its own height and the RAIL scrolls**, which is the other half of the same defect.
+   `.card2` is a flex item and flex items shrink by default, so with more cards than fit the rail
+   squeezed every one of them below its content instead of scrolling — measured under a record at
+   1280 x 900, the Singularities card at 22 px of 114 and the Result card at 166 of 371, its ledger
+   disclosure cut off mid-row. The rail already has `overflow: auto`; it was never reached. */
+.shell2 > .rail2 > .card2 {
+  flex: 0 0 auto;
+}
+
+.shell2 > .rail2.left {
+  grid-area: left;
+}
+.shell2 > .rail2.right {
+  grid-area: right;
+}
+
+/* ---- stage ---- */
+.shell2 > .stage2 {
+  grid-area: stage;
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--g-ground);
+}
+.shell2 > .stage2 > canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* **The INK canvas is the one that takes the pointer.**
+ *
+ * `app.css` carries an UNSCOPED `.ink { pointer-events: none }` — correct for the old shell, whose
+ * gestures land on a separate `.overlay` div, and silently wrong here, where the controller puts its
+ * listeners on the ink canvas itself. `index.html` loads both sheets, so the old shell's rule reached
+ * into the new one and the whole stage was dead to a real mouse: every gesture test dispatches
+ * straight at the canvas and so could not see it, and only a probe with a real pointer did.
+ *
+ * The GL layer is DATA and `aria-hidden`; it must never take a click, or the pointer lands on the
+ * layer that has no idea what a contour is. */
+.shell2 > .stage2 > canvas.ink {
+  pointer-events: auto;
+}
+.shell2 > .stage2 > canvas.gl {
+  pointer-events: none;
+}
+
+/* ---- strip ---- */
+.shell2 > .strip2 {
+  grid-area: strip;
+  min-height: 0;
+  position: relative;
+  background: var(--g-panel);
+  border-top: 1px solid var(--g-border);
+}
+/* **Two columns, not a stack.** The first draft made `.strip2` a block with the canvas absolutely
+   filling it, which painted over the side panel the moment one existed — the panel is a sibling, so
+   the canvas has to be laid out rather than taken out of flow. The panel is fixed-width because the
+   trail is the picture and the readout is the caption; a panel that grew with its own digits would
+   take width off the thing it is describing. */
+.shell2 > .strip2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 19rem;
+  /* **The ROW is declared too, and the page scrolled 33 px without it.** With only the columns
+     named, the implicit row is `auto` and sizes to the taller child — the side panel's readout — so
+     the panel's own `overflow: auto` never engaged, the canvas's `height: 100%` resolved against
+     224 px inside a 192 px strip, and the bottom of the trail sat below the fold. Measured at
+     1440 × 900: `scrollHeight` 933 against a 900 px viewport, the whole of it this row.
+     `minmax(0, 1fr)` pins the row to the strip and hands the overflow back to the panel. */
+  grid-template-rows: minmax(0, 1fr);
+}
+.shell2 > .strip2 > canvas.acc {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  display: block;
+}
+
+/* The strip's side panel. Its own rule rather than `.card2`, because it is not a card: it sits in
+   the strip's ground and is divided from the trail by a rule rather than by a raised surface. */
+.shell2 .accSide {
+  min-width: 0;
+  overflow: auto;
+  padding: 0.5rem 0.6rem;
+  border-left: 1px solid var(--g-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: var(--t-s);
+}
+/* The partial sum is the strip's headline number, so it is set a size up from the rest of the panel
+   and in tabular figures — it changes on every frame of a scrub, and a readout that jumps as its
+   digits change is the single cheapest way to look unfinished. */
+.shell2 .accValue {
+  font-size: var(--t-m);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  word-break: break-all;
+}
+
+/* ---- the stage's overlay ----
+ *
+ * Transient text only — the snap name and what the arrows hold. Anything that belongs in an exported
+ * figure is drawn on the ink canvas instead, which is why the pole rings moved there at step 1.3.
+ * `pointer-events: none` throughout: the overlay sits above the ink canvas and would otherwise eat
+ * every gesture the controller exists to handle.
+ *
+ * **`stageChip`, not `chip`** — see the collision block at the foot of this file. */
+.shell2 > .stage2 > .overlay2 {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.shell2 .overlay2 .stageChip {
+  position: absolute;
+  /* Offset up and right of the point, so the chip never covers the thing it names. */
+  transform: translate(0.6rem, -1.6rem);
+  white-space: nowrap;
+  font-size: var(--t-xs);
+  line-height: 1;
+  padding: 0.22rem 0.4rem;
+  border-radius: 4px;
+  background: var(--g-panel);
+  border: 1px solid var(--g-border);
+  color: var(--g-text);
+}
+/* The snap chip is the one that says a vertex MOVED, so it carries the accent rather than blending
+   into the chrome — research 07 rule 5 is about being noticed. */
+.shell2 .overlay2 .stageChip.snap {
+  border-color: var(--g-accent);
+  color: var(--g-accent);
+}
+/* The hover readout — M8 step 1.10.
+ *
+ * **Top-left, which the plan names and the geometry agrees with.** Step 1.1 reserved the host at
+ * bottom-right; the trouble with that corner is that it is where the accumulator strip's panel
+ * begins, so a block there sits between two readouts of different things. Top-left is the one corner
+ * no other surface claims, and it is where a reader's eye already is after a glance at the rail.
+ *
+ * `pointer-events: none` comes from `.overlay2`, so the block cannot intercept the pointer whose
+ * position it is reporting — which would make it flicker off the moment it appeared over the curve.
+ *
+ * A panel ground rather than a bare overlay: the phase portrait is saturated at full chroma and a
+ * muted label on top of it is unreadable at some hues and not at others, which is the one thing a
+ * colour-map comment in this app keeps saying not to do. */
+.shell2 .overlay2 .readout2 {
+  position: absolute;
+  left: 0.5rem;
+  top: 0.5rem;
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 0.05rem 0.5rem;
+  align-items: baseline;
+  font-size: var(--t-xs);
+  line-height: 1.35;
+  padding: 0.3rem 0.5rem;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--g-panel) 88%, transparent);
+  border: 1px solid var(--g-border);
+  /* Never more than a quarter of the stage: `f(z)` at a huge modulus is a long string, and a block
+     that grows to fit it would cover the contour it is describing. */
+  max-width: 25%;
+}
+.shell2 .overlay2 .readout2 > .readoutRow {
+  display: contents;
+}
+.shell2 .overlay2 .readout2 .readoutLabel {
+  color: var(--g-muted);
+  white-space: nowrap;
+}
+.shell2 .overlay2 .readout2 .num {
+  color: var(--g-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+   The old sheet's unscoped rules, cancelled.
+
+   **Scoping `theme.css` under `.shell2` protects the OLD shell from the NEW rules and does nothing
+   in the other direction** — step 1.2's comment states only the first half, and this step found the
+   second half twice in one afternoon. `index.html` loads `app.css` for both shells, and its rules
+   are unscoped, so anything the new shell names the same way inherits them.
+
+   Measured: eight classes collide — `.num`, `.small`, `.muted`, `.badge`, `.chip`, `.gl`, `.ink`,
+   `.navHost`, `.expr`. Two were repaired by RENAMING, because the old meaning is a different thing
+   entirely: `.chip` is the old shell's 9 × 9 colour swatch, which collapsed the stage's snap chip to
+   a 9 px square with its text spilling out (found in a browser; every node test reads `textContent`,
+   which does not have a width), and `.navHost` is the old shell's. The rest mean the SAME thing in
+   both shells, so they are cancelled here rather than renamed — the old rule's extras are what leak,
+   not its intent.
+
+   This whole block goes away at step 1.12 with `app.css`. */
+.shell2 .num {
+  /* The old sheet makes every `.num` monospace. Step 1.2's rule is that monospace is a SIGNAL that
+     the text is machine syntax; a tabular number is not machine syntax. */
+  font-family: inherit;
+}
+.shell2 .muted {
+  margin: 0;
+}
+.shell2 .badge {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  font-family: inherit;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+   The left rail's cards — M8 step 1.4.
+
+   One row idiom throughout: a label or readout, then the control, then any tags. Nothing here
+   declares a colour of its own; every one is a token from `theme.css`.
+   ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+.shell2 .card2 > * + * {
+  margin-top: 0.45rem;
+}
+
+/* A label and a control on one line, the label fixed and the control taking the rest. */
+.shell2 .pickRow,
+.shell2 .exprRow {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.shell2 .pickRow > select,
+.shell2 .exprRow > input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.shell2 .parseError {
+  color: var(--g-bad);
+  margin: 0;
+}
+
+/* A target is the one formula in the rail that gets DISPLAY mode — it is what the record is about,
+   and shrinking it to inline size beside a slider is how a rail comes to read as a settings panel. */
+.shell2 .targetLine {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  overflow-x: auto;
+}
+
+.shell2 .cites {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0;
+}
+
+/* ---- parameters ---- */
+.shell2 .paramRow2 {
+  display: grid;
+  grid-template-columns: minmax(6rem, auto) 1fr auto;
+  align-items: center;
+  gap: 0.4rem;
+}
+.shell2 .paramValue {
+  font-size: var(--t-s);
+}
+.shell2 .slider {
+  width: 100%;
+  accent-color: var(--g-accent);
+}
+
+/* ---- tags ---- */
+.shell2 .tag {
+  font-size: var(--t-xs);
+  color: var(--g-muted);
+  border: 1px solid var(--g-border);
+  border-radius: 4px;
+  padding: 0.05rem 0.3rem;
+  white-space: nowrap;
+}
+.shell2 .tag.warn {
+  color: var(--g-warn);
+  border-color: var(--g-warn);
+}
+
+/* ---- the singularities table ---- */
+.shell2 .poleTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-s);
+}
+/* **NOT uppercased.** These headings are FORMULAS — `Res(f, z₀)`, `Ind(γ, z₀)` — and the rail's
+   `h2` treatment turned them into `RES(F, Z₀)`, which is a different function. A heading that is
+   mathematics is set as mathematics. */
+.shell2 .poleTable th {
+  text-align: left;
+  font-weight: 600;
+  font-size: var(--t-xs);
+  color: var(--g-muted);
+  padding: 0 0.3rem 0.2rem 0;
+  white-space: nowrap;
+}
+.shell2 .poleTable td {
+  padding: 0.15rem 0.3rem 0.15rem 0;
+  vertical-align: baseline;
+  /* A residue broken across three lines mid-radical is unreadable; the card scrolls instead. */
+  white-space: nowrap;
+}
+/* The rail is 19rem and a four-pole residue is wider than that. Scrolling the TABLE keeps every
+   other card's width, where wrapping the formula destroys the formula.
+   **On a wrapper INSIDE the card, and it was on the card**: `overflow-x: auto` silently computes
+   `overflow-y: auto` too (CSS Overflow §3 — `visible` beside a scrolling axis becomes `auto`), so
+   the card became a scroll box in both directions and the rail's flex then crushed it to 22 px of
+   114 under a record. The wrapper carries `tabindex` in the markup, which is what a scrollable
+   region with no focusable content needs to be reachable from a keyboard. */
+.shell2 .tableScroll {
+  overflow-x: auto;
+}
+.shell2 .tableScroll:focus-visible {
+  outline: 2px solid var(--g-accent);
+  outline-offset: 2px;
+}
+/* The three-way highlight's rail end (step 1.10 completes the others). */
+.shell2 .poleTable tr.hot {
+  background: rgba(110, 168, 254, 0.1);
+}
+
+/* ---- the contour's piece list and the cut editor (step 1.4b) ---- */
+.shell2 .btnRow {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.shell2 .pieces2 {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.shell2 .pieces2 > li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  font-size: var(--t-s);
+  padding: 0.1rem 0.2rem;
+  border-radius: 4px;
+}
+/* ---- the editable piece row — M8 step 4.3 ----
+   The row was a sentence and is now a sentence with controls at the end of it. The controls keep to
+   the row's own line height and do not grow it: a rail of eight rows that each gained a toolbar's
+   worth of height would push the Branch-cuts card below the fold, and the measurement that decided
+   the glyph size is that at `--t-s` a 1.15 line box holds a ✕ with no clipping. */
+.shell2 .pieceRole {
+  font-size: var(--t-s);
+  max-width: 11rem;
+}
+.shell2 .pieceRename {
+  font-size: var(--t-s);
+  /* Fills the row the way the name it replaces does, so the list does not jump when a rename opens
+     — which it did at first, because an `<input>`'s default width is 20 characters and a piece name
+     is longer than that. */
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+/* Pushed to the end of the row, so the controls line up down the list however long the names are. */
+.shell2 .pieceTools {
+  margin-left: auto;
+  display: flex;
+  gap: 0.1rem;
+  flex: 0 0 auto;
+}
+.shell2 button.pieceTool {
+  /* A glyph, not a label: six words per row would be the card's whole width. The accessible name
+     carries the sentence, which is where a name belongs. */
+  padding: 0 0.25rem;
+  min-width: 1.4rem;
+  line-height: 1.15;
+  font-size: var(--t-s);
+  background: none;
+  border-color: transparent;
+}
+/* **Revealed on hover or focus, not always**: eight rows × six controls is forty-eight glyphs, and
+   a list that looks like a control panel stops reading as a statement about the contour. They are
+   never hidden from the keyboard or from assistive technology — `visibility` and `display` would do
+   that; opacity does not, and `:focus-within` brings them back the moment a Tab reaches one. */
+.shell2 .pieces2 > li .pieceTools {
+  opacity: 0;
+}
+.shell2 .pieces2 > li:hover .pieceTools,
+.shell2 .pieces2 > li:focus-within .pieceTools {
+  opacity: 1;
+}
+@media (hover: none) {
+  /* No hover to reveal them with, so they simply stay. */
+  .shell2 .pieces2 > li .pieceTools {
+    opacity: 1;
+  }
+}
+.shell2 button.pieceTool:hover {
+  border-color: var(--g-border);
+}
+/* The ledger's own verdict on the piece, in the colour the badge uses for that level. */
+.shell2 .pieces2 .tag[data-status="failed"] {
+  color: var(--g-warn, #e0a33e);
+}
+
+/* The rail end of the three-way highlight (step 1.10 completes the others). */
+.shell2 .pieces2 > li.hot {
+  background: rgba(110, 168, 254, 0.1);
+}
+.shell2 .pieceName {
+  flex: 1 1 7rem;
+  min-width: 0;
+}
+.shell2 .pieceValue {
+  flex-basis: 100%;
+  color: var(--g-muted);
+  font-size: var(--t-xs);
+}
+/* **The SAME six hues the stage strokes with** — `--piece-N` is `inkTheme.ts`'s `pieces[N]`, so a
+   reader matching a row to a curve is matching one colour rather than two kept in step. */
+.shell2 .swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  flex: none;
+  align-self: center;
+}
+
+.shell2 .declaration {
+  border-left: 1px solid var(--g-border);
+  padding-left: 0.5rem;
+}
+/* **A verdict is a SENTENCE with a stamp on it, and it was a flex row** — which made every node of
+   the sentence a flex item. That is fine for `badge` + one string and wrong for the ones this app
+   actually composes: a refusal naming $R(z)$ is text, formula, text, formula, text, and step 2.1's
+   browser pass found it laid out as a five-column grid two words wide. `share.ts` had been doing the
+   same since step 1.6. The badge is `inline-grid` at a fixed 22 px, so it could never collapse
+   outside a flex context and needs no `flex: none` to protect it. */
+.shell2 .verdict {
+  margin: 0;
+  font-size: var(--t-s);
+}
+.shell2 .verdict > .badge {
+  margin-right: 0.35rem;
+  /* A 22 px stamp on a 13 px line: dropped so its middle sits on the sentence's baseline. */
+  vertical-align: -0.35em;
+}
+/* A note on a picker row wraps under it rather than being clipped mid-word — the sheet spinner's
+   sentence is 60 characters and the rail is 19rem. */
+.shell2 .pickRow {
+  flex-wrap: wrap;
+}
+.shell2 .pickRow > .muted.small:last-child {
+  flex-basis: 100%;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+   The right rail — M8 step 1.5.
+   ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* The headline is the product — "does this argument close?" — so it is the one line in the rail set
+   at reading size rather than at the card scale. */
+.shell2 .headline {
+  margin: 0;
+  font-size: var(--t-m);
+}
+.shell2 .headline.closes {
+  color: var(--g-ok);
+}
+.shell2 .headline.open {
+  color: var(--g-warn);
+}
+
+.shell2 .resultValue {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  overflow-x: auto;
+}
+.shell2 .resultValue > .badge {
+  flex: none;
+}
+
+.shell2 .repair {
+  color: var(--g-accent);
+  margin: 0;
+}
+.shell2 .restriction {
+  color: var(--g-warn);
+  margin: 0;
+}
+
+/* A disclosure's summary is a control: it gets the pointer and the focus ring every other control
+   has, and its marker stays so the open/shut state is not carried by position alone. */
+.shell2 details > summary {
+  cursor: pointer;
+  font-size: var(--t-s);
+  color: var(--g-muted);
+  padding: 0.15rem 0;
+  border-radius: var(--r-control);
+}
+.shell2 details > summary:focus-visible {
+  outline: 2px solid var(--g-accent);
+  outline-offset: 1px;
+}
+.shell2 details[open] > summary {
+  color: var(--g-text);
+}
+
+.shell2 .checkList {
+  list-style: none;
+  margin: 0.3rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.shell2 .checkList > li {
+  display: grid;
+  grid-template-columns: 22px auto 1fr;
+  align-items: baseline;
+  gap: 0.35rem;
+  font-size: var(--t-s);
+}
+.shell2 .checkList > li > .claim {
+  min-width: 0;
+}
+.shell2 .checkList > li > .repair {
+  grid-column: 2 / -1;
+}
+/* A failed row is the one a reader is looking for, so it carries a rule in the bad colour rather
+   than relying on its badge alone — three glyphs down a list is not a scannable difference. */
+.shell2 .checkList > li.failed {
+  border-left: 2px solid var(--g-bad);
+  padding-left: 0.35rem;
+  margin-left: -0.35rem;
+}
+
+.shell2 .numTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-xs);
+  margin-top: 0.3rem;
+}
+.shell2 .numTable th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--g-muted);
+  padding: 0 0.3rem 0.2rem 0;
+  white-space: nowrap;
+}
+.shell2 .numTable td {
+  padding: 0.1rem 0.3rem 0.1rem 0;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+/* The right rail is 24rem and a four-piece contour's values are wider; the card scrolls rather than
+   wrapping a complex number across two lines. */
+.shell2 .card2[data-card="result"] {
+  overflow-x: auto;
+}
+
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+   The contrasts dialog — M8 step 1.7.
+
+   **The backdrop wears `.shell2` without living under it.** The dialog reuses the shell's visual
+   system, every rule of which is scoped `.shell2 …`; it cannot be a descendant of the shell because
+   `inert` is not defeasible from CSS and a modal inside the element it makes inert is a modal nobody
+   can reach. So it carries the class and this rule cancels the grid the class otherwise means.
+
+   **`modalBackdrop` / `modalDialog`, and they were `contrast…`.** Neither rule ever said anything
+   about the ladder — they are the container the mechanics in `shell/modal.ts` put up — and the
+   front door is the second panel to wear them. A shared rule named after its first consumer is the
+   same drift `modal.ts` was extracted to stop, one file over.
+   ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+.shell2.modalBackdrop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: fixed;
+  inset: 0;
+  margin: 0;
+  height: auto;
+  /* Above `.cas-nav`, which sits at z-index 6 — a modal under the suite nav is not modal. */
+  z-index: 20;
+  background: rgba(8, 10, 14, 0.6);
+  padding: 1rem;
+}
+
+.modalDialog {
+  max-width: min(96vw, 84rem);
+  max-height: 88vh;
+  overflow: auto;
+  /* The one surface in the app that is raised off its ground rather than beside it, because it is
+     the one that is IN FRONT of the page rather than part of it. */
+  border: 1px solid var(--g-border);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+/* ---- the front door (step 1.8) ---- */
+
+/* The picker is wider than the ladder: four cards across at 240 px of thumbnail plus their text. */
+.frontDoorDialog {
+  max-width: min(94vw, 76rem);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* **FOUR columns, fixed, and this is a CONTRACT rather than a preference.** `frontDoor.ts` moves
+   the arrow keys by a declared `COLUMNS = 4` — layout is the only instrument that could measure the
+   real count, and jsdom reports every box as zero-sized, so a measured version would be asserted
+   nowhere in the blocking gate. `auto-fill` would therefore leave Up and Down stepping by four while
+   the eye sees three, at exactly the widths where a reader is most likely to be using the keyboard.
+   The cards narrow instead; the thumbnail is 240 px and scales down with them. */
+.doorGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.doorCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.5rem;
+  border: 1px solid var(--g-border);
+  border-radius: var(--r-card);
+  background: var(--g-panel-2);
+  min-width: 0;
+}
+/* The whole card is the target — `frontDoor.ts` puts the handler on the article and leaves the
+   button bare, so pointer, Enter and Space all arrive at one place and a card cannot open twice. */
+.doorCard:hover {
+  border-color: var(--g-accent);
+}
+.doorCard:focus-within {
+  outline: 2px solid var(--g-accent);
+  outline-offset: 2px;
+}
+
+/* The thumbnail's slot. A fixed aspect box, so a record whose plate is missing leaves a gap the
+   size of the picture rather than collapsing the card and reflowing the grid around it. */
+.doorThumb {
+  aspect-ratio: 240 / 110;
+  background: var(--g-ground);
+  border-radius: calc(var(--r-card) / 2);
+  overflow: hidden;
+}
+.doorThumb > canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* The identity — the target integral with its answer — is the card's headline and the one thing a
+   reader scans for, so it is the one thing allowed to wrap. */
+.doorIdentity {
+  font-size: var(--t-s);
+  overflow-x: auto;
+}
+
+.doorGroups {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.doorGroup > .doorDisclosure {
+  width: 100%;
+  text-align: left;
+}
+.doorRegion {
+  padding-top: 0.5rem;
+}
+
+/* ---- the contrast ladder — M8 step 3.5 ----
+   A strip of cases above the stage, spanning the WHOLE width rather than the stage's own column —
+   and that was measured rather than chosen. In the stage column at 1440 px the five cases are
+   152 px wide, every line of every card wraps, and the strip is **335 px tall against a stage of
+   328**: a panel taking more room than the thing it is a comment on. Across all three columns they
+   are 277 px, nothing scrolls (1,413 px of content in 1,413 px of box, against 789 in 725), and
+   the strip is 231 px with the stage keeping 433. It costs the rails 231 px of scroll, which is
+   the right thing to spend: a rail's content is the same content further down, where a stage's is
+   simply smaller. The wrapper's grid row is `auto` and the element is `hidden` when the panel is
+   shut, so a closed ladder is exactly zero pixels rather than a collapsed box with padding. */
+.shell2 > .ladderWrap {
+  grid-area: ladder;
+  min-width: 0;
+  overflow: hidden;
+}
+.ladder2 {
+  background: var(--g-panel);
+  border-bottom: 1px solid var(--g-border);
+  padding: 0.5rem 0.85rem 0.6rem;
+}
+.ladderHead {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+}
+.ladderHead > h2 {
+  font-size: var(--t-m);
+  margin: 0;
+}
+/* The legend takes the slack so the Close button sits at the right edge, where the reader's eye
+   already looks for one after the bar's own controls. */
+.ladderHead > p {
+  flex: 1 1 auto;
+  margin: 0;
+}
+
+/* **A row that SCROLLS rather than five cases that shrink to nothing.** At the full width the five
+   fit with room over, so the scroll never appears there; it is what keeps the strip readable in a
+   narrower window instead of taking the cases below the width at which their labels mean anything.
+   The region is reachable from the keyboard because its contents are buttons. */
+.ladderList {
+  display: flex;
+  gap: 0.45rem;
+  list-style: none;
+  margin: 0.45rem 0 0;
+  padding: 0;
+  overflow-x: auto;
+}
+.ladderList > li {
+  flex: 1 1 0;
+  min-width: 9.5rem;
+  display: flex;
+}
+button.ladderCard {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  text-align: left;
+  padding: 0.4rem 0.5rem;
+  font-size: var(--t-s);
+  /* Normal weight and wrapping: the bar's buttons are labels, and a rung is four lines of content
+     that happens to be pressable. */
+  font-weight: 400;
+  white-space: normal;
+  height: 100%;
+}
+/* The rung whose argument is the one on screen. `aria-current` rather than a class, so the mark and
+   the announcement are the same attribute and cannot come apart. */
+button.ladderCard[aria-current="true"] {
+  border-color: var(--g-accent);
+  box-shadow: inset 0 0 0 1px var(--g-accent);
+}
+.caseLabel {
+  font-size: var(--t-m);
+}
+.caseWhy {
+  /* Two lines at most: a rung is a pointer to an argument, not the argument. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+/* The declared change, in the accent the Result card's highlighted row also wears — one colour for
+   one fact, across the two places it is said. */
+.caseChange {
+  color: var(--g-accent);
+}
+/* **`.shell2 button.ladderCard >`, and the specificity is the whole point.** A plain `.caseAnswer`
+   loses to `.shell2 .verdict { margin: 0 }` — so the ONE case with no answer, the wrong-way one,
+   had its `⚠ incomplete` sitting where its text ended while the other four had theirs on a shared
+   baseline at the foot of the row. The odd card out was the card whose whole job is to be the odd
+   one out, which made a layout accident read as a statement. */
+.shell2 button.ladderCard > .caseAnswer {
+  margin-top: auto;
+  padding-top: 0.15rem;
+}
+
+/* **The check the ladder's rung declares, in the Result card's own list.** The same mark as the
+   grid's `data-change="declared"` wore, moved to where the rows actually are: a reader who opens a
+   rung is looking at one argument, so the contrast has to be drawn on that argument's own checks
+   rather than in a table of five. M7.1's second mark (a row whose WORDING moved without the
+   argument doing so) has no reader here on purpose — it is a fact about the comparison, and the
+   card is not showing one. */
+.checkRow[data-change="declared"] {
+  background: rgba(110, 168, 254, 0.12);
+  box-shadow: inset 2px 0 0 var(--g-accent);
+}
+
+/* The visually-hidden text that carries a status word beside an `aria-hidden` glyph. `app.css` has
+   an unscoped `.srOnly`; this is the shell2-scoped twin, so the dialog does not depend on the old
+   sheet surviving step 1.12. */
+.shell2 .srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* The phone notice — M8 step 1.12.
+ *
+ * **LAST in the file, and that is the whole rule.** `.shell2 { display: grid }` and the `.shell2`
+ * inside this media block have the same specificity, so the later one wins — and the first draft put
+ * this at the top, where the grid's own rule overrode it and the notice never appeared. It passed a
+ * test that asserted the media rule's CONTENTS and not its effect; the iframe harness in
+ * `test/phoneNotice.browser.test.ts` is what found it, on its first run.
+ *
+ * **The owner's decision is desktop and laptop**, and below 900 px the grid cannot hold two rails, a
+ * stage and a strip: the old shell relaxed its rigid `rem` tracks with two media queries and still
+ * scrolled sideways (`test/narrowLayout.browser.test.ts` measured 656 px of content in a 400 px
+ * viewport). Saying so is more honest than a layout nobody designed.
+ *
+ * `display: none` on whichever half is hidden takes it out of the accessibility tree too, so a
+ * reader on a phone is not offered an app they cannot see — which is why this is a swap rather than
+ * an overlay. */
+.phoneNotice {
+  display: none;
+}
+@media (max-width: 899px) {
+  .shell2 {
+    display: none;
+  }
+  .phoneNotice {
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    gap: 0.9rem;
+    min-height: calc(100vh - var(--cas-nav-h, 0px));
+    margin-top: var(--cas-nav-h, 0px);
+    padding: 1.5rem;
+    text-align: center;
+    color: var(--g-text);
+  }
+  .phoneNotice p {
+    margin: 0;
+    max-width: 24rem;
+    line-height: 1.5;
+  }
+  /* The link WRAPS: it is there to be read and copied, and a URL that runs off the side of a phone
+     is a link the reader cannot have. `anywhere` rather than `break-all` so a break inside a word
+     only happens when there is no other way. */
+  .phoneNotice > .phoneLink {
+    display: block;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    font-size: var(--t-xs);
+    color: var(--g-muted);
+    background: var(--g-panel);
+    border: 1px solid var(--g-border);
+    border-radius: 5px;
+    padding: 0.5rem 0.65rem;
+  }
+}
+
+/* ── the derivation stepper (M8 step 3.1b) ───────────────────────────────────────────────────
+   One row of controls above one step. The dots are BUTTONS, not decoration: each is the step it
+   names, so the shape of the argument is visible and also reachable — a reader who can see nine
+   dots can jump to the sixth, and a reader who cannot gets the same nine controls by name. */
+.shell2 .stepBar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin: 0.2rem 0 0.5rem;
+}
+.shell2 .stepBtn {
+  padding: 0.14rem 0.45rem;
+  font-size: var(--t-xs);
+}
+.shell2 .stepBtn[disabled] {
+  opacity: 0.4;
+  cursor: default;
+}
+.shell2 .stepDots {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+/* The dot is the button, so the hit target is the dot plus its padding rather than a 6 px circle:
+   `min-width`/`min-height` keep it pressable while the painted mark stays small. */
+.shell2 .stepDots > li > button.stepDot {
+  width: 0.5rem;
+  height: 0.5rem;
+  min-width: 0.5rem;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--g-border);
+  background: var(--g-panel-2);
+}
+.shell2 .stepDots > li > button.stepDot[aria-current="step"] {
+  background: var(--g-accent);
+  border-color: var(--g-accent);
+}
+/* A step that failed is marked BEFORE a reader opens it — the same product decision the disclosures
+   make by opening themselves, at the resolution a dot has. Colour is not the only channel: the
+   failed dot is also the one the ledger's own row names. */
+.shell2 .stepDots > li > button.stepDot[data-failed] {
+  border-color: var(--g-bad);
+  box-shadow: inset 0 0 0 2px var(--g-bad);
+}
+.shell2 .stepBody > h3 {
+  font-size: var(--t-m);
+  margin: 0 0 0.15rem;
+}
+
+/* ── the rail toggles (M8 step 3.1b) ─────────────────────────────────────────────────────────
+   A folded rail draws its name and its control and NOTHING else. Before this it went on drawing
+   every card into a 38 px column — a stripe of one-letter fragments, with the target's formula an
+   unreachable horizontal scroll region — while the comment above claimed a "labelled strip". */
+.shell2 .railToggle {
+  align-self: flex-end;
+  padding: 0.1rem 0.4rem;
+  font-size: var(--t-xs);
+  line-height: 1.1;
+}
+.shell2 > .rail2 > .railToggle {
+  flex: 0 0 auto;
+}
+.shell2[data-left="folded"] > .rail2.left > .railToggle,
+.shell2[data-right="folded"] > .rail2.right > .railToggle {
+  align-self: center;
+}
+/* Written down the strip, because 38 px is narrower than any of these names. */
+.shell2 .railName {
+  writing-mode: vertical-rl;
+  margin: 0.4rem auto 0;
+  font-size: var(--t-xs);
+  color: var(--g-muted);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+/* ── the step's callouts, and the app's FIRST motion (M8 step 3.1c) ──────────────────────────
+   A callout is the claim of the step in hand, on the plane, at the thing the claim is about: the
+   bound at the vanishing arc's midpoint, the residue at its pole, the value at the target piece.
+   It rides `.stageChip`'s ground and offset — a chip is a chip — and differs in carrying a badge,
+   because the number on it was established at a LEVEL and a bound shown without its `≤` is the
+   honest-labelling guardrail dropped at the one place a reader is looking. */
+.shell2 .overlay2 .stageChip.callout {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: 22rem;
+  border-color: var(--g-accent);
+}
+.shell2 .overlay2 .stageChip.callout > .badge {
+  flex: 0 0 auto;
+}
+
+/* **This is the first `@keyframes` in the app, and therefore the first `prefers-reduced-motion`
+   query with anything to act on.** M6.4 measured that `app.css` carried zero transition, animation
+   and keyframe rules and recorded that rule 7 of research 07 was satisfied VACUOUSLY — a media
+   query with nothing inside it would have claimed to address something that was never there. Step
+   3.1c is what gives it something: the limit step's chip announces the handle it is about, once.
+
+   ONCE, and by ANIMATION rather than by a transition, which is the mechanism the plan's "300 ms
+   CSS transition" needs to be to work at all: a transition fires on a property CHANGE, and this
+   node is created already in its final state — there is nothing to transition from. The keyed
+   builder is what makes "once" true: a chip that stays put keeps its node (`dom.ts` rule 1), so
+   the animation runs when the step CHANGES and not on every pointer move over the stage. */
+@keyframes stepPulse {
+  0% {
+    transform: translate(0.6rem, -1.6rem) scale(1);
+    border-color: var(--g-accent);
+  }
+  45% {
+    transform: translate(0.6rem, -1.6rem) scale(1.12);
+    border-color: var(--g-accent);
+  }
+  100% {
+    transform: translate(0.6rem, -1.6rem) scale(1);
+    border-color: var(--g-accent);
+  }
+}
+.shell2 .overlay2 .stageChip.callout.pulse {
+  animation: stepPulse 300ms ease-out 1;
+}
+/* The chip still appears and still says what it says; it simply does not move to say it. */
+@media (prefers-reduced-motion: reduce) {
+  .shell2 .overlay2 .stageChip.callout.pulse {
+    animation: none;
+  }
+}
+
+/* ── the scrubbable number (M8 step 3.2) ─────────────────────────────────────────────────────
+   A claim's parameter, inline in the prose, as a control over the same field the rail slider and
+   the stage handle write. The dashes are the only thing on screen that says so — there is no track,
+   no thumb and no box — so they are not decoration: a reader who cannot tell the number from the
+   rest of the sentence has no way to discover the drag at all, which is why the underline is
+   `text-decoration` on the word rather than a border under the line box.
+
+   `cursor: ew-resize` says which axis before the pointer is down. `touch-action: none` is what
+   makes a drag on a touch screen a drag: without it the browser claims the gesture for a scroll
+   after a few pixels and the pointer stream ends in `pointercancel` — the case `scrub.ts`'s
+   `onScrubbing(false)` exists for, and one it should not have to handle on every gesture.
+
+   The focus ring is `:focus-visible` and not `:focus`, matching the disclosure summaries above: the
+   element takes focus on a click as well, and a ring appearing under the pointer on every drag
+   would be noise. Its two values are this file's own (2px accent, 2px offset). */
+.shell2 .scrub {
+  text-decoration: underline dashed;
+  text-underline-offset: 0.18em;
+  text-decoration-color: var(--g-accent);
+  cursor: ew-resize;
+  touch-action: none;
+  /* A scrub in a sentence must not move the words around it while its digits change, and the
+     figures are already tabular in `.num`; this only keeps the browser from selecting the word
+     mid-drag, which would paint a selection over the number being read. */
+  user-select: none;
+}
+.shell2 .scrub:focus-visible {
+  outline: 2px solid var(--g-accent);
+  outline-offset: 2px;
+}
+
+/* ── the limit step's play control and its table (M8 step 3.2) ───────────────────────────────
+   The two controls sit on one row above the table they fill, so a reader who has just pressed one
+   sees the rows appear directly beneath the button rather than somewhere else in the rail. */
+.shell2 .stepBody > .sweepBar {
+  display: flex;
+  gap: 0.4rem;
+  margin: 0.5rem 0 0.35rem;
+}
+/* Tabular figures, because the whole point is to watch a column SHRINK: a proportional font moves
+   the digits sideways as they change and the eye then has to re-find the decimal point on every
+   row. `fmtCx` already pads nothing, so the alignment has to come from the font. */
+.shell2 .stepBody > .sweepTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-xs);
+  font-variant-numeric: tabular-nums;
+}
+.shell2 .stepBody > .sweepTable th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--g-muted);
+  padding: 0.15rem 0.3rem 0.15rem 0;
+}
+.shell2 .stepBody > .sweepTable td {
+  padding: 0.12rem 0.3rem 0.12rem 0;
+  white-space: nowrap;
+}
+.shell2 .stepBody > .sweepTable .badge {
+  margin-right: 0.15rem;
+}
+
+/* ── the front door's tab strip and practice list (M8 step 3.4) ──────────────────────────────
+   The strip sits under the dialog's own heading, so the heading names the dialog and the strip
+   names which half of it is up — a reader who lands on the dialog hears the one and then reaches
+   the other, rather than meeting a choice before being told what the choice is about. */
+.doorTabs {
+  display: flex;
+  gap: 0.3rem;
+  border-bottom: 1px solid var(--g-border);
+}
+/* The selected tab is joined to the panel beneath it: the border it sits on is erased under it,
+   which is what makes `aria-selected` legible to a reader who is not being read to. Colour alone
+   would not — the two tabs are both controls and both blue-on-panel in the accent theme. */
+.doorTab[aria-selected="true"] {
+  border-color: var(--g-accent);
+  border-bottom-color: transparent;
+  color: var(--g-text);
+  margin-bottom: -1px;
+}
+/* The hidden panel is `hidden` in the DOM; this is only so a panel that is up fills the dialog's
+   column rather than sitting at its natural height with the groups list scrolling beside it. */
+.doorPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.doorPanel[hidden] {
+  display: none;
+}
+.doorTasks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.doorTasks > .pickRow > .pieceName {
+  flex: 1 1 auto;
+  min-width: 0;
+}

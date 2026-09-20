@@ -40,7 +40,7 @@ export const d4LogSquaredKeyhole: Family = {
       "With $\\log z$ alone the log-integral cancels between the two edges; with $(\\log z)^2$ the $(\\log x+2\\pi i)^2$ on the lower edge leaves an identity linear in $\\int R\\log x$ and $\\int R$, whose real and imaginary parts determine both.",
     citations: [
       { book: "Stein–Shakarchi", where: "Ch. 3", text: "" },
-      { book: "Ahlfors", where: "Ch. 4 §5 (the \\(R(x)\\log x\\) case, by the upper half-plane)", text: "" },
+      { book: "Ahlfors", where: "Ch. 4 §5 (the $R(x)\\log x$ case, by the upper half-plane)", text: "" },
       { book: "Brown–Churchill", where: "§83", text: "" },
     ],
   },
@@ -309,7 +309,7 @@ export const d4LogSquaredKeyhole: Family = {
       numeric: -0.78539816339744828,
       verifiedTo: 7e-16,
       method:
-        "(a) exp-sinh DE quadrature on (0, inf) -> -0.78539816339744806 (rel 2.8e-16); (b) the fold x -> 1/x onto (0,1), giving int_0^1 log u (1-u^2)/(1+u^2)^2 du, tanh-sinh -> -0.78539816339744772 (rel 7.1e-16). Contour bookkeeping verified independently: the keyhole total = 2 pi i Sigma to 1.0e-14 at eps = 1e-9, R = 1e9, and upper + lower reproduced 4 pi^2 T0 - 4 pi i T1 to 8.5e-9",
+        "two routes: exp-sinh double-exponential quadrature on $(0,\\infty)$, giving $-0.78539816339744806$ (relative $2.8\\times10^{-16}$); and the fold $x \\to 1/x$ onto $(0,1)$, giving $\\int_0^1 \\log u\\,(1-u^2)/(1+u^2)^2\\,du$ by tanh-sinh, $-0.78539816339744772$ (relative $7.1\\times10^{-16}$). The keyhole total is $2\\pi i\\Sigma$ to $1.0\\times10^{-14}$ at $\\varepsilon = 10^{-9}$ and $R = 10^{9}$, and the two edges reproduce $4\\pi^2 T_0 - 4\\pi i T_1$ to $8.5\\times10^{-9}$",
     },
     {
       params: { p: 1 },
@@ -317,7 +317,7 @@ export const d4LogSquaredKeyhole: Family = {
       numeric: 0.0,
       verifiedTo: 1.2e-16,
       method:
-        "int_0^inf log x/(1+x^2) dx = 0 by the fold x -> 1/x, which maps the integrand to its own negative; Sigma = -i pi^2 so Re(Sigma) = 0 exactly and the bonus is T0 = pi/2",
+        "$\\int_0^{\\infty}\\log x/(1+x^2)\\,dx = 0$ by the fold $x \\to 1/x$, which maps the integrand to its own negative; $\\Sigma = -i\\pi^2$, so $\\operatorname{Re}\\Sigma = 0$ exactly and the companion value is $T_0 = \\pi/2$",
     },
   ],
 };

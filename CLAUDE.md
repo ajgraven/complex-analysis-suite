@@ -97,16 +97,19 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **560 test files / 5895 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **593 test files / 6649 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
-separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and several suites are
-**jsdom** rather than node, each per-file through a `// @vitest-environment jsdom` docblock —
-`packages/ui`; three of Contour-Integration's (`shell`, `pen`, `drillShell`, all reaching
-`src/shell/app.ts`); three of Complex-Dynamics' (`shell`, `escapeStack`, `gradientKeyboard`, reaching
-`src/main.ts`); and ~34 of Quadrature-Domains' DOM specs under `vitest/`, despite that project's
-config saying `environment: "node"`. **Never pipe the gate through `tail` or `head`** — doing so has truncated
-real failures before.
+separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and **jsdom is opted
+into per FILE, by a `// @vitest-environment jsdom` docblock on line 1** — `packages/ui` is the only
+one that sets it in its Vitest config, and Quadrature-Domains' own config says `environment: "node"`
+while ~34 of its `vitest/` DOM specs opt in anyway. Measured after the M8 merge, rather than
+remembered: **34 Quadrature-Domains** specs, **23 Contour-Integration** ones (the whole
+`src/shell/` surface after M8 — the cards, the two rails, the bar, the front door, the drill, the
+strip) and **3 Complex-Dynamics** ones (reaching `src/main.ts`), and no other app or package.
+*(This paragraph named three Contour-Integration files by name until M8 step 5.3; all three were
+deleted at the M8 cutover.)* **Never pipe the gate through `tail` or `head`** — doing so has
+truncated real failures before.
 
 Dev servers go through `.claude/launch.json` (one entry per app, each with its port), not a bare
 `vite` left running in the background.
@@ -317,7 +320,10 @@ Schwarz export (#338) landed alongside.
 integration and the residue theorem, including the evaluation of real definite integrals in closed
 form. Plan, design and content spec are in [`docs/contour-integration/`](docs/contour-integration/)
 — **read `PLAN.md` then `DESIGN.md` before touching it**; the 28 gallery entries are the engine's
-specification, not examples added afterwards.
+specification, not examples added afterwards. **Its shell was rebuilt at M8** (ADR-0043, the *Done — M8*
+paragraph below): `src/shell/` is the M8 shell — a keyed DOM builder, two rails, KaTeX and the textbook
+vocabulary — over the same engine, so anything below describing the SCREEN before M8 describes a shell
+that no longer exists, while everything about the MATHEMATICS is unchanged.
 
 Through **Milestone 7** and published — **M1–M7 complete, and THE GALLERY IS COMPLETE: all 28 records load and every one is executed against the engine.** `∮ f dz` comes from `2πi Σ n(γ,aₖ)·Res(f,aₖ)` — a *formula*,
 not a quadrature — with exactly-decided winding numbers (exact-sign predicates over a certified
@@ -1288,16 +1294,60 @@ the other consumer, is unaffected). A unified `#vs=` decoder still reads every A
 bare-`#id` permalink. **HD-6.0–6.4 done** (ADR + plan; the unified body model + airfoil-equivalence golden;
 the single-page shell; the domain-color render; the doc + PNG-export-verification sweep).
 
-**In progress — M8 (Contour Integration: the shell rebuild, ADR-0043).** The presentation layer of
-`apps/contour-integration` is being rebuilt on the existing engine: two rails, KaTeX, textbook vocabulary,
-stage modes, a worked-example mode, an editable piece list. Plan:
-[`docs/contour-integration/M8-plan.md`](docs/contour-integration/M8-plan.md) (complete: method, five
-phases in step detail, risks, step index). **Live state: [`docs/contour-integration/M8/STATUS.md`](docs/contour-integration/M8/STATUS.md)
-— a session working on M8 reads it first, does the one step it names, updates it, commits and pushes
-before ending; never more than one step without a push.** Branch `claude/inspiring-keller-5sizwl`. Phase 0
-merges to `master` alone; Phases 1–5 land in one merge. The owner's usage is metered, so steps are small and
-every session ends pushed.
+**Done — M8 (Contour Integration: the shell rebuild, ADR-0043).** A review at M7 found the engine sound
+and the PRESENTATION LAYER the liability — no mathematics typeset, one right-hand rail carrying seven
+concerns and torn down on every recompute, a `<select>` of slugs for a front door, and the ledger's house
+ids (`COVER / KILL / CATCH / LEGALITY`) shown to readers. So the shell was rebuilt rather than patched,
+on the UNCHANGED engine and its `ShellState → resolveState` contract: a keyed DOM builder, **two rails**
+(what is being integrated · what it proves) around the stage, **KaTeX throughout**, textbook vocabulary
+decided in one place (`engine/vocabulary.ts`, with a two-part denylist — one half reading every string
+literal out of the TypeScript AST, the other mounting the app across 43 states and reading the screen —
+so a house id cannot reach a reader), a **front door** of eight classics over an eight-group taxonomy,
+**four stage modes** on Kovesi's real CET-C6 (quiet / full / isolines / a textbook plate with no portrait
+at all), a **stepper** that gives the argument in the order a lecturer gives it, scrubbable limits, the
+amplitwist detail, the contrast ladder as a strip, the faded drill rehoused as a card, an **editable piece
+list** (seven actions plus a Shift-drag division) and undo/redo. Phase 0 merged to `master` alone
+([#340](https://github.com/ajgraven/complex-analysis-suite/pull/340)); Phases 1–5 landed in one merge.
+
+Six findings worth carrying. **The rebuild's own gates were the weakest part of it, twice**: M6.1's
+*"`applyState(currentState())` is a fixed point"* survived 11 of 20 mutants, because a CONSISTENTLY LOSSY
+round trip is still a fixed point; and step 3.6's gate clause named *a Worked-example permalink at step 5*
+for a link that could not exist, the reader's place in an argument being session state the codec did not
+carry. **The plan's own carriers were falsified by measuring them** — serialising an edited template as a
+pen wire changes the LEDGER for four of the ten templates (a full turn has a zero-length chord no bulge can
+express; a rebuilt arc's centre lands 2.2e-16 off an origin `arcRadius` demands exactly), so an edited
+contour is carried as WHAT WAS DONE TO IT, six replayable operations onto the recipe. **A defect can ship
+green because a test pins the outcome without the reason**, which the sweeps caught at 4.2, 4.3, 4.4b, 5.1
+and 5.2. **The accessibility TREE is the instrument and a DOM walk is not** — established at M6.4 and
+re-established at 5.1 and 5.2, a walk reading `aria-label ?? textContent` reporting twelve unnamed controls
+on a page whose tree has none. **A sentence the engine composed correctly can still reach a reader wrong**:
+the Result card said *There is no integrand* about a refused declaration with the integrand still in the
+box, and printed a refused claim raw above a typeset copy of itself. And `scripts/a11y-audit.mjs` now walks
+each page's accessibility tree beside axe — **845 interactive nodes across 20 pages, 0 unnamed** — because
+a `<div tabindex="0">` with no name is a tab stop a screen reader announces as nothing and **axe calls that
+page clean**. Plan: [`docs/contour-integration/M8-plan.md`](docs/contour-integration/M8-plan.md); the
+step-by-step record, with every finding and every sweep, is
+[`docs/contour-integration/M8/STATUS.md`](docs/contour-integration/M8/STATUS.md), the owner's click-through
+checklist [`M8/browser-pass.md`](docs/contour-integration/M8/browser-pass.md), and what survived the rebuild
+and what deliberately did not is [`M8/parity.md`](docs/contour-integration/M8/parity.md), row by row.
 
 Work in small, reviewable commits. Pause at each phase/milestone gate for review before proceeding.
 When a command or path in the docs is marked `⚠ verify`, check it against the actual repo
 contents rather than assuming.
+
+## Replying: be brief
+
+**The code and the docs carry the detail; the reply does not.** Findings belong in
+`STATUS.md` and in the comment beside the code that caused them, which is where a reader
+will look for them later — repeating them in chat costs the owner's metered context and is
+read once.
+
+- **Report, do not re-narrate.** A finished step is a handful of lines: what was built, the
+  numbers the gate and the sweep came back with, where it is written down, and the one
+  decision the owner has to make. Never restate a finding the commit already carries.
+- **Never announce, never wait aloud.** No "I'll now…", no "waiting…", no progress ticks
+  while a background job runs. Say nothing until there is a result.
+- **A measurement, not a paragraph about a measurement.** `20.4% (2.03e6 → 1.62e6)` says
+  what three sentences would.
+- **Bold, bullets and headings are for a reply with real structure**, not decoration on a
+  two-line answer.

@@ -211,7 +211,7 @@ export const a6SemicircleQuartic: Family = {
       numeric: 2.2214414690791831,
       verifiedTo: 1e-14,
       method:
-        "Res ≡ −z/4 in ℚ(i)[z]/⟨z⁴+1⟩ (verified by 4z³·(−z/4) = −z⁴ ≡ 1) summed over the rung-2 radical split, cross-checked against the two upper roots' numeric residues to 12 s.f. and against a contour quadrature",
+        "$\\operatorname{Res} \\equiv -z/4$ in $\\mathbb{Q}(i)[z]/\\langle z^4+1\\rangle$, verified by $4z^3\\cdot(-z/4) = -z^4 \\equiv 1$ and summed over the radical split of the two upper roots; cross-checked against their numeric residues to twelve significant figures and against a contour quadrature",
     },
     {
       params: { closeDown: true },
@@ -220,7 +220,7 @@ export const a6SemicircleQuartic: Family = {
       numeric: 2.2214414690791831,
       verifiedTo: 1e-14,
       method:
-        "the same value by −2πi Σ_{Im z<0} Res — an independent route whose residue sum is the exact negative, so it guards traps.closing-down-disagrees",
+        "the same value by $-2\\pi i\\sum_{\\operatorname{Im} z < 0}\\operatorname{Res}$ — an independent route whose residue sum is the exact negative, so closing downward and disagreeing would show here",
     },
   ],
 };

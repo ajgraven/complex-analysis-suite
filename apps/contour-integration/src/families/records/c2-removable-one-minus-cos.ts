@@ -191,7 +191,7 @@ export const c2RemovableOneMinusCos: Family = {
       numeric: 1.5707963267948966,
       verifiedTo: 3e-15,
       method:
-        "the residue sum is EMPTY (the auxiliary is entire, verified by an exact Taylor expansion at the origin) and the whole value is L5's iα·L with L = i, α = π: ∮ = 0 gives ∫_ℝ = π and the target is Re(π)/2 = π/2. Independently verified in research two ways: (a) half-period sums of ½·sinc(x/2)² to 40π with a Euler-accelerated tail, 1.5707963267948957 (rel 5.7e-16); (b) direct summation to 2000π with an accelerated tail, 1.5707963267948999 (rel 2.1e-15)",
+        "the residue sum is empty — the auxiliary is entire, verified by an exact Taylor expansion at the origin — and the whole value is the indentation's $i\\alpha L$ with $L = i$ and $\\alpha = \\pi$: $\\oint = 0$ gives $\\int_{\\mathbb{R}} = \\pi$ and the target is $\\operatorname{Re}(\\pi)/2 = \\pi/2$. Verified independently two ways: half-period sums of $\\tfrac12\\operatorname{sinc}^2(x/2)$ to $40\\pi$ with a Euler-accelerated tail, $1.5707963267948957$ (relative $5.7\\times10^{-16}$), and direct summation to $2000\\pi$ with an accelerated tail, $1.5707963267948999$ (relative $2.1\\times10^{-15}$)",
     },
     {
       params: { route: "indented" },
@@ -200,7 +200,7 @@ export const c2RemovableOneMinusCos: Family = {
       numeric: 1.5707963267948966,
       verifiedTo: 1e-6,
       method:
-        "the ALTERNATIVE route, and the cross-check that the two are the same π: with f = (1 − e^{iz})/z² there is a simple pole at 0 with Res = −i, the indentation (α = −π) contributes i(−π)(−i) = −π, and the big arc vanishes by L1 since |f| ≤ 2/R². Verified in research at ρ = 1e-6, R = 2000: closed-contour total 1.5e-7, small arc measured (−3.1415917, 0)",
+        "the alternative route, and the cross-check that the two give the same $\\pi$: with $f = (1 - e^{iz})/z^2$ there is a simple pole at 0 with $\\operatorname{Res} = -i$, the indentation ($\\alpha = -\\pi$) contributes $i(-\\pi)(-i) = -\\pi$, and the large arc vanishes because $|f| \\le 2/R^2$. Measured at $\\rho = 10^{-6}$ and $R = 2000$: the closed-contour total is $1.5\\times10^{-7}$ and the small arc $(-3.1415917, 0)$",
     },
   ],
 };

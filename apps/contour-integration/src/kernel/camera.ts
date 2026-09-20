@@ -27,6 +27,44 @@ export interface Viewport {
 
 export const DEFAULT_VIEW: View = { center: [0, 0], halfHeight: 2 };
 
+/** How far the camera may zoom, and how far its centre may travel. See {@link clampView}. */
+export const HALF_HEIGHT_MIN = 0.05;
+export const HALF_HEIGHT_MAX = 200;
+export const CENTER_MAX = 1e6;
+
+/**
+ * Put a camera back inside the plane.
+ *
+ * **It bounded the zoom and passed the CENTRE through**, which is not a clamp — it is half of one,
+ * and the half that was missing is where the reader is. `zoomAt` folds a wheel's factor into the
+ * centre as well as the half-height, so one `deltaY: 100000` left the camera 1e64 from the origin
+ * at a perfectly ordinary half-height of 200: a sane magnification pointed at nothing. The test
+ * firing that event is called *a flick cannot lose the plane* and asserted the half-height alone,
+ * so it went unnoticed for three steps — and then leaked, because `syncHash` minted a permalink to
+ * that camera and the next mount in the same document opened it.
+ *
+ * **Here rather than inside the controller, because the wheel is not the way in that matters.** The
+ * codec checks the camera is three finite numbers with a positive height and says nothing about
+ * magnitude — rightly, since a far-off camera is a link that CAN be honoured, just not one worth
+ * honouring literally — so a `#vs=` carrying `1e64` lands a reader somewhere they did not navigate
+ * to and cannot navigate back from. The shell's door clamps it; the codec keeps refusing only what
+ * it cannot rebuild.
+ *
+ * `CENTER_MAX` is a guard against arithmetic rather than a product limit: at the widest view, 1e6
+ * is five thousand screens from the origin, which is not navigation. A non-finite axis becomes 0,
+ * because there is no nearest point to fall back to and the origin is where the plane is.
+ */
+export function clampView(v: View): View {
+  const axis = (x: number): number =>
+    Number.isFinite(x) ? Math.min(CENTER_MAX, Math.max(-CENTER_MAX, x)) : 0;
+  return {
+    center: [axis(v.center[0]), axis(v.center[1])],
+    halfHeight: Number.isFinite(v.halfHeight)
+      ? Math.min(HALF_HEIGHT_MAX, Math.max(HALF_HEIGHT_MIN, v.halfHeight))
+      : DEFAULT_VIEW.halfHeight,
+  };
+}
+
 /** Plot units per CSS pixel. */
 export function scale(view: View, vp: Viewport): number {
   return (2 * view.halfHeight) / Math.max(vp.height, 1);

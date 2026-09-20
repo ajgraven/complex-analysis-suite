@@ -94,5 +94,7 @@
       "help": "All page content should be contained by landmarks"
     }
   },
-  "contour-integration-drill": {}
+  "contour-integration-drill": {},
+  "contour-integration-predict": {},
+  "contour-integration-worked": {}
 }

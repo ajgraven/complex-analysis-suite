@@ -32,14 +32,18 @@ import {
   type WindingRow,
 } from "../src/shell/drill.js";
 import {
+  LEGACY_KEY,
   clearedOf,
   isComplete,
   NO_PROGRESS,
   PROGRESS_KEY,
+  predictionOf,
   readProgress,
   stageFor,
   withCleared,
+  withPrediction,
   writeProgress,
+  type DrillProgress,
   type KeyStore,
 } from "../src/shell/drillProgress.js";
 import { CONTRAST_CELLS } from "../src/shell/contrastGrid.js";
@@ -295,16 +299,40 @@ describe("rung iii — the menu", () => {
     for (const task of DRILL_TASKS) expect(VERIFIED_ROLE_TEMPLATES).toEqual(expect.arrayContaining([...task.menu]));
   });
 
-  it("and the wedge really is a FALSE FRIEND — it answers B1, on a claim nothing checked", () => {
-    // `f(ωz) = μ f(z)` is false for `e^{iz}/(1+z²)`, and the ledger never asks: a `reproduces` row
-    // is satisfied "by its role". Without the exclusion rule the menu would mark this correct.
-    const task = taskById("oscillatory");
+  it("and the wedge really is a FALSE FRIEND — it answers the rational task, on a claim nothing checked", () => {
+    // `f(ωz) = μ f(z)` is false for `1/(1+z²)`, and the ledger never asks: a `reproduces` row is
+    // satisfied "by its role". Without the exclusion rule the menu would mark this correct.
+    //
+    // **The demonstration MOVED at M8 step 4.1, and the move is the finding.** It used to be the
+    // `oscillatory` task, where four templates — strip, wedge, keyhole and dogbone — closed and
+    // reported `π/e` for B1 (M7.3's own measurement). Honouring each piece's DECLARED lemma removed
+    // all four at once: their arcs declare the ML estimate, and at `a = 1` the integrand carries a
+    // live `e^{iaz}`, which the ML estimate refuses by name. So `oscillatory` now has exactly one
+    // template that answers it. At `a = 0` the integrand is rational, the ML estimate genuinely
+    // applies, and the unchecked `reproduces` claim is all that is left holding the wedge up —
+    // which is why the rule still needs excluding and why this is where it shows.
+    const task = taskById("rational");
     const run = task === null ? null : runTask(task);
     if (run === null) throw new Error("no run");
     const wedge = menuVerdict(run, "wedge");
     expect(wedge.answers).toBe(true);
-    expect(wedge.value).toBe("π/e");
+    expect(wedge.value).toBe("π");
     expect(TEMPLATES.find((t) => t.id === "wedge")?.build().pieces.find((p) => p.role === "reproduces")).toBeDefined();
+  });
+
+  it("and the four that were false friends at a live frequency are not any more", () => {
+    // The other half of the move, so it is a measurement rather than a remark: on `oscillatory`
+    // exactly one template answers, and it is the intended one. A declaration honoured is worth
+    // more here than the menu's own exclusion rule, because it refuses with the ledger's reason
+    // rather than by not being offered.
+    const task = taskById("oscillatory");
+    const run = task === null ? null : runTask(task);
+    if (run === null) throw new Error("no run");
+    const answering = TEMPLATES.filter((t) => menuVerdict(run, t.id).answers).map((t) => t.id);
+    expect(answering).toEqual(["semicircle"]);
+    for (const id of ["strip", "wedge", "keyhole", "dogbone"] as const) {
+      expect(menuVerdict(run, id).failedAt, `${id} should now fail at a boundary term`).toBe("KILL");
+    }
   });
 
   it("has exactly one intended option, and the others FAIL with the ledger's own reason", () => {
@@ -394,7 +422,7 @@ describe("rung iv — the enclosure", () => {
     const mirror = [w([0, 1], 0), w([0, -1], -1)];
     const bad = checkDrawing("as-recorded", recorded, mirror);
     expect(bad.ok).toBe(false);
-    expect(bad.why).toContain("winds 0 times");
+    expect(bad.why).toContain("$\\operatorname{Ind}_\\gamma(i) = 0$");
 
     // A doubled loop is a different number too — `2πi Σ n·Res`, not `2πi Σ Res`.
     const twice = [w([0, 1], 2), w([0, -1], 0)];
@@ -423,10 +451,10 @@ describe("rung iv — the enclosure", () => {
     expect(none.why).toContain("no singularity is enclosed");
     const both = checkDrawing("one-pole", rec, [w([0, 1], 1), w([0, -1], 1)]);
     expect(both.ok).toBe(false);
-    expect(both.why).toContain("2 singularities");
+    expect(both.why).toContain("both singularities are enclosed");
     const twice = checkDrawing("one-pole", rec, [w([0, 1], 2), w([0, -1], 0)]);
     expect(twice.ok).toBe(false);
-    expect(twice.why).toContain("winds 2 times");
+    expect(twice.why).toContain("$\\operatorname{Ind}_\\gamma(i) = 2$");
   });
 
   it("refuses an EMPTY singular set rather than passing vacuously", () => {
@@ -441,7 +469,7 @@ describe("rung iv — the enclosure", () => {
     // One of the two missing is the same failure, and named for the one that is missing.
     const half = checkDrawing("as-recorded", rec, [w([0, 1], 1)]);
     expect(half.ok).toBe(false);
-    expect(half.why).toContain("−i");
+    expect(half.why).toContain("$-i$");
   });
 
   it("refuses an UNDECIDED winding by name rather than reading it as zero", () => {
@@ -456,7 +484,7 @@ describe("rung iv — the enclosure", () => {
     expect(typeof task?.drawCheck).toBe("object");
     const r = checkDrawing(task?.drawCheck ?? "as-recorded", [], []);
     expect(r.ok).toBe(false);
-    expect(r.why).toContain("i\\alpha\\operatorname{Res}");
+    expect(r.why).toContain("a limit (the indentation) that a fixed drawn curve cannot take");
     // Measured: its own contour winds about nothing, so "wind about no pole" is free.
     const run = task === null ? null : runTask(task);
     expect(run?.integral.windings.map((x) => x.n)).toEqual([0]);
@@ -523,8 +551,8 @@ describe("every rung is ADDRESSABLE — M7's gate clause 2", () => {
     };
     expect(bad(["oscillatory", 2])).toBe("OK");
     expect(bad(["no-such-task", 2])).toContain("not one of its tasks");
-    expect(bad(["oscillatory", 0])).toContain("rung 0");
-    expect(bad(["oscillatory", 5])).toContain("rung 5");
+    expect(bad(["oscillatory", 0])).toContain("stage 0");
+    expect(bad(["oscillatory", 5])).toContain("stage 5");
     expect(bad("oscillatory")).toContain("not [task, stage]");
     expect(bad(["oscillatory"])).toContain("not [task, stage]");
   });
@@ -543,9 +571,10 @@ describe("every rung is ADDRESSABLE — M7's gate clause 2", () => {
 });
 
 describe("progress — the fade", () => {
-  const store = (value?: string): KeyStore => {
+  const store = (value?: string, legacy?: string): KeyStore => {
     const map = new Map<string, string>();
     if (value !== undefined) map.set(PROGRESS_KEY, value);
+    if (legacy !== undefined) map.set(LEGACY_KEY, legacy);
     return {
       getItem: (k) => map.get(k) ?? null,
       setItem: (k, v) => {
@@ -561,10 +590,61 @@ describe("progress — the fade", () => {
     expect(readProgress(store("[1,2,3]"))).toEqual(NO_PROGRESS);
     expect(readProgress(store("null"))).toEqual(NO_PROGRESS);
     expect(readProgress(store("42"))).toEqual(NO_PROGRESS);
-    // A single bad entry is dropped; its neighbours are not evidence about it.
-    expect(readProgress(store('{"rational":2,"oscillatory":"lots","indented":9,"forced-downward":-1}'))).toEqual({
-      rational: 2,
-    });
+    // A single bad entry is dropped; its neighbours are not evidence about it. Under `v2` an entry
+    // is an OBJECT, so a bare number is now one of the shapes that goes — and `predicted` is
+    // tri-state on the wire too, because `predicted: "yes"` is not evidence about the prediction
+    // either way and reading it as `true` would invent one.
+    expect(
+      readProgress(
+        store(
+          '{"rational":{"stage":2},"oscillatory":{"stage":"lots"},"indented":9,' +
+            '"forced-downward":{"stage":1,"predicted":"yes"},"wedge":{"stage":3,"predicted":false}}',
+        ),
+      ),
+    ).toEqual({ rational: { stage: 2 }, "forced-downward": { stage: 1 }, wedge: { stage: 3, predicted: false } });
+  });
+
+  it("reads a `v1` value as STAGES ONLY, and never writes one back — M8 step 3.4", () => {
+    // The module's rule 1 says a schema change takes a new key rather than a migration, and its
+    // reason is the clause after the colon: a half-read stale shape that silently UN-FADES a rung.
+    // Reading `v1` cannot un-fade anything — the stage is exactly what `v1` carries, and the field
+    // it does not carry defaults to "not answered", which is what a reader who has never seen the
+    // question already has. So this is the exception the rule's own reason permits, and the half it
+    // does not permit is asserted below: the write goes to `v2`.
+    const s = store(undefined, '{"rational":3,"indented":1}');
+    expect(readProgress(s)).toEqual({ rational: { stage: 3 }, indented: { stage: 1 } });
+    expect(predictionOf(readProgress(s), "rational")).toBeNull();
+
+    // **A fallback, not a merge**: a readable `v2` wins outright, so an old value can never reach
+    // back into a reader who has started under the new shape.
+    const both = store('{"rational":{"stage":1,"predicted":true}}', '{"rational":3,"indented":1}');
+    expect(readProgress(both)).toEqual({ rational: { stage: 1, predicted: true } });
+
+    // And the write is `v2`'s. Asserted on the STORE rather than on a round trip, because a round
+    // trip through a module that read and wrote `v1` would pass.
+    const keys = new Map<string, string>();
+    const spy: KeyStore = { getItem: (k) => keys.get(k) ?? null, setItem: (k, v) => void keys.set(k, v) };
+    writeProgress(spy, { rational: { stage: 2, predicted: false } });
+    expect([...keys.keys()]).toEqual([PROGRESS_KEY]);
+    expect(keys.get(LEGACY_KEY)).toBeUndefined();
+  });
+
+  it("records the prediction once, and does not confuse `false` with unanswered", () => {
+    let p: DrillProgress = NO_PROGRESS;
+    expect(predictionOf(p, "rational")).toBeNull();
+    p = withPrediction(p, "rational", false);
+    // `false` is an ANSWER. A reader who got it wrong has answered, and offering the question again
+    // would be asking them to guess until they hit it.
+    expect(predictionOf(p, "rational")).toBe(false);
+    p = withPrediction(p, "rational", true);
+    expect(`first answer wins: ${String(predictionOf(p, "rational"))}`).toBe("first answer wins: false");
+    // Clearing a rung is not evidence about the prediction, and the spread keeps it.
+    p = withCleared(p, "rational", 3);
+    expect(p.rational).toEqual({ stage: 3, predicted: false });
+    // And a prediction on a task with no stage yet leaves the stage at 0 rather than inventing one.
+    const fresh = withPrediction(NO_PROGRESS, "indented", true);
+    expect(fresh.indented).toEqual({ stage: 0, predicted: true });
+    expect(stageFor(fresh, "indented")).toBe(1);
   });
 
   it("survives a store that THROWS, on read and on write", () => {
@@ -578,10 +658,10 @@ describe("progress — the fade", () => {
     };
     expect(readProgress(hostile)).toEqual(NO_PROGRESS);
     expect(() => {
-      writeProgress(hostile, { rational: 1 });
+      writeProgress(hostile, { rational: { stage: 1 } });
     }).not.toThrow();
     expect(() => {
-      writeProgress(null, { rational: 1 });
+      writeProgress(null, { rational: { stage: 1 } });
     }).not.toThrow();
   });
 
@@ -605,8 +685,8 @@ describe("progress — the fade", () => {
 
   it("round-trips through a store", () => {
     const s = store();
-    writeProgress(s, { rational: 2, indented: 4 });
-    expect(readProgress(s)).toEqual({ rational: 2, indented: 4 });
+    writeProgress(s, { rational: { stage: 2 }, indented: { stage: 4, predicted: true } });
+    expect(readProgress(s)).toEqual({ rational: { stage: 2 }, indented: { stage: 4, predicted: true } });
   });
 
   it("uses a VERSIONED key, so a future shape cannot be half-read", () => {
@@ -615,5 +695,36 @@ describe("progress — the fade", () => {
     const s = store();
     s.setItem("ci.drill.v2", '{"rational":4}');
     expect(readProgress(s)).toEqual(NO_PROGRESS);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+// The same CONTRACT, for the two rungs that are the sandbox — M8 step 1.8.
+//
+// Rung iv IS the sandbox: it is where the pen lives, and the Contour card offers the pen in the
+// sandbox alone. A rung-iii pick puts an ORDINARY sandbox state on screen, which is what stops
+// `drillMask` masking the reply to the reader's own move. Both spread `defaultState` and so were
+// sandbox states only for as long as the app booted into one. As in `contrastGrid.test.ts`, this
+// passes with the pin removed TODAY and is the assertion that bites when the cold start moves.
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+
+describe("the drill's sandbox rungs pin their own mode", () => {
+  it("opens rung iv in the sandbox for every task, whatever the app boots into", () => {
+    for (const task of DRILL_TASKS) {
+      const state = taskState(task, 4);
+      expect(state.mode, `${task.id} rung iv`).toBe("sandbox");
+      expect(state.record, `${task.id} rung iv`).toBeNull();
+      expect(state.expr, `${task.id} rung iv carries the record's twin`).toBe(task.twin);
+    }
+  });
+
+  it("opens a rung-iii pick in the sandbox, for every option the menu offers", () => {
+    for (const task of DRILL_TASKS) {
+      for (const option of task.menu) {
+        const state = pickState(task, option);
+        expect(state.mode, `${task.id}/${option}`).toBe("sandbox");
+        expect(state.record, `${task.id}/${option}`).toBeNull();
+      }
+    }
   });
 });

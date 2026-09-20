@@ -22,6 +22,7 @@ import { asExponentialTimesRational } from "./exponentialFactor.js";
 import { asExponentialSum, isEntire, residueAtZero, type ExpRationalForm } from "./exponentialSum.js";
 import { exactPolesOf, weightedSum, type AlgebraicPole } from "./algebraic.js";
 import { formatSqrtExt } from "./formatExact.js";
+import { LATEX } from "./notation.js";
 import { ExpSum, formatExpSum, jordanExponent, weightedExpSum } from "./expSum.js";
 
 export type Cx = ComplexTuple;
@@ -36,8 +37,15 @@ export interface Pole {
   readonly orderCertain: boolean;
   /** Only ever true on the numeric path: exactly, a removable singularity is cancelled and gone. */
   readonly possiblyRemovable: boolean;
-  /** Present when the pole and its residue are exact. */
-  readonly residue?: { readonly value: Cx; readonly text: string };
+  /**
+   * Present when the pole and its residue are exact.
+   *
+   * `latex` is the SAME value in the LaTeX notation — `formatSqrtExt` at `LATEX`, not a second
+   * rendering (M8 step 0.4b's decision, applied here at 1.4 when the Singularities card became the
+   * first reader that needed to typeset one). A second formatter is how the table and the ledger
+   * come to print different residues for the same pole.
+   */
+  readonly residue?: { readonly value: Cx; readonly text: string; readonly latex: string };
   readonly isExact: boolean;
 }
 
@@ -210,7 +218,7 @@ const toPole = (p: AlgebraicPole): Pole => ({
   order: p.order,
   orderCertain: true,
   possiblyRemovable: false,
-  residue: { value: p.residue.toTuple(), text: formatSqrtExt(p.residue) },
+  residue: { value: p.residue.toTuple(), text: formatSqrtExt(p.residue), latex: formatSqrtExt(p.residue, LATEX) },
   isExact: true,
 });
 
@@ -393,12 +401,12 @@ export function findPoles(ast: Node, c: Cx = [0, 0], a: Cx = [0, 0]): PoleReport
       // A zero frequency is `e^0 = 1`: the residues carry no exponential factor at all, and the
       // output must be byte-identical to what the purely rational path would have produced.
       const frequency = exponential.a.isZero() ? undefined : exponential.a;
-      const residueOf = (p: AlgebraicPole): { value: Cx; text: string } => {
+      const residueOf = (p: AlgebraicPole): { value: Cx; text: string; latex: string } => {
         const r =
           frequency === undefined
             ? ExpSum.fromSqrtExt(p.residue)
             : ExpSum.of(p.residue, jordanExponent(frequency, p.at));
-        return { value: r.toTuple(), text: formatExpSum(r) };
+        return { value: r.toTuple(), text: formatExpSum(r), latex: formatExpSum(r, LATEX) };
       };
       const sum = weightedExpSum(structure.poles, () => 1, frequency);
       certificates.push(
@@ -479,7 +487,7 @@ export function findPoles(ast: Node, c: Cx = [0, 0], a: Cx = [0, 0]): PoleReport
             order: pole.order,
             orderCertain: true,
             possiblyRemovable: false,
-            residue: { value: residue.toTuple(), text: formatSqrtExt(residue) },
+            residue: { value: residue.toTuple(), text: formatSqrtExt(residue), latex: formatSqrtExt(residue, LATEX) },
             isExact: true,
           },
         ],

@@ -25,18 +25,42 @@ export type Cleared = 0 | 1 | 2 | 3 | 4;
 
 export const LAST_STAGE = 4;
 
-/** Cleared rungs by task id. Tasks absent from the map have cleared nothing. */
-export type DrillProgress = Readonly<Record<string, Cleared>>;
+/**
+ * What a task has to show for itself — M8 step 3.4.
+ *
+ * `stage` is what it has cleared; `predicted` is rung iii's forced choice, absent until it has been
+ * answered. Two facts rather than one because they fade different things: the stage decides where
+ * the task OPENS, and the prediction is a thing a reader did once and should not be asked to redo
+ * on a revisit.
+ */
+export interface TaskProgress {
+  readonly stage: Cleared;
+  /** Was rung iii's prediction right? Absent means "not answered yet", NOT "wrong". */
+  readonly predicted?: boolean;
+}
+
+/** Progress by task id. Tasks absent from the map have cleared nothing. */
+export type DrillProgress = Readonly<Record<string, TaskProgress>>;
 
 export const NO_PROGRESS: DrillProgress = {};
 
 /**
  * The key, version included.
  *
- * `v1` is the shape `{ [taskId]: 0..4 }`. A future shape takes `v2` and leaves this one to expire
- * with the browser, which is rule 1.
+ * `v2` is `{ [taskId]: { stage: 0..4, predicted?: boolean } }`. `v1` was `{ [taskId]: 0..4 }`.
+ *
+ * **`v1` IS STILL READ, and that is a deliberate exception to rule 1 above rather than a lapse
+ * from it.** The rule's reason is the clause after the colon — *a half-read stale shape that
+ * silently un-fades a rung is worse than starting again* — and reading `v1` cannot un-fade
+ * anything: the stage is exactly what `v1` carries, and the field it does not carry defaults to
+ * "not answered", which is the same thing a reader who has never seen rung iii's question already
+ * has. What the rule forbids and this still does not do is WRITE the old shape: every write goes
+ * to `v2`, so a `v1` value is read once and then superseded, never merged into.
  */
-export const PROGRESS_KEY = "ci.drill.v1";
+export const PROGRESS_KEY = "ci.drill.v2";
+
+/** The shape before the prediction. Read, never written — see {@link PROGRESS_KEY}. */
+export const LEGACY_KEY = "ci.drill.v1";
 
 /** The slice of `Storage` this needs — so a test can pass an object and a caller `localStorage`. */
 export interface KeyStore {
@@ -47,6 +71,32 @@ export interface KeyStore {
 const isCleared = (x: unknown): x is Cleared =>
   typeof x === "number" && Number.isInteger(x) && x >= 0 && x <= LAST_STAGE;
 
+/** One `v2` entry, or null. Rule 2: a bad entry is dropped, never repaired into a guess. */
+function entryOf(v: unknown): TaskProgress | null {
+  if (v === null || typeof v !== "object" || Array.isArray(v)) return null;
+  const o = v as Record<string, unknown>;
+  if (!isCleared(o.stage)) return null;
+  // `predicted` is tri-state on the wire too: present-and-boolean, or absent. Anything else is the
+  // absence, because a `predicted: "yes"` is not evidence about the prediction either way.
+  return typeof o.predicted === "boolean" ? { stage: o.stage, predicted: o.predicted } : { stage: o.stage };
+}
+
+/** Parse one stored payload, or null when there is nothing usable in it at all. */
+function parseStore(store: KeyStore, key: string): unknown {
+  let raw: string | null;
+  try {
+    raw = store.getItem(key);
+  } catch {
+    return null;
+  }
+  if (raw === null) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * What has been cleared. Total: any failure at all reads as {@link NO_PROGRESS}.
  *
@@ -56,23 +106,23 @@ const isCleared = (x: unknown): x is Cleared =>
  */
 export function readProgress(store: KeyStore | null): DrillProgress {
   if (store === null) return NO_PROGRESS;
-  let raw: string | null;
-  try {
-    raw = store.getItem(PROGRESS_KEY);
-  } catch {
-    return NO_PROGRESS;
+  const now = parseStore(store, PROGRESS_KEY);
+  if (now !== null && typeof now === "object" && !Array.isArray(now)) {
+    const out: Record<string, TaskProgress> = {};
+    for (const [k, v] of Object.entries(now as Record<string, unknown>)) {
+      const entry = entryOf(v);
+      if (entry !== null) out[k] = entry;
+    }
+    return out;
   }
-  if (raw === null) return NO_PROGRESS;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return NO_PROGRESS;
-  }
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return NO_PROGRESS;
-  const out: Record<string, Cleared> = {};
-  for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
-    if (isCleared(v)) out[k] = v;
+  // **The `v1` fallback, and it is a fallback rather than a merge.** It is consulted only when `v2`
+  // has nothing to say — an unreadable `v2`, a `v2` that is not an object, or no `v2` at all — so
+  // a reader who has started under the new shape can never have an old value reach back into it.
+  const old = parseStore(store, LEGACY_KEY);
+  if (old === null || typeof old !== "object" || Array.isArray(old)) return NO_PROGRESS;
+  const out: Record<string, TaskProgress> = {};
+  for (const [k, v] of Object.entries(old as Record<string, unknown>)) {
+    if (isCleared(v)) out[k] = { stage: v };
   }
   return out;
 }
@@ -87,7 +137,25 @@ export function writeProgress(store: KeyStore | null, progress: DrillProgress): 
   }
 }
 
-export const clearedOf = (progress: DrillProgress, task: string): Cleared => progress[task] ?? 0;
+export const clearedOf = (progress: DrillProgress, task: string): Cleared => progress[task]?.stage ?? 0;
+
+/** Rung iii's outcome, or `null` where it has not been answered. Never `false` for "unasked". */
+export const predictionOf = (progress: DrillProgress, task: string): boolean | null =>
+  progress[task]?.predicted ?? null;
+
+/**
+ * Record the prediction's outcome.
+ *
+ * **First answer wins, like the stage.** `withCleared` is monotone so revisiting an early rung
+ * cannot un-fade a later one, and the same reasoning applies here from the other side: a reader who
+ * got it right and comes back to look at the question again has not unlearned it, and a store that
+ * flipped to `false` on the second visit would be recording the visit rather than the prediction.
+ */
+export function withPrediction(progress: DrillProgress, task: string, ok: boolean): DrillProgress {
+  const at = progress[task] ?? { stage: 0 as Cleared };
+  if (at.predicted !== undefined) return progress;
+  return { ...progress, [task]: { ...at, predicted: ok } };
+}
 
 /**
  * The rung a task opens at — one past what it has cleared, capped at the last.
@@ -103,7 +171,10 @@ export function stageFor(progress: DrillProgress, task: string): 1 | 2 | 3 | 4 {
 /** Record a cleared rung. Monotone: revisiting an early rung cannot un-fade a later one. */
 export function withCleared(progress: DrillProgress, task: string, stage: Cleared): DrillProgress {
   const now = clearedOf(progress, task);
-  return stage > now ? { ...progress, [task]: stage } : progress;
+  if (stage <= now) return progress;
+  // Spread the entry rather than replace it: the prediction is the other half of this task's record
+  // and clearing a rung is not evidence about it.
+  return { ...progress, [task]: { ...(progress[task] ?? {}), stage } };
 }
 
 /** Has this task been finished — every rung cleared? */

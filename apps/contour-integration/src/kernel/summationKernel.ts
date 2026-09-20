@@ -205,7 +205,7 @@ export function kernelResidues(
     const d = kernel.den.eval(at);
     if (d.isZero()) {
       const reason =
-        `the cofactor has a pole at z = ${n}, where the kernel has one too: the two MERGE into a ` +
+        `the cofactor has a pole at z = ${n}, where the kernel has one too: the two merge into a ` +
         "pole of higher order and Res(K·f, n) = Res(K, n)·f(n) is false there — the merged residue " +
         "needs the Laurent expansion and lands in ℚ(i)(π), which is a different computation";
       return { ok: false, reason, certificate: refuse(`Res(K·f, ${n})`, reason) };

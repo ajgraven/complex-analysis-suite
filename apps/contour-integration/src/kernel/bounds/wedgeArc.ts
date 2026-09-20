@@ -35,7 +35,7 @@ import { Frac, Gauss, piUpper } from "@cas/exact";
 import { bound, refuse } from "@cas/rigor";
 import { sqrtUp } from "./ratBound.js";
 import { dampedArcIntegral, type MinorantFace } from "./linearMinorant.js";
-import type { ArcBound } from "./mlRational.js";
+import { DEFAULT_RADIUS_PARAM, type ArcBound } from "./mlRational.js";
 
 /** The arc, in units of π. The wedge is measured from the positive real axis, so `from` must be 0. */
 export interface WedgeArc {
@@ -92,7 +92,12 @@ const describe = (f: WedgeExponential): string =>
  * and branch bounds beside it. `degreeGap` is absent: there is no rational cofactor, so the decay is
  * governed by `n` rather than by a degree gap, and reporting `0` would name the wrong quantity.
  */
-export function wedgeArcBound(form: WedgeExponential, R: Frac, arc: WedgeArc): ArcBound {
+export function wedgeArcBound(
+  form: WedgeExponential,
+  R: Frac,
+  arc: WedgeArc,
+  param = DEFAULT_RADIUS_PARAM,
+): ArcBound {
   const exponent = 1 - form.n;
   const base = { R, exponent };
 
@@ -185,6 +190,7 @@ export function wedgeArcBound(form: WedgeExponential, R: Frac, arc: WedgeArc): A
   return {
     ...base,
     value,
+    evaluated: { param, at: R.toNumber(), bound: value.toNumber() },
     asymptotics,
     certificate:
       asymptotics === "vanishes"

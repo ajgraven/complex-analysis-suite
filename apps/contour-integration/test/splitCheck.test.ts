@@ -62,7 +62,7 @@ describe("the mistakes a reader actually makes are caught", () => {
     // removes it the split double-counts. The app has to say so rather than quietly computing.
     const r = checkSplit(product(Frac.of(-7n, 10n), KEYHOLE), parse("z^(-0.7)/(1+z)"), parse("z^(-0.7)/(1+z)"));
     expect(r.ok).toBe(false);
-    expect(r.detail).toMatch(/still inside R\(z\)/);
+    expect(r.detail).toMatch(/still inside \$R\(z\)\$/);
   });
 
   it("the wrong exponent", () => {

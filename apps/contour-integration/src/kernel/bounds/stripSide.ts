@@ -46,6 +46,8 @@ export interface StripSide {
   readonly length: number;
   /** The strip's `Im z` range, which bounds `|e^{−Im(a)·y}|`. */
   readonly imagRange: readonly [number, number];
+  /** The contour parameter the side's abscissa is bound to. `stripTemplate` names it `R`. */
+  readonly param?: string;
 }
 
 const modulus = (g: Gauss): number => {
@@ -140,6 +142,9 @@ export function stripSideBound(form: LatticeForm, s: StripSide): ArcBound {
   const imA = form.a.im.toNumber();
   const carrier = Math.exp(reA.toNumber() * x + Math.max(-imA * y0, -imA * y1));
   const value = carrier * (numeratorUpper(form.num, r) / denLow) * s.length;
+  // `at` is `s.R`, the side's |Re z|, which is the parameter's own value: `stripTemplate` puts the
+  // verticals at `±R` with the sign carried by `side`, so the magnitude IS what the slider reads.
+  const evaluated = { param: s.param ?? "R", at: s.R, bound: value };
 
   const exponentText = `${rationalExponent.n}/${rationalExponent.d}`;
   const claim = `the ${s.side} side: $\\left|\\int f\\,dz\\right| \\le ${value.toExponential(3)}$ ${at}`;
@@ -171,6 +176,7 @@ export function stripSideBound(form: LatticeForm, s: StripSide): ArcBound {
   // `≈` character is visible beside the words rather than typed as something it is not.
   return {
     R,
+    evaluated,
     asymptotics,
     exponent,
     degreeGap,

@@ -6,10 +6,25 @@
 import { runWithFatalBoundary } from "@cas/ui";
 import "katex/dist/katex.min.css";
 import "@cas/ui/nav.css";
-import { mountApp } from "./shell/app.js";
+import { mountShell2 } from "./shell/app.js";
 
+/**
+ * **One shell — M8 step 1.12.**
+ *
+ * Phase 1 built the new shell beside the old one and this file chose between them on `?shell=new`,
+ * which is what let every step in between be checked in a real browser without the app on the branch
+ * ever being half-migrated: a reader saw the old shell until the new one was finished, and the old
+ * one was never edited to accommodate the new one. The new one is finished, so there is nothing left
+ * to choose between — it has become `src/shell/` and the old shell is gone.
+ *
+ * *(The sentence above said `src/shell/` beside `src/shell/` until step 2.4: the cutover's rename
+ * ran through this comment as well as through the imports, and there was nothing left to tell the
+ * two halves of the sentence apart.)*
+ */
 runWithFatalBoundary(() => {
   const root = document.querySelector("#app");
-  if (!root) throw new Error("the page has no #app element to mount into");
-  mountApp(root);
+  // The one sentence here a reader can meet, so it is written for one: this is a page whose markup
+  // did not arrive, which is not something they can repair, and the boundary shows it as-is.
+  if (!root) throw new Error("This page is missing the element the app mounts into.");
+  mountShell2(root);
 });

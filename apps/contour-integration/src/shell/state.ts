@@ -39,6 +39,7 @@ import { runDeclared, type SandboxDeclaration } from "../engine/declaredRun.js";
 import { checkSplit, type SplitCheck } from "../engine/splitCheck.js";
 import type { QuadratureBudget, PathFn } from "../engine/contour/integrate.js";
 import { type Contour } from "../engine/contour/model.js";
+import { setParam, type ContourOp } from "../engine/contour/edit.js";
 import { effectiveBranch, NO_BRANCH, type BranchChoice } from "../kernel/branch/model.js";
 import type { DeclaredOrder } from "../kernel/branch/declaration.js";
 import type { DeclaredProduct } from "../kernel/branch/declared.js";
@@ -47,6 +48,7 @@ import { findPoles, type PoleReport } from "../kernel/poles.js";
 import { asSummationKernel } from "../kernel/summationKernel.js";
 import { DEFAULT_VIEW, type View } from "../kernel/camera.js";
 import type { ContrastMode } from "../ui/accumulator.js";
+import { DEFAULT_STAGE_MODE, type StageMode } from "../ui/stage/mode.js";
 import { Frac } from "@cas/exact";
 import { TEMPLATES, type TemplateId } from "./templates.js";
 
@@ -124,6 +126,32 @@ export interface ShellState {
   readonly scrub: number;
   /** Modulus contours: `null` follows the context, a boolean is the reader's own choice. */
   readonly iso: boolean | null;
+  /**
+   * The amplitwist detail at the scrubbed step — M8 step 3.3.
+   *
+   * `iso`'s tri-state rather than `stageMode`'s enum, and for `iso`'s reason: the app has a default
+   * that depends on the MODE — on in Worked example, off in Explore — so `false` and "I have not
+   * chosen" are different states, and collapsing them would make a reader who switches to Explore
+   * lose a toggle they had deliberately turned on. {@link showStepDetail} resolves it, in one place.
+   *
+   * A VIEW field like the two beside it: `resolveState` does not read it, so no position of the
+   * control can move a number.
+   */
+  readonly showStep: boolean | null;
+  /**
+   * What the stage draws behind the contour — M8 step 1.9.
+   *
+   * **A VIEW field**, and provably one: {@link resolveState} does not read it, so no position of the
+   * control can move a number. It is in the codec anyway, because what the reader is LOOKING at is
+   * part of what a permalink shares — a textbook plate and a full-chroma portrait are two different
+   * pictures of the same argument, and the one the sharer chose is the one that should open.
+   *
+   * Unlike {@link iso} beside it — a tri-state `boolean | null` whose `null` means "follow the
+   * context" — this is a plain enum with a REAL default. There are four positions and "follow the
+   * context" is not one of them: `quiet` is a choice the app makes and states
+   * (`ui/stage/mode.ts`), not an absence to be filled in later by whatever is on screen.
+   */
+  readonly stageMode: StageMode;
 
   // ── the teaching layer — what is MASKED, never a number ────────────────────────────────────
   /**
@@ -136,6 +164,22 @@ export interface ShellState {
    * also what puts it under M6.2's round-trip-by-verdict test.
    */
   readonly drill: DrillState | null;
+  /**
+   * Whether the reader is in **Worked example** mode — M8 step 1.7.
+   *
+   * **A VIEW field**, filed beside `iso` and `contrast` rather than with the problem: it collapses
+   * the left rail and opens every derivation stage, and cannot change a number. It is in the state
+   * and in the codec because a worked example is a thing to SHARE — the same reason `drill` is —
+   * and because the mode has to be one fact rather than a shell local the codec cannot see.
+   *
+   * The mode itself is DERIVED and never stored: `drill !== null` wins, then this, then Explore.
+   * Storing three booleans for one choice is how two of them come to be true at once.
+   *
+   * (The plan's §1.7 writes this as `session.workedExample` in one clause and as a `ShellState`
+   * field in the next. The state is the one that can be linked to, which is what the same paragraph
+   * asks for, so the state is where it is.)
+   */
+  readonly workedExample: boolean;
 
   // ── session ────────────────────────────────────────────────────────────────────────────────
   /** The sandbox's contour, parked while a record is open. */
@@ -154,11 +198,31 @@ export interface DrillState {
   readonly stage: 1 | 2 | 3 | 4;
 }
 
-/** The recipe a sandbox contour was built from — see {@link ShellState.contourSource}. */
+/**
+ * The recipe a sandbox contour was built from — see {@link ShellState.contourSource}.
+ *
+ * **It describes the CURVE, and from step 4.4 the codec carries the rest.** A role or a name the
+ * reader changed moves no point, so this recipe still rebuilds the geometry exactly and the wire
+ * form carries the two annotations as a diff on top of it; a structural edit sets the field to
+ * `null`, because the piece list is then no longer the one this template builds.
+ */
 export interface ContourSource {
   readonly template: TemplateId;
   /** The accumulated rigid translation since the template was built. */
   readonly shift: Cx;
+  /**
+   * The reader's structural edits, in the order they were made — M8 step 4.4b.
+   *
+   * **The recipe is `translate(ops(params(build(t))), shift)`, and the ops come BEFORE the shift.**
+   * That is not the order a reader works in — they divide, then drag, then divide again — and it
+   * does not have to be: every op but the division commutes with translation exactly, and the
+   * division commutes with it to **1.3e-15**, measured over every template, every piece and four
+   * fractions. Six orders below `sameShape`'s floor and far below anything a reader can see, so the
+   * one thing it costs is that a contour carrying ops is verified by SHAPE rather than by structural
+   * equality — the rebuild is no longer deterministic in its last bits, and `viewState.ts` says so
+   * where it makes the comparison.
+   */
+  readonly ops?: readonly ContourOp[];
 }
 
 /** The state the app boots into, minus the contour, which the caller supplies from a template. */
@@ -184,8 +248,43 @@ export function defaultState(contour: Contour): ShellState {
     contrast: "none",
     scrub: 1,
     iso: null,
+    showStep: null,
+    stageMode: DEFAULT_STAGE_MODE,
     drill: null,
+    workedExample: false,
     sandboxContour: contour,
+  };
+}
+
+/** The record the app opens on. A6 — `∫dx/(1+x⁴)` by a semicircle — which is `frontRow: 2`. */
+export const COLD_START_RECORD = "semicircle-quartic";
+
+/**
+ * What the app boots into: A6, at its first fixture, in Explore mode.
+ *
+ * **Separate from {@link defaultState}, and the plan said to change that one.** Measuring says
+ * otherwise. `defaultState` is the default STATE — a blank sandbox — and it has callers who all mean
+ * exactly that: the contrast ladder's wrong-way cell, the drill's rungs iii and iv, the codec's
+ * `defaults()`, and every test fixture that wants somewhere neutral to start. Flipping it makes all
+ * of them gallery states, which is 121 of the suite's 2,253 tests and, worse, three PRODUCTION
+ * behaviours that have nothing to do with what the app opens on. Naming the cold start separately
+ * costs one function and leaves `defaultState` meaning what its name says.
+ *
+ * It also makes the plan's own next clause true for free: *"the sandbox's default expression stays
+ * `1/z` on the circle for when Sandbox is chosen"*. That works because `sandboxContour` is set from
+ * the contour handed in, and `toSandbox` reads it — so the reader who presses Sandbox lands on the
+ * circle at `1/z`, which is the state this is built on top of rather than a second declaration of it.
+ *
+ * The CAMERA is not set here: framing needs the resolved contour and a viewport, neither of which
+ * exists until the stage has a size. `mountShell2` fits once after the first commit, and only when
+ * no link was honoured — a link carries the camera its sharer chose (M6.2).
+ */
+export function coldStartState(contour: Contour): ShellState {
+  return {
+    ...defaultState(contour),
+    mode: "gallery",
+    record: COLD_START_RECORD,
+    fixture: 0,
   };
 }
 
@@ -210,6 +309,29 @@ export function compile(expr: string): Compiled {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
   const fn = makeComplexFn(ast);
+  // **An expression that PARSES can still be unusable, and it was reaching the app as usable.**
+  // `makeComplexFn` builds a lazy evaluator: `1/(z-q)` parses, compiles, and throws
+  // `Unknown variable 'q'` on its first call. Nothing caught that. Measured in Chromium at M8 step
+  // 1.10: typing it into the sandbox threw an uncaught `ExprError` out of `resolveState` and left
+  // the app showing `∮ = 2πi` — the PREVIOUS integrand's answer — beside the new expression, with
+  // nothing saying so. (The old shell shows the same stale answer without the throw, so the
+  // dishonest half is older than the rebuild and the noisy half is the new shell's.)
+  //
+  // One probe at an ordinary point is enough and cannot reject a legitimate expression, because
+  // `makeComplexFn` throws for STRUCTURAL reasons — an unknown variable, a node it cannot build —
+  // which do not depend on where it is evaluated. Where a function is merely undefined it returns
+  // `NaN` or an infinity, as `1/z` and `log z` do at the origin, and those are values the app shows
+  // rather than errors it refuses.
+  const probe = (): string | null => {
+    try {
+      fn([0.5, 0.5], [0, 0]);
+      return null;
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
+  };
+  const unusable = probe();
+  if (unusable !== null) return { ok: false, error: unusable };
   return {
     ok: true,
     ast,
@@ -260,6 +382,76 @@ export type StateResolution =
   /** Nothing could be computed — an unparseable expression, or no record selected. */
   | { readonly kind: "empty"; readonly reason: string | null };
 
+/**
+ * Which channel a parameter's slider writes to.
+ *
+ * In the sandbox every parameter is geometry, so a move edits the contour in place. Under a record
+ * the three kinds are genuinely different: a FAMILY parameter rebuilds the integrand as well as the
+ * contour, a LIMIT parameter is geometry alone (and must never be substituted into the integrand —
+ * tier B renames its radius `R_lim` because `R` there is the rational function), and a DERIVED value
+ * is computed from the others, so moving it independently would desync the geometry from its own
+ * definition. Anything a family did not declare falls to `derived`, which is read-only.
+ *
+ * **Here rather than in either shell**, at M8 step 1.4: both shells ask it, and a rule about which
+ * field a write lands in belongs beside the fields. `src/shell/app.ts`'s `channelOf` delegates.
+ */
+export type ParamChannel = "sandbox" | "binding" | "geometry" | "derived";
+
+export function paramChannel(state: ShellState, family: Family | null, name: string): ParamChannel {
+  if (state.mode !== "gallery" || family === null) return "sandbox";
+  if (family.contour.limitParams.some((l) => l.name === name)) return "geometry";
+  if (family.parameters.some((q) => q.name === name)) return "binding";
+  return "derived";
+}
+
+/**
+ * The state with one parameter moved, through whichever channel owns it.
+ *
+ * A `derived` parameter is READ-ONLY and returns the state unchanged rather than throwing: a slider
+ * for one is never rendered, and a caller that reaches here for one has asked for something the
+ * record's own definition forbids.
+ */
+export function withParam(
+  state: ShellState,
+  family: Family | null,
+  name: string,
+  value: number,
+): ShellState {
+  switch (paramChannel(state, family, name)) {
+    case "binding":
+      return { ...state, bindings: { ...state.bindings, [name]: value } };
+    case "geometry":
+      return { ...state, geometry: { ...state.geometry, [name]: value } };
+    case "derived":
+      return state;
+    default: {
+      const moved = setParam(state.contour, name, value);
+      return { ...state, contour: moved, sandboxContour: moved };
+    }
+  }
+}
+
+/** Which of the three the reader is in. DERIVED, so two of them can never be true at once. */
+export type ShellMode = "explore" | "worked" | "drill";
+
+export function shellMode(state: ShellState): ShellMode {
+  if (state.drill !== null) return "drill";
+  return state.workedExample ? "worked" : "explore";
+}
+
+/**
+ * Is the amplitwist detail showing? — M8 step 3.3, and the one place the tri-state is resolved.
+ *
+ * The plan's rule: on by default in Worked example, off in Explore. **The drill takes Explore's
+ * answer rather than Worked example's**, although a rung is a worked example faded — because the
+ * fade is the point, and two arrows naming the very term a rung may be asking about is the app
+ * answering its own question. A reader who wants them can still turn them on; what they cannot get
+ * is them arriving unasked at a rung.
+ */
+export function showStepDetail(state: ShellState): boolean {
+  return state.showStep ?? shellMode(state) === "worked";
+}
+
 /** The declared order, read off the branch point the factor sits on — never stored twice. */
 export function declaredOrder(state: ShellState): DeclaredOrder | null {
   const d = state.declaration;
@@ -298,6 +490,23 @@ export function recordOf(state: ShellState): { family: Family; golden: Golden } 
   if (family === undefined) return null;
   const golden = family.golden[state.fixture] ?? primaryGolden(family);
   return { family, golden };
+}
+
+/**
+ * The contour the app actually DRAWS — M8 step 1.10, on the second-consumer rule.
+ *
+ * In gallery mode the contour is the record's OUTPUT, rebuilt from `(record, fixture, bindings,
+ * geometry)` on every run, while `state.contour` is still the reader's parked sandbox curve (M6.1's
+ * finding). Everything that asks about the curve on screen has to ask this and not the state.
+ *
+ * **It was written out three times before it was a function**: once in `shell2/stageView.ts`, once in
+ * `shell2/strip.ts` with a different signature, and step 1.10's hover would have been the third —
+ * which is ADR-0007's rule arriving. Here rather than in either module because it is a fact about a
+ * state and a resolution, which is what this file is for, and because the two copies had already
+ * drifted in shape if not yet in meaning.
+ */
+export function drawnContour(state: ShellState, resolution: StateResolution | undefined): Contour {
+  return resolution?.kind === "gallery" ? (resolution.run?.contour ?? state.contour) : state.contour;
 }
 
 /**
