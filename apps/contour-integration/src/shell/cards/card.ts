@@ -201,11 +201,10 @@ export interface ShellActions {
   readonly undo: () => void;
   readonly redo: () => void;
   /**
-   * Open the front door — step 1.8 builds it.
+   * Open the front door — the eight classics over the eight-group taxonomy, and the practice list.
    *
-   * Declared now and **deliberately inert**, so the bar's record button exists in the shape it will
-   * keep. It announces that it is not built rather than doing nothing silently: a control that
-   * swallows a click teaches a reader the app is broken.
+   * Declared here at step 1.7 and inert until step 1.8 built the dialog; `app.ts` has opened the
+   * real one since, so the "announces that it is not built" clause this comment carried is gone.
    */
   readonly openFrontDoor: () => void;
   /** Say something in the honest-labelling vocabulary — the Share card's notice channel, shared. */

@@ -153,7 +153,8 @@ export function frontDoorState(current: ShellState, recordId: string): ShellStat
  * One card.
  *
  * **The card is an `<article>` and the control inside it is a `<button>`**, which is
- * `contrasts.ts`'s `columnHead` shape and is here for a sharper reason: the card carries four
+ * `contrasts.ts`'s `caseCard` shape (it was `columnHead` until step 3.5 made the ladder an inline
+ * strip; the shape survived the rename) and is here for a sharper reason: the card carries four
  * sentences and a formula, and a `<button>` wrapping all of it would have every one of them read out
  * as its name. The button is named by the record's TITLE — the bar's argument, that KaTeX's HTML
  * reads as nonsense and a control is not named by its formula — and everything else is ordinary

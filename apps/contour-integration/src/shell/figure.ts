@@ -24,6 +24,7 @@ import { integralRefusal, ledgerHeadline, type LedgerResult } from "../engine/le
 import type { ContourIntegral } from "../engine/contour/integrate.js";
 import type { ResidueTheoremResult } from "../engine/residueTheorem.js";
 import type { SolvedValue } from "../families/solveTarget.js";
+import { mathSpoken } from "./math.js";
 import type { FigurePlate } from "./stageView.js";
 
 /** Where each piece of the plate goes, in device pixels. */
@@ -111,14 +112,23 @@ export function figureCaption(input: {
       title: input.title,
       value: "⚠ Refused",
       // The refusal's own claim, not the headline: "LEGALITY fails" says where, and this says what.
-      verdict: refused.claim,
+      // Spoken for the same reason the headline below is — a claim is written in the `$…$`
+      // convention wherever it is composed, and a plate has no typesetting to honour it with.
+      verdict: mathSpoken(refused.claim),
       level: "⚠",
     };
   }
   // A record's SOLVED target is the answer it was built to find; `∮` is the machinery. In the
   // sandbox there is no target and `∮` IS the result — which is what `ledgerHeadline` already
   // distinguishes, so the two lines never disagree about which claim is being made.
-  const headline = ledger === null ? "" : ledgerHeadline(ledger);
+  //
+  // **Through `mathSpoken`, because a plate is a canvas and a canvas has no typesetting** — the
+  // 2026-09-20 review. Every headline the 28 records reach is prose (*The argument is complete.*),
+  // which is why no test saw this; the SANDBOX's is `$\oint_\gamma f(z)\,dz$ is established
+  // exactly.`, and `fillText` drew it with its delimiters and its backslashes showing while
+  // `cas:verdict` stamped the same string into the bytes. `math.ts`'s own doc names a PNG's text
+  // chunk and a canvas caption as exactly what these two functions exist for.
+  const headline = ledger === null ? "" : mathSpoken(ledgerHeadline(ledger));
   if (solved !== null && solved.text !== undefined) {
     // The level is MET from the certificates, exactly as the record card meets it — the badge beside
     // a record's answer is computed from what was established and never chosen, which is the rule

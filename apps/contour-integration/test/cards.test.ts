@@ -13,7 +13,7 @@ import { Frac } from "@cas/exact";
 import { circleTemplate, semicircleTemplate } from "../src/engine/contour/templates.js";
 import { penContour } from "../src/engine/contour/pen.js";
 import { addBranchPoint, moveBranchPoint, setOrder, setShadow } from "../src/engine/branchEdit.js";
-import { LEFT_CARDS, RIGHT_CARDS, roleLabel } from "../src/engine/vocabulary.js";
+import { LEFT_CARDS, RIGHT_CARDS, paramSymbol, roleLabel } from "../src/engine/vocabulary.js";
 import { citationLine } from "../src/families/describe.js";
 import { FAMILIES } from "../src/families/index.js";
 import {
@@ -27,6 +27,8 @@ import {
   type ShellState,
 } from "../src/shell/state.js";
 import { patch } from "../src/shell/dom.js";
+import { mathSpoken } from "../src/shell/math.js";
+import { fmt } from "../src/kernel/decimal.js";
 import { render } from "../src/shell/render.js";
 import { defaultSession } from "../src/shell/session.js";
 import type { ShellActions } from "../src/shell/cards/card.js";
@@ -229,13 +231,38 @@ describe("the Parameters card", () => {
     const { host } = rail(gallery("mellin-keyhole"));
     const tags = new Map<string, string>();
     for (const row of host.querySelectorAll('[data-card="parameters"] .paramRow2')) {
-      const name = (row.querySelector(".paramValue")?.textContent ?? "").split(" ")[0];
+      // **`data-param`, not the row's text.** The readout is typeset since the 2026-09-20 review
+      // (`R_lim` through `paramSymbol`), and KaTeX lays a formula down twice — HTML and MathML — so
+      // `textContent` for `a` reads `aa`. The row's id is an attribute for exactly this reason.
+      const name = row.getAttribute("data-param") ?? "";
       const tag = row.querySelector('.tag [role="math"]')?.getAttribute("data-tex");
       if (tag !== null && tag !== undefined) tags.set(name, tag);
     }
     expect([...tags.keys()].sort(), "D1's two limit parameters are not both tagged").toEqual(["R", "eps"]);
     expect(tags.get("R")).toBe("\\to \\infty");
     expect(tags.get("eps")).toBe("\\to 0^+");
+  });
+
+  it("prints each parameter by the SYMBOL the rest of the app prints, typeset and spoken", () => {
+    // **`R_lim` and `sgnA` reached a reader** — the 2026-09-20 review. `vocabulary.ts`'s
+    // `paramSymbol` exists to print `R`, with its reason written out: tier B renames its radius
+    // `R_lim` so a record's limit parameter cannot collide with a template's `R`, an internal
+    // disambiguation — and the derivation's limit step, on screen at the same moment, prints `R`.
+    // Two names for one quantity at the one place the two are read together.
+    const { host } = rail(gallery("jordan-cosine-kernel"));
+    const row = q(host, '[data-card="parameters"] [data-param="R_lim"]');
+    const tex = row.querySelector(".paramValue [data-tex]")?.getAttribute("data-tex") ?? "";
+    expect(tex, "the readout is not typeset at all").not.toBe("");
+    expect(tex).toBe(paramSymbol("R_lim"));
+    expect(tex, "the internal disambiguation is on screen").not.toContain("lim");
+    // And the slider is NAMED by the spoken form of the same symbol, not by the id either.
+    const name = row.querySelector("input.slider")?.getAttribute("aria-label") ?? "";
+    expect(name).toBe(`${mathSpoken(`$${paramSymbol("R_lim")}$`)}, currently ${fmt(4)}`);
+    expect(name, "a macro reached the accessible name").not.toContain("\\");
+    // The anti-vacuity clause: a parameter `paramSymbol` leaves alone still reads as itself, so the
+    // assertions above are about the MAP rather than about the readout having been emptied.
+    const plain = q(host, '[data-card="parameters"] [data-param="a"]');
+    expect(plain.querySelector(".paramValue [data-tex]")?.getAttribute("data-tex")).toBe("a");
   });
 
   it("writes a value through the slider's own scale, not through its stop count", () => {
@@ -261,7 +288,7 @@ describe("the Parameters card", () => {
       const card = host.querySelector('[data-card="parameters"]');
       if (card === null) continue;
       for (const row of card.querySelectorAll(".paramRow2")) {
-        const name = (row.querySelector(".paramValue")?.textContent ?? "").split(" ")[0];
+        const name = row.getAttribute("data-param") ?? "";
         if (paramChannel(state, record.family, name) !== "derived") continue;
         found++;
         expect(row.querySelector("input.slider"), `${id}: ${name} is derived and got a slider`).toBeNull();
@@ -423,6 +450,27 @@ describe("the Branch cuts card", () => {
     expect(card.textContent ?? "").toContain("A record's cuts are the record's");
     expect(card.querySelector('button[aria-pressed]'), "the modulus toggle is missing").not.toBeNull();
     expect(card.querySelector('button[aria-label^="remove branch point"]')).toBeNull();
+  });
+
+  it("names each branch point's controls by its LABEL, not by its internal id", () => {
+    // **`order of branch point b1`** — the 2026-09-20 review, measured on the sandbox keyhole. `b1`
+    // is the id M6.1's `SINGLE_POINT_ID` bug was about, and the row typesets the reader's name for
+    // the point two lines above. The denylist's rendered half reads `aria-label`s but applies only
+    // the WORD list to them, so a bare id passed.
+    const { host } = rail(withPoint());
+    const card = q(host, '[data-card="cuts"]');
+    const point = withPoint().branch.points[0];
+    expect(point.label, "the point carries no reader-facing label").not.toBe("");
+    const spoken = mathSpoken(`$${point.label}$`);
+    for (const prefix of ["order of branch point", "remove branch point"]) {
+      const control = card.querySelector(`[aria-label^="${prefix}"]`);
+      expect(control, `no '${prefix}' control`).not.toBeNull();
+      expect(control?.getAttribute("aria-label")).toBe(`${prefix} ${spoken}`);
+      expect(control?.getAttribute("aria-label"), "the internal id is announced").not.toContain(point.id);
+    }
+    // Anti-vacuity: the label and the id are genuinely different strings here, so the assertion
+    // above is about which one was used.
+    expect(spoken).not.toBe(point.id);
   });
 
   it("says the integrand is single-valued until a branch point is declared", () => {
@@ -699,6 +747,35 @@ describe("the Target card", () => {
     expect(line.textContent ?? "", "the typeset identity has no equals sign").toContain("=");
   });
 
+  it("follows the SLIDER, and drops the record's answer once it is off the fixture", () => {
+    // **The two rails were describing different functions** — the 2026-09-20 review. Both cards
+    // rendered at `golden.params`, never merged with `state.bindings`, so A1 at `a = 5` answered
+    // `= π√6/6` under a left rail headed *what is being integrated* still typesetting the `a = 2`
+    // fixture. They render at the run's own bindings now, which is the merge `solveFamily` performs
+    // and therefore the one the Result card's number came out of.
+    const a1 = gallery("circle-linear-cos");
+    const found = recordOf(a1);
+    if (found === null) throw new Error("A1 is not in the corpus");
+    const at5 = withParam(a1, found.family, "a", 5);
+    const host = rail(at5).host;
+
+    const integrand = q(host, '[data-card="integrand"] .math-display').getAttribute("data-tex") ?? "";
+    expect(integrand, "the integrand is still at the fixture's binding").toContain("5");
+    expect(integrand, "the fixture's own binding is still being typeset").not.toContain("{2 +");
+
+    const line = q(host, '[data-card="target"] .targetLine .math').getAttribute("data-tex") ?? "";
+    expect(line, "the target is still at the fixture's binding").toContain("5 + 1 \\cdot \\cos");
+
+    // **And the right hand side is GONE, which measuring is what settled.** `golden.value` is the
+    // record's answer AT ITS FIXTURE and is already a constant — A1's is `2*pi/sqrt(3)` — so
+    // substituting the new binding into it changes nothing, and printing it beside the integral at
+    // `a = 5` would be a false identity carrying the record's authority. The value is on the Result
+    // card, where it is computed.
+    expect(line, "the fixture's answer is still pinned to a different integral").not.toContain("=");
+    const answer = q(right(at5).host, '[data-card="result"] .resultValue').textContent ?? "";
+    expect(answer, "the Result card is not answering at the moved binding").toContain("6");
+  });
+
   it("does NOT append the answer at a VARIANT fixture, where it belongs to another quantity", () => {
     // **`golden.value` belongs to the record's first target.** A5's variant is the half-range
     // corollary, worth `pi/4`, under a target written `\int_{-\infty}^{\infty}` — worth `pi/2`.
@@ -784,6 +861,46 @@ describe("the Result card", () => {
     const card = q(host, '[data-card="result"]');
     expect(card.textContent ?? "").toContain("Refused");
     expect(card.querySelector(".resultValue"), "a value was printed past a refusal").toBeNull();
+  });
+
+  it("gives a record whose answer has NO printable form a decimal and a sentence, not silence", () => {
+    // **`jordan-quartic`, 2 of the 92 (record, fixture) pairs that solve** — the 2026-09-20 review.
+    // Pass 5 returns `solved.value = 1.5442760096181358` with `text` and `latex` both undefined, so
+    // the solved block was skipped (it needs one of them) AND the note explaining the skip was
+    // skipped too, because its guard asked `solved === null`. The record's own answer appeared
+    // nowhere on the card and nothing said why.
+    const state = gallery("jordan-quartic");
+    const res = resolveState(state, compile(state.expr));
+    expect(res.kind, "B3 no longer resolves").toBe("gallery");
+    if (res.kind !== "gallery") return;
+    expect(res.solved, "B3 no longer solves, so this asserts nothing").not.toBeNull();
+    expect(res.solved?.text, "B3 grew a printable form; pick another record for this case").toBeUndefined();
+    expect(res.solved?.latex).toBeUndefined();
+
+    const card = q(right(state).host, '[data-card="result"]');
+    // The number is there, badged `≈`, because a decimal is an estimate whatever the argument that
+    // reached it was certified at.
+    const decimal = [...card.querySelectorAll(".resultValue")].find((v) => /1\.544/.test(v.textContent ?? ""));
+    expect(decimal, "the record's own answer is still missing from its card").toBeDefined();
+    expect(decimal?.querySelector(".badge")?.getAttribute("data-level")).toBe("≈");
+    // And the sentence, which is the half that makes it an answer rather than a stray number.
+    expect(card.textContent ?? "").toContain("its closed form is not one this app can print");
+  });
+
+  it("prints the theorem's identity WHOLE, left hand side included", () => {
+    // There was a `.replace("∮ f dz = ", "")` on this line that could never match: all three
+    // identities are written in the `$…$` convention and begin `$\oint_\gamma f(z)\,dz = `, so the
+    // literal occurs in none of them. Removed rather than implemented — the value above this line
+    // carries no `∮` of its own, so a stripped left hand side would leave a right hand side with
+    // nothing to be equal to. Pinned so the dead intent cannot be revived by accident.
+    const { host } = right(sandbox({ expr: "1/(1+z^2)" }));
+    const line = [...host.querySelectorAll('[data-card="result"] p.muted.small')].find((p) =>
+      /from exact residues over/.test(p.textContent ?? ""),
+    );
+    expect(line, "the identity line is gone").toBeDefined();
+    const tex = [...(line?.querySelectorAll("[data-tex]") ?? [])].map((n) => n.getAttribute("data-tex") ?? "");
+    expect(tex.join(" "), "the identity's left hand side was stripped").toContain("\\oint_\\gamma f(z)\\,dz =");
+    expect(line?.textContent ?? "").toContain("from exact residues over");
   });
 
   it("leads with the EXACT value and its own badge, not the ledger's meet", () => {
@@ -927,6 +1044,104 @@ describe("the Result card", () => {
   });
 });
 
+/**
+ * States in which a record's own ledger REFUSES, one binding at a time.
+ *
+ * **Measured, not reasoned** — the 2026-09-20 review swept the sliders in a browser and found the
+ * duplicate-key throw on these; each entry was then re-measured through `render` + `patch` here,
+ * which is why C1's is `rho = 0` and C3's is `rho = 1` rather than the browser's `1e-6` (that value
+ * closes on both, and the browser's slider was at a different stop). Seven of the 28 records — the
+ * ones whose parameters can be moved onto a singularity or through a hypothesis — and every one of
+ * them was a state in which the Result card threw.
+ */
+const REFUSING: readonly { readonly record: string; readonly param: string; readonly value: number }[] = [
+  { record: "circle-linear-cos", param: "a", value: 0 },
+  { record: "circle-linear-cos", param: "b", value: 32.9 },
+  { record: "jordan-cosine-kernel", param: "b", value: 0 },
+  { record: "indented-sinc", param: "rho", value: 0 },
+  { record: "indented-sinc", param: "R", value: 0 },
+  { record: "pv-sine-over-x-times-quadratic", param: "rho", value: 1 },
+  { record: "mellin-keyhole", param: "eps", value: 1 },
+  { record: "keyhole-two-poles", param: "p", value: -3.04 },
+  { record: "keyhole-two-poles", param: "q", value: -3.04 },
+  { record: "dogbone-inverse-sqrt", param: "a", value: 0 },
+  { record: "dogbone-inverse-sqrt", param: "eta", value: 1 },
+];
+
+/** The same states as `ShellState`s, through the channel each parameter really belongs to. */
+function refusingStates(): { readonly name: string; readonly state: ShellState }[] {
+  return REFUSING.map(({ record, param, value }) => {
+    const base = gallery(record);
+    const found = recordOf(base);
+    if (found === null) throw new Error(`${record} is not in the corpus`);
+    return { name: `${record} at ${param} = ${value}`, state: withParam(base, found.family, param, value) };
+  });
+}
+
+describe("a REFUSING gallery state, patched over a closing one", () => {
+  // **The defect no node test could see, and the reason it could not** — the 2026-09-20 review.
+  // `result.ts` gave the refusal's line and the solve note the same key `"why"`, and both are direct
+  // children of the card's `<section>`, so `patch` threw `two children of <section> share the key
+  // 'why'` out of `render2` and therefore out of `commit`. Measured consequences in a browser: the
+  // headline updated while the two `=`-badged values stayed at the PREVIOUS binding, and the `#vs=`
+  // hash was left at the old state because the throw precedes `syncHash`. The two corpus loops
+  // below iterate fixture 0 with no bindings — every one of which closes — so nothing reached it.
+  //
+  // The instrument is `patch` over a host that already holds the closing render, because that is
+  // what the app does and it is the only way the stale-value half is observable at all.
+  for (const { name, state } of refusingStates()) {
+    it(`does not throw, and shows no value: ${name}`, () => {
+      const host = document.createElement("div");
+      const before = gallery(state.record ?? "");
+      const first = render(before, resolveState(before, compile(before.expr)), defaultSession(), spyActions(), null);
+      patch(host, [...first.left, ...first.right]);
+      const closing = q(host, '[data-card="result"]').textContent ?? "";
+      expect(closing, "the previous binding did not close, so there is no stale value to leave").toContain(
+        "The argument is complete.",
+      );
+
+      const res = resolveState(state, compile(state.expr));
+      const out = render(state, res, defaultSession(), spyActions(), null);
+      patch(host, [...out.left, ...out.right]);
+
+      const card = q(host, '[data-card="result"]');
+      // The headline MOVED: this is the anti-vacuity clause, since a card that failed to re-render
+      // at all would satisfy every negative assertion below.
+      expect(card.textContent ?? "", "the card did not re-render").not.toContain("The argument is complete.");
+      // No value block of any kind — which is the whole of "no number, not a greyed-out number".
+      // (`=` badges DO survive on the check list, and should: a row the argument certified exactly
+      // is still certified exactly. What may not survive is a value.)
+      expect(card.querySelector(".resultValue"), "a value survived the refusal").toBeNull();
+      // The card LEADS with the refusal, which is the reading order the card's own doc sets out.
+      expect(card.querySelector(".badge")?.textContent, "the first badge is not the refusal's").toBe("⚠");
+      expect(card.textContent ?? "").toContain("Refused");
+      // And the previous binding's number is not still on screen.
+      expect(/π√6\/6|2π\/√3/.test(card.textContent ?? ""), "the previous binding's closed form is still there").toBe(
+        false,
+      );
+
+      // **The Numerics disclosure is SHUT, and prints no total** — the same review's §1.7. Its
+      // default was `refused !== null || …`, so the one state that prints no `∮` was the state that
+      // opened the numbers and led with `≈ 6.283i`: the figure a reader takes away, three lines
+      // under `⚠ Refused`.
+      const numerics = [...card.querySelectorAll("details")].find(
+        (d) => (d.querySelector("summary")?.textContent ?? "").includes("Numerics"),
+      );
+      expect(numerics, "there is no Numerics disclosure to judge").toBeDefined();
+      expect(numerics?.hasAttribute("open"), "Numerics opened itself under a refusal").toBe(false);
+      expect(
+        [...(numerics?.querySelectorAll(".verdict") ?? [])].map((p) => p.textContent ?? ""),
+        "a total was printed under a refusal",
+      ).toEqual([]);
+    });
+  }
+
+  it("reaches seven distinct records, so the table is not one case eleven times", () => {
+    expect(new Set(REFUSING.map((r) => r.record)).size).toBe(7);
+    expect(REFUSING).toHaveLength(11);
+  });
+});
+
 describe("every card, for every record", () => {
   it("gives each card EXACTLY ONE heading", () => {
     // Found in a browser: the Singularities card drew its heading twice, because its table carried
@@ -934,20 +1149,42 @@ describe("every card, for every record", () => {
     // first heading was never matched and never removed. Nothing in the node suite counted headings,
     // which is why a screenshot found it. `patch` now refuses a duplicate key outright; this is the
     // product-level statement of the same thing, and it holds for every record.
-    for (const id of [...RECORD_IDS, null]) {
-      const state = id === null ? sandbox() : gallery(id);
+    // **The refusing states are in the loop too**, which is the half that was missing: these ran
+    // fixture 0 with no bindings, i.e. only states where the argument closes, and the duplicate-key
+    // throw needed a refusal AND a solve note at once. `patch` rather than `render` for the same
+    // reason — the throw is `patch`'s.
+    const states: { name: string; state: ShellState }[] = [
+      ...[...RECORD_IDS, null].map((id) => ({ name: id ?? "sandbox", state: id === null ? sandbox() : gallery(id) })),
+      ...refusingStates(),
+    ];
+    for (const { name, state } of states) {
       const host = document.createElement("div");
       const out = render(state, resolveState(state, compile(state.expr)), defaultSession(), spyActions(), null);
       patch(host, [...out.left, ...out.right]);
       for (const card of host.querySelectorAll("[data-card]")) {
         const headings = card.querySelectorAll("h2");
-        expect(headings.length, `${id ?? "sandbox"}: ${card.getAttribute("data-card")} has ${headings.length} headings`).toBe(1);
+        expect(headings.length, `${name}: ${card.getAttribute("data-card")} has ${headings.length} headings`).toBe(1);
       }
     }
   });
 
 
   it("renders all 28 records at fixture 0 with no throw and no empty card", () => {
+    // **And every refusing binding the sweep found**, under the same rule: a card with a heading
+    // and nothing under it is the failure mode, and a refused state is exactly where a card is
+    // most tempted to render nothing at all.
+    for (const { name, state } of refusingStates()) {
+      for (const [side, cards] of [["left", LEFT_CARDS], ["right", RIGHT_CARDS]] as const) {
+        const host = railOf(state, side).host;
+        for (const card of cards) {
+          const node = host.querySelector(`[data-card="${card}"]`);
+          expect(node, `${name}: no ${card} card`).not.toBeNull();
+          expect((node?.textContent ?? "").trim().length, `${name}: ${card} is empty`).toBeGreaterThan(
+            (node?.querySelector("h2")?.textContent ?? "").length,
+          );
+        }
+      }
+    }
     for (const id of RECORD_IDS) {
       const { host } = rail(gallery(id));
       const rightHost = right(gallery(id)).host;

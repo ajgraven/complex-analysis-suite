@@ -16,6 +16,7 @@ import { semicircleTemplate } from "../src/engine/contour/templates.js";
 import { splitPieceAt, translateContour } from "../src/engine/contour/edit.js";
 import type { Cx } from "../src/kernel/geom.js";
 import { sameShape } from "../src/engine/contour/pen.js";
+import { mathSpoken } from "../src/shell/math.js";
 import { decodeShell, encodeShell } from "../src/shell/viewState.js";
 import { compile, defaultState, resolveState, type ShellState } from "../src/shell/state.js";
 
@@ -46,15 +47,87 @@ const rowOf = (root: ParentNode, id: string): HTMLElement => {
   if (li === null) throw new Error(`no row for ${id}`);
   return li;
 };
+/**
+ * The piece's own name, read back out of the row's typeset copy of it.
+ *
+ * `mathText` splits `the $R \to \infty$ circle` into text nodes and `role="math"` spans carrying
+ * `data-tex`, so re-joining them with the delimiters reconstructs the source string exactly — a
+ * second route to the name, independent of the `aria-label` the assertion below is about.
+ */
+const pieceNameIn = (row: ParentNode): string => {
+  const el = row.querySelector(".pieceName");
+  if (el === null) throw new Error("no name on this row");
+  return [...el.childNodes]
+    .map((n) =>
+      n.nodeType === 3 ? (n.nodeValue ?? "") : `$${(n as HTMLElement).getAttribute("data-tex") ?? ""}$`,
+    )
+    .join("");
+};
+
+/**
+ * A row's tool, found by its verb and then judged on its WHOLE accessible name.
+ *
+ * **`startsWith` alone was the defect's hiding place** — the 2026-09-20 review. The tail of each of
+ * these names is the piece's, and it was built with `mathPlain`, so `delete the $R \to \infty$
+ * circle` announced its backslashes; matching on the prefix meant the broken half was never read.
+ */
 const toolIn = (row: ParentNode, label: string): HTMLButtonElement => {
-  const b = [...row.querySelectorAll<HTMLButtonElement>("button.pieceTool")].find((x) =>
-    (x.getAttribute("aria-label") ?? "").startsWith(label),
+  const b = [...row.querySelectorAll<HTMLButtonElement>("button.pieceTool")].find(
+    (x) => (x.getAttribute("aria-label") ?? "").startsWith(label),
   );
   if (b === undefined) throw new Error(`no '${label}' control`);
+  // The verb is what FINDS the control; the piece's name is what is then judged, against the row's
+  // own typeset copy of it. `slice` rather than `endsWith` so a failure prints both strings.
+  const aria = b.getAttribute("aria-label") ?? "";
+  const tail = ` ${mathSpoken(pieceNameIn(row))}`;
+  expect(aria.slice(-tail.length), `the '${label}' control's name past its verb`).toBe(tail);
   return b;
 };
 
 describe("the row's controls reach the contour", () => {
+  it("names every control by the piece's SPOKEN name, on a contour whose names carry macros", () => {
+    // **The semicircle cannot see this defect and that is why it survived** — the 2026-09-20
+    // review's sweep. Its two pieces are `the real axis [−R, R]` and `the R→∞ upper semicircle`,
+    // both already Unicode, so `mathSpoken` is a no-op on them and `mathPlain` would have read the
+    // same. The KEYHOLE is where the template names are written in the `$…$` convention — `the $R
+    // \to \infty$ circle`, `the $\varepsilon \to 0$ circle` — and that is what was being announced
+    // with its backslashes.
+    const { root, app } = mount();
+    app.actions().setTemplate("keyhole");
+    const withMacro = app
+      .currentState()
+      .contour.pieces.filter((p) => /\\/.test(p.name));
+    expect(withMacro.length, "the keyhole's names no longer carry a macro").toBeGreaterThan(1);
+    for (const piece of withMacro) {
+      const row = rowOf(root, piece.id);
+      // Every name this row offers: the rename box's, the role menu's, the verdict tag's, the tools'.
+      const names = [...row.querySelectorAll("[aria-label]")].map((n) => n.getAttribute("aria-label") ?? "");
+      expect(names.length, `${piece.id} offers no named control`).toBeGreaterThan(3);
+      for (const name of names) {
+        expect(name, `${piece.id}: a macro is announced`).not.toContain("\\");
+        expect(name, `${piece.id}: a delimiter is announced`).not.toContain("$");
+        // And it is the SPOKEN name rather than the name with its delimiters merely stripped —
+        // `mathPlain` would leave `the R \to \infty circle`, which the two lines above catch, but
+        // the positive form is what says which function it went through.
+        expect(name).toContain(mathSpoken(piece.name));
+      }
+      // Anti-vacuity: the spoken name is not the empty string, and it really did change.
+      expect(mathSpoken(piece.name).length).toBeGreaterThan(5);
+      expect(mathSpoken(piece.name)).not.toBe(piece.name);
+    }
+    // No `title` anywhere on the row either: it was a tooltip AND the accessible description, and
+    // it carried a whole certified bound's LaTeX.
+    expect([...root.querySelectorAll('[data-card="contour"] [title]')]).toEqual([]);
+
+    // **The rename box's name is only in the DOM while the box is open**, so it needs its own
+    // gesture — the sweep above found it surviving for exactly that reason.
+    const macro = withMacro[0];
+    toolIn(rowOf(root, macro.id), "rename").click();
+    const box = rowOf(root, macro.id).querySelector("input.pieceRename");
+    expect(box, "the rename box did not open").not.toBeNull();
+    expect(box?.getAttribute("aria-label")).toBe(`rename ${mathSpoken(macro.name)}`);
+  });
+
   it("changes a piece's ROLE, and the ledger answers on the row", () => {
     const { root, app } = mount();
     const row = rowOf(root, "arc");
@@ -69,7 +142,12 @@ describe("the row's controls reach the contour", () => {
     expect(app.currentState().contour.pieces[1].lemma).toBe("L3");
     const status = rowOf(root, "arc").querySelector<HTMLElement>('.tag[data-status]');
     expect(status?.getAttribute("data-status")).toBe("failed");
-    expect(status?.getAttribute("title") ?? "").toContain("Jordan's lemma");
+    // **The SENTENCE is in the check list, not in a `title` on this tag.** There was one, built with
+    // `mathPlain`, and the 2026-09-20 review measured it carrying a backslash 52 times across the
+    // mounted states — a `title` is a tooltip a mouse user reads and the accessible DESCRIPTION
+    // where an `aria-label` is present, so it is gone and the claim is asserted where it is typeset.
+    expect(status?.getAttribute("title"), "the LaTeX-bearing tooltip is back").toBeNull();
+    expect(root.querySelector('[data-card="result"]')?.textContent ?? "").toContain("Jordan's lemma");
     // And the pairing: the lemma that DOES apply certifies, on the same row, through the same
     // control. Without this the line above would pass on a row that always says "failed".
     const again = rowOf(root, "arc").querySelector<HTMLSelectElement>("select.pieceRole");

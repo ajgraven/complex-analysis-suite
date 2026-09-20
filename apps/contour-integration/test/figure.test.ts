@@ -8,6 +8,9 @@ import { assembleVerdict, refuse } from "@cas/rigor";
 import { PNG_SIGNATURE, injectPngText, pngChunk, readPngText } from "@cas/export";
 import { FIGURE_THEMES, figureCaption, figureLayout, figureMetadata } from "../src/shell/figure.js";
 import { compile, defaultState, offeredCorpus, resolveState, type ShellState } from "../src/shell/state.js";
+import { ledgerHeadline, type LedgerResult } from "../src/engine/ledger.js";
+import { HEADLINES } from "../src/engine/vocabulary.js";
+import { mathSpoken } from "../src/shell/math.js";
 import { TEMPLATES } from "../src/shell/templates.js";
 import { decodeShell, encodeShell } from "../src/shell/viewState.js";
 import type { ContourIntegral } from "../src/engine/contour/integrate.js";
@@ -104,6 +107,60 @@ describe("the plate's caption", () => {
     expect(c.value).toBe("no integrand");
     expect(c.verdict).toContain("Nothing");
   });
+
+  it("SPEAKS the sandbox's headline, which is the one that carries a formula", () => {
+    // **The defect this file could not see** — the 2026-09-20 review. Every caption case here was
+    // hand-built or a gallery record, and all 28 records' headline is prose, so the one headline in
+    // the app that is written in the `$…$` convention was never captioned: `HEADLINES.sandbox`.
+    // `drawFigure` hands the caption to `fillText` and `figureMetadata` stamps it, so it reached
+    // the plate and `cas:verdict` as `$\oint_\gamma f(z)\,dz$ is established exactly.`
+    //
+    // Driven from a REAL sandbox resolution, not a hand-built ledger: the point is that a state a
+    // reader can reach in two clicks produces it.
+    const state: ShellState = { ...base(), expr: "1/z" };
+    const res = resolveState(state, compile(state.expr));
+    expect(res.kind, "the default sandbox no longer resolves plainly").toBe("plain");
+    if (res.kind !== "plain") return;
+    expect(ledgerHeadline(res.analysis.ledger), "this state's headline is not the sandbox one")
+      .toBe(HEADLINES.sandbox);
+    const c = figureCaption({
+      title: "sandbox",
+      integral: res.analysis.integral,
+      theorem: res.analysis.theorem,
+      ledger: res.analysis.ledger,
+      solved: null,
+    });
+    expect(c.verdict).toBe(mathSpoken(HEADLINES.sandbox));
+    expect(c.verdict, "a delimiter reached the plate").not.toContain("$");
+    expect(c.verdict, "a macro reached the plate").not.toContain("\\");
+    // The metadata carries the same string, so the bytes and the plate cannot disagree.
+    expect(figureMetadata(null, c)["cas:verdict"]).not.toContain("\\");
+  });
+
+  it("SPEAKS a refusal's claim, which is a `$…$` sentence wherever it is composed", () => {
+    const refusing: LedgerResult = {
+      rows: [],
+      closes: false,
+      verdict: assembleVerdict([refuse("the residue theorem", "a singularity is on the contour")]),
+      failedAt: "LEGALITY",
+      hasTarget: true,
+      pieceLimits: [],
+    } as unknown as LedgerResult;
+    const c = figureCaption({
+      title: "t",
+      integral: integralWith(
+        assembleVerdict([refuse("nope", "because")]),
+        "the $R \\to \\infty$ circle crosses the cut through $\\gamma$",
+      ),
+      theorem: null,
+      ledger: refusing,
+      solved: null,
+    });
+    expect(c.level).toBe("⚠");
+    expect(c.verdict).toContain("R to infinity");
+    expect(c.verdict).not.toContain("$");
+    expect(c.verdict).not.toContain("\\");
+  });
 });
 
 describe("the plate's metadata", () => {
@@ -147,10 +204,14 @@ describe("the gate: a figure's metadata agrees with the session it came from", (
       // **The claim: the stamped verdict is the ledger's own, not a restatement.** A figure whose
       // metadata said `=` where the ledger said `⚠` is exactly the dishonesty this key exists to
       // prevent, and it is the half of M6.3's gate that needs no browser.
+      // **Against `ledgerHeadline` itself, which is what the `else` used to get wrong** — the
+      // 2026-09-20 review. It asserted the substring `does not close`, which `ledgerHeadline` never
+      // composes (its open forms are *The argument is incomplete.* / *…incomplete: …*), and
+      // measured, 0 of 28 records fail to close at fixture 0 — so the branch was unreachable and
+      // wrong, and the day a record stopped closing it would have failed for the wrong reason. The
+      // OPEN case is driven from a hand-built ledger below instead.
+      expect(meta["cas:verdict"], fam.id).toBe(`${caption.level} ${ledgerHeadline(res.run.ledger)}`);
       const closes = res.run.ledger.closes;
-      expect(meta["cas:verdict"], fam.id).toContain(
-        closes ? "The argument is complete." : "does not close",
-      );
       if (closes) {
         // And when it closes, the value printed is the one the app prints: the solved form for a
         // record that has one, never a decimal standing in for it.

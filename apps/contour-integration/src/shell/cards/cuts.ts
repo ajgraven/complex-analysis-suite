@@ -32,7 +32,7 @@ import {
 import { declaredOrder } from "../../shell/state.js";
 import { effectiveBranch } from "../../kernel/branch/model.js";
 import { h, type Child } from "../dom.js";
-import { mathText } from "../math.js";
+import { mathSpoken, mathText } from "../math.js";
 import { card, type Card } from "./card.js";
 
 /** The two windows the sandbox offers. Both appear in the tier-D gallery. */
@@ -423,7 +423,11 @@ export const cutsCard: Card = ({ state, resolution, actions }) => {
             "select",
             {
               key: "o",
-              "aria-label": `order of branch point ${point.id}`,
+              // **The point's LABEL, spoken — not its id.** Measured on the sandbox keyhole, these
+              // two read *order of branch point b1* and *remove branch point b1*: `b1` is the
+              // program's filing name for the point, the one M6.1's `SINGLE_POINT_ID` bug was
+              // about, and the row typesets the reader's name for it two lines above.
+              "aria-label": `order of branch point ${mathSpoken(`$${point.label}$`)}`,
               value: OFFERED_ORDERS.find((o) => orderLabel(o.order) === orderLabel(point.order))?.label ?? "",
               onChange: (e: Event) => {
                 const chosen = OFFERED_ORDERS.find((o) => o.label === (e.target as HTMLSelectElement).value);
@@ -436,7 +440,7 @@ export const cutsCard: Card = ({ state, resolution, actions }) => {
             "button",
             {
               key: "x",
-              "aria-label": `remove branch point ${point.id}`,
+              "aria-label": `remove branch point ${mathSpoken(`$${point.label}$`)}`,
               onClick: () => actions.setBranch(removeBranchPoint(branch, point.id)),
             },
             "remove",

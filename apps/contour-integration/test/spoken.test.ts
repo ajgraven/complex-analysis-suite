@@ -161,6 +161,19 @@ describe("mathSpoken, on the cases the corpus cannot reach", () => {
     expect(mathSpoken("Let $\\mathrm{wedgeAngle} \\to 0$")).toBe("Let wedgeAngle to 0");
   });
 
+  it("speaks the SANDBOX headline, the one sentence in the app that is a formula", () => {
+    // **`figureCaption` is the second consumer of this map, and it found two gaps** — the
+    // 2026-09-20 review. `HEADLINES.sandbox` reached the exported plate and `cas:verdict` raw,
+    // because every one of the 28 records' headlines is prose and nothing else captioned it.
+    // `\oint` had no entry, and `\,` is not a `\word` so the macro map could not see it at all.
+    expect(mathSpoken("$\\oint_\\gamma f(z)\\,dz$ is established exactly.")).toBe(
+      "∮_gamma f(z) dz is established exactly.",
+    );
+    // The subscript stays as it is, which is the shape `Ind_gamma` above already pins: a subscript
+    // is not a macro, and inventing a reading for it would be this map doing LaTeX-to-speech.
+    expect(mathSpoken("$a\\;b$")).toBe("a b");
+  });
+
   it("leaves an UNMAPPED macro visible rather than dropping it", () => {
     // Which is what makes the corpus sweep above an instrument: a macro nobody mapped comes out as
     // a backslash and names itself, instead of vanishing into a name that reads almost right.

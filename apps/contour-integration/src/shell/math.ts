@@ -14,13 +14,30 @@ import katex from "katex";
 
 import { h, type Desc } from "./dom.js";
 
-/** LaTeX source → KaTeX's HTML. Unbounded on purpose: the corpus of formulas is finite and small. */
+/**
+ * LaTeX source → KaTeX's HTML, **bounded**.
+ *
+ * The comment here said *"unbounded on purpose: the corpus of formulas is finite and small"*, and
+ * the corpus is — 1,270 distinct formulas over the app's 43 states. What is not finite is the
+ * SANDBOX: the integrand box previews what the parser read on every keystroke, so typing
+ * `1/(1+z^4)/(z^2+2)` mints eighteen entries no second render will ever ask for, and a session
+ * spent typing grows the map without bound. Least-recently-used, because the corpus formulas are
+ * the ones asked for again and a draft is asked for once: the bound is well above the largest
+ * single state's demand, so the steady-state hit rate is unchanged and only the drafts are evicted.
+ */
+const CACHE_LIMIT = 4096;
 const RENDERED = new Map<string, string>();
 
 function render(latex: string, display: boolean): string {
   const key = display ? `D${latex}` : `I${latex}`;
   const hit = RENDERED.get(key);
-  if (hit !== undefined) return hit;
+  if (hit !== undefined) {
+    // A `Map` iterates in insertion order, so re-inserting is what makes the oldest key the one the
+    // eviction below reaches — the whole LRU, in two lines and no second structure.
+    RENDERED.delete(key);
+    RENDERED.set(key, hit);
+    return hit;
+  }
   // `throwOnError: false` is step 0.5b's decision and stays: a malformed formula renders in KaTeX's
   // error colour with its source visible — a defect a reader can SEE — where throwing would take
   // down whichever card was being built, usually the ledger, whose job is to say what is established.
@@ -34,6 +51,10 @@ function render(latex: string, display: boolean): string {
     .renderToString(latex, { throwOnError: false, displayMode: display })
     .replace(/<annotation[^>]*>[\s\S]*?<\/annotation>/g, "");
   RENDERED.set(key, html);
+  if (RENDERED.size > CACHE_LIMIT) {
+    const oldest = RENDERED.keys().next();
+    if (!oldest.done) RENDERED.delete(oldest.value);
+  }
   return html;
 }
 
@@ -156,6 +177,13 @@ const SPOKEN: Readonly<Record<string, string>> = {
   "\\theta": "theta",
   "\\arg": "arg",
   "\\log": "log",
+  // **`\oint`, measured on the map's second consumer** — the 2026-09-20 review. `figureCaption` is
+  // now a caller, and the one headline in the app written in the `$…$` convention is the sandbox's,
+  // `$\oint_\gamma f(z)\,dz$ is established exactly.` The glyph rather than a word because a plate
+  // draws it happily — `figureCaption`'s own value line already writes `∮ f dz ≈ …` in Unicode —
+  // and because *the contour integral of* would be a reading of the whole formula rather than of
+  // one symbol, which is the line this map does not cross.
+  "\\oint": "∮",
 };
 
 /**
@@ -174,6 +202,9 @@ const SPOKEN: Readonly<Record<string, string>> = {
  */
 export function mathSpoken(text: string): string {
   return mathPlain(text)
+    // **A spacing macro is a space.** `\,` `\;` `\:` `\!` are not `\word`s, so the map below cannot
+    // see them; the sandbox headline's `f(z)\,dz` came out with its backslash still in it.
+    .replace(/\\[,;:!]/g, " ")
     // An operator name is its own word: `\operatorname{Im} z` is *Im z*.
     .replace(/\\(?:operatorname|mathrm|mathbf|mathbb|text)\s*\{([^{}]*)\}/g, "$1")
     // A bare superscript sign is a direction of approach, and only where nothing follows it —
@@ -188,4 +219,19 @@ export function mathSpoken(text: string): string {
 /** How many distinct formulas have been typeset. For the test that proves the cache is a cache. */
 export function renderedCount(): number {
   return RENDERED.size;
+}
+
+/** The cache's ceiling, so the test that proves it is bounded reads the same number the code does. */
+export const renderCacheLimit = CACHE_LIMIT;
+
+/**
+ * Whether a formula is still resident — for the test that proves the eviction is LRU.
+ *
+ * `renderedCount` cannot answer it: at the ceiling a hit and a miss both leave the size unchanged,
+ * one because nothing was added and the other because something was added and something evicted. A
+ * predicate is the only observable that tells the two apart, and it reads the map without touching
+ * the order.
+ */
+export function renderCacheHolds(latex: string, display = false): boolean {
+  return RENDERED.has(display ? `D${latex}` : `I${latex}`);
 }

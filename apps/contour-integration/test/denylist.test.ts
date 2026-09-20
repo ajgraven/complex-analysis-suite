@@ -11,14 +11,17 @@
 // **It is two tests, because one instrument cannot see both halves.**
 //
 // The SOURCE half reads every string literal in `src/shell/**` and `src/engine/**` out of the
-// TypeScript AST. Complete coverage — a sentence rendered in one rare state is still in the file —
+// TypeScript AST. Complete coverage of those two trees — a sentence rendered in one rare state is
+// still in the file —
 // and no false positives from comments, which are where the house words legitimately live and where
 // a regex over the file would drown. Its blind spot is the data keys: `"KILL"` is the value of a
 // row's `constraint` field 48 times in `ledger.ts` alone, and every one of them is right, so they
 // are exempt.
 //
-// The RENDERED half closes exactly that blind spot. It mounts the app across fourteen states and
-// reads what is on screen, where an id has no business appearing whatever module it came from.
+// The RENDERED half closes exactly that blind spot. It mounts the app across every state
+// {@link states} names — 43 of them, counted from the list rather than remembered — and reads what
+// is on screen, where an id has no business appearing whatever module it came from. Since the
+// 2026-09-20 review it also sweeps the attributes a reader HEARS.
 // `vocabulary.test.ts` does this for the sentences the ENGINE composes, over all 28 records; this
 // one does it for the SHELL's own — the cards, the drill, the contrasts panel, the front door.
 //
@@ -237,10 +240,15 @@ const gallery = (record: string, fixture = 0): ShellState => ({
 const BROKEN_INPUTS = ["", "1/(1+z", "zz(3)", "1/z +", "1 § 2", "*/z", "if(z)", "sin(z, 1)"] as const;
 
 /**
- * The visible text alone — no accessible names, because those legitimately carry LaTeX.
+ * The visible text alone, for the `$`/backslash sweep that is about what is DRAWN.
  *
- * `math()` puts the formula's plain-text form in an `aria-label`, which is the app's convention and
- * is full of backslashes by design. What must never carry one is what a reader SEES.
+ * **The exemption this comment used to state is retired** — the 2026-09-20 review. It read *"no
+ * accessible names, because those legitimately carry LaTeX … `math()` puts the formula's plain-text
+ * form in an `aria-label`"*, and step 3.6 had already ended that: `math()` names a node only where
+ * the caller HAS a plain-text twin, and the source went to `data-tex`, which is not in the
+ * accessibility tree at all. So an `aria-label` no longer legitimately carries LaTeX — and that
+ * exemption is what let 45 names and 52 tooltips through. They have their own sweep below; this one
+ * stays about text nodes, because a `$` a reader SEES and a `$` a reader HEARS fail differently.
  */
 function visibleText(): string {
   const clone = document.body.cloneNode(true) as HTMLElement;
@@ -270,8 +278,26 @@ function onScreen(): string {
   return `${clone.textContent ?? ""}\n${spoken.join("\n")}`;
 }
 
+/**
+ * Every attribute a reader HEARS or hovers, across one mounted state.
+ *
+ * Separate from {@link onScreen} because that one folds everything into a haystack for the WORD
+ * rules; this returns the values one at a time, so a failure names the attribute that carries the
+ * macro rather than a forty-character window around it.
+ */
+function spokenAttributes(): { readonly attr: string; readonly value: string }[] {
+  const out: { attr: string; value: string }[] = [];
+  for (const el of document.body.querySelectorAll("*")) {
+    for (const name of ["aria-label", "title", "alt", "placeholder"]) {
+      const v = el.getAttribute(name);
+      if (v !== null && v !== "") out.push({ attr: `${el.tagName.toLowerCase()}[${name}]`, value: v });
+    }
+  }
+  return out;
+}
+
 /** The states, each named by what a reader would call it. */
-function states(): { readonly name: string; readonly go: (app: Shell2Handle) => void }[] {
+export function states(): { readonly name: string; readonly go: (app: Shell2Handle) => void }[] {
   const drill = DRILL_TASKS[0];
   return [
     { name: "the cold start", go: () => {} },
@@ -284,10 +310,11 @@ function states(): { readonly name: string; readonly go: (app: Shell2Handle) => 
         a.actions().setTemplate("keyhole");
       },
     },
-    // **Every record, not a sample.** Eleven of the twenty-eight carried a shouted word on screen
-    // when this sweep was first run — one each, in the sentence under the target — and two of them
-    // said `the solve`, which is the program's word for its own machinery. A sample of three would
-    // have found two of the thirteen.
+    // **Every record, not a sample.** Thirteen of the twenty-eight carried a house word on screen
+    // when this sweep was first run — eleven a shouted word, one each in the sentence under the
+    // target, and two `the solve`, which is the program's word for its own machinery. A sample of
+    // three would have found two of the thirteen. (The two numbers were `eleven` and `thirteen` in
+    // the same paragraph and contradicted each other; eleven is the shouted-word count.)
     ...[...loadFamilies().families.keys()].map((id) => ({
       name: `the record '${id}'`,
       go: (a: Shell2Handle) => a.applyState(gallery(id)),
@@ -332,13 +359,15 @@ function states(): { readonly name: string; readonly go: (app: Shell2Handle) => 
 }
 
 describe("nothing the SHELL puts on screen carries a house word", () => {
-  // **One mount pass for both claims**, because mounting the app forty-one times takes fifteen
-  // seconds and doing it twice takes thirty. The thin-screen check is the anti-vacuity clause for
+  // **One mount pass for every claim**, because mounting the app 43 times takes about forty
+  // seconds and doing it twice takes eighty — measured, where the sentence here used to say
+  // "forty-one times" and "fifteen seconds". The thin-screen check is the anti-vacuity clause for
   // the sweep beside it: a state that rendered nothing would pass the word check perfectly.
   const swept = states().map(({ name, go }) => {
     const app = mount();
     go(app);
     const text = onScreen();
+    const attributes = spokenAttributes();
     // **A `$` a reader can see is a sentence that was not typeset.** The convention is that every
     // formula travels inside `$…$` and `mathText` sets it; a sentence rendered as a string instead
     // puts the delimiters on screen. Step 2.1 shipped exactly that twice in one afternoon — a
@@ -350,7 +379,7 @@ describe("nothing the SHELL puts on screen carries a house word", () => {
     // backslash says it was typeset in a notation nothing here parses.
     const raw = [...visibleText().matchAll(/[^\n]{0,40}[$\\][^\n]{0,40}/g)].map((m) => m[0]);
     for (const a of mounted.splice(0)) a.destroy();
-    return { name, size: text.length, text, why: offences(text), dollars: raw };
+    return { name, size: text.length, text, why: offences(text), dollars: raw, attributes };
   });
 
   it("reaches every state the list names", () => {
@@ -358,6 +387,25 @@ describe("nothing the SHELL puts on screen carries a house word", () => {
     // would satisfy both perfectly.
     expect(swept).toHaveLength(states().length);
     expect(swept.length).toBeGreaterThan(38);
+  });
+
+  it("puts no `$` and no backslash in a name a reader HEARS or hovers", () => {
+    // **The exemption at `visibleText` retired, and this is what it was hiding** — the 2026-09-20
+    // review. Measured over these states before the repair: **45 distinct `aria-label`s and 52
+    // distinct `title`s carried a macro**, all from `cards/contour.ts`, which imports `mathPlain`
+    // where every other module imports `mathSpoken` — `"certified — the R \to \infty semicircle"`,
+    // `"delete the R \to \infty circle"` — plus a `title` holding a whole certified bound's LaTeX.
+    // A `title` is a tooltip a mouse user reads AND the accessible description where an
+    // `aria-label` is present, so both halves of the comment that defended it were false.
+    const bad = swept.flatMap((s2) =>
+      s2.attributes.filter((a) => /[$\\]/.test(a.value)).map((a) => `${s2.name}: ${a.attr} = ${a.value}`),
+    );
+    expect([...new Set(bad)]).toEqual([]);
+    // **The anti-vacuity clause, and it is a real number**: the sweep above is a `filter`, so an
+    // `onScreen` that collected nothing would pass it perfectly. 97 was the count of OFFENDING
+    // names alone; the total across these states is far larger, and the floor is set below it.
+    const total = swept.reduce((n, s2) => n + s2.attributes.length, 0);
+    expect(total, "the attribute sweep is collecting almost nothing").toBeGreaterThan(97);
   });
 
   it("puts no `$` and no backslash on screen — every formula is typeset, or is Unicode in a picker", () => {
