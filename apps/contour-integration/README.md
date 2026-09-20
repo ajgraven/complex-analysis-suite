@@ -711,6 +711,8 @@ locals. The refactor is proven a no-op by dumping the whole visible rail before 
 records × every fixture and 7 expressions × 10 templates — byte-identical over 710 lines. It also
 brings `test/shell.test.ts`, the first test that reaches `src/shell/app.ts` at all: `mountApp` runs
 under jsdom, because its WebGL2 stage is built inside a `try` and everything else is ordinary DOM.
+*(That spec was deleted at the M8 cutover; its assertions are `test/shell2State.test.ts`'s, row by
+row in [`M8/parity.md`](../../docs/contour-integration/M8/parity.md). Repointed 2026-09-20.)*
 
 **M6.2** adds the `#vs=` permalink (`src/shell/viewState.ts`, on `@cas/interchange`). Two things make
 it more than a convenience here. The contour is **never serialised as geometry**: a gallery link
@@ -858,7 +860,10 @@ integrand* about a REFUSED DECLARATION with the integrand still in the box, and 
 claim raw above a typeset copy of itself — both fixed. The accessibility baseline is **zero axe rules
 and zero nodes** on all four audited states, and `scripts/a11y-audit.mjs` now walks each page's
 accessibility TREE beside axe: **57 / 71 / 50 / 54 interactive nodes on the four states and 0
-unnamed**, 845 across the whole suite. That walk earns its place by measurement — a
+unnamed**, **⚠ measured at integration** across the whole suite *(this said 845, measured at M8
+step 5.2; ADR-0044's removal of the suite bar then measured 792 → 682, and the 845/792 pair is
+unreconciled — so the suite total is re-run rather than remembered. The four per-page figures above
+ADR-0044 did not move)*. That walk earns its place by measurement — a
 `<div tabindex="0">` with no role and no text is a tab stop a screen reader announces as nothing, and
 axe reports the page clean.
 

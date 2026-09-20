@@ -57,8 +57,10 @@ Read the docs in this order before making changes: [`docs/VISION.md`](docs/VISIO
     `complex-function-plotter/`, `riemann-map/`, `argument-principle/`, `faber-transform/`,
     `2d-electrostatics/`, `2d-hydrodynamics/`, `hele-shaw-flow/`, `potential-theory/`, and
     `contour-integration/` beneath it.
-    `apps/correspondences` is **built but not published** (the launcher shows it as "Coming soon"). There are **two** workflows: `ci.yml` (the `build` + `browser` gate) and
-    `deploy-pages.yml`; the `browser` job is not a publish blocker.
+    `apps/correspondences` is **built but not published** (the launcher shows it as "Coming soon"). There are **two** workflows: `ci.yml` (jobs `build` + `browser` + the non-blocking
+    `a11y`) and `deploy-pages.yml`; the `browser` job is not a publish blocker. *(Corrected
+    2026-09-20: this said "the `build` + `browser` gate" — `grep -n '^  [a-z0-9_-]*:'
+    .github/workflows/ci.yml` gives `build:` 46, `browser:` 131, `a11y:` 187.)*
 
 ## Non-negotiable guardrails
 
@@ -97,31 +99,44 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **593 test files / 6649 tests** with lint and typecheck silent. `pnpm lint` includes
-`pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
-clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
-separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and **jsdom is opted
-into per FILE, by a `// @vitest-environment jsdom` docblock on line 1** — `packages/ui` is the only
-one that sets it in its Vitest config, and Quadrature-Domains' own config says `environment: "node"`
-while ~34 of its `vitest/` DOM specs opt in anyway. Measured after the M8 merge, rather than
-remembered: **34 Quadrature-Domains** specs, **23 Contour-Integration** ones (the whole
-`src/shell/` surface after M8 — the cards, the two rails, the bar, the front door, the drill, the
-strip) and **3 Complex-Dynamics** ones (reaching `src/main.ts`), and no other app or package.
+Green is **⚠ measured at integration** test files / **⚠ measured at integration** tests
+*(592 files / 6643 tests before the 2026-09-20 remediation — the `--reporter=json` artefact and
+HEAD's own commit message both say so; this line had said 593 / 6649)* with lint and typecheck
+silent. `pnpm lint` includes `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the
+`packages/*` dists first, so a clean clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as
+**29 per-file specs under `apps/quadrature-domains/vitest/node/`** (via `vitest/node/_run.ts`), and
+**jsdom is opted into per FILE, by a `// @vitest-environment jsdom` docblock on line 1** —
+`packages/ui` is the only one that sets it in its Vitest config, and Quadrature-Domains' own config
+says `environment: "node"` while ~33 of its `vitest/` DOM specs opt in anyway. Measured after the M8
+merge, rather than remembered: **33 Quadrature-Domains** specs, **23 Contour-Integration** ones (the
+whole `src/shell/` surface after M8 — the cards, the two rails, the bar, the front door, the drill,
+the strip) and **3 Complex-Dynamics** ones (reaching `src/main.ts`), and no other app or package.
+*(Corrected 2026-09-20 by re-measuring rather than re-reading: this said the QD maths ran as one
+wrapper spec around `node app/node-test.js`, which QD-TEST-1 replaced with the 29 per-file specs —
+`app/node-test.js` is kept for standalone runs; and it said 34 QD jsdom specs where `head -1` over
+`apps/quadrature-domains/vitest/**` finds the docblock on line 1 in **33**, the thirty-fourth file
+being `vitest/_algebra-mount.ts`, a shared mount helper whose docblock is on line 10, where Vitest
+does not read it.)*
 *(This paragraph named three Contour-Integration files by name until M8 step 5.3; all three were
 deleted at the M8 cutover.)* **Never pipe the gate through `tail` or `head`** — doing so has
 truncated real failures before.
 
-Dev servers go through `.claude/launch.json` (one entry per app, each with its port), not a bare
-`vite` left running in the background.
+Dev servers go through `.claude/launch.json` (one entry per app that has one — **four today**:
+`qd-esm` 5199, `cd-esm` 5188, `corr` 5176, `contour` 5177), not a bare `vite` left running in the
+background. *(Corrected 2026-09-20: this said "one entry per app"; `grep '"name"' .claude/launch.json`
+gives four configurations against twelve tool apps.)*
 
 **The browser suites are NOT in `pnpm test`** and must be run deliberately — `pnpm test:browser` in
 the app that has one (contour-integration, complex-dynamics, complex-function-plotter, quadrature-domains,
 `packages/gpu`, `packages/schwarz`). They compile real GLSL and need a Chromium, and Playwright pins an
 exact build that `pnpm install` does not fetch, so a container holding one under a different version
-cannot launch the provider at all. Four of the six configs say so: contour-integration reads
-`CAS_CHROMIUM_EXECUTABLE`, quadrature-domains probes `/opt/pw-browsers/chromium`, and complex-dynamics
-and `packages/gpu` take both in that order. **complex-function-plotter and `packages/schwarz` still take
-neither, so their suites cannot run in such a container** — unify them when one is next touched.
+cannot launch the provider at all. Four of the six configs say so: contour-integration,
+complex-dynamics and `packages/gpu` take `CAS_CHROMIUM_EXECUTABLE ?? /opt/pw-browsers/chromium` — both,
+in that order — and quadrature-domains probes `/opt/pw-browsers/chromium` only. **complex-function-plotter
+and `packages/schwarz` still take neither, so their suites cannot run in such a container** — unify them
+when one is next touched. *(Corrected 2026-09-20: the split was written as one-env / one-probe / two-both;
+grepping all six configs gives three-both / one-probe / two-neither — contour-integration's line, which
+its own config once called "ONE LINE THE OTHER THREE DO NOT HAVE", has since been taken by two of them.)*
 **Run it when a slice adds a record or touches the stage:** the contour-integration
 browser suite was red for three milestones on a hardcoded record count, and the node gate structurally
 cannot see it. Anything about a shader's NUMBERS belongs there too — QD's Schwarz in-Ω mask claimed
@@ -464,7 +479,10 @@ expression with a branch factor declared) as ONE pure function of that state —
 the whole visible rail and strip dumped before and after across 28 records × every fixture, 7
 expressions × 10 templates and the full declared block, **byte-identical over 710 lines**. It brings
 `test/shell.test.ts`, the **first test that reaches `src/shell/app.ts`** — 2,511 lines reached by
-nothing, because the stage is WebGL2 and that looked like a browser-only problem. It is not: `mountApp`
+nothing, because the stage is WebGL2 and that looked like a browser-only problem. *(Both facts are
+M6.1's, and both were superseded at M8: that spec was deleted at the cutover — its assertions are
+`test/shell2State.test.ts`'s, row by row in [`M8/parity.md`](docs/contour-integration/M8/parity.md) —
+and `wc -l src/shell/app.ts` now reads **1,422**, reached by nineteen suites. Re-measured 2026-09-20.)* It is not: `mountApp`
 builds its stage inside a `try`, the fatal boundary catches WebGL2's absence, `getContext` is stubbed to
 `null`, and everything else is ordinary DOM that jsdom runs. Three findings. **(1)** The argument-window
 picker was **silently dropping the declared factor**: it adopted `buildDeclaration`'s whole cut system,
@@ -488,7 +506,9 @@ family parameter changes the integrand as well as the geometry. That is M6.2's *
 optimisation.
 
 **M6.2 — the `#vs=` permalink, verified by verdict.** `src/shell/viewState.ts` on `@cas/interchange`
-(namespace `"ci"`, the eight-app idiom). **The measurement came first and corrected M6.0's**, which was
+(namespace `"ci"`, the ten-app idiom — *corrected 2026-09-20 from "eight-app": `grep -rl encodeViewState
+apps/` names ten, which `src/shell/viewState.ts:3` already had right as "nine other apps"*). **The
+measurement came first and corrected M6.0's**, which was
 taken before `ShellState` existed: against the real state object the payload is 2.2× larger, and
 rounding floats — which M6.0 called "74% of the headroom" — is worth **4.0%**, because the bulk is
 structural (piece ids, names, roles, the `params` record) rather than decimal. **The headroom is that
@@ -596,7 +616,10 @@ and the app's single `requestAnimationFrame` is a draw COALESCER rather than a l
 rule 7 is satisfied vacuously and a media query with nothing inside it would claim to have addressed
 something that was never there. Because the a11y job is **non-blocking** in CI, the four structural
 invariants (one `<main>`, one `<h1>`, the nav before the landmark, every canvas named or explicitly
-hidden) are asserted in `test/shell.test.ts`, which blocks. **And the keyboard re-measurement repeated
+hidden) are asserted in `test/shell.test.ts`, which blocks *(that spec was deleted at the M8
+cutover; the two structural clauses are `test/shell2Page.test.ts` › "leaves M6.4's structure intact
+— one `<main>`, one `<h1>`, and the ladder INSIDE the landmark", and the nav clause is moot since
+ADR-0044 removed the header. Repointed 2026-09-20)*. **And the keyboard re-measurement repeated
 M6.0's own probe bug**: a DOM walk reading `aria-label ?? textContent` reported one unnamed `<input>`,
 where the real accessibility tree over CDP shows **45 interactive nodes in the sandbox and 29 in the
 gallery, none unnamed** — a wrapping `<label>` names an input that carries no `aria-label`. Twice in
@@ -634,7 +657,9 @@ thirteen.
 
 **M7.1 — the contrast ladder: five arguments, each one declared row from the last.** Research 02
 §13's contrasting cases as gallery ORGANISATION rather than lessons (M7's scope excludes prose,
-prediction prompts and self-explanation prompts on the record). `engine/contrast.ts` aligns two
+prediction prompts and self-explanation prompts on the record — *M8 step 3.4 then took exactly ONE
+prediction: forced-choice, asked before the drill's menu exists, graded from the ledger, and audited
+as its own a11y roster entry `contour-integration-predict`. Noted 2026-09-20*). `engine/contrast.ts` aligns two
 ledgers and says how they differ; `shell/contrastGrid.ts` holds the five cells and their DECLARED
 difference sets, and the test derives the real set from the engine and requires equality **in both
 directions** — nothing undeclared differs, nothing declared agrees. **Measuring first changed four
@@ -783,9 +808,13 @@ explains the whole tier-D gallery (the keyhole's cut must reach ∞ and may be a
 dogbone is admissible **both** as the bounded arc `a→b` and as two rays to ∞; a `log` is never
 bounded). **LEGALITY steps 2–3** land with it: the cut system must be admissible, and any piece that
 meets a cut must declare which side it runs on — a crossing without a `side` tag refuses and names
-the repair. The crossing classifier is three-valued on purpose (`clear` and `crosses` are decisions,
-`touches` is a refusal, since a grazing contact has no side to declare), and the keyhole's two lips
-stay `clear` down to the resolution floor. The sandbox's **cut editor** is a declared object, *not*
+the repair. The crossing classifier is **five**-valued on purpose (`clear`, `endpoint`, `along` and
+`crosses` are decisions, `touches` is a refusal, since a grazing contact has no side to declare), and
+the keyhole's two lips are `along` — legal when tagged. *(Corrected 2026-09-20: this said
+"three-valued" and named the keyhole's lips `clear`, which is the version `kernel/branch/crossing.ts`
+replaced inside M4.1 itself — its own header says so: "FIVE ANSWERS, AND D1 IS WHY. The first version
+of this file had three — `clear`, `crosses`, `touches` — and refused the keyhole outright."
+`endpoint` and `along` are what make the keyhole legal.)* The sandbox's **cut editor** is a declared object, *not*
 a detector — an incomplete detector would report "no branch points" for an integrand that has them
 and let LEGALITY pass a crossing in silence — and the dogbone join/split gesture is live. One latent
 hole closed on the way: `engine/ledger.ts` now exports `legalityRefusal`, so the result card can no
@@ -1324,7 +1353,10 @@ re-established at 5.1 and 5.2, a walk reading `aria-label ?? textContent` report
 on a page whose tree has none. **A sentence the engine composed correctly can still reach a reader wrong**:
 the Result card said *There is no integrand* about a refused declaration with the integrand still in the
 box, and printed a refused claim raw above a typeset copy of itself. And `scripts/a11y-audit.mjs` now walks
-each page's accessibility tree beside axe — **845 interactive nodes across 20 pages, 0 unnamed** — because
+each page's accessibility tree beside axe — **⚠ measured at integration interactive nodes across 20 pages,
+0 unnamed** *(this said 845, measured at M8 step 5.2; ADR-0044's removal of the bar then measured
+792 → **682**, and the 845/792 pair is itself unreconciled — so the total is re-run rather than
+remembered. The per-contour-page figures ADR-0044 did not move are 57/71/50/54)* — because
 a `<div tabindex="0">` with no name is a tab stop a screen reader announces as nothing and **axe calls that
 page clean**. Plan: [`docs/contour-integration/M8-plan.md`](docs/contour-integration/M8-plan.md); the
 step-by-step record, with every finding and every sweep, is

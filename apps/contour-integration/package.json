@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Sandbox and worked-example gallery for contour integration and the residue theorem, including the evaluation of real definite integrals in closed form. Fifth app in the suite; rides the shared @cas/* packages. See docs/contour-integration/PLAN.md.",
+  "description": "Sandbox and worked-example gallery for contour integration and the residue theorem, including the evaluation of real definite integrals in closed form. The eleventh published app in the suite; rides the shared @cas/* packages. See docs/contour-integration/PLAN.md.",
   "license": "MIT",
   "author": "Andrew Graven <andrew@graven.com>",
   "scripts": {

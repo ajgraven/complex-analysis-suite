@@ -44,7 +44,8 @@ are read by the unified decoder.)
   `½(z−1/z)`, ellipse `z+1/(2z)`, deltoid `z+1/(2z²)`, astroid `z+1/(3z³)`, 5-cusp star `z+1/(4z⁴)`. Riemann-Map
   is **consumer 1** (its exterior *image* pane); this app is **consumer 2** (the flow *transplant*), so under
   [ADR-0007](../DECISIONS.md) they are extracted into `@cas/flow` and golden-pinned across both.
-- **The shell** — `@cas/ui` (`mountNavHeader` + `runWithFatalBoundary` + `attachCanvasA11y`), and `@cas/export`
+- **The shell** — `@cas/ui` (`runWithFatalBoundary` + `attachCanvasA11y`; `mountNavHeader` was here
+  and is *withdrawn — [ADR-0044](../DECISIONS.md), noted 2026-09-20*), and `@cas/export`
   (PNG figure metadata) from HD-3.
 
 ## The design spine
@@ -64,8 +65,10 @@ green before and after (guardrail: working software at every step).
 
 - **HD-0 — scaffold + wire the empty app (done).** `apps/2d-hydrodynamics` with the hub `index.html` + the
   nav header, the body roster (`src/bodies.ts`) previewed on the hub, and a smoke test. Wired into
-  `SUITE_APPS`, `vitest.workspace.ts`, the census `PROJECTS`, a launcher card, the `deploy-pages.yml` `cp`, and
-  the a11y roster. Proves the wiring against a trivial page before any code moves.
+  `vitest.workspace.ts`, the census `PROJECTS`, a launcher card, the `deploy-pages.yml` `cp`, and
+  the a11y roster. *(The checklist named `SUITE_APPS` and the nav header first; both were deleted by
+  [ADR-0044](../DECISIONS.md), so a new app no longer registers anywhere in `@cas/ui`. Noted
+  2026-09-20.)* Proves the wiring against a trivial page before any code moves.
 - **HD-1 — move the airfoil (`git mv`, history preserved; done).** The seven airfoil files (`airfoil.html`,
   `main-airfoil.ts`, `airfoil.ts`, `render/airfoilView.ts` + `airfoilShader.ts`, and the two tests) moved in;
   the page retitled to "2D Hydrodynamics · Airfoil", its nav retargeted (`current: "2d-hydrodynamics"`), and its
