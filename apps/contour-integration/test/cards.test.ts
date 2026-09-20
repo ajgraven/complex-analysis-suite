@@ -12,7 +12,7 @@ import { Frac } from "@cas/exact";
 
 import { circleTemplate, semicircleTemplate } from "../src/engine/contour/templates.js";
 import { penContour } from "../src/engine/contour/pen.js";
-import { addBranchPoint, setOrder, setShadow } from "../src/engine/branchEdit.js";
+import { addBranchPoint, moveBranchPoint, setOrder, setShadow } from "../src/engine/branchEdit.js";
 import { LEFT_CARDS, RIGHT_CARDS, roleLabel } from "../src/engine/vocabulary.js";
 import { citationLine } from "../src/families/describe.js";
 import { FAMILIES } from "../src/families/index.js";
@@ -565,6 +565,78 @@ describe("the empty states", () => {
     expect(said).toContain("could not be run");
     expect(said).toContain("its contour has no pieces");
     expect(said, "the old sentence is still there").not.toContain("There is no integrand");
+  });
+
+  it("says the DECLARATION was refused, rather than that there is no integrand", () => {
+    // **The same defect as the one above, in the sandbox's declared route** — found in step 5.1's
+    // browser pass, by grabbing the keyhole's branch point with the keyboard and moving it up. The
+    // engine's refusals are exact and well-worded, and three cards already show them — Integrand,
+    // Branch cuts, Derivation. The Result card, which is where a reader looks for an answer, showed
+    // none of it and said "There is no integrand." with `1/(1+z)` still in the box.
+    //
+    // Asserted as EQUALITY against the resolution's own reason, over BOTH refusals the move can
+    // reach: off the real axis is `declaredRun`'s and away from the origin along it is
+    // `buildDeclaration`'s, and a card that printed a sentence of its own would satisfy "not the
+    // false one" while still keeping the engine's words from the reader.
+    const base = declared();
+    for (const to of [[0, 1], [1, 0]] as const) {
+      const moved = { ...base, branch: moveBranchPoint(base.branch, base.branch.points[0].id, to) };
+      const res = resolveState(moved, compile(moved.expr));
+      if (res.kind !== "declared-refused") throw new Error(`not refused at ${to.join(",")}`);
+      const said = (q(right(moved).host, '[data-card="result"]').textContent ?? "").replace(/\s+/g, " ");
+      expect(said, "the sentence that is false").not.toContain("There is no integrand");
+      expect(said).toContain(res.reason.replace(/\s+/g, " "));
+    }
+    // The two reasons really are different, so the loop is two cases rather than one run twice.
+    const reasonAt = (to: readonly [number, number]): string => {
+      const r = resolveState(
+        { ...base, branch: moveBranchPoint(base.branch, base.branch.points[0].id, to) },
+        compile(base.expr),
+      );
+      return r.kind === "declared-refused" ? r.reason : "";
+    };
+    expect(reasonAt([0, 1])).not.toBe(reasonAt([1, 0]));
+    // And the card is unchanged where the declaration is SOUND: a refusal is a third state, not a
+    // relabelling of the empty one.
+    const sound = (q(right(base).host, '[data-card="result"]').textContent ?? "");
+    expect(sound).not.toContain("The declared factor was refused");
+    expect(sound).not.toContain("There is no integrand");
+    // (It says plenty ABOUT the branch point — its ledger refuses a circle round one. That is the
+    // ledger's row, not this card's placeholder, which is why the check names the sentence.)
+    expect(sound).toContain("Hypotheses");
+  });
+
+  it("TYPESETS the refusal, which the table below it was already doing", () => {
+    // **The same sentence was on the card twice, spelled two ways** — M8 step 5.1's browser pass.
+    // Every claim in `engine/claims.ts` is written in the `$…$` convention; the hypothesis table
+    // renders it through `mathText` and the headline block printed it raw, so a reader met
+    // `the $R \to \infty$ circle crosses the cut $\Gamma$` above the typeset copy of itself.
+    //
+    // Driven from a circle round a branch point, which is `legality.cut-crossed`: the refused claim
+    // and its repair both carry math.
+    const base = declared();
+    const said = (q(right(base).host, '[data-card="result"]').textContent ?? "");
+    expect(said, "the fixture must actually refuse").toContain("Refused");
+    expect(said, "delimiters on screen").not.toContain("$");
+    expect(said, "and the backslashes with them").not.toContain("\\operatorname");
+    // Not vacuous: the claim this fixture refuses with really does carry math, and the KaTeX span
+    // for it is inside the card.
+    expect(q(right(base).host, '[data-card="result"] .katex')).toBeTruthy();
+  });
+
+  it("shows the REPAIR beside the refusal, which is the half a reader can act on", () => {
+    // **The sweep's survivor.** `integralRefusal` returns a claim and a repair, and its own comment
+    // says why — *"a refusal a reader cannot act on is half a message"* — but nothing asserted that
+    // the second half reaches the card, so dropping the line entirely left every test green.
+    const said = (q(right(declared()).host, '[data-card="result"]').textContent ?? "").replace(/\s+/g, " ");
+    const REPAIR = "Exclude the branch point (a keyhole), or enclose the whole cut (a dogbone).";
+    expect(said).toContain("Refused");
+    // **By POSITION, because `toContain` cannot see this at all** — the first draft passed with the
+    // line deleted. The failed hypothesis row carries the same repair further down the card, so the
+    // sentence is on screen either way; what the deletion costs is the repair standing WITH the
+    // refusal, above a table the reader has to open. The claim is therefore where it is.
+    expect(said.indexOf(REPAIR)).toBeGreaterThan(said.indexOf("Refused"));
+    expect(said.indexOf(REPAIR)).toBeLessThan(said.indexOf("What was checked"));
   });
 
   it("says WHY there is no target value, where the ledger is sound and the solve refused", () => {

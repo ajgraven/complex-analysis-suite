@@ -89,6 +89,27 @@ export const resultCard: Card = (ctx) => {
   if (ctx.resolution.kind === "gallery" && ctx.resolution.fatal !== null) {
     return card("result", nothing(`This worked example could not be run: ${ctx.resolution.fatal}`));
   }
+  // **The same sentence, and the same falsehood, on the sandbox's declared route** — M8 step 5.1's
+  // browser pass. Move the keyhole's branch point off the origin and `runDeclared` refuses, exactly
+  // and by name; Integrand, Branch cuts and Derivation all show that reason, and this card — the
+  // one a reader is looking at for an answer — said there was no integrand while the box still held
+  // `R(z)`. It carries the ENGINE's words (through `mathText`, as `cuts.ts` does, since a refusal is
+  // a sentence in the `$…$` convention wherever it is composed) rather than one of its own.
+  if (ctx.resolution.kind === "declared-refused") {
+    return card(
+      "result",
+      h(
+        "p",
+        { key: "refused", class: "placeholder" },
+        "The declared factor was refused: ",
+        // `mathText` for the same reason the claim below uses it, and EQUIVALENT for the same
+        // measured reason: no refusal `runDeclared` or `buildDeclaration` composes carries `$`
+        // today. `cards/cuts.ts` already routes this identical string through it, and two readers
+        // of one string must not differ about what convention it is written in.
+        ...mathText(ctx.resolution.reason, "why"),
+      ),
+    );
+  }
   if (ledger === null || integral === null) return card("result", nothing("There is no integrand."));
 
   // **The drill's mask, read here rather than re-derived.** `drillMask` is the one decision (its own
@@ -116,8 +137,26 @@ export const resultCard: Card = (ctx) => {
     // **No number. Not a greyed-out number, not a number with a warning beside it — none.**
     head.push(
       h("p", { key: "ref", class: "verdict" }, badge("⚠"), " Refused"),
-      h("p", { key: "why", class: "muted small" }, refused.claim),
-      refused.repair === undefined ? null : h("p", { key: "fix", class: "repair small" }, refused.repair),
+      // **Through `mathText`** — M8 step 5.1's browser pass, and the sentence was on this card
+      // TWICE with the two spellings side by side: the hypothesis table below renders the same
+      // claim typeset, while these two lines printed `the $R \to \infty$ circle crosses the cut
+      // $\Gamma$` with its delimiters and its backslashes showing. Every claim in `engine/claims.ts`
+      // is written in the `$…$` convention, so a reader of a refusal is exactly the reader who most
+      // needs it read, and step 2.1's rule holds here as everywhere: a verdict is a sentence in that
+      // convention wherever it is composed.
+      h("p", { key: "why", class: "muted small" }, ...mathText(refused.claim, "why")),
+      // **The repair goes through it too, and that half is an EQUIVALENT mutant** — recorded rather
+      // than dropped. Measured: over all 28 records × 4 fixtures and eight hand-built refusing
+      // states, no repair the app can reach carries `$` at all (`legalityRefusal`'s repairs are
+      // prose; the `$`-bearing ones in `kernel/bounds/` are certificate PROVENANCE, which
+      // `integralRefusal` only falls through to when there is no legality refusal — and every
+      // reachable refusal has one). So raw and typeset are indistinguishable here today. It is kept
+      // because the string's TYPE is an engine sentence and the line above it is already routed:
+      // one rule, one spelling, rather than two lines of the same block disagreeing about the
+      // convention the moment a repair grows a `$`.
+      refused.repair === undefined
+        ? null
+        : h("p", { key: "fix", class: "repair small" }, ...mathText(refused.repair, "fix")),
     );
   } else {
     // **What the RECORD asked for leads, where there is one.** C1 makes this unavoidable: its
