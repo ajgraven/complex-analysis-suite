@@ -8,8 +8,7 @@
 // honest error bar); suction (Q < 0) is the ILL-POSED fingering direction (RISKS §3), gated behind an
 // opt-in and stopped hard at the (3,2)-cusp (min|f'| → 0, ⚠), never integrated past. Sixth page of the app.
 import "./styles/main.css";
-import "@cas/ui/nav.css";
-import { runWithFatalBoundary, attachCanvasA11y, mountNavHeader } from "@cas/ui";
+import { runWithFatalBoundary, attachCanvasA11y } from "@cas/ui";
 import { Net2D, boundsOf, type Pt } from "@cas/flow";
 import { dropletBoundary, dropletFlowNet, multiSourceStreamlines } from "./render/interiorDropletRender.js";
 import { canonicalize, evolveDroplet, type DropletFrame, type StopReason } from "./heleShawInteriorStepper.js";
@@ -197,7 +196,6 @@ function main(): void {
     "<b>Interior Hele-Shaw droplet</b> — the free boundary ∂D<sub>t</sub> = f<sub>t</sub>(∂𝔻) moves by Darcy's law under a point source (drag the yellow dot to move it). Injection smooths; suction fingers (ill-posed).";
   fig.append(canvas, cap);
   stage.append(fig);
-  mountNavHeader(app, { current: "hele-shaw-flow" });
   app.append(bar, stage);
 
   const net = new Net2D(canvas);

@@ -5,7 +5,6 @@
 // leave a blank page with the reason only in the console. The boundary turns that into a named banner.
 import { runWithFatalBoundary } from "@cas/ui";
 import "katex/dist/katex.min.css";
-import "@cas/ui/nav.css";
 import { mountShell2 } from "./shell/app.js";
 
 /**

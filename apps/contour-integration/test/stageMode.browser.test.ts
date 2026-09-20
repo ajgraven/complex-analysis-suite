@@ -18,7 +18,6 @@ import type { StageMode } from "../src/ui/stage/mode.js";
 import { plotToScreen } from "../src/kernel/camera.js";
 
 import "katex/dist/katex.min.css";
-import "@cas/ui/nav.css";
 import "../src/ui/theme.css";
 import "../src/ui/shell.css";
 

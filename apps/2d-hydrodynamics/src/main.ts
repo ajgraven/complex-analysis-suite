@@ -13,8 +13,7 @@
 // outline + the stagnation markers on each pane; the airfoil folds in as ψ(w) = J(ζ₀ + R·w), so its rear
 // stagnation lands on the trailing edge — the Kutta condition made visible.
 import "./styles/panes.css";
-import "@cas/ui/nav.css";
-import { runWithFatalBoundary, attachCanvasA11y, mountNavHeader } from "@cas/ui";
+import { runWithFatalBoundary, attachCanvasA11y } from "@cas/ui";
 import { unitCircle, boundsOf, EXTERIOR_MAP_PRESETS, type RefFlow, type Pt } from "@cas/flow";
 import { BODIES, type BodyEntry } from "./bodies.js";
 import { airfoilBody, galleryBody, physicalVelocity, type ResolvedBody } from "./bodyModel.js";
@@ -272,7 +271,6 @@ function main(): void {
   const disk = makePane("The disk plane: the reference flow that is carried onto the body");
   const body = makePane("The body plane: the same flow carried through the conformal map onto the body");
 
-  mountNavHeader(app, { current: "2d-hydrodynamics" });
   app.append(bar, stage);
 
   // preserveDrawingBuffer so "Save PNG" can read the rendered pixels back.

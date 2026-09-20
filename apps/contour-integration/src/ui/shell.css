@@ -14,22 +14,15 @@
   --strip2: 12rem;
 }
 
-/* The nav's host. Its own name rather than the old shell's `.navHost`, for the reason at the foot
-   of this file; `display: contents` because `.cas-nav` is `position: fixed` and the host occupies
-   nothing. */
-.shell2Nav {
-  display: contents;
-}
-
 /* The link refusal (M6.2's third finding), between the nav and the shell so that it is neither
    inside the page's one landmark nor competing with the bar for width. It is `hidden` almost
    always. When it is not, it takes a row of its own and the page scrolls by exactly its height,
-   because `.shell2` below is `calc(100vh - nav)` and nothing tells it about this element — which is
-   the right trade here rather than a defect worked around: the banner is showing only until the
-   reader's first action (`writeHash` clears it), a fixed overlay would cover the bar exactly as the
-   suite nav once did, and a scroll a reader can see is better than a sentence they cannot. */
+   because `.shell2` below is `100vh` and nothing tells it about this element — which is the right
+   trade here rather than a defect worked around: the banner is showing only until the reader's
+   first action (`writeHash` clears it), and a scroll a reader can see is better than a sentence
+   they cannot. */
 .linkRefusal {
-  margin: var(--cas-nav-h, 0px) 0 0;
+  margin: 0;
   padding: 0.5rem 1rem;
   border-bottom: 1px solid var(--g-line, #2a2f3a);
   background: color-mix(in srgb, var(--g-warn, #d8a657) 12%, transparent);
@@ -57,16 +50,14 @@
 
 .shell2 {
   display: grid;
-  /* **The suite nav is `position: fixed` and publishes its own height as `--cas-nav-h`.** A shell
-     anchored at y = 0 runs UNDERNEATH it — which this app already did once: it adopted the nav
-     without the offset and the top 32 px of its bar was covered, and because the nav sits at
-     z-index 6 it swallowed every click in that band too. The first draft of this file used
-     `height: 100%` and reproduced it exactly, with the stage collapsing to 186 px besides, because
-     a percentage height needs a sized ancestor and `#app` is not one. Reserve the strip and take it
-     off the height, so the shell fills what is left and nothing scrolls. The `0px` fallback keeps a
-     page that does not load `nav.css` where it was. */
-  margin-top: var(--cas-nav-h, 0px);
-  height: calc(100vh - var(--cas-nav-h, 0px));
+  /* **`100vh`, not `100%`** — the first draft of this file used a percentage and the stage collapsed
+     to 186 px, because a percentage height needs a sized ancestor and `#app` is not one.
+     (It once reserved the suite nav's height too, withdrawn at ADR-0044. That offset existed
+     because the app had adopted the nav WITHOUT one: the top 32 px of its own 48 px bar was
+     covered, and since the nav sat at z-index 6 it swallowed every click in that band as well —
+     the sharpest single piece of evidence for withdrawing it, kept here as the reason this line
+     is now simply `100vh`.) */
+  height: 100vh;
   min-height: 0;
   grid-template-columns: var(--rail-left) minmax(0, 1fr) var(--rail-right);
   /* The bar's row is a MINIMUM rather than a fixed height — M8 step 1.9. See the note beside
@@ -769,7 +760,6 @@
   inset: 0;
   margin: 0;
   height: auto;
-  /* Above `.cas-nav`, which sits at z-index 6 — a modal under the suite nav is not modal. */
   z-index: 20;
   background: rgba(8, 10, 14, 0.6);
   padding: 1rem;
@@ -1015,8 +1005,7 @@ button.ladderCard[aria-current="true"] {
     align-content: center;
     justify-items: center;
     gap: 0.9rem;
-    min-height: calc(100vh - var(--cas-nav-h, 0px));
-    margin-top: var(--cas-nav-h, 0px);
+    min-height: 100vh;
     padding: 1.5rem;
     text-align: center;
     color: var(--g-text);

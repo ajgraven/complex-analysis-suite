@@ -5,8 +5,7 @@
 // zooms while singularities drag with live recompute. Presets, a `#vs=` permalink, and PNG export
 // round out M1. (The hydrodynamic reading is the sibling 2D Hydrodynamics app's, ADR-0037.)
 import "./styles/main.css";
-import "@cas/ui/nav.css";
-import { runWithFatalBoundary, mountCanvas, mountNavHeader } from "@cas/ui";
+import { runWithFatalBoundary, mountCanvas } from "@cas/ui";
 import { injectPngText } from "@cas/export";
 import { fieldOf, initialState } from "./state.js";
 import { createFieldRenderer } from "./render/glView.js";
@@ -30,8 +29,6 @@ function main(): void {
   const app = document.getElementById("app");
   if (!app) return;
   app.textContent = "";
-  mountNavHeader(app, { current: "2d-electrostatics" });
-
   const canvas = mountCanvas(app, {
     label:
       "The complex potential as a 2D electrostatic field: drag charges, sources, sinks, and vortices; " +

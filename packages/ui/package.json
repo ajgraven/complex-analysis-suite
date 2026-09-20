@@ -3,12 +3,11 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "The suite's shared browser SHELL: an accessible-canvas mount, a fatal-error boundary, a worker-offload compute client, and the suite navigation header. Ports Complex Dynamics' proven product-shell patterns so every TS app gets them uniformly (ADR-0028). Consumed via SOURCE by the suite's Vite/Vitest bundlers (no dist build).",
+  "description": "The suite's shared browser SHELL: an accessible-canvas mount, a fatal-error boundary and a worker-offload compute client. Ports Complex Dynamics' proven product-shell patterns so every TS app gets them uniformly (ADR-0028). Consumed via SOURCE by the suite's Vite/Vitest bundlers (no dist build).",
   "license": "MIT",
   "author": "Andrew Graven <andrew@graven.com>",
   "exports": {
-    ".": "./src/index.ts",
-    "./nav.css": "./src/nav.css"
+    ".": "./src/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

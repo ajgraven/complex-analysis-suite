@@ -2,7 +2,26 @@
 
 Executes [ADR-0044](../../DECISIONS.md#adr-0044-withdraw-the-in-app-suite-navigation-header-the-launcher-is-the-unified-menu):
 no in-app suite navigation header, in any app. Six stages, each a small reviewable commit that leaves
-the gate green. **N0 is done** (this session). Total effort: one to two metered sessions.
+the gate green.
+
+> **EXECUTED 2026-09-20, in one session, immediately after the M8 merge (`f318fe8`).** N0–N5 are
+> done and N6's discovery half with them; the ADR's action items carry the per-stage detail. Three
+> things the plan did not have right, each measured rather than assumed:
+>
+> 1. **N3's premise was false.** The plan and ADR-0044 §6 both say the new Contour-Integration shell
+>    "simply never mounts a nav", so N3 was one STATUS.md line. It does mount one — M8 carried
+>    M6.4's ordering fix forward deliberately, host and all — so N3 was real work: the host, the
+>    call, six `--cas-nav-h` declarations, `nav.css` in `main.ts` and eleven browser specs, and two
+>    structural assertions replaced rather than deleted.
+> 2. **The footprint table undercounted the browser specs.** `@cas/ui/nav.css` was imported by
+>    eleven of Contour Integration's `*.browser.test.ts` files, none of them listed — they mount the
+>    real stylesheets because mounting without one gives not a plainer layout but a different one.
+> 3. **N5's re-record was a no-op and is left un-recorded.** Not one rule or node count moved, so
+>    `--update-baseline` produced a 44-line reordering that says nothing; it was reverted. The
+>    accessibility-tree count is where the removal actually shows: **792 → 682**, exactly 11 nodes
+>    (one home link + ten siblings) on each of the ten audited pages that carried the bar.
+
+Total effort: one to two metered sessions.
 
 **The one hard sequencing constraint.** Contour Integration's shell is being rebuilt right now
 (ADR-0043 / M8, branch `claude/inspiring-keller-5sizwl`, Phase 0 merged as PR #340, Phase 1 builds

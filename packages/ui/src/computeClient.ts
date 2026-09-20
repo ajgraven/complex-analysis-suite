@@ -39,7 +39,7 @@ export interface ComputeClientOptions<Req, Res> {
    * (There is exactly ONE consumer of `createComputeClient` today — Complex Dynamics'
    * `juliaMetricsClient`. This used to say "the other consumers pass no handler and are
    * unaffected", which reads as a compatibility claim across several apps; the other `@cas/ui`
-   * adopters import `runWithFatalBoundary` / `attachCanvasA11y` / `mountCanvas` / `mountNavHeader`
+   * adopters import `runWithFatalBoundary` / `attachCanvasA11y` / `mountCanvas`
    * / `drawDirectionTicks` and never this. The optionality is still the right contract for the next
    * consumer; the breadth was not a fact.)
    */

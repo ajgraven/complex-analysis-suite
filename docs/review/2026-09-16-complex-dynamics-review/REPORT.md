@@ -223,11 +223,15 @@ README's "so the plot stays visible while you adjust them". Group the sidebar in
 _Function · Look · Precision · Instruments (z²+c) · Studio_ tabs or a two-level accordion, move
 the inspector's action inputs into the report they act on, and let the phone sheet open half-height.
 
-**U5 [browser] No suite navigation.** CD never calls `mountNavHeader` (`.cas-nav` absent), so the
-one app at the centre of two interchange hand-offs has no back-to-launcher link, and the two
-hand-offs live in unrelated places — "Import map…" under the formula box (a native
-`window.prompt`, `main.ts:5164-5171`) and "Riemann Map ↗" inside the Exterior-map panel
-(`index.html:2078`). U7 (the nav header's hand-off picker) is wired in no app.
+**U5 [browser] No suite navigation.** ~~CD never calls `mountNavHeader`~~ — **the finding stands,
+the remedy is the opposite one: [ADR-0044](../../DECISIONS.md#adr-0044-withdraw-the-in-app-suite-navigation-header-the-launcher-is-the-unified-menu)
+withdrew the header from every app rather than adding it here**, and it is now removed from the
+package and from the five apps that had it. What survives of this item is the second half, which
+was the real one: the two hand-offs live in unrelated places — "Import map…" under the formula box
+(a native `window.prompt`, `main.ts:5164-5171`) and "Riemann Map ↗" inside the Exterior-map panel
+(`index.html:2078`). Under ADR-0044 §4 a hand-off belongs in the panel that owns the state, so that
+is where they stay; making them consistent and findable is the withdrawal plan's N6, and CD's
+`window.prompt` is WP10.
 
 **U6 [browser+code] The σ view is a takeover, not a peer.** It hides both plots _and_ the sidebar
 (`main.css:454-458`); the mobile "Controls" FAB stays visible but toggles a `display:none` pane;
@@ -307,8 +311,10 @@ for this app.
 
 Ordered by how close each is to what already exists.
 
-1. **Suite nav header + hand-off picker** (`mountNavHeader` with `handoff:`) — the missing U7; CD is
-   the natural first adopter since it already has both a producer and a consumer.
+1. ~~**Suite nav header + hand-off picker** (`mountNavHeader` with `handoff:`) — the missing U7; CD
+   is the natural first adopter since it already has both a producer and a consumer.~~ **DROPPED —
+   [ADR-0044](../../DECISIONS.md#adr-0044-withdraw-the-in-app-suite-navigation-header-the-launcher-is-the-unified-menu)
+   withdraws the header from the whole suite and closes U7 as withdrawn, not done.**
 2. **Multi-critical parameter planes.** `findCriticalPoints` already returns every critical point;
    the parameter plane iterates one (0). A per-critical-point colour blend, or at least a picker,
    makes `z³+az+c` slices honest (I6).
@@ -342,7 +348,7 @@ Ordered by how close each is to what already exists.
 3. **State integrity:** S2, S3, S4, S6, U2 — and a `test/shell.test.ts` for CD in the
    contour-integration mould (mount `main.ts` under jsdom with `getContext` stubbed) so the shell
    has _any_ test; enable `no-shadow` for the app.
-4. **Shell UX:** U4 sidebar regrouping and inspector layout, U5 nav header, U6 make σ a real peer
+4. **Shell UX:** U4 sidebar regrouping and inspector layout, ~~U5 nav header~~ (withdrawn, ADR-0044), U6 make σ a real peer
    (keep the sidebar; carry overlays in the link), U7 visible gating text.
 5. **Docs:** rewrite README's Architecture/Known-limitations/CI paragraphs, add the σ and
    interchange sections, fix the ComplexDynamicsJS URLs and the `Software` tag, and refresh the

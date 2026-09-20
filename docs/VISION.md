@@ -162,7 +162,7 @@ necessary.
   `export`, and `conformal` already exist.
   *(As built: `ui` was not extracted for a long time — no second consumer forced it. It was finally
   extracted as `@cas/ui`, the shared **browser shell** (canvas a11y, a fatal-error boundary, an
-  off-thread compute client, a suite nav header), in [ADR-0032](DECISIONS.md#adr-0032-extract-casui-ahead-of-adoption-port-cds-product-shell)
+  off-thread compute client; a fourth, a suite nav header, was withdrawn by ADR-0044), in [ADR-0032](DECISIONS.md#adr-0032-extract-casui-ahead-of-adoption-port-cds-product-shell)
   — an extract-*ahead*-of-adoption, since the demand was already proven across the apps by a UX review.
   See ADR-0007 and the "As built" note atop [ARCHITECTURE.md](ARCHITECTURE.md).)*
 
@@ -170,7 +170,7 @@ necessary.
 
 - **A single unified application *shell*.** **Decided:** the suite is *separate apps that
   hand off to each other*, fronted by a lightweight **unified menu** (a launcher page +,
-  later, a shared navigation header) — **not** one single-page shell with a tab per tool
+  **not** a shared navigation header, withdrawn by ADR-0044, and **not** one single-page shell with a tab per tool
   that owns all cross-tool state and routing. The launcher gives the *experience* of a
   suite (one entry point, easy movement, hand-off) without the coupling of a merged
   application. A true unified shell remains out of scope; if ever wanted, it can be added
