@@ -207,6 +207,19 @@ describe("what the strip-side bound refuses", () => {
     // Past it, the same integrand bounds perfectly well.
     expect(boundOf("1/(2 + exp(z))", { R: 4 }).certificate.level).toBe("≤");
   });
+
+  it("and claims NOTHING about the limit while refusing", () => {
+    // The field the disposal row's status is read from. `e1("3/10")` vanishes on the right side, so
+    // carrying the exponent's verdict through a refusal put `"vanishes"` beside a `⚠` — which is
+    // exactly the disagreement between a number and its label this app exists to prevent.
+    expect(boundOf(e1("3/10"), { R: 0 }).asymptotics).toBe("unestablished");
+    expect(boundOf(e1("3/10"), { length: 0 }).asymptotics).toBe("unestablished");
+    expect(boundOf("1/(2 + exp(z))", { R: 0.5 }).asymptotics).toBe("unestablished");
+    // And a bound that WAS reached keeps its own verdict, whichever it is.
+    expect(boundOf(e1("3/10")).asymptotics).toBe("vanishes");
+    expect(boundOf(e1("1")).asymptotics).toBe("bounded");
+    expect(boundOf(e1("6/5")).asymptotics).toBe("diverges");
+  });
 });
 
 describe("stripTemplate — an argument, not a shape", () => {

@@ -228,6 +228,30 @@ export function applyResidueTheorem(
   // n(γ, a) for an exact pole: match by position against the decided winding numbers. The lookup is
   // by distance because the winding list is keyed on the float locations the contour was measured
   // with; exactness enters through the residue, not through the search.
+  //
+  // **A pole with no winding entry is REFUSED, not weighted zero** (2026-09-20 review). The search
+  // returned `0` for a miss, which is the one wrong answer available: `n = 0` is a decision — *the
+  // contour does not wind about this pole* — and a pole nobody asked about has no decision at all.
+  // The five routes beside this one all refuse such a pole by name; this one silently dropped its
+  // residue out of the sum and reported the total as exact. Asked here, once, ahead of the sum, so
+  // the reader gets the refusal rather than a plausible number short by one term.
+  const unasked = poles.exactPoles.find(
+    (p) =>
+      !integral.windings.some(
+        (w) => Math.hypot(w.at[0] - p.at.toTuple()[0], w.at[1] - p.at.toTuple()[1]) < 1e-6,
+      ),
+  );
+  if (unasked !== undefined) {
+    return {
+      verdict: assembleVerdict([
+        refuse(
+          "the residue theorem",
+          "a pole of f was never asked for its winding number, so its residue has no coefficient",
+        ),
+      ]),
+    };
+  }
+
   const windingOf = (a: SqrtExt): number => {
     const at = a.toTuple();
     let best = 0;

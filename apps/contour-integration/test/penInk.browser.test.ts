@@ -21,8 +21,10 @@
 // 1200 × 154 somewhere inside it — two boxes that in the real app are the same box. A test aiming at
 // either is aiming at an artefact, which is how the first draft came to place "vertices" outside the
 // drawing surface and then read the snap that never fired as a pen defect. So this file loads the
-// stylesheets `src/main.ts` loads — FOUR of them since step 1.12, `app.css` having gone with the old
-// shell — and the browser project sets a desktop viewport (the default is a phone, see
+// page's THREE stylesheets — `katex.min.css` from `src/main.ts`, `theme.css` and `shell.css` from
+// `index.html`; `app.css` went with the old shell at step 1.12, and this comment went on saying
+// four until it was counted — and the browser project sets a desktop viewport (the default is a
+// phone, see
 // `vitest.browser.config.ts`). Re-measured on the new shell: `canvas.ink` is 592 × 613 at
 // (304, 95) with a half-height of 1.94, and does not move for the rest of the gesture. It is
 // NARROWER than the old shell's 928 × 564 because shell2 has two rails, which is why every offset

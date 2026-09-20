@@ -408,6 +408,20 @@ distinction is the product.
 > folded in below. The gaps are listed with their originating entries in
 > [`GALLERY.md`](GALLERY.md) so the reasoning survives.
 
+> **⚠ This section is the v1 schema as SPECIFIED, and has not been back-ported to what shipped
+> (noted 2026-09-20; the record is [`src/families/schema.ts`](../../apps/contour-integration/src/families/schema.ts)
+> and [`src/families/index.ts`](../../apps/contour-integration/src/families/index.ts)).** Three
+> differences a reader must not take from the listing below. **`branch` was reshaped**: it is
+> `factors[]`, each carrying its own `argRange`, with a tagged `CrossingPhase`, `rationalPart`,
+> `constant`, `orientation` and `effectiveCut` — not `branchPoints[]` / `cuts[].argRange` /
+> `crossingPhase: string` / `admissibilityCheck`. `closedForm` gained `simplifiedWhen`, `Golden`
+> gained `label` and `refuses`, and `FamilyPiece` gained `knownValue` (ADR-0042). **The predicate
+> namespaces are thirteen, not the four named at §5.0** — `index.ts:140-154` lists them, and
+> `index.ts:118-139` records precisely why the four-element version was wrong (it was inferred from
+> tiers A and B, and C1's `analytic:dirichletTest(…)` was rejected by a guard that had never seen
+> the rest of the corpus). **And `checkFamily` runs five numbered invariants plus well-formedness**,
+> where §5 lists four; invariant 5 is documented in [`GALLERY.md`](GALLERY.md) §0.
+
 A Family is **data**, and every field is either executable or renderable — nothing is
 prose-for-humans-only except `traps[].message` and `*.note`.
 
@@ -456,7 +470,12 @@ export interface Family {
   parameters: { name: string; domain: "real" | "complex" | "integer";
                 constraints: string[] }[];
 
-  /** Scope the whole family's claim is restricted to; travels into Verdict.restrictions. */
+  /**
+   * Scope the whole family's claim is restricted to; travels into Verdict.restrictions.
+   * (Measured 2026-09-20: it does not. Nothing reads `family.restrictions`, and no record declares
+   * one — A1 and A2 say "DELIBERATELY ABSENT" in a comment. `Verdict.restrictions`, which
+   * `derivation.ts:248` and `result.ts:236` do read, is `@cas/rigor`'s own field, not this one.)
+   */
   restrictions?: string[];           // "sgn(a) = +1"; "|a| < 1 branch of the pole selection"
 
   hypotheses: {

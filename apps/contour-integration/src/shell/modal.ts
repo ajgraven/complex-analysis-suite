@@ -38,9 +38,16 @@
 /**
  * Everything Tab may land on, in document order.
  *
- * No visibility filter. Every control in these dialogs is visible by construction, and the filter
- * that would be written for one — `offsetParent !== null` — is `null` for everything in jsdom, so a
- * trap guarded by it would pass its tests by having nothing to cycle through.
+ * **The premise that there was nothing to filter was false, and the front door is why** — the
+ * 2026-09-20 review. *"Every control in these dialogs is visible by construction"* held while a
+ * dialog was one panel; `frontDoor.ts`'s `syncTabs` hides the panel it is leaving without emptying
+ * it, so on the Practice tab 16 of 23 matches sit inside a `[hidden]` ancestor. A browser will not
+ * focus a `display: none` element, so `items[next].focus()` is a no-op and Tab stops advancing —
+ * and since jsdom focuses hidden elements happily, the trap's own tests passed throughout.
+ *
+ * The filter is `closest("[hidden]")` rather than `offsetParent !== null`: the old comment is right
+ * that `offsetParent` is `null` for everything in jsdom and would leave the trap with nothing to
+ * cycle through, where the attribute is the same fact in both engines.
  */
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -111,7 +118,7 @@ export function createModal(input: ModalInput): Modal {
   let built = false;
 
   function focusables(): HTMLElement[] {
-    return [...dialog.querySelectorAll<HTMLElement>(FOCUSABLE)];
+    return [...dialog.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el.closest("[hidden]") === null);
   }
 
   /**

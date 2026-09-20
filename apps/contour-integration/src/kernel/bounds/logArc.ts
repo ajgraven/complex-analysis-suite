@@ -21,7 +21,7 @@
 // **`ln ρ` IS A FLOAT, so the bound's VALUE is `≈` while its LIMIT is `≤`** — exactly as `ρ^α` is in
 // `branchArc.ts`, and for the same reason: the asymptotic verdict rests on the SIGN of an exact
 // rational exponent and on `m ≥ 0`, not on any evaluated logarithm.
-import { Frac, QiPoly } from "@cas/exact";
+import { Frac, piUpper, QiPoly } from "@cas/exact";
 import { bound, refuse } from "@cas/rigor";
 import {
   coefficientUpperBound,
@@ -63,7 +63,7 @@ export function logArcBound(
   if (rho.n <= 0n) {
     return {
       R: rho,
-      asymptotics: "diverges",
+      asymptotics: "unestablished",
       exponent,
       degreeGap,
       certificate: refuse("the arc bound", "the radius must be positive"),
@@ -72,7 +72,7 @@ export function logArcBound(
   if (!Number.isInteger(power) || power < 0) {
     return {
       R: rho,
-      asymptotics,
+      asymptotics: "unestablished",
       exponent,
       degreeGap,
       certificate: refuse("the arc bound", `log^${power} is not a non-negative integer power`),
@@ -84,7 +84,8 @@ export function logArcBound(
   if (denLow.n <= 0n) {
     return {
       R: rho,
-      asymptotics,
+      // NOT `asymptotics`: that is the exponent's verdict, and no bound was reached here at all.
+      asymptotics: "unestablished",
       exponent,
       degreeGap,
       certificate: refuse(
@@ -103,13 +104,17 @@ export function logArcBound(
     opts.argRange[1].n < 0n ? -opts.argRange[1].n : opts.argRange[1].n,
     opts.argRange[1].d,
   );
-  const a = Math.max(widest.toNumber(), other.toNumber()) * Math.PI;
+  // `piUpper()` rather than `Math.PI` here and below, for PROVENANCE rather than for the number:
+  // measured, `piUpper().toNumber() === Math.PI` exactly at the precision it returns. `Math.PI` is
+  // still below π, hence the wrong direction for a `≤`, and this directory's claim is that π enters
+  // only through the certified upper bracket — see `branchArc.ts` for the same note and its sweep.
+  const a = Math.max(widest.toNumber(), other.toNumber()) * piUpper().toNumber();
 
   const maxModulus = coefficientUpperBound(num, rho).div(denLow);
   const rhoValue = rho.toNumber();
   const value =
     opts.piMultiple.toNumber() *
-    Math.PI *
+    piUpper().toNumber() *
     rhoValue *
     Math.pow(Math.abs(Math.log(rhoValue)) + a, power) *
     maxModulus.toNumber();

@@ -46,6 +46,13 @@ const declined = (reason: string, also?: Certificate): ResidueTheoremResult => (
 });
 
 export function applyLogTheorem(input: LogTheoremInput): ResidueTheoremResult {
+  // As in `branchTheorem.ts`, and for the same reason: five of the six routes have stated this
+  // since they were written and these two did not, so an open contour reached an `exactValue` for a
+  // theorem that does not apply (2026-09-20 review).
+  if (!input.integral.closed) {
+    return declined("it applies to a closed contour, and this one is not closed");
+  }
+
   const split = toExactRational(input.rational);
   if (!split.ok) {
     return declined(`the rational cofactor is not an exact rational function: ${split.reason}`);

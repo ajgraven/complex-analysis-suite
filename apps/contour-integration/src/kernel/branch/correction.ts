@@ -53,8 +53,13 @@ export interface CutSegment {
  * How many segments the shader's uniform block holds.
  *
  * Research 06 §5.2's number, and generous: a hand-dragged polyline will not exceed it, and the loop
- * is `O(#segments)` per pixel. A cut system that would need more is truncated and SAID to be, rather
- * than quietly drawn short — a picture missing an arc is a picture in a different determination.
+ * is `O(#segments)` per pixel. A cut system that would need more is truncated, and the truncation
+ * must be SAID — a picture missing an arc is a picture in a different determination, and a
+ * determination the app has not announced is the one thing this module exists to prevent.
+ *
+ * Reachable: measured, 40 branch points with one ray each produce 80 segments, of which 64 are read.
+ * {@link cutSegmentsDropped} is how a caller finds that out; it was silent until then, while the
+ * comment here promised it was not.
  */
 export const MAX_CUT_SEGMENTS = 64;
 
@@ -240,6 +245,20 @@ export function cutCorrection(z: Cx, base: Cx, segments: readonly CutSegment[]):
     m -= signedCross(base, z, seg.a, seg.b) * seg.jump;
   }
   return m;
+}
+
+/**
+ * How many of `segments` neither {@link cutCorrection} nor the shader reads — `0` when they all fit.
+ *
+ * **The truncation is the caller's to announce, and until this existed there was nothing to announce
+ * it WITH.** Both readers stop at {@link MAX_CUT_SEGMENTS}, silently, which draws the picture in a
+ * determination that is not the declared one — the failure mode the constant's own comment promises
+ * will not happen. It is a function rather than a field on `cutSegments`' return because that return
+ * is an array the GPU upload and the parity gate both index directly, and the rule for "what gets
+ * dropped" then has one home either way.
+ */
+export function cutSegmentsDropped(segments: readonly CutSegment[]): number {
+  return Math.max(0, segments.length - MAX_CUT_SEGMENTS);
 }
 
 /**

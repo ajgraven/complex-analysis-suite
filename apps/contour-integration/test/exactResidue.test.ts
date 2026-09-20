@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Frac, Gauss, QiPoly } from "@cas/exact";
 import { parse } from "@cas/expr";
 import { simplestRational, toExactRational } from "../src/kernel/exactRational.js";
+import { findPoles } from "../src/kernel/poles.js";
 import {
   exactPoleAt,
   exactResidues,
@@ -79,6 +80,17 @@ describe("exactPoleAt", () => {
     const { num, den } = exact(src);
     return exactPoleAt(num, den, a);
   };
+
+  it("answers `f ≡ 0` with null rather than throwing on the zero polynomial", () => {
+    // The guard used to sit BELOW the multiplicity count, which throws on the zero polynomial — so
+    // it protected nothing, and `exactPoleAt(QiPoly.zero(), …)` came back
+    // `THREW: multiplicityAt: the zero polynomial`. No live path reaches it (`cancelCommon` removes
+    // the whole denominator first), which is why nothing noticed.
+    expect(exactPoleAt(QiPoly.zero(), QiPoly.fromCoeffs([g(0), g(1)]), g(0))).toBeNull();
+    for (const src of ["0/z", "(z-z)/z", "0/(z^2+1)", "(z*0)/(z-1)^2"]) {
+      expect(findPoles(parse(src)).poles, src).toHaveLength(0);
+    }
+  });
 
   it("gives Res(1/z, 0) = 1", () => {
     expect(at("1/z", g(0))?.residue.equals(g(1))).toBe(true);
@@ -257,5 +269,58 @@ describe("weightedResidueSum", () => {
     const [re, im] = sum.toTuple();
     expect(-2 * Math.PI * im).toBeCloseTo(Math.PI, 12);
     expect(re).toBe(0);
+  });
+});
+
+describe("a literal no arithmetic here should carry", () => {
+  it("refuses a subnormal BY NAME instead of throwing a RangeError out of findPoles", () => {
+    // `Number.isFinite(5e-324)` is true, so the continued fraction used to enter its loop, overflow
+    // `1/frac` to `Infinity` and throw out of `BigInt(Math.floor(Infinity))` — measured,
+    // `findPoles(parse("1/(z - 5e-324)"))` came back `THREW RangeError The number Infinity cannot be
+    // converted to a BigInt`. A sandbox user typing it got a crash, not a refusal.
+    const r = toExactRational(parse("1/(z - 5e-324)"));
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.reason).toMatch(/needs 1075 bits/);
+    // …and the crash is gone from the caller that suffered it: `findPoles` falls through to the
+    // numeric path and returns a report.
+    expect(() => findPoles(parse("1/(z - 5e-324)"))).not.toThrow();
+  });
+
+  it("refuses a literal whose simplest rational is legitimate and enormous", () => {
+    // Not a crash — `simplestRational` genuinely returns the simplest rational that round-trips,
+    // and for `1e-300` that has a 997-bit denominator which would then multiply through every
+    // `QiPoly` product downstream. `MAX_DEGREE` bounds a polynomial's LENGTH; nothing bounded one
+    // entry. `1e-310` is the subnormal version of the same thing, at 1075 bits.
+    expect(toExactRational(parse("1/(z - 1e-300)")).ok).toBe(false);
+    const r = toExactRational(parse("1/(z - 1e-310)"));
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.reason).toMatch(/over the 256-bit limit/);
+  });
+
+  it("still reads every literal a reader plausibly types", () => {
+    // The anti-vacuity half: the guard is 77 digits wide, and the widest literal in the corpus or
+    // off a dragged handle is under 60 bits.
+    for (const src of ["1/(z - 0.1)", "1/(z - 1e-20)", "(6.02e23)/(z^2 + 1)", "1/(z - 1234.56789)"]) {
+      expect(toExactRational(parse(src)).ok, src).toBe(true);
+    }
+  });
+
+  it("reports a THROW as a refusal rather than letting it escape", () => {
+    // The other half of the same rule, and the one path that still raises something which is NOT a
+    // `Refusal`: `1e999` is `Infinity` as a double, so `simplestRational` throws its own
+    // `non-finite input` Error. The caller's contract is "refuse, with a reason, and fall back to
+    // the numeric path", whatever the arithmetic raises.
+    const r = toExactRational(parse("1/(z - 1e999)"));
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.reason).toMatch(/could not be read exactly/);
+    expect(!r.ok && r.reason).toMatch(/non-finite/);
+  });
+});
+
+describe("simplestRational on a subnormal", () => {
+  it("falls through to the dyadic value the docstring promises, rather than overflowing", () => {
+    const f = simplestRational(5e-324);
+    expect(f.toNumber()).toBe(5e-324);
+    expect(f.d).toBe(1n << 1074n);
   });
 });

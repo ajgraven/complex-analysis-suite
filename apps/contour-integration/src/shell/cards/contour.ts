@@ -33,7 +33,7 @@ import type { ContourIntegral } from "../../engine/contour/integrate.js";
 import type { LedgerResult, LedgerRow } from "../../engine/ledger.js";
 import type { LemmaId, Piece, PieceRole } from "../../engine/contour/model.js";
 import { h, type Child } from "../dom.js";
-import { mathPlain, mathText } from "../math.js";
+import { mathSpoken, mathText } from "../math.js";
 import { card, nothing, type Card } from "./card.js";
 
 /**
@@ -230,7 +230,7 @@ export const contourCard: Card = (ctx) => {
             class: "pieceRename",
             type: "text",
             value: piece.name,
-            "aria-label": `rename ${mathPlain(piece.name)}`,
+            "aria-label": `rename ${mathSpoken(piece.name)}`,
             onKeydown: (e: Event) => {
               const ev = e as KeyboardEvent;
               if (ev.key === "Enter") {
@@ -238,15 +238,16 @@ export const contourCard: Card = (ctx) => {
                 actions.renamePiece(piece.id, (ev.target as HTMLInputElement).value);
                 actions.setRenaming(null);
               } else if (ev.key === "Escape") {
-                // **Escape abandons, and it stops HERE.** The first draft of this comment said the
-                // guard protects the pen and the modals; measured, it protects neither and could
-                // not — the pen's Escape is on `ink` and a modal's is on its own backdrop, and the
-                // rename box is inside neither subtree, so nothing the event bubbles through acts
-                // on Escape today. What the line guarantees is the ROW's contract rather than a
-                // consequence somewhere else: a cancel key pressed in this box cancels this box
-                // and does nothing further, whatever the shell later puts above it. Asserted that
-                // way too, by a listener on an ancestor, because a test aimed at the pen passed
-                // with the line removed.
+                // **Escape abandons, and it stops HERE — and the stopping is load-bearing now.**
+                // This comment said twice that it was not: the first draft claimed the guard
+                // protects the pen and the modals, and the correction said nothing the event
+                // bubbles through acts on Escape at all, so the line only stated the ROW's
+                // contract. Both readings are out of date. The shell takes Escape on the DOCUMENT
+                // while a pen path is open, and the rename box is inside that subtree — so without
+                // `stopPropagation` a cancel pressed in this box would also throw away a half-drawn
+                // contour. The contract is the same and it now has a consequence: a cancel key
+                // pressed in this box cancels this box and nothing else. Asserted by a listener on
+                // an ancestor, because a test aimed at the pen passed with the line removed.
                 ev.preventDefault();
                 ev.stopPropagation();
                 actions.setRenaming(null);
@@ -264,7 +265,7 @@ export const contourCard: Card = (ctx) => {
           {
             key: "role",
             class: "pieceRole",
-            "aria-label": `what ${mathPlain(piece.name)} is for`,
+            "aria-label": `what ${mathSpoken(piece.name)} is for`,
             value: choiceOf(piece),
             onChange: (e: Event) => {
               const chosen = ROLE_CHOICES.find((c) => c.id === (e.target as HTMLSelectElement).value);
@@ -298,11 +299,19 @@ export const contourCard: Card = (ctx) => {
     // card with one voice.
     if (status !== undefined) {
       // **The NAME is the verdict; the SENTENCE is not put here** — M8 step 3.6's finding, in the
-      // one place step 4.3 could have repeated it. A KILL row's claim is a formula (`\left|\int
+      // one place step 4.3 could have repeated it. A vanishing row's claim is a formula (`\left|\int
       // f\,dz\right| \le 4.928e-2 …`) and `mathPlain` strips the `$` and leaves the macros, so an
       // `srOnly` copy of it would put LaTeX source on screen and read it aloud character by
       // character. The full sentence is in the Result card's check list, typeset, which is where a
       // reader looking for WHY goes; this row says only which of the three verdicts it got.
+      //
+      // **And that argument applies to a `title` too, which is what the 2026-09-20 review measured.**
+      // There was one here, `mathPlain(status.claim)`, under a comment claiming it was neither on
+      // screen nor in the accessible name — both halves false: a browser draws a `title` as a
+      // tooltip, and where an `aria-label` is present the tree takes the `title` as the accessible
+      // DESCRIPTION. Across the 43 mounted states it carried a backslash 52 times. `mathSpoken`
+      // would not rescue it either, since it maps NAMES and not integrals, so the attribute is gone
+      // and the claim stays where it is already typeset.
       const said =
         status.status === "failed"
           ? "not certified"
@@ -316,10 +325,7 @@ export const contourCard: Card = (ctx) => {
             key: "st",
             class: status.status === "failed" ? "tag warn" : "tag",
             "data-status": status.status,
-            "aria-label": `${said} — ${mathPlain(piece.name)}`,
-            // A pointer can have the sentence; it is an attribute rather than text, so it is not on
-            // screen and not in the accessible name either.
-            title: mathPlain(status.claim),
+            "aria-label": `${said} — ${mathSpoken(piece.name)}`,
           },
           status.status === "failed" ? "⚠" : status.status === "satisfied" ? "✓" : "?",
         ),
@@ -341,7 +347,7 @@ export const contourCard: Card = (ctx) => {
 
     if (sandbox) {
       const tool = (key: string, label: string, glyph: string, onClick: () => void): Child =>
-        h("button", { key, class: "pieceTool", type: "button", "aria-label": `${label} ${mathPlain(piece.name)}`, onClick }, glyph);
+        h("button", { key, class: "pieceTool", type: "button", "aria-label": `${label} ${mathSpoken(piece.name)}`, onClick }, glyph);
       body.push(
         h(
           "span",

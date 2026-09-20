@@ -6,9 +6,11 @@
 // integrals rather than punchlines.
 import katex from "katex";
 import { describe, expect, it } from "vitest";
+import { evaluate, parse, type Complex } from "@cas/expr";
 import { FAMILIES, loadFamilies } from "../src/families/index.js";
 import { isVariant } from "../src/families/describe.js";
-import { TAXONOMY_SECTIONS, type CitationBook } from "../src/families/schema.js";
+import { primaryGolden, runFamily } from "../src/families/runFamily.js";
+import { TAXONOMY_SECTIONS, type CitationBook, type Golden } from "../src/families/schema.js";
 
 const BOOKS: readonly CitationBook[] = [
   "Ahlfors",
@@ -120,5 +122,168 @@ describe("the corpus describes itself", () => {
       }
     }
     expect(variants).toBe(10);
+  });
+});
+
+/**
+ * **What the corpus SAYS about itself, checked against what the engine does with it.**
+ *
+ * The 2026-09-20 review measured four claims the records make and nothing read: the closed form
+ * beside each fixture's number, the winding number declared per pole, the bonus clause loader
+ * invariant 3 is built on, and the half-plane rule 19 records name. All four came out RIGHT — so
+ * these are gaps rather than defects, and what they buy is that the next wrong one is caught by the
+ * suite instead of by a reader. Each carries its own anti-vacuity count, because a filter that
+ * silently emptied would otherwise pass over nothing.
+ */
+describe("the corpus agrees with the engine about itself", () => {
+  /** A fixture's `params` as an `@cas/expr` scope; variant flags are not numbers and are dropped. */
+  function scopeOf(params: Golden["params"]): Record<string, Complex> {
+    const scope: Record<string, Complex> = {};
+    for (const [name, value] of Object.entries(params)) {
+      if (typeof value === "number") scope[name] = [value, 0];
+    }
+    return scope;
+  }
+
+  function evaluateAt(text: string, params: Golden["params"]): Complex {
+    const got = evaluate(parse(text), [0, 0], [0, 0], undefined, scopeOf(params));
+    if (!Array.isArray(got) || got.length !== 2) throw new Error(`not a complex value: ${String(got)}`);
+    return got as Complex;
+  }
+
+  function want(g: Golden): Complex {
+    return typeof g.numeric === "number" ? [g.numeric, 0] : [g.numeric[0], g.numeric[1]];
+  }
+
+  it("prints a closed form that IS the number beside it, at all 94 fixtures", () => {
+    // **The M5.3d class — a right value under a wrong form — at the RECORD level.** `Golden.value`
+    // is what `describe.ts`'s claim line and `latex.ts`'s identity line print verbatim, and the
+    // golden corpus asserted `solved.text` only for the PRIMARY fixture, comparing numbers alone
+    // everywhere else. So a wrong string beside a right number shipped on the card, in the
+    // accessible name and in the front door's identity line, with nothing to catch it.
+    const wrong: string[] = [];
+    let checked = 0;
+    for (const f of FAMILIES) {
+      for (const g of f.golden) {
+        const where = `${f.id} @ ${JSON.stringify(g.params)}`;
+        let got: Complex;
+        try {
+          got = evaluateAt(g.value, g.params);
+        } catch (e) {
+          wrong.push(`${where}: "${g.value}" did not evaluate — ${(e as Error).message}`);
+          continue;
+        }
+        checked += 1;
+        const [re, im] = want(g);
+        const scale = Math.max(1, Math.abs(re), Math.abs(im));
+        if (Math.abs(got[0] - re) > 1e-9 * scale || Math.abs(got[1] - im) > 1e-9 * scale) {
+          wrong.push(`${where}: "${g.value}" is ${got[0]} + ${got[1]}i, not ${re} + ${im}i`);
+        }
+      }
+    }
+    expect(wrong).toEqual([]);
+    // Every one of them evaluates: there is no "unreadable" bucket for this to hide in.
+    expect(checked).toBe(94);
+    expect(checked).toBe(FAMILIES.reduce((n, f) => n + f.golden.length, 0));
+  });
+
+  it("declares winding numbers the engine agrees with, at every record's primary fixture", () => {
+    // `contour.windings[]` is *"per-pole, not a prose blurb"* and `index.ts`'s loader says in so
+    // many words that nothing evaluates them. For D6 the assertion `n(γ, ±ia) = 0` is the record's
+    // entire point — its dogbone winds about the CUT and not about the poles the answer comes from
+    // — so a record silently declaring the opposite would be a claim the engine contradicts.
+    const wrong: string[] = [];
+    let compared = 0;
+    let nonZero = 0;
+    const unreadable: string[] = [];
+    for (const f of FAMILIES) {
+      const g = primaryGolden(f);
+      const r = runFamily(f, g);
+      expect(r.ok, `${f.id} did not run`).toBe(true);
+      if (!r.ok) continue;
+      for (const w of f.contour.windings) {
+        const where = `${f.id}: n(γ, ${w.pole})`;
+        let at: Complex;
+        let declaredN: Complex;
+        try {
+          at = evaluateAt(w.pole, g.params);
+          declaredN = evaluateAt(w.n, g.params);
+        } catch {
+          // D3 names its poles as a FAMILY — `exp(i*pi*(2*k+1)/n)` over an index `k` the fixture
+          // does not bind — which is the honest way to say "every n-th root of −1" and is the one
+          // entry here that is not a point. Named, so the exception cannot grow silently.
+          unreadable.push(where);
+          continue;
+        }
+        compared += 1;
+        if (declaredN[0] !== 0) nonZero += 1;
+        const got = r.run.integral.windings.find(
+          (x) => Math.hypot(x.at[0] - at[0], x.at[1] - at[1]) < 1e-7,
+        );
+        if (got === undefined) {
+          wrong.push(`${where}: the engine has no pole at ${at[0]} + ${at[1]}i`);
+          continue;
+        }
+        if (!got.decided) wrong.push(`${where}: the engine did not decide it`);
+        else if (got.n !== declaredN[0]) wrong.push(`${where}: declared ${declaredN[0]}, engine says ${got.n}`);
+      }
+    }
+    expect(wrong).toEqual([]);
+    expect(unreadable).toEqual(["keyhole-x-to-the-n: n(γ, exp(i*pi*(2*k+1)/n))"]);
+    expect(FAMILIES.reduce((n, f) => n + f.contour.windings.length, 0)).toBe(46);
+    expect(compared).toBe(45);
+    expect(nonZero).toBe(28);
+  });
+
+  it("declares no `bonus` at all — loader invariant 3's second clause is vacuous over the corpus", () => {
+    // Not a defect and not dead code: `familyLoader.test.ts` exercises the clause on a synthetic
+    // record, so the mechanism works. What does not exist is a corpus record that exercises it —
+    // including D4 and D5, the log families it was bought from, whose affine lower-edge row lives
+    // in `coefficients` rather than in `bonus`. The number is pinned so that a record acquiring one
+    // is noticed and this test updated deliberately, rather than the clause quietly going live.
+    const declaring = FAMILIES.filter((f) => f.contour.pieces.some((p) => p.bonus !== undefined));
+    expect(declaring.map((f) => f.id)).toEqual([]);
+  });
+
+  it("names a half-plane the engine's own winding numbers agree with", () => {
+    // `residueSelection.rule` is declared by every record and read by nothing but `targetTerms`.
+    // The engine decides inclusion from the computed windings instead, which is the better source
+    // — it follows a contour that has been dragged — but nothing compared the two, so a record
+    // could name the wrong half-plane in silence. B1's is load-bearing: it closes UP or DOWN with
+    // `sgn(a)`, and the rule is what a reader is told the choice was.
+    const wrong: string[] = [];
+    const checked: string[] = [];
+    const emptied: string[] = [];
+    for (const f of FAMILIES) {
+      const rule = f.residueSelection.rule;
+      if (rule !== "upperHalfPlane" && rule !== "lowerHalfPlane") continue;
+      const g = primaryGolden(f);
+      const r = runFamily(f, g);
+      expect(r.ok, `${f.id} did not run`).toBe(true);
+      if (!r.ok) continue;
+      const weighted = r.run.integral.windings.filter((w) => w.decided && w.n !== 0);
+      if (weighted.length === 0) {
+        // C1 declares the half-plane AND an empty set — *"the whole answer is the indentation"* —
+        // so an engine that weights nothing there is agreeing with it. Pinned by NAME rather than
+        // skipped, because a record that silently stopped weighting anything would otherwise pass
+        // this test by having nothing left to check.
+        emptied.push(f.id);
+        continue;
+      }
+      checked.push(f.id);
+      const side = rule === "upperHalfPlane" ? 1 : -1;
+      const strays = weighted.filter((w) => Math.sign(w.at[1]) !== side);
+      if (strays.length > 0) {
+        wrong.push(
+          `${f.id}: declares '${rule}' but weights ${strays
+            .map((w) => `${w.at[0]}${w.at[1] < 0 ? "" : "+"}${w.at[1]}i`)
+            .join(", ")}`,
+        );
+      }
+    }
+    expect(wrong).toEqual([]);
+    expect(emptied).toEqual(["indented-sinc"]);
+    // The anti-vacuity count: a `rule` renamed would empty the filter and pass over nothing.
+    expect(checked.length).toBeGreaterThanOrEqual(5);
   });
 });

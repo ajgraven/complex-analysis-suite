@@ -51,8 +51,10 @@ Monte Carlo). PT-2 … PT-5 remain queued.
   engines (`potentialDomain` / `generalDomains` / `logLightning` / `faberZeros` / `feketePoints` /
   `marchingSquares`) moved off `2d-electrostatics` as the single-page `index.html`. Deps `@cas/flow`,
   `@cas/faber`, `@cas/core`, `@cas/ui`.
-- **PT-1 — the shell (done, ADR-0036 stage 3).** The shared `mountNavHeader` (`@cas/ui`) + `@cas/ui/nav.css`
-  now render on the page — back-to-launcher + sibling nav, restoring cross-app navigation.
+- **PT-1 — the shell (done, ADR-0036 stage 3; since REVERSED).** The shared `mountNavHeader`
+  (`@cas/ui`) + `@cas/ui/nav.css` rendered on the page — back-to-launcher + sibling nav. *(Withdrawn —
+  [ADR-0044](../DECISIONS.md) deleted both symbols and the stylesheet from every app; the launcher is
+  the unified menu. Noted 2026-09-20.)*
 - **PT-2 — the growth-law readout** (deferred at M3). Draw (1/n)·log|Fₙ(z)| → g_K(z) as an on-canvas
   convergence readout, closing the loop between the Faber overlay and the Green's function (the "Faber
   polynomials as an approximate exterior map" story).

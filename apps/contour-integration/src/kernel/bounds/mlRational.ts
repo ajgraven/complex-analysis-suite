@@ -20,8 +20,20 @@ import { dampedArcIntegral } from "./linearMinorant.js";
 import { bound, refuse, type Certificate } from "@cas/rigor";
 import { fracCmp, sqrtDown, sqrtUp } from "./ratBound.js";
 
-/** What happens to the bound as the limit parameter runs to its limit. */
-export type ArcAsymptotics = "vanishes" | "bounded" | "diverges";
+/**
+ * What happens to the bound as the limit parameter runs to its limit.
+ *
+ * **`"unestablished"` is not a fourth asymptotic regime; it is the absence of one.** A producer that
+ * REFUSES has computed no bound, so it knows nothing about the limit — and the three values above are
+ * each a claim. Saying `"vanishes"` there was measured to mark a refused row *satisfied*
+ * (`1/(1+z²)` on the semicircle at `R = 0.5`: a `⚠` certificate beside `status = satisfied`, and a
+ * headline saying the argument closes about `target = 0` where the true value is 0.9273), because the
+ * one field the row's status was read from carried the degree gap's asymptotics rather than the
+ * refusal's. Every refusal in this directory that reaches no bound answers `"unestablished"`; a
+ * refusal that DID reach a bound and is merely reporting that it does not discharge keeps its true
+ * asymptotics, since that is exactly what it established.
+ */
+export type ArcAsymptotics = "vanishes" | "bounded" | "diverges" | "unestablished";
 
 /**
  * The name {@link ArcBound.evaluated} uses when the caller does not supply one.
@@ -41,7 +53,14 @@ export interface ArcBound {
   /** `|∫_arc f dz| ≤ value`, exactly — present unless the bound could not be established at all. */
   readonly value?: Frac;
   readonly asymptotics: ArcAsymptotics;
-  /** The bound behaves like `R^exponent`. Negative ⇒ it vanishes. */
+  /**
+   * The bound behaves like `R^exponent` — **or `e^{exponent·R^k}` for the exponential producers.**
+   *
+   * `stripSide.ts` writes `Re(a) + deg N − deg D`, the RATE in `e^{κR}`, and `gaussianSide.ts` writes
+   * the rate in `e^{κR²}`; neither is a power of `R`, and a reader taking the field at the word
+   * "power" about a strip side would be off by an exponential. **Only the SIGN is contractual**, and
+   * it is the same sign in both readings: negative ⇒ the bound vanishes in the limit.
+   */
   readonly exponent: number;
   /**
    * `deg Q − deg P`, the quantity the classical hypothesis is stated in.
@@ -181,7 +200,7 @@ export function mlArcBound(
   if (!positive(R)) {
     return {
       R,
-      asymptotics: "diverges",
+      asymptotics: "unestablished",
       exponent,
       degreeGap,
       certificate: refuse("the arc bound", "the radius must be positive"),
@@ -191,10 +210,12 @@ export function mlArcBound(
   const denLow = denominatorLowerBound(den, R);
   if (!positive(denLow)) {
     // Not a failure of the method: below the Cauchy root bound a pole may lie ON or outside the arc,
-    // and then there is genuinely no bound of this form. Enlarging R is the repair.
+    // and then there is genuinely no bound of this form. Enlarging R is the repair. The asymptotics
+    // are `"unestablished"` rather than the degree gap's: nothing here was bounded, so the limit is
+    // not a thing this call knows about.
     return {
       R,
-      asymptotics,
+      asymptotics: "unestablished",
       exponent,
       degreeGap,
       certificate: refuse(
@@ -258,6 +279,41 @@ export function mlArcBound(
 /** The semicircle's angular extent, in units of π — the range Jordan's bound is taken over. */
 const SEMICIRCLE = Frac.ONE;
 
+/**
+ * The arc Jordan's bound is being asked about, in units of π — `wedgeArcBound`'s `WedgeArc` shape.
+ *
+ * Optional only so that a caller written before the extent was read still compiles; absent, the
+ * bound REFUSES. It may not default to a semicircle, which is what it used to assume.
+ */
+export interface JordanArc {
+  readonly from: Frac;
+  readonly to: Frac;
+}
+
+/**
+ * Is the arc contained in the half-plane the bound is being taken over?
+ *
+ * `[0, π]` for the upper half and `[−π, 0]` or `[π, 2π]` for the lower — the two windows a template
+ * or a drag can produce. Orientation is irrelevant (a clockwise arc sweeps the same set), so the
+ * endpoints are ordered first. A window outside those two is refused rather than reduced modulo 2π:
+ * refusing is always sound, and an arc reaching `[2π, 3π]` is a shape no piece in the app draws.
+ */
+function containedInHalfPlane(arc: JordanArc, half: "upper" | "lower"): boolean {
+  const lo = fracCmp(arc.from, arc.to) <= 0 ? arc.from : arc.to;
+  const hi = fracCmp(arc.from, arc.to) <= 0 ? arc.to : arc.from;
+  const within = (a: Frac, b: Frac): boolean => fracCmp(lo, a) >= 0 && fracCmp(hi, b) <= 0;
+  return half === "upper"
+    ? within(Frac.ZERO, Frac.ONE)
+    : within(Frac.ONE.neg(), Frac.ZERO) || within(Frac.ONE, Frac.of(2n));
+}
+
+/** An angle in units of π, as a reader writes one: `0`, `\pi`, `-\pi`, `3\pi/2`. */
+const piUnits = (f: Frac): string => {
+  if (f.isZero()) return "0";
+  const head = f.n === 1n ? "" : f.n === -1n ? "-" : `${f.n}`;
+  return f.d === 1n ? `${head}\\pi` : `${head}\\pi/${f.d}`;
+};
+
 export function jordanArcBound(
   gNum: QiPoly,
   gDen: QiPoly,
@@ -265,6 +321,7 @@ export function jordanArcBound(
   half: "upper" | "lower",
   R: Frac,
   param = DEFAULT_RADIUS_PARAM,
+  arc?: JordanArc,
 ): ArcBound {
   const degreeGap = gDen.degree() - gNum.degree();
   const correctHalf = (a.n > 0n && half === "upper") || (a.n < 0n && half === "lower");
@@ -272,12 +329,50 @@ export function jordanArcBound(
   if (a.isZero()) {
     return {
       R,
-      asymptotics: "bounded",
+      asymptotics: "unestablished",
       exponent: 0,
       degreeGap,
       certificate: refuse(
         "Jordan's lemma",
         "it needs a non-zero frequency; at $a = 0$ the exponential is $1$ and the ML-estimate applies instead",
+      ),
+    };
+  }
+
+  // **THE ARC'S EXTENT IS PART OF THE HYPOTHESIS, NOT OF THE PICTURE.** `|e^{iaz}| = e^{-a\,Im z}` is
+  // bounded on ONE half-plane, so a bound taken over `[0, π]` says nothing about an arc that leaves
+  // it — and until this was read, the extent was assumed: a full circle at `R = 4` on
+  // `e^{iz}/(1+z^2)` certified `≤ 2.094e-1` at level `≤`, where `∫|f||dz| = 1.841e+1`, 88× the
+  // claimed bound, on an arc whose integrand grows like `e^R` over half its length. A SUB-arc of the
+  // right half-plane stays sound — `∫_sub ≤ ∫_{[0,π]}` term by term, so the constant below still
+  // dominates — which is why containment is the whole question and the extent is not otherwise used.
+  if (arc === undefined) {
+    return {
+      R,
+      asymptotics: "unestablished",
+      exponent: -degreeGap,
+      degreeGap,
+      certificate: refuse(
+        "Jordan's lemma",
+        "it is stated on an arc inside one half-plane, and this arc's angular extent was not supplied — a bound taken over a half-turn is not a bound on an arc that leaves it",
+      ),
+    };
+  }
+  if (!containedInHalfPlane(arc, half)) {
+    return {
+      R,
+      asymptotics: "unestablished",
+      exponent: -degreeGap,
+      degreeGap,
+      certificate: refuse(
+        `Jordan's lemma on the arc from $${piUnits(arc.from)}$ to $${piUnits(arc.to)}$`,
+        `it is stated on an arc contained in the ${half} half-plane — $[0,\\pi]$ for the upper, $[-\\pi,0]$ or $[\\pi,2\\pi]$ for the lower — and this arc leaves it, where $|e^{iaz}|$ grows like $e^{|a|R}$ rather than being bounded`,
+        {
+          provenance: [
+            { ok: false, text: `the arc sweeps $${piUnits(arc.from)}$ to $${piUnits(arc.to)}$, which is not inside the ${half} half-plane` },
+            { ok: true, text: "suggested repair: split the arc at the real axis, and close each half through the half-plane its exponential decays in" },
+          ],
+        },
       ),
     };
   }
@@ -305,7 +400,9 @@ export function jordanArcBound(
   if (!positive(denLow)) {
     return {
       R,
-      asymptotics: degreeGap >= 1 ? "vanishes" : "bounded",
+      // Not the degree gap's verdict: `max|g|` was never bounded, so this call establishes nothing
+      // about the limit — the same correction `mlArcBound` takes one refusal above.
+      asymptotics: "unestablished",
       exponent: -degreeGap,
       degreeGap,
       certificate: refuse(
@@ -322,13 +419,22 @@ export function jordanArcBound(
   // `dampedArcIntegral` at a range of π in the `sin` face — the SAME call the wedge lemma makes, in
   // the same module, so `sin ψ ≥ 2ψ/π` is asserted in exactly one place in the engine. The constant
   // is `1` here (the semicircle needs the symmetry fold), so this is byte-for-byte the bound it
-  // replaces; `test/jordanUnified.test.ts` pins that it is.
+  // replaces; `test/wedgeArc.test.ts` pins that it is.
+  //
+  // The range stays the WHOLE half-turn even for a sub-arc, and that is the conservative direction:
+  // `∫_sub e^{−κ sin ψ} dψ ≤ ∫₀^π`, so the same constant dominates. The arc's own extent is spent on
+  // the containment decision above and nowhere else.
   const damped = dampedArcIntegral(SEMICIRCLE, "sin");
   if (damped.constant === null) {
-    return { R, asymptotics: "bounded", exponent: 0, degreeGap, certificate: damped.certificate };
+    return { R, asymptotics: "unestablished", exponent: 0, degreeGap, certificate: damped.certificate };
   }
   const value = damped.constant.mul(piUpper()).div(absA).mul(maxG);
   const asymptotics: ArcAsymptotics = degreeGap >= 1 ? "vanishes" : "bounded";
+  // A half-turn is a semicircle and anything shorter is an arc. The word was "semicircle"
+  // unconditionally, which printed "the upper semicircle" about a full circle.
+  const sweep = arc.to.sub(arc.from);
+  const isHalfTurn = Frac.of(sweep.n < 0n ? -sweep.n : sweep.n, sweep.d).equals(SEMICIRCLE);
+  const shape = `the ${half} ${isHalfTurn ? "semicircle" : "arc"}`;
 
   return {
     R,
@@ -341,7 +447,7 @@ export function jordanArcBound(
       asymptotics === "vanishes"
         ? bound(
             "≤",
-            `the ${half} semicircle: $\\left|\\int g(z)e^{iaz}\\,dz\\right| \\le (\\pi/|a|)\\max|g| \\le ${value.toNumber().toExponential(3)}$ at $R = ${R.toNumber()}$, and $\\to 0$ as $R \\to \\infty$ since $\\max|g| = O(R^{${-degreeGap}})$`,
+            `${shape}: $\\left|\\int g(z)e^{iaz}\\,dz\\right| \\le (\\pi/|a|)\\max|g| \\le ${value.toNumber().toExponential(3)}$ at $R = ${R.toNumber()}$, and $\\to 0$ as $R \\to \\infty$ since $\\max|g| = O(R^{${-degreeGap}})$`,
             "Jordan's lemma, with $\\max|g|$ from the exact $\\mathbb{Q}$ coefficient bound",
             {
               provenance: [

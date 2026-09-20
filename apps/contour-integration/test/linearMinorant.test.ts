@@ -88,7 +88,7 @@ describe("dampedArcIntegral — the side condition, decided in ℚ", () => {
     expect(survives.constant).not.toBeNull();
     expect(refuses.constant).toBeNull();
     expect(refuses.certificate.level).toBe("⚠");
-    expect(refuses.certificate.method).toMatch(/GROWS/);
+    expect(refuses.certificate.method).toMatch(/grows rather than decays/);
     expect(refuses.certificate.method).toMatch(/runs past π\/2/);
   });
 

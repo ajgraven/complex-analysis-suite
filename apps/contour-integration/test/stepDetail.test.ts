@@ -167,7 +167,7 @@ describe("the corpus, which set the policy", () => {
       const st = { ...base, mode: "gallery" as const, record: id, fixture: 0 };
       const r = resolveState(st, compile(st.expr));
       if (r.kind !== "gallery" || r.run === null || r.run.integral === undefined) continue;
-      const acc = accumulateForIntegral(r.run.f, r.run.resolved, r.run.integral, undefined, r.run.sides);
+      const acc = accumulateForIntegral(r.run.f, r.run.resolved, r.run.integral, r.run.ledger, undefined, r.run.sides);
       if (acc === null) continue;
       for (let k = 0; k < acc.steps.length; k += 1) {
         const d = stepDetail(acc.steps[k], k, 120);

@@ -356,7 +356,9 @@ The maths prerequisite for tier F, and a correction to the research.
 >   monotonicity, and `coth(π/2)` bracketed from a certified lower bound on `e^π` with both
 >   truncations erring upward. The bound **refuses** any other half-width by name, which ENFORCES
 >   what `through: "halfIntegers"` declares — from the geometry, not from the field, and stronger for
->   it (a dragged contour is caught too). **The field is still unread**, and SG-5 proper (the G
+>   it (a dragged contour is caught too). **The field was still unread at M5.5** *(re-measured 2026-09-20: M8 step 3.2 gave it two
+>   readers in `src/families/instantiate.ts` — it clamps the limit range to `MAX_SERIES_N` and
+>   emits `admits: "integers"`)*, and SG-5 proper (the G
 >   tier's target is a SUM, not an integral) is untouched and stays in M5.7.
 >
 > **D-2 executed, and corrected.** Research 03 §8's bound reads 3.392 against a measured 3.567 at

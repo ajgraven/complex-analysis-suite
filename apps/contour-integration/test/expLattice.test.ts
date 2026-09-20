@@ -15,6 +15,7 @@ import {
   MAX_ROOT_ORDER,
 } from "../src/kernel/expLattice.js";
 import type { Cx } from "../src/kernel/geom.js";
+import { findPoles } from "../src/kernel/poles.js";
 
 const q = (n: number, d = 1): Frac => Frac.of(BigInt(n), BigInt(d));
 const form = (src: string) => {
@@ -244,5 +245,37 @@ describe("what the strip reader refuses, and by name", () => {
   it("a non-positive strip height", () => {
     expect(polesInStrip(form("1/(1 + exp(z))"), Frac.ZERO).ok).toBe(false);
     expect(polesInStrip(form("1/(1 + exp(z))"), q(-1)).ok).toBe(false);
+  });
+});
+
+describe("the root finder the band reader was NOT passing", () => {
+  it("pins the three poles of `1/(1 + e^z + e^{2z} + e^{3z})`, where it used to deny they existed", () => {
+    // `exactPolesOf` deflates against injected candidates, so with none `splitWithDeflation` declines
+    // any denominator that is neither degree ≤ 2 nor an even binomial — and `polesInBand` then said
+    // *"not every root of D(w) is expressible in ℚ(i) or one quadratic extension of it"*, which for
+    // `D(w) = 1 + w + w² + w³` (roots `−1, ±i`) is false in every clause. A refusal naming a pole
+    // that is not there is worse than no refusal.
+    const r = strip("1/(1 + exp(z) + exp(2*z) + exp(3*z))", q(2));
+    expect(r.poles).toHaveLength(3);
+    // The roots are `−1, i, −i`, i.e. `z₀/2πi` at a half, a quarter and three quarters of a turn.
+    expect(r.poles.map((p) => `${p.turns.n}/${p.turns.d}`).sort()).toEqual(["1/2", "1/4", "3/4"]);
+    // And every one is a genuine pole, checked against an independent contour integral that shares
+    // no arithmetic with the exact route.
+    for (const p of r.poles) {
+      const z0: Cx = [0, 2 * Math.PI * p.turns.toNumber()];
+      const v = numericResidue("1/(1 + exp(z) + exp(2*z) + exp(3*z))", z0, 0.05);
+      expect(Math.hypot(v[0], v[1]), `${p.turns.n}/${p.turns.d}`).toBeGreaterThan(0.1);
+    }
+    // The same denominator read as an ordinary rational function pins all three too — the comparison
+    // that showed the two paths disagreeing about one polynomial.
+    expect(findPoles(parse("1/(1 + z + z^2 + z^3)")).poles).toHaveLength(3);
+  });
+
+  it("still refuses a root that genuinely is not a root of unity", () => {
+    // The anti-vacuity half: passing the finder must not turn the refusal into a rubber stamp.
+    // `D(w) = 2 + w` has the perfectly findable root `−2`, which is not on the unit circle.
+    const r = polesInStrip(form("1/(2 + exp(z))"), q(2));
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.reason).toMatch(/not a root of unity/);
   });
 });

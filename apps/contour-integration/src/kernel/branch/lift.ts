@@ -192,7 +192,7 @@ function onTop(t: number, rMin: number): LiftResult {
       `the path comes within ${rMin.toExponential(1)} of the branch point at t = ${t.toFixed(6)}, where arg(z − b) is not defined`,
       {
         provenance: [
-          { ok: false, text: "a path THROUGH a branch point has no continuous argument to follow" },
+          { ok: false, text: "a path through a branch point has no continuous argument to follow" },
           { ok: true, text: "suggested repair: indent the path around the branch point, or move it" },
         ],
       },

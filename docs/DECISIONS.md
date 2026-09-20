@@ -53,6 +53,7 @@ Format follows Michael Nygard's ADR convention.
 | [0042](#adr-0042)                                                                                              | An exactly-known IMPORTED value is `=` on its form, with the import in its provenance                         | Accepted |
 | [0043](#adr-0043)                                                                                              | Contour Integration rebuilds its shell — two rails, a keyed renderer, KaTeX, textbook vocabulary              | Accepted |
 | [0044](#adr-0044-withdraw-the-in-app-suite-navigation-header-the-launcher-is-the-unified-menu)                | Withdraw the in-app suite navigation header (the launcher is the unified menu)                                 | Accepted |
+| [0045](#adr-0045)                                                                                              | One predicate decides whether a value may be shown                                                            | Accepted |
 
 > **Status legend:** Proposed → Accepted (once you sign off) → Superseded/Deprecated.
 > All thirty-six are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
@@ -4001,6 +4002,9 @@ students, as an exploration instrument first with a pedagogical mode.
   DOM-free suites (codec by verdict, figure caption, contrast ladder, drill, engine and kernel) are the
   safety net and are untouched.
 - The `@cas/ui` nav header stays hard-coded dark; a full light theme is deferred (plan P3).
+  **(Moot — [ADR-0044](#adr-0044-withdraw-the-in-app-suite-navigation-header-the-launcher-is-the-unified-menu)
+  deleted the header from `@cas/ui` and from every app. Marked 2026-09-20; ADR-0016 AI-5 and U7 were
+  marked at the time and this bullet was missed.)**
 - Supersedes PLAN §5's two-left-rails table for this app; the ten interaction rules and the P0
   pedagogical constraints stand.
 
@@ -4209,3 +4213,93 @@ Staged in [`review/2026-09-16-complex-dynamics-review/NAV-WITHDRAWAL-PLAN.md`](r
        controls across Complex Dynamics, the plotter and Riemann Map is UI work in three apps this
        removal does not otherwise touch, so it is left with its reason rather than taken on
        unasked. CD's `window.prompt` import stays WP10 of the remediation plan.
+
+---
+
+<a id="adr-0045"></a>
+
+## ADR-0045: One predicate decides whether a value may be shown
+
+**Status:** Accepted **Date:** 2026-09-20 **Deciders:** Andrew
+
+_Executes §1 of the 2026-09-20 Contour Integration review
+([`review/2026-09-20-contour-integration-review/REPORT.md`](review/2026-09-20-contour-integration-review/REPORT.md),
+items 1.2, 1.6, 1.7, 1.9)._
+
+### Context
+
+`engine/ledger.ts` has said since M4.1 that a LEGALITY refusal means **nothing may report a value
+while this exists**, and `test/ledger.test.ts` heads its block *"the one gate on printing a value at
+all"*. It was never one gate. Five surfaces decided it separately, and the review found four of them
+disagreeing on the same state:
+
+| surface | asked | 2026-09-20 |
+|---|---|---|
+| Result card, figure caption | `integralRefusal` | correct |
+| Derivation card, Stepper | nothing | printed `∮ f dz = 2πi` at `=` past a `⚠ failed` LEGALITY row |
+| accumulator | `integral.value === undefined` | drew the trail; readout ended at `6.283005874i` beside `⚠ Refused` |
+| Pass 5 (`solveWithin`) | `legalityRefusal` alone | `= −π` for `∫₀^∞ x^{1/2}/(1+x) dx`, which diverges |
+
+All four measured on the corpus. The last is the worst: fifteen bindings over six records where a
+KILL row *fails*, the headline reads *"a boundary term does not vanish"*, and an `=`-badged closed
+form is printed directly under it — every one of the fifteen integrals divergent. `solveWithin`'s own
+comment makes the LEGALITY argument and then stops one constraint short of it.
+
+A second, quieter symptom of the same thing: two surfaces derived the ANSWER's badge by different
+rules (`assembleVerdict(solved.certificates)` in the derivation, `levelOfSolved` on the card), which
+over 28 records × 94 fixtures disagree exactly once — B3, `=` above and `?` below.
+
+### Decision
+
+1. **One predicate, `valueRefusal(integral, ledger, of)` in `engine/ledger.ts`**, beside
+   `integralRefusal` (which it subsumes and does not replace: the narrower question still has
+   callers). It returns a named refusal, with the repair and the failing constraint, when any of:
+   everything `integralRefusal` refuses on; **an undecided winding number**; and — **for the TARGET
+   only** — **any failed row, of any constraint**, or a constraint that failed with no row to say
+   which. **The caller names what it is showing** (`of: "contour" | "target"`), because the two
+   are earned by different rows: `∮ f dz` by LEGALITY and CATCH alone (the contour is legal, every
+   winding and residue decided), the integral the contour DETERMINES by all four. *Measured at
+   integration, and it corrected the first draft:* `z/(1+z²)` on the upper semicircle has `∮ = πi`
+   exactly, a failing KILL row (the arc is `O(1)`) and no target — asking the target's clause of the
+   `∮` line, the accumulator and the result card withheld the one number the sandbox exists to show,
+   M3.5's *"drag it across a pole and the value jumps by exactly `2πi·Res`"*. `closes === false` on
+   its own is NOT a clause of either tier: `closes` also requires an exact `∮`, which `sin z` on a
+   circle and every estimate-only integrand fail with nothing wrong.
+2. **Every surface that shows a value asks it**, naming its tier: the derivation's `∮` line and its
+   quadrature cross-check statement, the Stepper (which inherits, computing nothing), the
+   accumulator (`accumulateForIntegral` takes the ledger), the strip, the Result card's `∮` and the
+   figure caption ask `"contour"`; Pass 5's gate in `families/runFamily.ts` asks `"target"`, and a
+   target it refuses reaches the card as `solved === null` with the reason in `resolution.note`.
+3. **The answer's badge comes from one function too** — `levelOfSolved`, lifted out of
+   `shell/cards/result.ts` into `engine/derivation.ts` and read by both.
+4. **Two missing sibling guards close with it**: `applyBranchTheorem` and `applyLogTheorem` gain the
+   `integral.closed` check the other four routes have always stated, and `residueTheorem`'s
+   `windingOf` refuses a pole with no winding entry instead of weighting it `0` — `n = 0` is a
+   decision and an unasked pole has none.
+
+### Consequences
+
+- **A refusal reaches the reader where a number used to be**, not as a silence: the derivation's
+  solve stage carries the refusal's own sentence and repair, and the strip names why it is blank.
+- **Pass 5's refusal string no longer carries a record slug or the word `LEGALITY`.** It is composed
+  from the record's `title` and `constraintLabel(constraint)`, the failing constraint's — *"hypotheses"*
+  would be false of a diverging arc. `test/denylist.test.ts` does not scan `src/families/**`, which is
+  why both had been reader-visible since M4.2; adding that directory to the sweep is WP3's.
+- **An OPEN contour now draws no partial-sum trail.** *The contour is not closed* is a failing
+  LEGALITY row, so the accumulator goes with every other value, and the `Σ Δz` contrast's teaching
+  line for an open path — *"the same sum is the displacement from start to end"* — is not reachable
+  any more. Recorded as a deliberate loss rather than absorbed: the picture was the honest one, and
+  it was the only surface still showing a number the result card was withholding.
+- The tier-G records are unaffected: their `∮ → 0` argument closes, so the gate never fires on them.
+
+### Action items
+
+1. [x] `valueRefusal` in `engine/ledger.ts`; derivation, stepper, accumulator, strip and
+   `runFamily.ts`'s `solveWithin` all routed through it; `levelOfSolved` lifted into the engine.
+2. [x] `integral.closed` in `applyBranchTheorem` / `applyLogTheorem`; `windingOf` refuses an unasked
+   pole.
+3. [x] The Result card and the figure caption ask `valueRefusal(…, "contour")`, and the card takes
+   `levelOfSolved` from the engine rather than keeping its own copy *(done at integration,
+   2026-09-20)*.
+4. [x] `test/ledger.test.ts:551`'s heading reworded: `legalityRefusal` is the first clause of this
+   predicate *(done at integration)*.

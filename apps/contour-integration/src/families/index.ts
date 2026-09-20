@@ -72,17 +72,16 @@ export { FRAC_FIELD, RAT_PI_FIELD, type Field } from "./field.js";
 export { RatPi, formatRatPi } from "../kernel/ratPi.js";
 
 /**
- * The records, in gallery order.
+ * The records, in gallery order — **all 28, every tier, every one executed against the engine.**
  *
- * **All of tiers A, B and C** — the families the engine runs end to end. A1–A3 arrived with the
- * `z = e^{iθ}` substitution; A4 with the residue-at-the-origin series, which is the Cauchy integral
- * formula; B1–B3 with the exponential basis `Σ cₖ e^{βₖ}`, which lets a Jordan residue be exact
- * without being evaluated; C1–C3 with L4, L5 and Pass 5's solve.
- *
- * D1 joins them with M4.2: the widened exponential basis, the sine recogniser, the power-residue
- * reader and Pass 5 over the `reproduces` role. Tiers E–G, and the rest of D, need the machinery of
- * M4.3 onward and M5 — a record loaded before its machinery exists would be a worked example that
- * cannot be worked.
+ * The rule the array was grown under is the one worth keeping: a record is loaded when the
+ * machinery its argument needs exists, because one loaded before it would be a worked example that
+ * cannot be worked. A1–A3 arrived with the `z = e^{iθ}` substitution; A4 with the
+ * residue-at-the-origin series, which is the Cauchy integral formula; B1–B3 with the exponential
+ * basis `Σ cₖ e^{βₖ}`, which lets a Jordan residue be exact without being evaluated; C1–C3 with L4,
+ * L5 and Pass 5's solve; D1 and D3 with M4.2's widened basis, sine recogniser and power-residue
+ * reader; the rest of D through M4.3–M4.6; E, F and G through M5. `records.test.ts` asserts the
+ * count, so this sentence cannot drift again the way it did between M4.2 and the 2026-09-20 review.
  */
 export const FAMILIES: readonly Family[] = [
   a1CircleLinearCos,
@@ -202,10 +201,15 @@ function checkWellFormed(family: Family): Violation[] {
   const escalation = escalationRefusal(family);
   if (escalation !== null) fail(escalation);
   // `windings` is specified as "per-pole, not a prose blurb" (DESIGN §5), so both halves must be
-  // readable as expressions. Nothing evaluates them yet — which is exactly why this is checked here.
-  // Transcribing A1–A3 produced three entries that did NOT parse (`sign(a)`, which the expression
-  // language does not have, and `if … then … else`, which is spelled `if(c, t, e)`), and without
-  // this guard they would have sat in the corpus looking executable until something tried.
+  // readable as expressions. Transcribing A1–A3 produced three entries that did NOT parse
+  // (`sign(a)`, which the expression language does not have, and `if … then … else`, which is
+  // spelled `if(c, t, e)`), and without this guard they would have sat in the corpus looking
+  // executable until something tried.
+  //
+  // Something does now: `records.test.ts` evaluates all 46 at each record's primary fixture and
+  // compares 45 of them against `run.integral.windings` (the one exception is D3's, which names a
+  // FAMILY of poles over an index no fixture binds). This note used to say nothing evaluated them,
+  // which made the parse check read as the whole protection it was never meant to be.
   for (const w of family.contour.windings) {
     for (const [what, src] of [
       ["pole", w.pole],
@@ -385,6 +389,12 @@ function checkInvariant2(family: Family): Violation[] {
  * A family with no `reproduces` piece has no bonus constants, so the second clause is VACUOUS — and
  * that is stated here rather than silently skipped, because "there was nothing to check" and "the
  * check was forgotten" must not look the same in this file.
+ *
+ * **Measured 2026-09-20: it is vacuous over the WHOLE corpus.** No record declares a `bonus` at
+ * all — not even D4 and D5, the log families the rule was bought from, whose affine lower-edge row
+ * lives in `coefficients`. The mechanism is exercised on a synthetic record in
+ * `familyLoader.test.ts` and the zero is pinned in `records.test.ts`, so the day a record acquires
+ * one it is a deliberate change rather than a clause quietly going live.
  */
 function checkInvariant3(family: Family): Violation[] {
   const v: Violation[] = [];

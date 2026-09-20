@@ -31,8 +31,10 @@ import {
 } from "../../engine/branchEdit.js";
 import { declaredOrder } from "../../shell/state.js";
 import { effectiveBranch } from "../../kernel/branch/model.js";
+import { isoShown } from "../../ui/stage/mode.js";
 import { h, type Child } from "../dom.js";
-import { mathText } from "../math.js";
+import { drawnBranch } from "../stageView.js";
+import { mathSpoken, mathText } from "../math.js";
 import { card, type Card } from "./card.js";
 
 /** The two windows the sandbox offers. Both appear in the tier-D gallery. */
@@ -80,7 +82,11 @@ export const cutsCard: Card = ({ state, resolution, actions }) => {
       : resolution.kind === "declared"
         ? resolution.declared
         : null;
-  const isoOn = state.iso ?? declaredProduct !== null;
+  // The DEFAULT is the stage's, through one predicate — see `ui/stage/mode.ts`'s `isoShown`. This
+  // line and `stageView`'s `iso === true` were two readers of the same tri-state, which is why the
+  // control read pressed on every branch record while the stage drew nothing and the first click
+  // only un-pressed it.
+  const isoOn = isoShown(state.iso, declaredProduct !== null);
 
   const head: Child[] = [
     h(
@@ -112,7 +118,11 @@ export const cutsCard: Card = ({ state, resolution, actions }) => {
           ),
         )
       : null,
-    monodromy(shown),
+    // **The system the STAGE draws, not the sandbox's.** Under a record `state.branch` is the reader's
+    // parked sandbox system (its own doc says so), and reading it here left the "Crossing a cut"
+    // block absent for every tier-D record at the 2026-09-20 review — the same defect as the stage's,
+    // through the same field. `drawnBranch` is the one decision, shared with `stageView`.
+    monodromy(effectiveBranch(drawnBranch(state, resolution))),
   ];
 
   if (state.mode !== "sandbox") {
@@ -423,7 +433,11 @@ export const cutsCard: Card = ({ state, resolution, actions }) => {
             "select",
             {
               key: "o",
-              "aria-label": `order of branch point ${point.id}`,
+              // **The point's LABEL, spoken — not its id.** Measured on the sandbox keyhole, these
+              // two read *order of branch point b1* and *remove branch point b1*: `b1` is the
+              // program's filing name for the point, the one M6.1's `SINGLE_POINT_ID` bug was
+              // about, and the row typesets the reader's name for it two lines above.
+              "aria-label": `order of branch point ${mathSpoken(`$${point.label}$`)}`,
               value: OFFERED_ORDERS.find((o) => orderLabel(o.order) === orderLabel(point.order))?.label ?? "",
               onChange: (e: Event) => {
                 const chosen = OFFERED_ORDERS.find((o) => o.label === (e.target as HTMLSelectElement).value);
@@ -436,7 +450,7 @@ export const cutsCard: Card = ({ state, resolution, actions }) => {
             "button",
             {
               key: "x",
-              "aria-label": `remove branch point ${point.id}`,
+              "aria-label": `remove branch point ${mathSpoken(`$${point.label}$`)}`,
               onClick: () => actions.setBranch(removeBranchPoint(branch, point.id)),
             },
             "remove",

@@ -103,7 +103,7 @@ export function stripSideBound(form: LatticeForm, s: StripSide): ArcBound {
   if (s.R <= 0) {
     return {
       R,
-      asymptotics: "diverges",
+      asymptotics: "unestablished",
       exponent,
       degreeGap,
       certificate: refuse("the strip-side bound", "the side must lie off the imaginary axis"),
@@ -112,7 +112,7 @@ export function stripSideBound(form: LatticeForm, s: StripSide): ArcBound {
   if (s.length <= 0) {
     return {
       R,
-      asymptotics,
+      asymptotics: "unestablished",
       exponent,
       degreeGap,
       certificate: refuse("the strip-side bound", "the side has no length"),
@@ -126,7 +126,8 @@ export function stripSideBound(form: LatticeForm, s: StripSide): ArcBound {
   if (!(denLow > 0)) {
     return {
       R,
-      asymptotics,
+      // NOT `asymptotics`: nothing was bounded on this side, so the limit is not established here.
+      asymptotics: "unestablished",
       exponent,
       degreeGap,
       certificate: refuse(

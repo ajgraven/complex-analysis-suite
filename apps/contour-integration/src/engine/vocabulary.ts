@@ -108,15 +108,6 @@ export function headlineFails(id: ConstraintId): string {
 }
 
 /**
- * The three headlines that name no constraint.
- *
- * Named here rather than written inline in `ledgerHeadline` so the M8 review document can read what
- * the app says instead of carrying a copy. The copy was the defect: step 0.5b applied all three
- * proposals and the document went on printing the pre-0.5b sentences as *today*, so a reader was
- * told that finished work was outstanding — and a review document that misreports the code is worse
- * than none, because it is believed.
- */
-/**
  * The cards the two rails hold, by id.
  *
  * M8 step 1.1. Here for the reason the constraint labels and the derivation titles are here: this
@@ -173,6 +164,15 @@ export function cardTitle(id: CardId): string {
   return CARD_TITLES[id];
 }
 
+/**
+ * The three headlines that name no constraint.
+ *
+ * Named here rather than written inline in `ledgerHeadline` so the M8 review document can read what
+ * the app says instead of carrying a copy. The copy was the defect: step 0.5b applied all three
+ * proposals and the document went on printing the pre-0.5b sentences as *today*, so a reader was
+ * told that finished work was outstanding — and a review document that misreports the code is worse
+ * than none, because it is believed.
+ */
 export const HEADLINES = {
   /** A record: the argument determines the integral it set out to determine. */
   closes: "The argument is complete.",

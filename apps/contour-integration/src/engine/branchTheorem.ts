@@ -64,6 +64,18 @@ export function applyBranchTheorem(input: BranchTheoremInput): ResidueTheoremRes
   const { poles, integral, factor } = input;
   const certificates: Certificate[] = [];
 
+  // **The same guard the other five routes state in as many words**, and its absence here was a
+  // structural asymmetry rather than a decision (2026-09-20 review): on an OPEN contour this
+  // produced a confident `exactValue` for a theorem that does not apply, and the ledger's first
+  // LEGALITY row was all that stood between it and a reader.
+  if (!integral.closed) {
+    return {
+      verdict: assembleVerdict([
+        refuse("the residue theorem", "it applies to a closed contour, and this one is not closed"),
+      ]),
+    };
+  }
+
   // THE CYCLOTOMIC ROUTE FIRST, because it needs strictly less. `Σₖ Res` over the roots of
   // `b_n z^n + b₀` has a closed form built from the structure alone, so it works where the poles are
   // not individually representable — which for D3 at `n = 5` and `n = 7` is the difference between

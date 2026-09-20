@@ -63,8 +63,3 @@ export function orient2d(a: Pt, b: Pt, c: Pt): -1 | 0 | 1 {
     .sub(doubleToFrac(b[1]).sub(ay).mul(doubleToFrac(c[0]).sub(ax)));
   return sgn(exact);
 }
-
-/** Exact comparison of two doubles as rationals — for the ray test's `y` straddle. */
-export function cmpExact(x: number, y: number): -1 | 0 | 1 {
-  return x < y ? -1 : x > y ? 1 : 0;
-}

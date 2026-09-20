@@ -6,6 +6,7 @@
 // Every clause of that is a test below. The record itself is the specification, so the expected
 // values are read out of `d1MellinKeyhole.golden` rather than written again here.
 import { describe, expect, it } from "vitest";
+import { constraintLabel } from "../src/engine/vocabulary.js";
 import { d1MellinKeyhole } from "../src/families/records/d1-mellin-keyhole.js";
 import { runFamily, solveFamily } from "../src/families/runFamily.js";
 import { loadFamilies } from "../src/families/index.js";
@@ -238,8 +239,13 @@ describe("the wrong argRange is a DIVISION BY ZERO, and the app never prints 0",
     const r = solveFamily(principal(), flagship);
     expect(r.ok).toBe(false);
     if (r.ok) return;
-    expect(r.reason).toMatch(/LEGALITY refuses/);
+    // The GROUP a reader is shown, not the house id it is keyed by (ADR-0045): this sentence goes
+    // through `StateResolution.note` onto the result card, and `test/denylist.test.ts` reads
+    // `src/shell/**` and `src/engine/**` only, so `src/families/**` was the one path neither half
+    // of it covered.
     expect(r.reason).toMatch(/crosses the cut/);
+    expect(r.reason).toContain(constraintLabel("LEGALITY").toLowerCase());
+    expect(r.reason).not.toContain("LEGALITY");
     // The run still comes back, so a caller can show the ledger and the contour rather than blanking
     // a record that mostly works.
     expect(r.run?.ledger.failedAt).toBe("LEGALITY");

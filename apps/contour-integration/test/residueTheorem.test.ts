@@ -116,6 +116,28 @@ describe("when the residue theorem does not apply, it says so", () => {
     expect(theorem.exactValue).toBeUndefined();
     expect(theorem.verdict.level).toBe("≈");
   });
+
+  it("refuses a pole that was never asked for its winding, rather than weighting it 0", () => {
+    // **`n = 0` is a DECISION and an unasked pole has none** — ADR-0045. `windingOf` matched by
+    // distance and fell back to `0` on a miss, so a pole absent from the winding list dropped
+    // silently out of `Σ n·Res` and the total came back exact. The five routes beside this one all
+    // refuse such a pole by name.
+    //
+    // `1/(1+z²)` about the origin, with only `+i` measured: the missing `−i` weighs `0` either way
+    // here, which is exactly why the old code looked right — the number it printed was `π`, a
+    // number the contour does earn, and nothing said whether `−i` had been decided or skipped.
+    const { poles, integral } = setup("1/(1+z^2)", circle(2));
+    expect(integral.windings).toHaveLength(2);
+    const short = { ...integral, windings: integral.windings.filter((w) => w.at[1] > 0) };
+    const answered = applyResidueTheorem(poles, short);
+    expect(answered.exactValue).toBeUndefined();
+    expect(answered.verdict.level).toBe("⚠");
+    expect(
+      answered.verdict.certificates.some((c) => c.method.includes("never asked for its winding")),
+    ).toBe(true);
+    // …and with both measured it answers, so the guard is not simply refusing everything.
+    expect(applyResidueTheorem(poles, integral).exactValue?.text).toBe("0");
+  });
 });
 
 describe("the cross-check is a real check", () => {

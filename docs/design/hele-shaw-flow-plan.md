@@ -54,9 +54,11 @@ committed beyond HS-0; each is a separately-approved pass.
 - **HS-0 — carve the app (done, ADR-0036 stage 1).** `apps/hele-shaw-flow`; the twist + droplet pages and
   their engines moved off `2d-electrostatics`; the QD hand-off retargeted to `hele-shaw-flow/twist.html`
   (golden renamed `QD_TO_POTENTIAL_HELESHAW` → `QD_TO_HELESHAW`, hash unchanged); a landing hub `index.html`.
-- **HS-1 — the shell.** Adopt `mountNavHeader` (`@cas/ui`) on both pages (back-to-launcher + sibling nav +
-  the "send to" picker) — one of the review's findings the split is meant to fix — and promote the hub from
-  static links to a proper landing with the nav header.
+- **HS-1 — the shell.** ~~Adopt `mountNavHeader` (`@cas/ui`) on both pages (back-to-launcher + sibling
+  nav + the "send to" picker)~~ *(withdrawn — [ADR-0044](../DECISIONS.md) removed the in-app header
+  from every app; the launcher is the unified menu, and a "send to" hand-off belongs in the panel that
+  owns the state. Noted 2026-09-20.)* What remains of this milestone is promoting the hub from static
+  links to a proper landing.
 - **HS-2 — one timeline.** Factor the scrub/play + conservation-monitor UI the two pages now each hand-roll
   into a single app-local component (a shared `<timeline>` + a `<conserved-quantity>` readout), so the exact
   and numerical pages present the same controls. Candidate for a fifth `@cas/flow` (or app-local) primitive

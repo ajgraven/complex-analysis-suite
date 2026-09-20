@@ -56,8 +56,14 @@
      because the app had adopted the nav WITHOUT one: the top 32 px of its own 48 px bar was
      covered, and since the nav sat at z-index 6 it swallowed every click in that band as well —
      the sharpest single piece of evidence for withdrawing it, kept here as the reason this line
-     is now simply `100vh`.) */
+     is now simply `100vh`.)
+
+     **`dvh` with a `vh` fallback**, which is what a phone actually has: `100vh` on mobile Safari and
+     Chrome is the LARGEST viewport — the height with the URL bar retracted — so the strip sits under
+     the browser chrome until the reader scrolls. The two lines are the whole mechanism: a browser
+     that does not know `dvh` drops the second and keeps the first. */
   height: 100vh;
+  height: 100dvh;
   min-height: 0;
   grid-template-columns: var(--rail-left) minmax(0, 1fr) var(--rail-right);
   /* The bar's row is a MINIMUM rather than a fixed height — M8 step 1.9. See the note beside
@@ -199,13 +205,15 @@
   display: block;
 }
 
-/* **The INK canvas is the one that takes the pointer.**
+/* **The INK canvas is the one that takes the pointer**, and the GL one never is.
  *
- * `app.css` carries an UNSCOPED `.ink { pointer-events: none }` — correct for the old shell, whose
- * gestures land on a separate `.overlay` div, and silently wrong here, where the controller puts its
- * listeners on the ink canvas itself. `index.html` loads both sheets, so the old shell's rule reached
- * into the new one and the whole stage was dead to a real mouse: every gesture test dispatches
- * straight at the canvas and so could not see it, and only a probe with a real pointer did.
+ * It is stated rather than left to the default because the old shell's sheet carried an UNSCOPED
+ * `.ink { pointer-events: none }` — right for that shell, whose gestures landed on a separate
+ * `.overlay` div, and silently wrong here, where the controller puts its listeners on the ink canvas
+ * itself. While both sheets were loaded the whole stage was dead to a real mouse; every gesture test
+ * dispatches straight at the canvas and so could not see it, and only a probe with a real pointer
+ * did. That sheet went at step 1.12 and this rule stays, because the hazard is the pair of stacked
+ * canvases rather than the sheet.
  *
  * The GL layer is DATA and `aria-hidden`; it must never take a click, or the pointer lands on the
  * layer that has no idea what a contour is. */
@@ -347,37 +355,20 @@
   white-space: nowrap;
 }
 
-/* ════════════════════════════════════════════════════════════════════════════════════════════
-   The old sheet's unscoped rules, cancelled.
+/* A paragraph inside the shell carries no margin of its own.
 
-   **Scoping `theme.css` under `.shell2` protects the OLD shell from the NEW rules and does nothing
-   in the other direction** — step 1.2's comment states only the first half, and this step found the
-   second half twice in one afternoon. `index.html` loads `app.css` for both shells, and its rules
-   are unscoped, so anything the new shell names the same way inherits them.
+   **The one survivor of step 1.2's cancellation block**, which existed to undo the old sheet's
+   unscoped rules while both shells shared a page. That sheet went at step 1.12 and the block's own
+   last line promised to go with it; two of its three rules now have, measured rather than read —
+   `.shell2 .num { font-family: inherit }` and the five properties on `.shell2 .badge` leave every
+   computed value where it already was, and the badge's rendered box at 22 px either way.
 
-   Measured: eight classes collide — `.num`, `.small`, `.muted`, `.badge`, `.chip`, `.gl`, `.ink`,
-   `.navHost`, `.expr`. Two were repaired by RENAMING, because the old meaning is a different thing
-   entirely: `.chip` is the old shell's 9 × 9 colour swatch, which collapsed the stage's snap chip to
-   a 9 px square with its text spilling out (found in a browser; every node test reads `textContent`,
-   which does not have a width), and `.navHost` is the old shell's. The rest mean the SAME thing in
-   both shells, so they are cancelled here rather than renamed — the old rule's extras are what leak,
-   not its intent.
-
-   This whole block goes away at step 1.12 with `app.css`. */
-.shell2 .num {
-  /* The old sheet makes every `.num` monospace. Step 1.2's rule is that monospace is a SIGNAL that
-     the text is machine syntax; a tabular number is not machine syntax. */
-  font-family: inherit;
-}
+   This rule is NOT inert, and measuring is the only reason that is known: nothing resets `p`, so
+   without it every `<p class="muted">` in the app takes the user agent's `1em` — 12.5 px above and
+   below, in cards whose rows are 0.45 rem apart. It is a rule of this sheet now rather than a
+   cancellation of another one, so it is stated as one. */
 .shell2 .muted {
   margin: 0;
-}
-.shell2 .badge {
-  border: 0;
-  padding: 0;
-  margin: 0;
-  min-width: 0;
-  font-family: inherit;
 }
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
@@ -407,6 +398,50 @@
 .shell2 .parseError {
   color: var(--g-bad);
   margin: 0;
+}
+
+/* **A DISPLAYED formula SCROLLS rather than running off the side of its card.**
+
+   The rail is 19rem and the right rail 24rem; a record's identity is as wide as it is. Measured at
+   1440 × 900 across all 28 records, 7 of them put a `.katex-display` outside its card's content box
+   — worst `jordan-quartic`, whose Target formula is 404 px in a 285 px card (142.8 px past the edge)
+   and whose Result value is 421 px in a 365 px card, its right edge at x = 1528 in a 1440 px window,
+   so the answer was simply not on the screen. `document.documentElement.scrollWidth` never exceeds
+   `innerWidth`, which is why no page-level overflow test could ever see it.
+
+   **Scrolling rather than scaling**, because the alternative shrinks the one thing the card exists
+   to show: `jordan-quartic`'s Target would go to 71 % and its exponentials with it. The affordance
+   is the scrollbar itself — `thin`, in the app's own muted ink — plus the room below it, so the bar
+   does not sit on the formula's descenders.
+
+   **On `.math-display`, the app's own wrapper, and not on `.katex-display`** — which is where the
+   first draft put it, and it did nothing at all. `math.ts` wraps KaTeX's output in
+   `span.math.math-display`, and that span is what sits in the card: measured on `jordan-quartic`,
+   the wrapper stood at 363 px inside a 261 px `.targetLine` with the `.katex-display` inside it at
+   404, so a cap on the child was resolving against a parent that had already overflowed.
+
+   **What each declaration does was measured, not reasoned, and two of the first draft's four were
+   doing nothing.** On a 285 px card holding a 600 px formula: with nothing, the wrapper's box is
+   600 px wide; with `display: block` alone it is 285 with `scrollWidth` 600 and `overflow` visible,
+   so the content paints straight across the rail; with the pair, 285 and scrollable. The two that
+   went were `min-width: 0` and `max-width: 100%` — **an `overflow` other than `visible` already
+   zeroes a flex item's automatic minimum size** (CSS Flexbox §4.5), which is what `min-width: 0` was
+   there for in `.targetLine`, and a block box is capped by its containing block without a
+   `max-width` at all.
+
+   `overflow-y` is stated because `overflow-x: auto` silently computes it to `auto` as well (CSS
+   Overflow §3) — the defect the Singularities table's own note records, where a card became a scroll
+   box in both directions and the rail's flex then crushed it. The implication runs both ways, which
+   is why a sweep that flips one axis at a time cannot move any measurement here: what the rule
+   supplies is *an* overflow that is not visible, and removing the rule is the only mutation that
+   takes it away. */
+.shell2 .card2 .math-display {
+  display: block;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 0.3rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--g-border) transparent;
 }
 
 /* A target is the one formula in the rail that gets DISPLAY mode — it is what the record is about,
@@ -1005,7 +1040,10 @@ button.ladderCard[aria-current="true"] {
     align-content: center;
     justify-items: center;
     gap: 0.9rem;
+    /* `dvh` with a `vh` fallback — see `.shell2`'s height. This is the rule a PHONE reaches, which
+       is the one place the difference between the two units is the browser's own chrome. */
     min-height: 100vh;
+    min-height: 100dvh;
     padding: 1.5rem;
     text-align: center;
     color: var(--g-text);

@@ -180,7 +180,16 @@ describe("Jordan is this lemma at n = 1, which is the check that the sharing is 
         from: Frac.ZERO,
         to: Frac.ONE,
       });
-      const jordan = jordanArcBound(QiPoly.fromCoeffs([Gauss.ONE]), QiPoly.fromCoeffs([Gauss.ONE]), q(a), "upper", q(7));
+      const jordan = jordanArcBound(
+        QiPoly.fromCoeffs([Gauss.ONE]),
+        QiPoly.fromCoeffs([Gauss.ONE]),
+        q(a),
+        "upper",
+        q(7),
+        "R",
+        // The same arc the wedge is handed — Jordan now reads its extent too, and reads it as this.
+        { from: Frac.ZERO, to: Frac.ONE },
+      );
       expect((wedge.value as Frac).equals(jordan.value as Frac)).toBe(true);
     }
   });
@@ -220,6 +229,11 @@ describe("what the wedge bound refuses, and by name", () => {
       expect(b.certificate.claim).toMatch(/diverges/);
       expect(b.certificate.provenance.some((s) => s.text.includes("repair"))).toBe(true);
       expect(b.exponent).toBe(Number.POSITIVE_INFINITY);
+      // **The METHOD, not only the outcome.** It is the sentence the derivation panel prints, and
+      // it ended by naming the disposal constraint by its house id — measured on screen for a
+      // sandbox wedge on `exp(z²)`, where the assertion above passes either way.
+      expect(b.certificate.method).toMatch(/the wedge cannot be closed this way/);
+      expect(b.certificate.method).not.toMatch(/\bKILL\b/);
     }
   });
 

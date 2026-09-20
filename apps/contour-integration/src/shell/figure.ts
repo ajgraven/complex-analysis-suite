@@ -20,10 +20,11 @@
 // needs a real 2-D context and is covered by the browser suite. That is the same split
 // `ui/accumulator.ts` already uses — its frame fit is a node test, its ink a Chromium one.
 import { assembleVerdict } from "@cas/rigor";
-import { integralRefusal, ledgerHeadline, type LedgerResult } from "../engine/ledger.js";
+import { ledgerHeadline, valueRefusal, type LedgerResult } from "../engine/ledger.js";
 import type { ContourIntegral } from "../engine/contour/integrate.js";
 import type { ResidueTheoremResult } from "../engine/residueTheorem.js";
 import type { SolvedValue } from "../families/solveTarget.js";
+import { mathSpoken } from "./math.js";
 import type { FigurePlate } from "./stageView.js";
 
 /** Where each piece of the plate goes, in device pixels. */
@@ -79,7 +80,7 @@ export function figureLayout(
 /**
  * What the plate says, in three lines.
  *
- * Derived from the SAME data the result card reads, and through the same `integralRefusal` gate, so
+ * Derived from the SAME data the result card reads, and through the same `valueRefusal` gate (ADR-0045), so
  * the caption cannot claim a number the app withholds. That gate was inline in the card until this
  * module existed; it is one function now precisely because this is its second reader.
  */
@@ -105,20 +106,29 @@ export function figureCaption(input: {
   if (integral === null) {
     return { title: input.title, value: "no integrand", verdict: "Nothing was computed.", level: "?" };
   }
-  const refused = integralRefusal(integral, ledger);
+  const refused = valueRefusal(integral, ledger, "contour");
   if (refused !== null) {
     return {
       title: input.title,
       value: "⚠ Refused",
       // The refusal's own claim, not the headline: "LEGALITY fails" says where, and this says what.
-      verdict: refused.claim,
+      // Spoken for the same reason the headline below is — a claim is written in the `$…$`
+      // convention wherever it is composed, and a plate has no typesetting to honour it with.
+      verdict: mathSpoken(refused.claim),
       level: "⚠",
     };
   }
   // A record's SOLVED target is the answer it was built to find; `∮` is the machinery. In the
   // sandbox there is no target and `∮` IS the result — which is what `ledgerHeadline` already
   // distinguishes, so the two lines never disagree about which claim is being made.
-  const headline = ledger === null ? "" : ledgerHeadline(ledger);
+  //
+  // **Through `mathSpoken`, because a plate is a canvas and a canvas has no typesetting** — the
+  // 2026-09-20 review. Every headline the 28 records reach is prose (*The argument is complete.*),
+  // which is why no test saw this; the SANDBOX's is `$\oint_\gamma f(z)\,dz$ is established
+  // exactly.`, and `fillText` drew it with its delimiters and its backslashes showing while
+  // `cas:verdict` stamped the same string into the bytes. `math.ts`'s own doc names a PNG's text
+  // chunk and a canvas caption as exactly what these two functions exist for.
+  const headline = ledger === null ? "" : mathSpoken(ledgerHeadline(ledger));
   if (solved !== null && solved.text !== undefined) {
     // The level is MET from the certificates, exactly as the record card meets it — the badge beside
     // a record's answer is computed from what was established and never chosen, which is the rule

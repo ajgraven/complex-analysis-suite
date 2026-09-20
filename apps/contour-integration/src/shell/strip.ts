@@ -26,6 +26,7 @@ import { attachCanvasA11y } from "@cas/ui";
 import { integrandEmptyClause } from "./errors.js";
 
 import { accumulateForIntegral, type Accumulation, type AccumulationStep } from "../engine/contour/accumulate.js";
+import { valueRefusal, type LedgerResult } from "../engine/ledger.js";
 import type { ContourIntegral, PathFn } from "../engine/contour/integrate.js";
 import type { CutSide } from "../engine/contour/model.js";
 import type { Resolved } from "../kernel/geom.js";
@@ -140,6 +141,8 @@ type AccInputs =
       readonly f: PathFn;
       readonly pieces: readonly Resolved[];
       readonly integral: ContourIntegral;
+      /** The ledger the same run produced — `accumulateForIntegral`'s fourth argument. */
+      readonly ledger: LedgerResult;
       readonly sides: readonly (CutSide | undefined)[];
     }
   /** An engine sentence, never a phrase invented here. */
@@ -150,17 +153,17 @@ function inputsOf(state: ShellState, resolution: StateResolution): AccInputs {
     case "gallery": {
       const run = resolution.run;
       if (run === null) return { ok: false, refusal: resolution.fatal ?? "this record could not be run" };
-      return { ok: true, f: run.f, pieces: run.resolved, integral: run.integral, sides: run.sides };
+      return { ok: true, f: run.f, pieces: run.resolved, integral: run.integral, ledger: run.ledger, sides: run.sides };
     }
     case "declared": {
       const a = resolution.analysis;
-      return { ok: true, f: resolution.f, pieces: a.resolved, integral: a.integral, sides: a.sides };
+      return { ok: true, f: resolution.f, pieces: a.resolved, integral: a.integral, ledger: a.ledger, sides: a.sides };
     }
     case "declared-refused":
       return { ok: false, refusal: resolution.reason };
     case "plain": {
       const a = resolution.analysis;
-      return { ok: true, f: resolution.f, pieces: a.resolved, integral: a.integral, sides: a.sides };
+      return { ok: true, f: resolution.f, pieces: a.resolved, integral: a.integral, ledger: a.ledger, sides: a.sides };
     }
     case "empty":
       // **The parser's own words used to land in *Nothing is plotted — Empty expression.*** — M8
@@ -173,15 +176,19 @@ function inputsOf(state: ShellState, resolution: StateResolution): AccInputs {
 /**
  * Why `accumulateForIntegral` returned null — **the engine's own sentence, never a guess**.
  *
- * It returns null exactly when `integral.value` is undefined, which is a real case and not an error:
- * the integral was refused (a contour dragged through a singularity), or the quadrature was
- * deliberately SKIPPED (a multivalued integrand whose principal-branch samples would confidently
- * answer a different question). Those are different facts and the strip says which, because
- * `accumulate.ts`'s own rule is that a partial sum shown beside a refusal hands the reader the very
- * number the refusal exists to withhold.
+ * It returns null on three different facts, and the strip says which. The integral was refused (a
+ * contour dragged through a singularity); the quadrature was deliberately SKIPPED (a multivalued
+ * integrand whose principal-branch samples would confidently answer a different question); or —
+ * the third, added with ADR-0045's gate — **the quadrature is perfectly happy and the ARGUMENT is
+ * not**, which is a LEGALITY row, a failing bound, an undecided winding. That third case is the one
+ * the 2026-09-20 review found: the trail was drawn and its readout ended at `6.283005874i` while
+ * the result card beside it printed `⚠ Refused`, which is `accumulate.ts`'s own rule inverted.
  */
-const withheldBecause = (integral: ContourIntegral): string =>
-  integral.refusal ?? integral.quadratureSkipped ?? "the integral has no value to accumulate";
+const withheldBecause = (integral: ContourIntegral, ledger: LedgerResult): string =>
+  integral.refusal ??
+  integral.quadratureSkipped ??
+  valueRefusal(integral, ledger, "contour")?.claim ??
+  "the integral has no value to accumulate";
 
 /**
  * The floor below which a component of the partial sum is the SUM's OWN ROUNDING.
@@ -420,14 +427,19 @@ export function createStripView(host: HTMLElement, input: StripInput): StripView
       problem,
       stable(got.pieces),
       stable(got.sides),
-      got.integral.value === undefined ? "withheld" : "ok",
+      // **PERMISSION is the ledger's, not the quadrature's** — ADR-0045. Keying this on
+      // `integral.value` alone made a LEGALITY refusal invisible to the cache, so a state that had
+      // just lost its permission kept the previous draw's trail.
+      valueRefusal(got.integral, got.ledger, "contour") === null ? "ok" : "withheld",
     ].join("|");
   }
 
   function accumulate(d: StripDraw, got: AccInputs): Accumulation | null {
     const key = keyOf(d, got);
     if (cached !== null && cached.key === key) return cached.acc;
-    const acc = got.ok ? accumulateForIntegral(got.f, got.pieces, got.integral, undefined, got.sides) : null;
+    const acc = got.ok
+      ? accumulateForIntegral(got.f, got.pieces, got.integral, got.ledger, undefined, got.sides)
+      : null;
     cached = { key, acc };
     return acc;
   }
@@ -571,7 +583,7 @@ export function createStripView(host: HTMLElement, input: StripInput): StripView
     const withheld = masked
       ? "the contour is the question"
       : got.ok
-        ? (acc === null ? withheldBecause(got.integral) : null)
+        ? (acc === null ? withheldBecause(got.integral, got.ledger) : null)
         : got.refusal;
 
     // **The panel first, and unconditionally** — `stageView.ts`'s rule, for the same reason: the

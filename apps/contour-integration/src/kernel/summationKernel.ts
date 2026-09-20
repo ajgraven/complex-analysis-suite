@@ -161,18 +161,6 @@ export type KernelResidues =
   | { readonly ok: false; readonly reason: string; readonly certificate: Certificate };
 
 /**
- * `Res(K·f, n)` at every integer `n` with `|n| ≤ bound`, exactly.
- *
- * Refuses a COLLISION by name rather than dividing by zero, and refuses rather than skipping,
- * because a sum missing the term the record is about is the failure this whole tier could have and
- * not notice. The cofactor is reduced by {@link asSummationKernel}, so a denominator root here is a
- * genuine pole of `f` rather than a factor that cancels.
- *
- * **Its consumer is M5.6**, where Pass 5 gains an unknown INSIDE the residue sum. Until then it is
- * exercised only by the suite — said out loud so it does not become another export that is dead and
- * quiet about it.
- */
-/**
  * The integers in the band at which the cofactor ALSO has a pole — the collisions.
  *
  * Split out so the theorem and Pass 5 read one list rather than each deciding for itself what a
@@ -186,6 +174,19 @@ export function collisionsOf(kernel: SummationKernel, bound: bigint): readonly b
   return out;
 }
 
+/**
+ * `Res(K·f, n)` at every integer `n` with `|n| ≤ bound`, exactly.
+ *
+ * Refuses a COLLISION by name rather than dividing by zero, and refuses rather than skipping,
+ * because a sum missing the term the record is about is the failure this whole tier could have and
+ * not notice. The cofactor is reduced by {@link asSummationKernel}, so a denominator root here is a
+ * genuine pole of `f` rather than a factor that cancels.
+ *
+ * **This block used to sit above {@link collisionsOf}**, two `/** … *\/` comments back to back, of
+ * which TypeScript attaches only the second — so the paragraph describing this function documented
+ * that one and this one had no docstring at all. Its closing sentence said the consumer was still to
+ * come; `engine/summationTheorem.ts` has been it since M5.6.
+ */
 export function kernelResidues(
   kernel: SummationKernel,
   bound: bigint,

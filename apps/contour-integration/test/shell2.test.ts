@@ -604,6 +604,77 @@ describe("the pen, through the controller", () => {
     expect(app.session().pen).toBeNull();
     expect(app.session().gesture).toBe("none");
   });
+
+  // **M7.4's finding, reopened through two more doors** — the review's 4.3. M7.4 put the pen away on
+  // leaving the sandbox and on every `applyState`; folding the left rail is neither, and neither is
+  // the mode control. Both take the Contour card — which is where Close / Undo / Cancel live — off
+  // screen while `session.pen` stays non-null, and `pointerdown` takes the pen's click BEFORE any
+  // grab test, deliberately. So the reader's next click on the stage placed a vertex into a path
+  // with no visible controls and Enter committed it.
+  //
+  // The card's absence is asserted first, because that is what makes the armed pen unreachable
+  // rather than merely untidy; then the click, because "put away" has to mean the stage is a stage
+  // again and not just that a field is null.
+  const stillArmed = (app: ReturnType<typeof mountShell2>): string =>
+    `pen ${app.session().pen === null ? "away" : "out"}, gesture ${app.session().gesture}`;
+
+  it("is put away when the rail holding its controls FOLDS", () => {
+    const { root, app, ink } = mountStage();
+    app.stage().penStart();
+    ink.dispatchEvent(pointer("pointerdown", 10, 10));
+    ink.dispatchEvent(pointer("pointerdown", 40, 10));
+    expect(app.session().pen).not.toBeNull();
+    expect(root.querySelector('[data-card="contour"]'), "the card is on screen while the pen is out").not.toBeNull();
+
+    app.actions().setRail("left", true);
+    expect(root.querySelector('[data-card="contour"]'), "a folded rail draws its name and its toggle only").toBeNull();
+    expect(stillArmed(app)).toBe("pen away, gesture none");
+
+    // And the stage is a stage again: this click grabbed or panned before the pen existed, and must
+    // do so again rather than placing a third vertex into a path nothing can finish.
+    const before = app.currentState().contour;
+    ink.dispatchEvent(pointer("pointerdown", 70, 70));
+    expect(`${stillArmed(app)}, contour ${app.currentState().contour === before ? "unchanged" : "MOVED"}`).toBe(
+      "pen away, gesture view, contour unchanged",
+    );
+  });
+
+  it("is put away by a change of MODE, which folds that same rail from the bar", () => {
+    const { root, app, ink } = mountStage();
+    app.stage().penStart();
+    ink.dispatchEvent(pointer("pointerdown", 10, 10));
+    ink.dispatchEvent(pointer("pointerdown", 40, 10));
+    app.actions().setMode("worked");
+    expect(root.querySelector('[data-card="contour"]')).toBeNull();
+    expect(stillArmed(app)).toBe("pen away, gesture none");
+  });
+
+  // **Escape had been bound on the ink canvas alone**, so the one key that abandons a path did
+  // nothing once focus had moved — and the way a reader loses the pen's controls is by clicking the
+  // fold toggle, which puts focus on a button. The shell's own document listener carries it now;
+  // `modal.ts` stops Escape on its backdrop, so a dialog over the stage still shuts itself.
+  it("Escape abandons the path from wherever focus is, not only on the canvas", () => {
+    const { app, ink } = mountStage();
+    const before = app.currentState().contour;
+    app.stage().penStart();
+    ink.dispatchEvent(pointer("pointerdown", 10, 10));
+    ink.dispatchEvent(pointer("pointerdown", 40, 10));
+    // On the DOCUMENT, not on `ink` — the event the controller's own handler never sees.
+    const took = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+    document.dispatchEvent(took);
+    expect(app.session().pen).toBeNull();
+    expect(app.currentState().contour).toBe(before);
+    expect(took.defaultPrevented, "the key the app acted on was not claimed").toBe(true);
+
+    // **And with no path open Escape is NOT the app's**, which is what the guard buys and what a
+    // mutation sweep found nothing asserting: `penStop()` on a null pen is a visible no-op, so
+    // dropping the guard changes only whether the app CLAIMS the key. Escape belongs to whatever
+    // else the page is doing — a dialog, a `<select>`, the browser's own find bar — and a handler
+    // that calls `preventDefault` on every press has taken it from all of them.
+    const left = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+    document.dispatchEvent(left);
+    expect(left.defaultPrevented, "Escape was claimed with no path to abandon").toBe(false);
+  });
 });
 
 // ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -1202,6 +1273,66 @@ describe("the stage's gestures", () => {
     expect(app.session().gesture, "the radius handle took a click meant for the cut").toBe("branch");
   });
 
+  // **A record's cuts are the record's — the review's 2.1, and it is a gate that has to exist
+  // BEFORE the stage draws them.** `nearestBranch` and `cycleGrab` hit-tested
+  // `branchHandles(getState().branch)` with no mode test at all. That was harmless only by
+  // accident: `ShellState.branch` is by its own doc the SANDBOX's cut system and a record mounts
+  // with none, so the hit test found nothing to hit. The stage is being changed to draw the
+  // RECORD's branch under a record, at which moment an ungated hit test makes D1's keyhole ray and
+  // D7's dogbone draggable — a reader editing a declaration the record's whole argument is about.
+  //
+  // So the branch is put where a record's own cut WILL be, on the state, and the two doors are
+  // asked separately: the keyboard walk must not offer it, and a press on it must pan.
+  it("will not let a GALLERY record's cut be grabbed, by pointer or by Enter", () => {
+    const { app, ink } = mountStage();
+    const s0 = app.currentState();
+    const point = { id: "b", at: [0.8, 0.6] as const, order: { kind: "log" as const }, label: "b" };
+    const withCut = { ...s0.branch, points: [point] };
+
+    // First in the SANDBOX, so the gate is shown to be about the MODE and not about the handle
+    // being unreachable — an anti-vacuity clause the gallery half cannot supply for itself.
+    app.applyState({ ...s0, branch: withCut });
+    const walk = (): string[] => {
+      const seen: string[] = [];
+      for (let i = 0; i < 8; i++) {
+        app.stage().onCanvasKey({ kind: "commit" }, new KeyboardEvent("keydown", { key: "Enter" }));
+        seen.push(app.stage().grabLabel() ?? "«the view»");
+      }
+      return seen;
+    };
+    const sandboxStops = walk();
+    expect(sandboxStops.some((x) => x.includes("branch point")), `the sandbox never offered it: ${sandboxStops.join(" / ")}`).toBe(true);
+    const [px, py] = screenOf(app, point.at);
+    ink.dispatchEvent(pointer("pointerdown", px, py));
+    expect(app.session().gesture, "the sandbox could not grab its own branch point").toBe("branch");
+    ink.dispatchEvent(pointer("pointerup", px, py));
+
+    // Then the same cut system under a record. Nothing about the geometry has moved.
+    app.applyState({ ...app.currentState(), mode: "gallery", record: "circle-linear-cos", fixture: 0, branch: withCut });
+    const galleryStops = walk();
+    expect(
+      galleryStops.filter((x) => x.includes("branch")),
+      `Enter offered a record's cut to the arrows: ${galleryStops.join(" / ")}`,
+    ).toHaveLength(0);
+    ink.dispatchEvent(pointer("pointerdown", ...(screenOf(app, point.at) as [number, number])));
+    expect(app.session().gesture, "a press on a record's branch point grabbed it instead of panning").toBe("view");
+  });
+
+  // **Escape LETS GO**, which the stage could not do: `onKeyDown` handled keys only while the pen
+  // was out, so with a handle grabbed the only way back to panning was to press Enter through the
+  // whole cycle — and the live region went on saying the arrows moved what was held. `STAGE_KEYS`
+  // never named a way out because there was none.
+  it("Escape releases a grabbed handle, and the stage says so", () => {
+    const { root, app, ink } = mountStage();
+    app.stage().onCanvasKey({ kind: "commit" }, new KeyboardEvent("keydown", { key: "Enter" }));
+    expect(app.stage().grabLabel(), "nothing was grabbed, so the release is vacuous").not.toBeNull();
+    ink.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(app.stage().grabLabel()).toBeNull();
+    expect(app.session().held).toBeNull();
+    // And the key is in the stage's own instructions, which is the half a reader can find.
+    expect(q(root, "canvas.ink").getAttribute("aria-label")).toContain("Press Escape to let go");
+  });
+
   it("will NOT move a gallery record's contour bodily", () => {
     // Under a record the contour is the record's, and translating it would leave a worked example
     // whose pieces no longer match the argument it is making. The radius handles still work, because
@@ -1330,21 +1461,23 @@ describe("the stage's gestures", () => {
     host.remove();
   });
 
+  // **Where a budget becomes visible.** Read off the quadrature's own certificate rather than a
+  // field: `integrateContour` records `"gauss-legendre, N nodes"` as its method, and a scan for
+  // that number does not have to transcribe the shape of `ContourIntegral` into the test. Two
+  // tests use it — the slider's draft budget, and the keystroke's.
+  const nodes = (app: ReturnType<typeof mountShell2>): number => {
+    const r = app.resolution();
+    if (r.kind !== "plain" && r.kind !== "declared") throw new Error(`nothing was integrated (${r.kind})`);
+    const found = /(\d+) nodes/.exec(JSON.stringify(r.analysis.integral));
+    if (found === null) throw new Error("no quadrature node count in the integral");
+    return Number(found[1]);
+  };
+
   it("spends the DRAFT budget while a slider is being scrubbed", () => {
     // `gesture` covers the stage; a rail slider's drag is the same thing happening somewhere the
     // stage cannot see, and without this a parameter scrub recomputes at full precision on every
     // pointer move. The sliders that set the flag arrive with the cards at 1.4/1.5 — the budget
     // reads it today, and the node count is where a budget becomes visible.
-    // Read off the quadrature's own certificate rather than a field: `integrateContour` records
-    // `"gauss-legendre, N nodes"` as its method, and a scan for that number does not have to
-    // transcribe the shape of `ContourIntegral` into the test.
-    const nodes = (app: ReturnType<typeof mountShell2>): number => {
-      const r = app.resolution();
-      if (r.kind !== "plain" && r.kind !== "declared") throw new Error(`nothing was integrated (${r.kind})`);
-      const found = /(\d+) nodes/.exec(JSON.stringify(r.analysis.integral));
-      if (found === null) throw new Error("no quadrature node count in the integral");
-      return Number(found[1]);
-    };
     const { app } = mountStage();
     // **The DEFAULT state is too easy for the budget to bite**, measured: `1/z` inside `|z| = 1.5`
     // puts the pole 1.5 away from every node, so the rule wants 56 nodes and the draft ceiling of
@@ -1356,6 +1489,45 @@ describe("the stage's gestures", () => {
     app.stage().fitContour();
     const draft = nodes(app);
     expect(draft, "the scrub ran at full precision").toBeLessThan(full);
+  });
+
+  // **A KEYSTROKE is a frame of a gesture too — the review's 4.4.** `setExpr` committed `"edit"`,
+  // and the draft rule above reads only `session.gesture`, `session.scrubbing` and
+  // `why === "gesture"`, so every prefix a reader typed was solved at the full quadrature budget on
+  // the main thread. Measured on the keyhole, typing `1/(1+z^4)/(z^2+2)`, best of three: the
+  // seventeen keystrokes cost **1,031.9 ms before and 340.0 ms after**, with the intermediate `"1"`
+  // alone 553.1 → 52.9 ms; isolating `resolveState` on that one prefix, **689.1 ms at the full
+  // budget against 3.0 ms at the draft one**, 230×. The page was frozen for half a second on one
+  // character.
+  //
+  // Two clauses, because either alone would be satisfied by the wrong thing: the keystroke has to
+  // land at the DRAFT budget, and the picture the reader is then left looking at has to be the FULL
+  // one — a draft resolution that never settled would be cheap and wrong.
+  it("spends the DRAFT budget on a KEYSTROKE and settles at the full one", async () => {
+    const { app } = mountStage();
+    // The scrub test's integrand and for its measured reason: with the pole 1.5 away from every
+    // node the rule wants 56 and the draft ceiling never comes near it, so a budget change would be
+    // invisible. Typed a character at a time, which is the gesture under test.
+    const src = "1/(z-1.4)";
+    // The DELTA, because `mountStage` reaches the sandbox through the Sandbox button and that is an
+    // entry of its own — measured, and the absolute count would have pinned the helper's route
+    // rather than the typing.
+    const before = app.session().undo.length;
+    for (let k = 1; k <= src.length; k += 1) app.actions().setExpr(src.slice(0, k));
+    const typed = nodes(app);
+    // The settle rides `syncHash`'s 250 ms idle timer — one timer, one moment at which the app
+    // agrees the reader has stopped — so 320 ms is the same wait a permalink test makes.
+    await new Promise((done) => setTimeout(done, 320));
+    const settled = nodes(app);
+    // 512 against 830, measured: the keystroke is bound by `DRAFT_EVALUATIONS` and the settle by
+    // the quadrature's own refinement. Both numbers are in the message, so a failure says which
+    // half moved.
+    expect(typed, `the keystroke ran at full precision (${typed} nodes typed, ${settled} settled)`).toBeLessThan(settled);
+    // And the history a reader has is untouched: `undo.ts`'s rule 7 coalesces `"type"` exactly as
+    // it coalesces `"edit"`, so the nine keystrokes are ONE entry, not nine.
+    expect(`${app.session().undo.length - before} entries for the typed expression`).toBe(
+      "1 entries for the typed expression",
+    );
   });
 
   it("pans the VIEW when a drag starts on nothing grabbable", () => {

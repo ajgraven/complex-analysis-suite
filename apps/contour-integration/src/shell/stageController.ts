@@ -29,13 +29,6 @@ import type { StageView } from "./stageView.js";
 const GRAB_PX = 11;
 
 /**
- * How far a wheel may zoom.
- *
- * The review's addition. Without it a trackpad flick reaches `halfHeight = 1e-12`, where the camera's
- * own arithmetic loses the contour entirely and the only way back is a reload — a dead end a reader
- * cannot see coming and cannot undo.
- */
-/**
  * How much ONE wheel event may zoom.
  *
  * The PHYSICAL bound, and it is separate from {@link clampView}'s because it answers a different
@@ -288,6 +281,23 @@ export function createStageController(input: StageControllerInput): StageControl
   const canMoveBody = (): boolean => getState().mode === "sandbox";
 
   /**
+   * Whether the CUT SYSTEM on screen is the reader's to move. **Sandbox only, and it was ungated.**
+   *
+   * `nearestBranch` and {@link cycleGrab} hit-tested `branchHandles(getState().branch)` with no
+   * mode test at all. That was harmless only because `ShellState.branch` is by its own doc the
+   * SANDBOX's cut system and a record mounts with none — so the hit test found nothing to hit, and
+   * the rule held by accident rather than by decision. The review's 2.1 restores a record's own cut
+   * to the stage, at which point an ungated hit test makes D1's keyhole ray and D7's dogbone
+   * draggable: the cuts card says *a record's cuts are the record's*, and a reader who moved one
+   * would be editing a declaration the record's whole argument is about.
+   *
+   * The same answer as {@link canMoveBody} today and a different question — one is about the curve
+   * being integrated, the other about the determination it is integrated in — so they are two
+   * predicates, and a mode that separates them later separates them here.
+   */
+  const canMoveCuts = (): boolean => getState().mode === "sandbox";
+
+  /**
    * What a Shift-press on the curve would divide, and the state that divides it — M8 step 4.3.
    *
    * **THE MODIFIER IS THE DESIGN DECISION, and the rule it was chosen under is that a new gesture
@@ -356,8 +366,9 @@ export function createStageController(input: StageControllerInput): StageControl
     };
   }
 
-  /** The branch handle nearest `at` within `tol`, or null. */
+  /** The branch handle nearest `at` within `tol`, or null — {@link canMoveCuts} or nothing. */
   function nearestBranch(at: Cx, tol: number): BranchHandle | null {
+    if (!canMoveCuts()) return null;
     let best: BranchHandle | null = null;
     let bestD = tol;
     for (const h of branchHandles(getState().branch)) {
@@ -807,7 +818,9 @@ export function createStageController(input: StageControllerInput): StageControl
     const stops: Grab[] = [null];
     if (canMoveBody()) stops.push({ kind: "body" });
     for (const handle of h.radius) stops.push({ kind: "radius", handle });
-    for (const handle of h.branch) stops.push({ kind: "branch", handle });
+    // The keyboard's own copy of {@link canMoveCuts}: `handles()` reports what is DRAWN, and under
+    // a record that is the record's cut system — which Enter must walk past rather than offer.
+    if (canMoveCuts()) for (const handle of h.branch) stops.push({ kind: "branch", handle });
     const sameAs = (a: Grab): boolean => {
       if (a === null) return grab === null;
       if (grab === null || a.kind !== grab.kind) return false;
@@ -898,6 +911,19 @@ export function createStageController(input: StageControllerInput): StageControl
         penCommit(p.nodes.length >= 3);
         return;
       }
+      return;
+    }
+    // **Escape LETS GO** — the review's finding. With a handle grabbed the only way back to panning
+    // was to press Enter through the whole cycle, and the live region went on saying the arrows
+    // moved what was held; `STAGE_KEYS` never named a way out because there was none. One key means
+    // one thing on this canvas — abandon what you are in the middle of — whether that is a path
+    // being drawn or a handle being moved, which is why it is the same key as the pen's.
+    if (ev.key === "Escape") {
+      if (grab === null) return;
+      ev.preventDefault();
+      setGrab(null);
+      announce("Let go. Arrow keys pan the view again.");
+      redraw();
     }
   };
 

@@ -10,7 +10,13 @@ import { constraintLabel } from "../src/engine/vocabulary.js";
 import { makeComplexFn, parse } from "@cas/expr";
 import { assembleVerdict, unknown } from "@cas/rigor";
 import { analyse } from "../src/engine/analyse.js";
-import { buildDerivation, DERIVATION_STAGES, type Derivation, type StageId } from "../src/engine/derivation.js";
+import {
+  buildDerivation,
+  DERIVATION_STAGES,
+  levelOfSolved,
+  type Derivation,
+  type StageId,
+} from "../src/engine/derivation.js";
 import type { Contour } from "../src/engine/contour/model.js";
 import { semicircleTemplate } from "../src/engine/contour/templates.js";
 import { rowFrom, type LedgerResult } from "../src/engine/ledger.js";
@@ -334,5 +340,91 @@ describe("the stage plan", () => {
       expect(s.why.length).toBeGreaterThan(40);
       expect(s.title.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("the conclusion's badge is the one the result card shows", () => {
+  // **B3, and it is the only one in the corpus.** The card has always derived the answer's level
+  // with `levelOfSolved` (the theorem's, where there is one) and this panel derived it with
+  // `assembleVerdict(solved.certificates)`. Over 28 records × 94 fixtures they disagree exactly
+  // once — `jordan-quartic`, whose Pass 5 carries an `=` *"the unknown is isolated"* and a `?`
+  // *"the target's closed form"*, so the card read `=` and the derivation beneath it read `?`
+  // about the same number. `levelOfSolved` now lives in the engine and both read it.
+  it("agrees with `levelOfSolved` on jordan-quartic, where the two rules part company", () => {
+    const family = familyById("jordan-quartic");
+    const g = primaryGolden(family);
+    const r = solveFamily(family, g);
+    if (!r.ok) throw new Error(r.reason);
+    // The premise: the two rules really do differ here, so the assertion is not vacuous.
+    expect(assembleVerdict(r.solved.certificates).level).toBe("?");
+    const card = levelOfSolved(r.run.theorem, r.run.integral);
+    expect(card).toBe("=");
+    expect(fromRecord("jordan-quartic").conclusion?.level).toBe(card);
+  });
+
+  it("agrees on every other record too, which is what makes one function worth having", () => {
+    for (const family of FAMILIES) {
+      for (const g of family.golden) {
+        const r = solveFamily(family, g);
+        if (!r.ok) continue;
+        const d = buildDerivation({
+          ledger: r.run.ledger,
+          poles: r.run.poles,
+          integral: r.run.integral,
+          theorem: r.run.theorem,
+          spec: r.run.contour.pieces,
+          solved: r.solved,
+        });
+        if (d.conclusion === undefined) continue;
+        expect(d.conclusion.level, `${family.id} ${JSON.stringify(g.params)}`).toBe(
+          levelOfSolved(r.run.theorem, r.run.integral),
+        );
+      }
+    }
+  });
+
+  it("reads the INTEGRAL's level when there is no exact ∮ — the branch no record reaches", () => {
+    // **The literal-killer, and it has to live here.** Every conclusion the app can draw badges `=`
+    // (28 records × their fixtures, plus five sandbox states), because `closes` requires an exact
+    // `∮` and the theorem's verdict is `=` whenever it has one. So no record-driven test can tell
+    // `levelOfSolved` from a constant; a fabricated theorem can.
+    const theorem = { exactValue: undefined, verdict: assembleVerdict([unknown("∮", "fabricated")]) };
+    const integral = { verdict: assembleVerdict([unknown("the quadrature", "fabricated")]) };
+    expect(levelOfSolved(theorem, integral)).toBe("?");
+    const exactTheorem = {
+      exactValue: { value: [0, 0] as Cx, text: "0", latex: "0" },
+      verdict: assembleVerdict([unknown("∮", "fabricated")]),
+    };
+    // The theorem's, not the integral's, the moment there IS an exact value — and it is `?` here so
+    // the two sides of the ternary cannot be confused with each other by their glyph.
+    expect(levelOfSolved(exactTheorem, { verdict: assembleVerdict([]) })).toBe("?");
+  });
+
+  it("prints a typeset form rather than a decimal when that is all the solve has", () => {
+    // Measured at the review: B3's `solved` carries NEITHER `text` nor `latex`, correcting the
+    // report's reading that its `latex` was present and dropped. So the fallback is exercised by
+    // hand — it guards a shape the corpus does not currently produce.
+    const family = familyById("jordan-quartic");
+    const r = solveFamily(family, primaryGolden(family));
+    if (!r.ok) throw new Error(r.reason);
+    const withLatex = buildDerivation({
+      ledger: r.run.ledger,
+      poles: r.run.poles,
+      integral: r.run.integral,
+      theorem: r.run.theorem,
+      spec: r.run.contour.pieces,
+      solved: { ...r.solved, latex: "\\frac{\\pi}{2}" },
+    });
+    expect(withLatex.conclusion?.text).toBe("\\frac{\\pi}{2}");
+    // …and `text` still wins over `latex`, which is the order the card reads them in.
+    const withBoth = buildDerivation({
+      ledger: r.run.ledger,
+      poles: r.run.poles,
+      integral: r.run.integral,
+      theorem: r.run.theorem,
+      spec: r.run.contour.pieces,
+      solved: { ...r.solved, text: "π/2", latex: "\\frac{\\pi}{2}" },
+    });
+    expect(withBoth.conclusion?.text).toBe("π/2");
   });
 });

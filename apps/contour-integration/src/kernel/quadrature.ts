@@ -138,6 +138,24 @@ export const NODES_PER_PANEL = 16;
 export const MAX_EVALUATIONS = 262_144;
 
 /**
+ * The resolution for a piece with **no singularity anywhere** — panels for {@link panelPlan}, nodes
+ * for {@link nodeCount}.
+ *
+ * A COUNT rather than a length, and that is the whole of the reason. With a singularity at distance
+ * `d` the plan is `arcLen/d`, a ratio of two lengths the problem itself supplies; with none, nothing
+ * in the data supplies a second length, so dividing the arc by "one unit" would make the plan depend
+ * on the units the contour happens to be drawn in. A fixed count is the only choice that does not.
+ *
+ * It is not a promise of accuracy and does not pretend to be one: what says whether it was enough is
+ * the successive-refinement estimate the caller already computes at `2×` this, read through
+ * `integrate.ts`'s `converged`. Measured on the three entire records in the gallery (F2's rays, E3's
+ * rectangle, C2's removable pole) the refinement lands at 1e-13…1e-31 here, and F2's ray — the piece
+ * that needs the most, a Gaussian of unit width along a length of 6 — is bit-stable from 32 panels
+ * through 8192.
+ */
+export const NO_SINGULARITY_RESOLUTION = 32;
+
+/**
  * How to subdivide a piece.
  *
  * Research 04's node-density rule — `10⁻¹²` wants roughly **4.4 nodes within one pole distance** —
@@ -151,6 +169,14 @@ export const MAX_EVALUATIONS = 262_144;
  * through the singularity has parameter `ρ = (h + √(h² + d²))/h ≈ 3.2`, and Gauss–Legendre converges
  * like `ρ^{−2n}`, so 16 points per panel is already past double precision.
  *
+ * **`d = ∞` and `d ≤ 0` are opposite cases and are answered apart.** No singularity at all is the
+ * EASIEST piece there is, and lumping it in with one sitting on the contour bought the three entire
+ * records the maximum plan on every recompute — 1.0M–2.1M nodes and 0.96–1.48 s, against 0.8–63 ms
+ * for every other record — and, worse, a `capped: true` that made `converged` false and put
+ * *"the evaluation budget bound the resolution"* in their provenance, which had not happened. A
+ * non-positive distance still means "as fine as the budget allows", and so does a `NaN`, which is a
+ * distance that could not be measured rather than one that is not there.
+ *
  * When the budget binds, `capped` is set — and the caller must surface that rather than quietly
  * returning a value computed at the wrong resolution. Past that point refining is the wrong move
  * anyway; the fix is to subtract the principal part (research 04 §1.5), which is M2 work.
@@ -162,6 +188,13 @@ export function panelPlan(
 ): PanelPlan {
   const budget = opts?.maxEvaluations ?? MAX_EVALUATIONS;
   const maxPanels = Math.max(1, Math.floor(budget / NODES_PER_PANEL));
+  if (nearestSingularity === Number.POSITIVE_INFINITY) {
+    return {
+      panels: Math.min(NO_SINGULARITY_RESOLUTION, maxPanels),
+      nodesPerPanel: NODES_PER_PANEL,
+      capped: false,
+    };
+  }
   if (!Number.isFinite(nearestSingularity) || nearestSingularity <= 0) {
     return { panels: maxPanels, nodesPerPanel: NODES_PER_PANEL, capped: true };
   }
@@ -177,7 +210,8 @@ export function panelPlan(
  * Node count for the periodic trapezoidal rule on a closed loop.
  *
  * Here the rule really is uniform in the parameter, so the 4.4-nodes-per-pole-distance form applies
- * directly, with no panelling needed.
+ * directly, with no panelling needed. `d = ∞` takes {@link NO_SINGULARITY_RESOLUTION} for the reason
+ * {@link panelPlan} gives; `d ≤ 0` and `NaN` still take the maximum.
  */
 export function nodeCount(
   arcLen: number,
@@ -186,6 +220,9 @@ export function nodeCount(
 ): number {
   const min = opts?.min ?? 16;
   const max = opts?.max ?? 65_536;
+  if (nearestSingularity === Number.POSITIVE_INFINITY) {
+    return Math.max(min, Math.min(max, NO_SINGULARITY_RESOLUTION));
+  }
   if (!Number.isFinite(nearestSingularity) || nearestSingularity <= 0) return max;
   return Math.max(min, Math.min(max, Math.ceil((4.4 * arcLen) / nearestSingularity)));
 }

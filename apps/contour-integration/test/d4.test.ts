@@ -8,6 +8,7 @@
 import { describe, expect, it } from "vitest";
 import { Frac } from "@cas/exact";
 import { assembleVerdict } from "@cas/rigor";
+import { constraintLabel } from "../src/engine/vocabulary.js";
 import { d4LogSquaredKeyhole } from "../src/families/records/d4-log-squared-keyhole.js";
 import { loadFamilies } from "../src/families/index.js";
 import { runFamily, solveFamily } from "../src/families/runFamily.js";
@@ -276,7 +277,10 @@ describe("the determination is an input to the answer", () => {
     // keyhole's two circles, which carry no `side` tag.
     const r = solveFamily(principal(), flagship);
     expect(r.ok).toBe(false);
-    expect(!r.ok && r.reason).toMatch(/LEGALITY refuses/);
+    // The reader's word for the group, never the house id — ADR-0045.
+    expect(!r.ok && r.reason).toMatch(/crosses the cut/);
+    expect(!r.ok && r.reason).toContain(constraintLabel("LEGALITY").toLowerCase());
+    expect(!r.ok && r.reason).not.toContain("LEGALITY");
     expect(r.run?.ledger.failedAt).toBe("LEGALITY");
   });
 

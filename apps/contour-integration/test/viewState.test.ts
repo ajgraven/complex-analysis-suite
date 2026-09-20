@@ -24,6 +24,8 @@ import { penContour, sameShape } from "../src/engine/contour/pen.js";
 import { resolveScalar } from "../src/engine/contour/model.js";
 import { decodeShell, encodeShell } from "../src/shell/viewState.js";
 import { TEMPLATES } from "../src/shell/templates.js";
+import { lemmaLabel, roleLabel } from "../src/engine/vocabulary.js";
+import { VIEWSTATE_VERSION } from "@cas/interchange";
 import { NO_BRANCH, type BranchChoice } from "../src/kernel/branch/model.js";
 import { applyOps, setParam, translateContour } from "../src/engine/contour/edit.js";
 
@@ -385,6 +387,73 @@ describe("a link that cannot be honoured refuses BY NAME", () => {
     expect(refusal(good.slice(0, good.length - 6))).toContain("truncated");
   });
 
+  it("an envelope VERSION this build does not read", () => {
+    // **`v` was never looked at** — the 2026-09-20 review. `@cas/interchange`'s decoder validates
+    // the envelope's SHAPE and its doc says *"the caller checks `app` (and `v`, if it cares)"*; this
+    // app cares, because `v` is the only thing that says which STATE schema the payload is written
+    // in and every field below is validated against today's. A future `v` read by today's fields is
+    // the failure this file exists to prevent: something plausible instead of what was shared.
+    const bumped = (version: number): string => {
+      const good = enc({ ...base(), mode: "gallery", record: "circle-linear-cos", fixture: 0 });
+      const env = JSON.parse(atob(good.slice(4).replace(/-/g, "+").replace(/_/g, "/"))) as Record<string, unknown>;
+      return `#vs=${btoa(JSON.stringify({ ...env, v: version }))
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/, "")}`;
+    };
+    for (const v of [2, 7, 0]) {
+      expect(refusal(bumped(v)), `format ${v} was opened`).toContain(`view-state format ${v}`);
+    }
+    // The anti-vacuity clause: the version this build DOES write is opened, so the check above is
+    // about the number and not about the rewrite `bumped` performs.
+    const same = decodeShell(bumped(VIEWSTATE_VERSION));
+    expect(same?.ok, "the app's own version was refused").toBe(true);
+  });
+
+  it("a contour parameter outside the range its own template declares", () => {
+    // **The decoder accepted anything finite** — the 2026-09-20 review. `setParam` writes whatever
+    // it is given, so a link carrying `rho = -4` on a keyhole rebuilt a contour no slider can
+    // produce and no encode would have minted. The range comes off the `Param` the template builds,
+    // which is the same object the slider reads, so the control and the codec cannot disagree.
+    const keyhole = TEMPLATES.find((t) => t.id === "keyhole");
+    if (keyhole === undefined) throw new Error("no keyhole template");
+    const built = keyhole.build();
+    const name = Object.keys(built.params)[0];
+    const [lo, hi] = built.params[name].range;
+    const linkWith = (value: number): string => {
+      const good = enc({ ...base(), contour: built, contourSource: { template: "keyhole", shift: [0, 0] } });
+      const state = payloadOf(good);
+      const c = state.c as Record<string, unknown>;
+      state.c = { ...c, p: { ...((c.p as Record<string, number>) ?? {}), [name]: value } };
+      return rehash(good, state);
+    };
+    expect(refusal(linkWith(hi + 1))).toContain(`outside the ${lo} to ${hi}`);
+    expect(refusal(linkWith(lo - 1))).toContain(`outside the ${lo} to ${hi}`);
+    // Named, not silently clamped: a clamp opens a DIFFERENT state under a link claiming this one.
+    expect(refusal(linkWith(hi + 1))).toContain(name);
+    // In range is opened, so the refusal is about the RANGE and not about the rewrite.
+    const inside = decodeShell(linkWith((lo + hi) / 2));
+    expect(inside?.ok, "a legal value was refused").toBe(true);
+    if (inside !== null && inside.ok) {
+      expect(inside.state.contour.params[name].value).toBeCloseTo((lo + hi) / 2, 12);
+    }
+  });
+
+  it("does NOT apply that range rule to a record's bindings, which is what a trap link needs", () => {
+    // **The two halves of a parameter are not the same object.** A sandbox contour's parameters are
+    // the TEMPLATE's, with a range the slider draws; a record's bindings go through `instantiate`,
+    // which widens the range to contain the value on purpose. D1 declares `0 < α < 1` and its
+    // `wrong-window` trap is reached at `α = 1.5`: the link has to open there for the ledger to
+    // refuse it by name, and a decoder that clamped to the declared range would replace a named
+    // refusal with a plausible answer — which is this review's §1 defect from the other end.
+    const trap: ShellState = { ...base(), mode: "gallery", record: "mellin-keyhole", fixture: 0, bindings: { alpha: 1.5 } };
+    const { state } = roundTrip(trap);
+    expect(state.bindings.alpha, "the binding was clamped or dropped").toBe(1.5);
+    // And it really is outside what the record declares, so the case is the one described.
+    const fam = offeredCorpus().tiers.flatMap((t) => t.families).find((f) => f.id === "mellin-keyhole");
+    expect(fam?.parameters[0]?.constraints).toContain("alpha < 1");
+  });
+
   it("a link from another app in the suite", () => {
     const foreign = `#vs=${btoa(JSON.stringify({ v: 1, app: "2dh", state: { bodyId: "airfoil" } }))
       .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")}`;
@@ -489,24 +558,43 @@ describe("a link that cannot be honoured refuses BY NAME", () => {
       state.c = { ...(state.c as Record<string, unknown>), ...c };
       return rehash(e.hash, state);
     };
+    // **The unknown id is NOT quoted back** — the 2026-09-20 review. It was, and an id the link
+    // supplies is an id on screen by a different door; there is no label for a role this build does
+    // not have, so the sentence says that and nothing else.
     const unknownRole = decodeShell(wire({ r: { "0": "hypotenuse" } }));
     expect(unknownRole?.ok).toBe(false);
     if (unknownRole !== null && !unknownRole.ok) {
-      expect(unknownRole.reason).toContain("hypotenuse");
-      expect(unknownRole.reason).toContain("this build does not have");
+      expect(unknownRole.reason).not.toContain("hypotenuse");
+      expect(unknownRole.reason).toContain("a role this build does not have");
     }
     const lemmaOnTarget = decodeShell(wire({ r: { "0": "target:L2" } }));
     expect(lemmaOnTarget?.ok).toBe(false);
     if (lemmaOnTarget !== null && !lemmaOnTarget.ok) {
       expect(lemmaOnTarget.reason).toContain("only a vanishing piece");
     }
+    // **BY THE READER'S NAMES FOR BOTH.** The sentence interpolated `L2` and the role id; both are
+    // checked against their own lists two lines before it is composed, so `vocabulary.ts`'s labels
+    // are total here and a house id has no business in a sentence a reader is shown.
+    //
+    // **`residue`, not `target`**, and the sweep is what made the difference matter: `roleLabel`
+    // maps `target` to the word *target*, so a mutant printing the raw id would have been invisible
+    // — `residue` is the one role whose label is nothing like its id (*computed directly*).
+    const lemmaOnResidue = decodeShell(wire({ r: { "0": "residue:L3" } }));
+    expect(lemmaOnResidue?.ok).toBe(false);
+    if (lemmaOnResidue !== null && !lemmaOnResidue.ok) {
+      expect(roleLabel("residue"), "the roles' labels no longer differ from their ids").not.toBe("residue");
+      expect(lemmaOnResidue.reason).toContain(lemmaLabel("L3"));
+      expect(lemmaOnResidue.reason).toContain(roleLabel("residue"));
+      expect(lemmaOnResidue.reason, "the role id itself").not.toContain("residue:");
+      expect(lemmaOnResidue.reason, "the lemma id itself").not.toMatch(/\bL[1-8]\b/);
+    }
     // A lemma this build does not know, on a role that CAN hold one — the case the role check above
     // cannot reach, and the one a future lemma id would arrive as.
     const unknownLemma = decodeShell(wire({ r: { "0": "vanish:L9" } }));
     expect(unknownLemma?.ok).toBe(false);
     if (unknownLemma !== null && !unknownLemma.ok) {
-      expect(unknownLemma.reason).toContain("L9");
-      expect(unknownLemma.reason).toContain("not a lemma this build knows");
+      expect(unknownLemma.reason).not.toContain("L9");
+      expect(unknownLemma.reason).toContain("a lemma this build does not have");
     }
     // An empty name. `renamePiece` refuses one by returning the contour, so without this check the
     // link would open with the ORIGINAL name and no sign that it had asked for anything else —

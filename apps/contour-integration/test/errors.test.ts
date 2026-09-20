@@ -151,11 +151,15 @@ describe("the sentences a broken link gets", () => {
       "This link belongs to another app in the suite, not to Contour Integration.",
       "This link is incomplete — it may have been cut short when it was copied.",
       "This link names a worked example this version does not have.",
-      "This link names a fixture that worked example does not have.",
+      "This link names a fixture that this worked example does not have.",
       "This link names a contour this version does not have.",
       "This link names a backdrop this version does not have.",
       "This link declares a branch factor at a point it does not carry.",
       "This link opens practice at a stage that does not exist.",
+      // The 2026-09-20 review's two: the envelope version, which was never read at all, and a
+      // contour parameter outside the range its own template declares.
+      "This link was made by a different version of Contour Integration and cannot be opened here.",
+      "This link sets a contour parameter outside the range this contour allows.",
     ]) {
       expect(said.has(actionable), `no codec reason reaches: ${actionable}`).toBe(true);
     }

@@ -14,6 +14,7 @@ import {
 } from "../src/kernel/kernelResidue.js";
 import { asSummationKernel } from "../src/kernel/summationKernel.js";
 import { ExpSum } from "../src/kernel/expSum.js";
+import { formatSqrtExt } from "../src/kernel/formatExact.js";
 
 const must = <T>(v: T | null, what: string): T => {
   if (v === null) throw new Error(`expected ${what}`);
@@ -218,3 +219,59 @@ describe("cofactorResidues — G2's two poles", () => {
     expect(r.at.every((x) => !x.z.asGauss()?.im.isZero())).toBe(true);
   });
 });
+
+describe("the root finder `cofactorResidues` was NOT passing", () => {
+  it("pins all three poles of a CUBIC cofactor, where it used to say none of them was pinned", () => {
+    // Without an injected finder `exactPolesOf` deflates against nothing, so a cubic denominator is
+    // declined however rational its roots are — and the refusal then read *"not every pole of the
+    // cofactor was pinned exactly"*, which of `(z² + ¼)(z − ⅓)` is false: its poles are
+    // `±i/2` and `1/3`, every one a Gaussian rational.
+    const kernel = must(
+      asSummationKernel(parse("pi*cot(pi*z)/((z^2 + 1/4)*(z - 1/3))")),
+      "a cot kernel over a cubic cofactor",
+    );
+    const r = cofactorResidues(kernel);
+    if (!r.ok) throw new Error(`expected the cubic cofactor to resolve: ${r.reason}`);
+    expect(r.at).toHaveLength(3);
+    expect(r.at.map((a) => formatSqrtExt(a.z)).sort()).toEqual(["1/3", "i/2", "−i/2"]);
+    // The sum is checked against an independent contour integral of `K·f` — exact side polynomial
+    // division over ℚ(i), numeric side a trapezoid. `|z| = 0.8` is the smallest circle holding all
+    // three, and it necessarily holds `z = 0` too, whose residue is `f(0) = −12`: that term is the
+    // KERNEL's pole and belongs to `mergedResidue`, so subtracting it is the PARTITION being
+    // asserted rather than an adjustment. Measured, the two sides differ by exactly 12.000000000000004
+    // without it.
+    const total = ratioToTuple(r.total);
+    const numeric = circleIntegral("pi*cot(pi*z)/((z^2 + 1/4)*(z - 1/3))", 0.8);
+    const atZero = 1 / ((0 + 1 / 4) * (0 - 1 / 3));
+    expect(atZero).toBe(-12);
+    expect(total[0] * Math.PI, "Re").toBeCloseTo(numeric[0] - atZero, 8);
+    expect(total[1] * Math.PI, "Im").toBeCloseTo(numeric[1], 8);
+  });
+
+  it("still refuses a cofactor pole it cannot evaluate the kernel at, by name", () => {
+    // The anti-vacuity half: the finder must not turn the refusal into a rubber stamp. A pole at
+    // `√2` carries a radicand, so `e^{2πiz₀}` is outside the basis — a fact about the number, not
+    // about whether anything went looking for it.
+    const kernel = must(asSummationKernel(parse("pi*cot(pi*z)/(z^2 - 2)")), "a cot kernel");
+    const r = cofactorResidues(kernel);
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.reason).toMatch(/carries a √d/);
+  });
+});
+
+/** `(1/2πi)∮ f dz` on `|z| = r`, by the trapezoid — the same independent check the file's own
+ *  residue tests use, at the one radius that encloses the cofactor's poles and no integer. */
+function circleIntegral(src: string, r: number, n = 8192): Cx {
+  const fn = makeComplexFn(parse(src));
+  let re = 0;
+  let im = 0;
+  for (let k = 0; k < n; k++) {
+    const t = (2 * Math.PI * k) / n;
+    const z: [number, number] = [r * Math.cos(t), r * Math.sin(t)];
+    const v = fn(z, [0, 0]) as Cx;
+    // f(z)·z averaged over the circle is (1/2πi)∮ f dz.
+    re += v[0] * z[0] - v[1] * z[1];
+    im += v[0] * z[1] + v[1] * z[0];
+  }
+  return [re / n, im / n];
+}

@@ -27,10 +27,11 @@
 // through `sqrtUp`, and everything else is `+ × ÷` on rationals. The asymptotic verdict rests on
 // the SIGN of `1 − n`, an integer, so it is a decision rather than a measurement.
 //
-// **Two records this exists for, neither loaded yet:** F2 (`∫₀^∞cos(x²)dx = √(π/8)`, the `π/4`
-// wedge — research 03 §7 calls this "the bound everyone hand-waves") and the `∫₀^∞e^{−xⁿ}dx`
-// family. The wedge TEMPLATE that draws their contours is M5.4; this is the maths it stands on, and
-// it is reachable now through the ledger's KILL pass for any `L6`-shaped arc.
+// **Two records this exists for, and both arrived.** F2 (`∫₀^∞cos(x²)dx = √(π/8)`, the `π/4` wedge —
+// research 03 §7 calls this "the bound everyone hand-waves") is the corpus's twenty-eighth record,
+// loaded at M5.8 and discharged here; the `∫₀^∞e^{−xⁿ}dx` family is the `cos` face beside it. The
+// wedge TEMPLATE that draws their contours landed at M5.4, and this bound is reachable from any arc
+// of that shape whether a record declares it or the sandbox does.
 import { Frac, Gauss, piUpper } from "@cas/exact";
 import { bound, refuse } from "@cas/rigor";
 import { sqrtUp } from "./ratBound.js";
@@ -153,7 +154,7 @@ export function wedgeArcBound(
       exponent: Number.POSITIVE_INFINITY,
       certificate: refuse(
         `the wedge arc for ${describe(form)} diverges`,
-        `$|e^{wz^n}| = e^{${face.face === "cos" ? "-cR^n\\cos n\\theta" : "-cR^n\\sin n\\theta"}}$ with $c = ${face.rate.toNumber()} \\le 0$, so the integrand grows like ${grows} — the wedge cannot be closed this way, and the failing constraint is KILL`,
+        `$|e^{wz^n}| = e^{${face.face === "cos" ? "-cR^n\\cos n\\theta" : "-cR^n\\sin n\\theta"}}$ with $c = ${face.rate.toNumber()} \\le 0$, so the integrand grows like ${grows} — the wedge cannot be closed this way, and the arc is not disposed of`,
         {
           provenance: [
             { ok: false, text: `$c = ${face.rate.toNumber()}$ gives growth rather than damping` },

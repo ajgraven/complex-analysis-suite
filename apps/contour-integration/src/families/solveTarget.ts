@@ -191,9 +191,14 @@ export function solveTarget(family: Family, inputs: SolveInputs): SolveTargetRes
     };
   }
 
-  // A `free` piece would contribute a quadrature value, which is `≈` and would cap the result. No
-  // family in the corpus has one, so this refuses rather than quietly downgrading. (`reproduces`
-  // used to be refused alongside it and is now folded into the coefficient above.)
+  // A `free` piece would contribute a quadrature value, which is `≈` and would cap the result, so
+  // this refuses rather than quietly downgrading. (`reproduces` used to be refused alongside it and
+  // is now folded into the coefficient above.)
+  //
+  // **Two records DO have one** — E3's `top` and F2's `ray1` — and neither reaches here, because a
+  // `free` piece carrying a `knownValue` routes to `solveImported` before this point. That is what
+  // the note saying "no family in the corpus has one" was really about (measured 2026-09-20): the
+  // gate is on a free piece with NOTHING declared for it, which is still the whole corpus minus two.
   const free = family.contour.pieces.filter((p) => p.role === "free");
   if (free.length > 0) {
     const reason = `piece '${free[0].id}' has role 'free', which this solve does not yet carry`;
@@ -383,7 +388,8 @@ export function solvePiTargets(family: Family, inputs: PiSolveInputs): SolvePiRe
   const system = built.system;
 
   // A `free` piece would contribute a quadrature value, which is `≈` and would cap every unknown in
-  // the system rather than just one. No family in the corpus has one.
+  // the system rather than just one. E3's `top` and F2's `ray1` are `free` and do not reach here:
+  // each carries a `knownValue`, which routes the record to `solveImported` first.
   const free = family.contour.pieces.filter((p) => p.role === "free");
   if (free.length > 0) {
     const reason = `piece '${free[0].id}' has role 'free', which this solve does not yet carry`;

@@ -125,6 +125,35 @@ describe("L5 — the large arc that does not vanish", () => {
     if (r.ok) return;
     expect(r.certificate.method).toMatch(/diverges rather than tending to a limit/);
   });
+
+  // **The sweep reader held a whitelist, and `2π/5` was not on it** — so this refused, naming the
+  // ANGLE, about an arc whose angle is a perfectly ordinary rational multiple of π. It is the M5.4
+  // finding (an integrand reported unsupported because its geometry could not be measured) reaching
+  // the other two lemmas; the disposal pass's cap was never copied here.
+  it("reads F1's 2π/5 wedge arc, which the eight-entry list refused by the wrong name", () => {
+    const wedge: Resolved = {
+      kind: "arc",
+      center: [0, 0],
+      radius: 50,
+      theta0: 0,
+      theta1: (2 * Math.PI) / 5,
+    };
+    const r = largeArcLimit(formOf("1/(1 + z^5)"), wedge, "upper");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.limit.sweptAnglePi.n).toBe(2n);
+    expect(r.limit.sweptAnglePi.d).toBe(5n);
+    // `z/(1+z⁵) → 0`, so the arc really does vanish; what changed is that it can now be SAID.
+    expect(r.limit.L.isZero()).toBe(true);
+  });
+
+  it("still refuses an angle past the cap, by name and about the angle", () => {
+    const odd: Resolved = { kind: "arc", center: [0, 0], radius: 50, theta0: 0, theta1: 1 };
+    const r = largeArcLimit(formOf("1/(1 + z^5)"), odd, "upper");
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.certificate.method).toMatch(/not a recognised rational multiple/);
+  });
 });
 
 /** C2's contour, with the arc's lemma under test. */

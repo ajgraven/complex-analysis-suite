@@ -131,7 +131,7 @@ export function gaussianSideBound(q: QiPoly, lambda: Gauss, s: GaussianSide): Ar
   if (length.isZero()) return no("the side has no length, so its ML bound would be a vacuous ≤ 0");
   if (leading.isZero()) {
     return no(
-      "Re(q₂) = 0, so the bound is O(e^{κc}) with κ depending on WHICH endpoint attains the maximum — " +
+      "Re(q₂) = 0, so the bound is O(e^{κc}) with κ depending on which endpoint attains the maximum — " +
         "that is a different lemma from this one, which decides on the sign of the z² term alone",
     );
   }

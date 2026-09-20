@@ -548,7 +548,7 @@ describe("LEGALITY, steps 2 and 3 — the cut system", () => {
   });
 });
 
-describe("legalityRefusal — the one gate on printing a value at all", () => {
+describe("legalityRefusal — the first clause of ADR-0045's one gate on printing a value (`valueRefusal`)", () => {
   const origin: BranchPoint = {
     id: "0",
     at: [0, 0],
@@ -772,7 +772,7 @@ describe("L6 — the wedge lemma, routed and certified", () => {
     const gaussian = arcRow(run("exp(-z^2)", wedge(2)));
     expect(gaussian?.status).toBe("failed");
     expect(gaussian?.evidence.level).toBe("⚠");
-    expect(gaussian?.evidence.method).toMatch(/GROWS/);
+    expect(gaussian?.evidence.method).toMatch(/grows rather than decays/);
     expect(gaussian?.evidence.method).toMatch(/runs past π\/2/);
   });
 
@@ -835,8 +835,16 @@ describe("L6 — the wedge lemma, routed and certified", () => {
 // enumerate `2π/n` for a record's own `n`, and at `n = 5` KILL blamed the INTEGRAND for a failure
 // of the geometry reader — for the one integrand shape it discharges at `n = 4`.
 describe("an arc's sweep as an exact multiple of π", () => {
-  /** The `p·π/q` sector from the positive real axis — F1's wedge shape, at any angle. */
-  const sweep = (p: number, q: number) => sector(0, (p * Math.PI) / q);
+  /**
+   * The `p·π/q` sector from the positive real axis — F1's wedge shape, at any angle.
+   *
+   * **At `R = 20`, and the default of 4 was the review's own item 1.3 living in a test.** The ML
+   * bound reads `|z² − 6z + 10| ≥ R² − 6R − 10`, which is negative below `3 + √19 = 7.359`, so at
+   * `R = 4` `mlArcBound` REFUSED every sweep below — and the row read `satisfied` anyway, because
+   * the refusal carried the degree gap's `"vanishes"`. The thing this block is about is the ANGLE
+   * reader, so the radius has to be one at which there is a bound for the angle to be read into.
+   */
+  const sweep = (p: number, q: number) => sector(0, (p * Math.PI) / q, 20);
 
   it("reads every fraction the old whitelist held", () => {
     // The thirteen, so a cap that lost one would be caught rather than inferred. The integrand's

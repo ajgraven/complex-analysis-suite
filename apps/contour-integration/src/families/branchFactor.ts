@@ -18,7 +18,7 @@
 //
 // **`rationalPart`** is an AST, since everything downstream (poles, residues, the arc bounds) wants
 // the polynomial pair and `toExactRational` produces it.
-import { Frac, Gauss, SqrtExt } from "@cas/exact";
+import { Frac, Gauss, SqrtExt, bigGcd } from "@cas/exact";
 import { parse, substitute, type Node } from "@cas/expr";
 import type { MultiPowerFactor, PowerFactor } from "../kernel/branchResidue.js";
 import type { LogFactor } from "../kernel/logResidue.js";
@@ -30,6 +30,15 @@ import type { DeclaredFactor, DeclaredProduct } from "../kernel/branch/declared.
 import type { Cx } from "../kernel/geom.js";
 import { exactConstant, type Bindings } from "./system.js";
 import type { BranchFactor as BranchFactorSpec, Family } from "./schema.js";
+
+/**
+ * The largest common denominator of a multi-point factor's exponents this app will work with.
+ *
+ * See `multiFactorOf` for the measurement. Every fixture in the corpus is far below it — D6's two
+ * exponents are `−1/2`, D7's are `μ` and `1 − μ` at quarters and thirds — so this binds only on a
+ * value that arrived from a control or a permalink rather than from a record.
+ */
+const MAX_EXPONENT_DENOMINATOR = 10_000n;
 
 export type BranchFactorResult =
   | {
@@ -284,6 +293,29 @@ export function multiFactorOf(family: Family, bindings: Bindings): MultiFactorRe
       argRange: [ownLo, ownHi],
     });
     geometry.push({ id: `b${k + 1}`, at: at.value.toTuple() as Cx, order: { kind: "power", alpha }, label });
+  }
+
+  // **THE EXPONENTS' COMMON DENOMINATOR IS A COST, AND IT IS THE ONE THAT WEDGED THE TAB.**
+  // `multiPowerAtPole` verifies the product's phase by raising it to `N = 2·lcm(αⱼ.d)`, where every
+  // power is an integer and the quotient is therefore exact — and the bit length of the result
+  // doubles with each squaring, so `N` is not a loop count but an exponent on the arithmetic.
+  // Measured on D7 (Node 22, this container): denominator 4 000 → 44 ms, 10 000 → 124 ms,
+  // 25 000 → 239 ms, 100 000 → 2 389 ms, and a SLIDER float — `mu = 0.7000000000000002`, which is
+  // inside the record's own `0 < mu < 1` — has denominator 4.7e14 and does not finish at all: the
+  // renderer sat at 100 % CPU for 13 minutes without a paint and the tab could not be navigated
+  // away from. So the declared-range clamp in `instantiate.ts` does NOT make this unreachable, and
+  // this cap is what does. 10 000 is where the worst case is still ~125 ms, the same "a slow commit
+  // and not a hang" line `MAX_SERIES_N` draws.
+  let denominator = 1n;
+  for (const point of points) denominator = (denominator * point.alpha.d) / bigGcd(denominator, point.alpha.d);
+  if (denominator > MAX_EXPONENT_DENOMINATOR) {
+    return {
+      ok: false,
+      reason:
+        `the branch exponents have common denominator ${denominator}, and verifying this product's phase means ` +
+        `raising it to the power ${2n * denominator} in exact arithmetic — above ${MAX_EXPONENT_DENOMINATOR} that is ` +
+        `not a computation this app will finish, so it is refused rather than started`,
+    };
   }
 
   let constant = SqrtExt.ONE;

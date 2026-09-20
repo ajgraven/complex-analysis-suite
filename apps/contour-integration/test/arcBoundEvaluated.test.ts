@@ -153,7 +153,7 @@ describe("a certified bound, as three numbers", () => {
     const quadratic = QiPoly.fromCoeffs([Gauss.ONE, Gauss.ZERO, Gauss.ONE]);
     const bounds = [
       mlArcBound(one, quartic, Frac.of(4n), Frac.ONE, "R"),
-      jordanArcBound(one, quadratic, Frac.ONE, "upper", Frac.of(4n), "R"),
+      jordanArcBound(one, quadratic, Frac.ONE, "upper", Frac.of(4n), "R", { from: Frac.ZERO, to: Frac.ONE }),
       wedgeArcBound({ w: Gauss.I, n: 2, lambda: Gauss.ONE }, Frac.of(4n), { from: Frac.ZERO, to: Frac.of(1n, 4n) }, "R"),
       squareSideBound("cot", one, quadratic, Frac.of(7n, 2n), "N"),
     ];

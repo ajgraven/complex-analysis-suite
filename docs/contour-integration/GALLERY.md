@@ -69,13 +69,18 @@ in `loadFamilies`. A record that fails is **dropped, not thrown on**, like the o
 | **B** | B1–B3 | Jordan's lemma and the sign-of-`a` half-plane branch; conditional convergence |
 | **C** | C1–C3 | indented contours, the small-arc lemma L4, removable-singularity detection, principal values as a distinct result type |
 | **D** | D1–D7 | **branch cuts** — keyhole, Mellin, log, log², dogbone; the residue at infinity; two fractional powers on one cut |
-| **E** | E1–E3 | the `reproduces` role: quasi-periodic strips, and the zero-residue contour shift |
+| **E** | E1–E3 | quasi-periodic strips, and the zero-residue contour shift |
 | **F** | F1–F2 | wedge contours and the L6 bound; the `§5.1 ≡ §7` cross-check |
 | **G** | G1–G3 | summation by residues; the kernel/`f` pole collision |
 
-Six contour templates (circle, semicircle, indented semicircle, keyhole, dogbone, rectangle, wedge)
-plus `square` for tier G; one fractional-power branch; one logarithm branch; one `πcot`/`πcsc` kernel
-pair. Everything else in the taxonomy is parameterisation, not new machinery.
+**Eight** contour templates — circle, semicircle, indented semicircle, keyhole, dogbone, rectangle,
+wedge, and `square` for tier G; one fractional-power branch; one logarithm branch; one
+`πcot`/`πcsc` kernel pair.
+*(Corrected 2026-09-20 by counting rather than remembering: the list said "six" and then named seven
+plus `square`, where `TemplateId` (`src/families/schema.ts:116-124`) has eight members, all eight
+used. The same table credited tier **E** with introducing the `reproduces` role; tier **D** did — all
+seven D records carry a `reproduces` piece, and `solveTarget.ts:127-133` calls folding it in "THE
+KEYHOLE'S WHOLE MECHANISM, and … what M4.2 added". What tier E adds is the quasi-periodic strip.)* Everything else in the taxonomy is parameterisation, not new machinery.
 
 ---
 
@@ -99,7 +104,7 @@ acceleration, cross-checked to 2.4e-13 by oscillation-resolved quadrature with a
 2. **The tier-G square-contour "bound" was not a bound** — it dropped the `π` from `π cot(πz)`,
    leaving it *below* the true integral at every `N`. The asymptotics were right; the constant was
    not, and a ledger would have printed a false `≤`. *(This entry's own "30–40 % at every `N`" was
-   itself wrong, and §5.8 corrects it: measured, the shortfall is 4.9 % at `N = 3` and 27.8 % at
+   itself wrong, and §5.6 corrects it — the pointer said §5.8, re-checked 2026-09-20: measured, the shortfall is 4.9 % at `N = 3` and 27.8 % at
    `N = 25`, GROWING toward `π·(N/(N+½))^k` — so 30 % is the asymptote rather than the typical case.
    The finding stands; only its magnitude was overstated at small `N`.)*
 3. **`P = 2πi` should have been `P = 2π`** in the strip family, against the section's own convention.
@@ -238,8 +243,11 @@ Its forms are **carried, not reduced** (ADR-0041): `π/sin(3π/10)` is the exact
 before one, because reducing it would need a general algebraic number field — D3's `sin(23π/50)` is
 degree 20. The FORM is `=` and the decimal is `≈`, exactly as tier B carries `e^{β}`.
 
-And **the quadrature cross-check is SKIPPED for all seven**, by an explicit decision the run reports
-rather than by omission: sampling `z^α` needs a determination, and `@cas/expr`'s compiled evaluator
+And **the quadrature cross-check WAS skipped for all seven** — *closed in M5.0; §5.2 below is the
+record, and `engine/branchTheorem.ts:165` now calls `checkAgainstQuadrature` unconditionally. The
+past tense is 2026-09-20's correction: this paragraph stood in the present tense two paragraphs above
+its own retraction, so a reader who stopped at §5 took away the opposite of what the engine does.* It
+was an explicit decision the run reported rather than an omission: sampling `z^α` needs a determination, and `@cas/expr`'s compiled evaluator
 uses the principal one, so a quadrature of a keyhole would answer a different question with
 confidence. Tiers A–C are corroborated by an independent numeric route and tier D is not — which is
 the one respect in which tier D's evidence is thinner than tier A's, and it is now closable rather
@@ -573,14 +581,17 @@ non-positive and shrinks the denominator's subtracted sum — a term-by-term ine
 certified LOWER bound on `e^π` (`e^x ≥ Σ x^k/k!` at `piLower()`), and both truncations push the same
 way — the only direction a bound may err. It **refuses** a half-width that is not `N + ½` by name. That ENFORCES what
 `limitParams[].through = "halfIntegers"` declares — but from the GEOMETRY, not from the field, which
-is still unread. The distinction is worth keeping: a check on the geometry catches a contour the user
+was then still unread *(re-measured 2026-09-20: M8 step 3.2 gave it two readers in
+`src/families/instantiate.ts`, clamping the limit range and emitting `admits: "integers"`)*. The distinction is worth keeping: a check on the geometry catches a contour the user
 has dragged, which a record's declaration cannot, so this is the stronger of the two and not a
 substitute waiting to be replaced.
 
 **D-2, executed rather than described — and a correction to the correction.** Research 03 §8's
 `(M/N^k)·coth(π/2)·4(2N+1)` drops the `π` from `π cot(πz)`, and is then not a bound: 3.392 against a
 measured 3.567 at `N = 3`, 0.356 against 0.493 at `N = 25`, both recomputed from the engine's own
-quadrature. **§6 above says it fails "by 30–40 % at every `N` tested", and that is wrong.** Measured,
+quadrature. **§2 above says it fails "by 30–40 % at every `N` tested", and that is wrong.**
+*(The back-reference said §6, which does not exist; the sentence is §2's Verification record, which
+now carries the correction inline. Re-checked 2026-09-20.)* Measured,
 the shortfall is **4.9% at `N = 3` and 27.8% at `N = 25`**, and it GROWS — because the ratio between
 the two bounds is exactly `π·(N/(N+½))^k`, the missing π times a factor tending to 1. So 30% is the
 ASYMPTOTE, not the typical case. The finding itself is untouched: at every `N` the stated quantity is
@@ -734,7 +745,9 @@ KERNEL's, which is why `(−1)ⁿ` never appears in a cofactor — it is not a f
 **`cofactorResidues` and `mergedResidue` PARTITION the pole set.** Before M5.7 both refused a
 collision from their own side, each true of the identity it applies and beside the point, because the
 identity that applies at an integer is a different one. Skipping integer poles by construction made
-one refusal unreachable, and it was removed — §5.8's lesson about assertions that cannot fire.
+one refusal unreachable, and it was removed — §5.2's lesson about assertions that cannot fire
+*(the pointer said §5.8, which is where G2 loads; the lesson is §5.2's vacuously-passing
+`declaredProduct` half. Re-checked 2026-09-20)*.
 
 **SG-5 was already done**, and §10.2 lists it as the widest remaining change. `kind: "sum"`, an
 integer index and a `summand` landed with D1's arc; their readers — `targetText`, `instantiate`'s

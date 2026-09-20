@@ -70,10 +70,17 @@ export default tseslint.config(
   {
     // **Shadowing, in the one app whose shell is a long closure over mutable state.**
     //
-    // `apps/contour-integration/src/shell/app.ts` holds its whole state — `branch`, `contour`,
-    // `mode`, `input` — as `let` bindings in one module closure, and its renderers take pieces of
+    // `apps/contour-integration/src/shell/app.ts` HELD its whole state — `branch`, `contour`,
+    // `mode`, `input` — as `let` bindings in one module closure, and its renderers took pieces of
     // that state as parameters. A parameter named after the state it was passed therefore SHADOWS
     // it, and an assignment inside the renderer writes to the parameter and is silently discarded.
+    // (Past tense re-measured 2026-09-20: M6.1 lifted those four into `ShellState` and the M8
+    // rebuild kept them there, so the shareable state is now three `let`s at lines 125-127 —
+    // `state`, `compiled`, `resolution` — with the file's other six holding stage/sweep/hash
+    // machinery rather than the argument. The rule stays, and so does the finding that bought it:
+    // the hazard
+    // is a renderer parameter shadowing an outer binding, which a state object narrows but does not
+    // remove.)
     // That happened: `renderDeclaration(branch)` made the sheet spinner do nothing, and made
     // changing the declared determination move the ANSWER while leaving the cut drawn where it was
     // — the two then disagreeing about where the discontinuity is, which is the one thing
