@@ -13,7 +13,7 @@
 // which is the same reason, one step down; see {@link splitTarget} for why the modifier is there at
 // all and what the alternatives cost.
 import { applyBranchGrab, branchHandles, sameBranchGrab, type BranchHandle } from "../engine/branchEdit.js";
-import { nearestHandle, onContour, pieceAt, radiusDragValue, splitPiece, translateContour, type Handle } from "../engine/contour/edit.js";
+import { fractionAlong, nearestHandle, onContour, pieceAt, radiusDragValue, splitPiece, translateContour, type Handle } from "../engine/contour/edit.js";
 import { arcThroughBulge, bulgeFromApex, penContour } from "../engine/contour/pen.js";
 import { clampView, panBy, scale, screenToPlot, zoomAt, type View, type Viewport } from "../kernel/camera.js";
 import { isOriginCentred, pointAt, type Cx, type Resolved } from "../kernel/geom.js";
@@ -339,14 +339,18 @@ export function createStageController(input: StageControllerInput): StageControl
     // `edit.ts`'s own way of asking whether an operation applied: every refusal returns the contour
     // BY REFERENCE, so this is exact rather than a comparison that could go either way.
     if (next === st.contour) return null;
+    // **The RECIPE absorbs the division — M8 step 4.4b.** Until then this branch set `contourSource`
+    // to null, because `translate(TEMPLATES[t].build(), shift)` is not a divided template and the
+    // codec would have rebuilt a different contour. It carries the reader's own operations now, so
+    // the field stays true and the link survives; the fraction is what is recorded rather than the
+    // point, because that is the part of a division a slider does not move.
+    const fraction = fractionAlong(st.contour, piece.id, at);
+    const source =
+      st.contourSource === null || fraction === null
+        ? null
+        : { ...st.contourSource, ops: [...(st.contourSource.ops ?? []), { k: "s" as const, id: piece.id, at: fraction }] };
     return {
-      // **`contourSource` goes null, because it has become false.** The field says the contour is
-      // `translate(TEMPLATES[t].build(), shift)`, and a divided template is not that — so
-      // `viewState.ts`, which rebuilds the recipe and compares before minting a link, would refuse.
-      // It still refuses, by the other branch and naming the gap step 4.4 fills; what changes is
-      // that the refusal comes from a true field rather than from catching a lie. `penCommit` sets
-      // it null for exactly this reason.
-      state: { ...st, contour: next, sandboxContour: next, contourSource: null },
+      state: { ...st, contour: next, sandboxContour: next, contourSource: source },
       pieceId: piece.id,
       pieceName: piece.name,
     };

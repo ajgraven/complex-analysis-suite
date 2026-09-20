@@ -180,9 +180,21 @@ changed.
   in step — is now one function in `kernel/geom.ts`. Five findings; the one beyond this app is that
   **nothing pinned the origin test as an EQUALITY**, so loosening it to `|c| < 1e-9` left the suite
   green and would have re-admitted every arc the round trip was mis-centring.
-  **Next execution action: the rest of 4.4b** (the structural ops list — a template's deletions,
-  insertions, reorders, reversals and divisions carried on the recipe, which keeps the parameters and
-  the exactly-centred arcs a pen wire loses).
+  **4.4b is DONE — the recipe carries what was DONE to a template, not what it became.**
+  `ContourSource.ops` holds the reader's six structural operations and `viewState.ts` replays them,
+  so a deleted, inserted, reordered, reversed or divided template keeps its link — which §4.4's own
+  carrier could not deliver, changing the ledger for four of the ten templates. A division is
+  carried as a FRACTION, which is what makes it replayable at all, and `splitPiece` is split into
+  the question a pointer asks and the operation itself. **The ops come before the shift, which is not
+  the order a reader works in**: measured, every op but the division commutes with translation
+  exactly and the division to 1.3e-15, so the order is free and the only cost is the instrument — a
+  contour carrying ops is verified by SHAPE where an unedited recipe keeps the structural
+  comparison. Six findings; the sharpest is that the sweep survived BOTH branches of that fork,
+  because every edited fixture had no shift and every unedited one is rebuilt structurally, so
+  neither instrument was pinned until a drag-then-divide and a same-curve-different-writing fixture
+  were built for them.
+  **Next execution action: step 4.5** (the Phase 4 gate — full gate, browser suite, screenshots
+  under `M8/screens/phase4/`, and STATUS pointing at Phase 5).
   **Step 1.12 is done — THE CUTOVER.** `main.ts` stops choosing, the old `src/shell/app.ts` (3,700
   lines), `src/ui/app.css` and four of its test files are deleted, and `src/shell2/` has BECOME
   `src/shell/`. [`parity.md`](parity.md) is complete. The parity sweep found two capabilities the new
@@ -213,6 +225,7 @@ changed.
 
 | date | step | commit | notes |
 |---|---|---|---|
+| 2026-09-20 | **4.4b (2/2)** | (this commit) | **THE EDIT LIST — a structurally edited template is carried as WHAT WAS DONE TO IT.** `ContourSource.ops` holds the six operations a reader can make (`d`elete, `i`nsert, `m`ove, `r`everse-piece, `R`everse-contour, `s`plit) and `bareRecipe` replays them, so the parameters, the symbolic geometry and the exactly-centred arcs survive because nothing re-describes the curve — where §4.4's pen-wire carrier changed the LEDGER for four of the ten templates. **A division is a FRACTION**: a point would re-divide a contour whose slider has moved at a place its geometry no longer passes through, so `splitPiece` splits into `splitFraction` (what a pointer asks) and `splitPieceAt` (the operation), a no-op for the 94 existing tests — and the refactor found a `divide === null` branch that had been unreachable since the operation was written. **The ops come BEFORE the shift**, which is not the order a reader works in: measured, every op but the division commutes with translation exactly and the division to **1.3e-15** over every template, every piece and four fractions, and all six commute exactly with a parameter change — so the order is free and the only cost is that a contour carrying ops is verified by SHAPE, where an unedited recipe keeps the structural comparison. **The sweep survived BOTH branches of that fork**, because every edited fixture had no shift and every unedited one is rebuilt structurally; the cases that separate them are a drag-then-divide (which the exact check refuses) and a template whose radius is frozen to the literal `4` instead of the parameter it binds — the same curve, a different writing, and a link that would open with the slider gone. `movePiece` moves to `edit.ts` on the second-consumer rule; `reverseContour` keeps its recipe as `{k:"R"}`, which makes a comment true for the first time since the cutover. Sweep: **16 mutants, 15 killed, 1 recorded equivalent** (five closed on a second pass). Browser-verified at 1440x950: two structural edits round-trip in a 239-character link with identical pieces, identical Result card and the template picker still reading `semicircle`. Full gate green: **586 files / 6,472 tests**; app browser suite **20 files / 220 tests**; a11y roster clean on all four contour pages |
 | 2026-09-20 | **4.4b (1/2)** | (this commit) | **THE ARC'S CENTRE IS CARRIED, BECAUSE A BULGE CANNOT HOLD IT — and the defect it fixes shipped in step 4.2.** Measured before the step's own subject was touched: the plan's figure, an upper semicircle of radius 8 drawn with 4.2's snap, reports `π` with a certified `≤` and reopens from its own permalink with `closes = false`, the KILL row at `unknown` and no target value. The link VERIFIES on the way out; what moves is the CENTRE, because `penPath` reads the chord and the apex back through `cos`/`sin`, recovers a bulge of `7.999999999999999`, and `arcThroughBulge` rebuilds the centre at `(0, 8.9e-16)` where `arcRadius` demands exactly zero. **Recomputing the bulge from the arc's own centre and radius is an improvement and NOT a fix** — 64.3% exactly centred against the apex route's 49.5% over 8,000 antipodal arcs — so `PenNode.centred` joins `role` and `lemma` as a field carried rather than derived, at one integer per arc on the wire. `originArc` writes the centre down as a literal zero and reads BOTH angles from the endpoints, taking only the discrete branch from the bulge-built arc (carrying its sweep over left the far end 3.6e-9 out against the near end's 1.6e-9), with the radius the MEAN of the two ends so neither is privileged. The decoder REFUSES a claim whose ends are not the same distance from the origin — that is the statement that such a circle exists — rather than building the nearest thing. `isOriginCentred` moves to `kernel/geom.ts` and its three spellings become one; **nothing had pinned it as an EQUALITY**, so the sweep's `|c| < 1e-9` mutant left the suite green, and it is now asserted at 1e-12, 1e-16, `Number.MIN_VALUE`, a signed-zero case and an exactly-zero control. Sweep: **11 mutants, 11 killed, no equivalents** (three closed on a second pass, two of them the same carelessness about which end the reconstruction favours). Full gate green: **586 files / 6,465 tests**; app browser suite **20 files / 220 tests** |
 | 2026-09-20 | **4.4a** | (this commit) | **THE WIRE FORM CARRIES ROLES — and the step split, because measuring the plan's own carrier falsified it.** `TemplateContourWire` and `PenContourWire` both gain `r` (piece index → `role` or `role:lemma`) and `n` (index → name), carried as a DIFF against `bareRecipe(wire)` — one rule for both forms, since `penContour` assigns every piece `PEN_ROLE` where a template assigns its own — so a contour nobody annotated carries neither map and every link minted before this step is byte-identical. Measured: a keyhole is 68 characters plain, 118 with one 24-character name and 140 with all four pieces re-roled; a twelve-vertex drawn path 674 and 720 with two roles. **4.3 had left every edited template contour with NO LINK AT ALL** — it cleared `contourSource` on every edit, and `penPath` refuses a contour whose ids are not the pen's, so a rename produced *"this contour came from neither a template nor the pen"*; `editPieces` now keeps the recipe for the two operations that move no point, which also gives the Contour card's template `<select>` and the drill's menu match their field back. **The plan's pen-wire carrier for a STRUCTURALLY edited template changes the ledger for four of the ten templates** — a full-turn arc has a zero-length chord no bulge can express (`circle`'s only piece becomes a degenerate segment) and an arc's centre returns 2.2e-16 off the origin where `arcRadius` demands exactly zero — so that half is **4.4b**, pointed at an ops list on the recipe. The decoder refuses by name an unknown role, an unknown lemma, an out-of-range index, an empty name and — the sharp one — **a lemma on a role that cannot hold one**, because `setRole` drops it silently and is right to. Also: committing a rename **threw on every Enter and every Escape** (`NotFoundError`, Chromium firing `blur` inside `patch`, invisible to jsdom and to a green app suite), fixed by the shell's own no-op rule and pinned by a browser test measured to fail without it; and `reverseContour`'s comment has said the opposite of its code since the cutover. Sweep: **MUTSCORE**. Browser-verified at 1440x950 (an annotated template link reopens with identical piece rows, identical Result card and the template picker still reading `semicircle`), app browser suite **20 files / 220 tests**, full gate green: **586 files / 6,459 tests** |
 | 2026-09-20 | **4.3** | (this commit) | **THE LIST EDITOR, AND THE CURVE DIVIDED.** Seven actions on the Contour card's rows — a role `<select>`, a status glyph, rename in place, delete, insert, reverse and Alt+↑/↓ reorder — over `engine/contour/edit.ts`'s pure operations, plus an eighth operation `splitPiece` reached by **Shift-dragging the curve**, which inserts the vertex and drags it in ONE gesture and ONE undo entry. **The menu is four vanishing lemmas and two known limits, not the plan's eight**: measured at 4.1, `L7` is the `reproduces` ROLE rather than a bound, `L8` is an identity about the whole integral, and the strip/square sides and the branch/log arcs are `L1`/`L2` dispatched by geometry. A division's count rule **has no cases** (always `n + 1`) because the halves share the very `PointSpec` or `theta` they meet at; a segment's join point is SYMBOLIC (`(1−t)·a + t·b`, which at `N = 9` sits where a frozen literal would be **7.0 units off the side**), and an arc is divided **on its own circle** rather than at the pointer, because `arcRadius` refuses any centre that is not exactly `(0,0)` and a new circle would silently destroy a vanishing arc's `≤` — at the cost of up to 11 px, 0.073 units at the default camera, which the drag makes recoverable. **A role the ledger DECIDES is inherited by both halves; a role it takes ON FAITH is dropped to `free`** — so dividing a `residue` circle changes no number and dividing the target stops the app reporting one. Undo gains `"edit-step"`, because rule 7 coalesces by CHANGED FIELD NAMES and every contour edit writes the same three fields, so two deletions inside 800 ms would leave one press of Ctrl+Z to bring back neither. Eleven findings, including that the commonest state in the app had no entry in the role menu, that `cycleGrab` had been reading LaTeX aloud since 3.6 in the one surface that pass could not reach, and that **the rename box's Escape guard was documented as protecting the pen and the modals when it protects neither** — both handlers are outside the box's ancestry, and the test aimed at the pen passed with the line removed. Sweeps: **13/13 with one equivalent** on the shell half (both undo mutants and the Escape mutant closed on a second pass, each by a test that had been pinning the outcome without the reason) and **39 mutants — 35 killed by the suite, 1 by `tsc`, 3 equivalents** on the stage half. Browser-verified at 1440x950 (cursor `grab` → `cell` under Shift; one Shift-drag takes the default circle to two pieces), axe clean in the sandbox and with a rename box open, app browser suite **19 files / 218 tests**, full gate green: **586 files / 6,455 tests** |
@@ -299,6 +312,54 @@ changed.
 | 2026-09-15 | **0.5b-ii** | 573fb8c | the five rules through `kernel/bounds/*`, the three theorem identities, `derivation.ts`'s solve stage and `solveTarget.ts`; `latex` on the solved value; 65 wording-pinned tests updated; 191 → 152 flagged |
 
 ## Findings (things learned while executing; each names its step)
+
+- **(4.4b) THE PLAN'S CARRIER FOR A STRUCTURALLY EDITED TEMPLATE WAS REPLACED BY WHAT WAS DONE TO
+  IT.** §4.4 asks for the edited piece list to ride as a pen wire — vertices and bulges. Run over
+  the ten templates, that conversion changes the LEDGER for four, for two reasons measured at 4.4a:
+  a full turn has a zero-length chord, so no bulge can express it and `circle`'s only piece returns
+  a degenerate segment, and a rebuilt arc's centre lands 2.2e-16 off the origin where `arcRadius`
+  demands zero. An edit list does not re-describe the curve at all — it replays the reader's own six
+  operations onto the template the recipe already names — so the parameters, the symbolic geometry
+  and the exactly-centred arcs survive because nothing ever touched them.
+
+- **(4.4b) A DIVISION IS CARRIED AS A FRACTION, WHICH IS WHAT MAKES IT REPLAYABLE.** A point would
+  re-divide a contour whose slider has moved at a place its geometry no longer passes through; the
+  fraction follows the parameter exactly as the halves' shared `PointSpec` already does, and costs
+  one number instead of two. `splitPiece` is therefore split into the question a POINTER asks
+  (`splitFraction`, then the tolerance) and the operation itself (`splitPieceAt`), with the point
+  form delegating — a no-op for the 94 existing tests. The refactor found a guard that had been
+  dead since the operation was written: `splitPiece` tested `divide === null` where neither helper
+  can return null, so the branch was unreachable and is gone rather than recorded.
+
+- **(4.4b) THE OPS COME BEFORE THE SHIFT, AND THAT IS NOT THE ORDER THE READER WORKS IN.** A reader
+  divides, drags, divides again, and the recipe holds one accumulated translation — so the replay
+  cannot interleave them and has to pick. Measured rather than assumed: every op but the division
+  commutes with translation EXACTLY (structurally identical pieces), and the division commutes to
+  **1.3e-15**, over every template, every piece and four fractions. All six commute exactly with a
+  parameter change. So the order is free, and the one thing it costs is the instrument: a contour
+  carrying ops is verified by SHAPE at `sameShape`'s 1e-9 — six orders above that noise — where an
+  unedited recipe keeps the structural comparison, which is stronger and free.
+
+- **(4.4b) BOTH BRANCHES OF THAT FORK NEEDED A TEST, AND NEITHER HAD ONE.** The sweep survived both
+  `same` everywhere and `sameShape` everywhere, because every edited fixture had no shift (so the
+  two agree) and every unedited one is rebuilt structurally (so they agree again). The cases that
+  separate them are a contour that was BOTH edited and dragged — which the exact comparison refuses
+  — and one written differently but drawn the same, a template's radius frozen to the literal `4`
+  instead of the parameter it binds, which `sameShape` accepts and which would open a link with the
+  slider gone. That second one is why `contourSource` is a claim about the REPRESENTATION and not
+  about the picture: no sampled point can see a parameter binding.
+
+- **(4.4b) A REVERSAL IS AN OP, AND THAT MAKES A COMMENT TRUE FOR THE FIRST TIME SINCE THE CUTOVER.**
+  4.4a found `reverseContour`'s comment claiming the recipe is kept while the line below it cleared
+  the field, and recorded the repair as a wire flag rather than a lie about the recipe. It is one
+  bit, it commutes with both the parameters and the shift, and it is now `{k:"R"}` like any other
+  operation — so a reversed contour has a link again.
+
+- **(4.4b) One equivalent mutant, carried over with its code.** `movePiece` moved from the shell to
+  `edit.ts` on the second-consumer rule (the row's arrows and the replay), and its range guard is
+  still unobservable for the reason recorded at 4.3: an out-of-range swap writes `undefined` into
+  the id list and `reorderPieces` refuses it as a non-permutation. Kept because "there is nowhere to
+  go" and "that is not a permutation" are different statements.
 
 - **(4.4b) A DRAWN ARGUMENT THAT CLOSES REOPENED FROM ITS OWN PERMALINK NOT CLOSING, AND THE DEFECT
   SHIPPED IN STEP 4.2.** Measured before anything was written: the plan's own figure — an upper

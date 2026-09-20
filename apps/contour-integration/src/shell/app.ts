@@ -22,8 +22,9 @@ import {
   renamePiece,
   reverseContour,
   reversePiece,
-  reorderPieces,
+  movePiece,
   setRole,
+  type ContourOp,
 } from "../engine/contour/edit.js";
 import { TEMPLATES } from "./templates.js";
 import { coldStartState, compile, drawnContour, resolveState, shellMode, withParam, type Compiled, type ShellMode, type ShellState, type StateResolution } from "./state.js";
@@ -481,42 +482,27 @@ export function mountShell2(root: Element): Shell2Handle {
   function editPieces(
     op: (c: Contour) => Contour,
     why: CommitReason = "edit-step",
-    keeps: "the recipe" | "nothing" = "nothing",
+    keeps: "the recipe" | "nothing" | ContourOp = "nothing",
   ): void {
     const next = op(state.contour);
     if (next === state.contour) return;
-    commit(
-      { ...state, contour: next, sandboxContour: next, contourSource: keeps === "the recipe" ? state.contourSource : null },
-      why,
-    );
+    commit({ ...state, contour: next, sandboxContour: next, contourSource: recipeAfter(keeps) }, why);
   }
 
   /**
-   * Move one piece by one place — the row's reorder, expressed as `reorderPieces`' permutation.
+   * What `contourSource` becomes after an edit — M8 step 4.4b.
    *
-   * `reorderPieces` takes the whole order because a permutation is what it can verify; a reader
-   * moves one row. The translation is here rather than in `edit.ts` so the engine keeps the
-   * operation it can check, and the shell keeps the gesture a reader makes.
+   * Three answers, and they are the three kinds of edit. `"the recipe"` is an annotation: a role or
+   * a name moves no point, so the recipe still describes the curve and `viewState.ts` carries the
+   * difference as a diff. A {@link ContourOp} is a STRUCTURAL edit that the recipe can now absorb,
+   * by recording what was done rather than what it became. `"nothing"` is left for an edit that is
+   * neither — there is none today, and the case stays because the alternative is a default that
+   * silently makes a future one a lie.
    */
-  function moveOne(contour: Contour, id: string, by: -1 | 1): Contour {
-    const ids = contour.pieces.map((p) => p.id);
-    const at = ids.indexOf(id);
-    const to = at + by;
-    // At either end there is nowhere to go, and a wrap would move the piece the whole way across
-    // the list on a keypress that means "one step".
-    //
-    // **The range half is a recorded equivalent, kept deliberately.** Dropping it is unobservable:
-    // the swap would write `undefined` into the id list, and `reorderPieces` refuses that as a
-    // non-permutation (or, at `to === ids.length`, as a list of the wrong length) and returns the
-    // contour by reference, which `editPieces` reads as a refusal — the same outcome by a longer
-    // road. It stays because "there is nowhere to go" and "that is not a permutation" are different
-    // statements, and relying on the second would couple this list's ends to the engine's
-    // validation shape.
-    if (at < 0 || to < 0 || to >= ids.length) return contour;
-    const next = [...ids];
-    next[at] = ids[to];
-    next[to] = ids[at];
-    return reorderPieces(contour, next);
+  function recipeAfter(keeps: "the recipe" | "nothing" | ContourOp): ShellState["contourSource"] {
+    if (keeps === "nothing" || state.contourSource === null) return null;
+    if (keeps === "the recipe") return state.contourSource;
+    return { ...state.contourSource, ops: [...(state.contourSource.ops ?? []), keeps] };
   }
 
   const actions: ShellActions = {
@@ -575,7 +561,10 @@ export function mountShell2(root: Element): Shell2Handle {
     // parameters and the shift), and it belongs with the other structural edits.
     reverseContour: () => {
       const flipped = reverseContour(state.contour);
-      commit({ ...state, contour: flipped, sandboxContour: flipped, contourSource: null }, "edit");
+      commit(
+        { ...state, contour: flipped, sandboxContour: flipped, contourSource: recipeAfter({ k: "R" }) },
+        "edit",
+      );
     },
 
     // ── the piece list, editable — M8 step 4.3 ──────────────────────────────────────────────
@@ -597,10 +586,11 @@ export function mountShell2(root: Element): Shell2Handle {
     // typing IS one adjustment continued.
     setPieceRole: (id, role, lemma) => editPieces((c) => setRole(c, id, role, lemma), "edit-step", "the recipe"),
     renamePiece: (id, name) => editPieces((c) => renamePiece(c, id, name), "edit", "the recipe"),
-    deletePiece: (id) => editPieces((c) => deletePiece(c, id)),
-    insertPiece: (afterId, kind) => editPieces((c) => insertPiece(c, afterId, kind)),
-    movePiece: (id, by) => editPieces((c) => moveOne(c, id, by)),
-    reversePiece: (id) => editPieces((c) => reversePiece(c, id)),
+    deletePiece: (id) => editPieces((c) => deletePiece(c, id), "edit-step", { k: "d", id }),
+    insertPiece: (afterId, kind) =>
+      editPieces((c) => insertPiece(c, afterId, kind), "edit-step", { k: "i", id: afterId, of: kind }),
+    movePiece: (id, by) => editPieces((c) => movePiece(c, id, by), "edit-step", { k: "m", id, by }),
+    reversePiece: (id) => editPieces((c) => reversePiece(c, id), "edit-step", { k: "r", id }),
     // Session only, so no commit and no undo entry: opening a text box is not an edit, and an undo
     // that closed one would spend the reader's step on nothing.
     setRenaming: (id) => {

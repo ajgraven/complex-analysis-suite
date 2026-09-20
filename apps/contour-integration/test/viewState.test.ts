@@ -20,11 +20,12 @@ import {
   type ShellState,
   type StateResolution,
 } from "../src/shell/state.js";
-import { penContour } from "../src/engine/contour/pen.js";
+import { penContour, sameShape } from "../src/engine/contour/pen.js";
+import { resolveScalar } from "../src/engine/contour/model.js";
 import { decodeShell, encodeShell } from "../src/shell/viewState.js";
 import { TEMPLATES } from "../src/shell/templates.js";
 import { NO_BRANCH, type BranchChoice } from "../src/kernel/branch/model.js";
-import { setParam, translateContour } from "../src/engine/contour/edit.js";
+import { applyOps, setParam, translateContour } from "../src/engine/contour/edit.js";
 
 const base = (): ShellState => defaultState(TEMPLATES[0].build());
 const template = (id: string): ShellState["contour"] => {
@@ -554,6 +555,73 @@ describe("a link that cannot be honoured refuses BY NAME", () => {
     expect(back.state.contour.pieces.map((q) => `${q.role}${q.lemma ?? ""}|${q.name}`)).toEqual(
       named.pieces.map((q) => `${q.role}${q.lemma ?? ""}|${q.name}`),
     );
+  });
+
+  it("holds an UNEDITED recipe to the representation, not just to the picture — M8 step 4.4b", () => {
+    // **The other branch of the verification fork, and the sweep is what asked for it.** With no
+    // ops the rebuild is deterministic from the same inputs, so the comparison is structural and
+    // there is no reason to weaken it; the contour below draws the SAME curve and is written
+    // differently — a radius of 4 as the literal 4 rather than as the parameter the template binds
+    // — so `sameShape` accepts it and the recipe is still false. Refusing is what keeps
+    // `contourSource` a falsifiable claim rather than a claim about pictures: a link that opened
+    // this would lose the slider, which is a fact about the contour no sampled point can see.
+    const built = template("semicircle");
+    const frozen: ShellState["contour"] = {
+      ...built,
+      pieces: built.pieces.map((q) =>
+        q.geom.kind !== "arc" ? q : { ...q, geom: { ...q.geom, radius: resolveScalar(q.geom.radius, built.params) } },
+      ),
+    };
+    expect(sameShape(frozen, built), "the fixture is not the same curve, so it tests nothing").toBe(true);
+    expect(JSON.stringify(frozen.pieces)).not.toBe(JSON.stringify(built.pieces));
+    const e = encodeShell({
+      ...base(),
+      contour: frozen,
+      sandboxContour: frozen,
+      contourSource: { template: "semicircle", shift: [0, 0] },
+    });
+    expect(e.ok).toBe(false);
+    if (!e.ok) expect(e.reason).toContain("does not rebuild the contour on screen");
+  });
+
+  it("refuses an edit list it cannot read, and one it cannot apply — M8 step 4.4b", () => {
+    // The two questions a reader has about a link that will not open, told apart: an entry this
+    // build cannot make, and an entry it understands perfectly and cannot perform. The second is
+    // `applyOps`' answer rather than a second copy of the engine's rules, which is why the message
+    // names the op's PLACE in the list — the only thing positional data lets anyone act on.
+    // The KEYHOLE, because `deletePiece` refuses below three remaining pieces and a semicircle has
+    // two — the fixture would then be testing that refusal instead of this one.
+    const ops = [{ k: "d", id: "upper" }] as const;
+    const replayed = applyOps(template("keyhole"), ops);
+    expect(replayed.ok, "the fixture's own edit was refused").toBe(true);
+    if (!replayed.ok) return;
+    const edited: ShellState = {
+      ...base(),
+      contour: replayed.contour,
+      sandboxContour: replayed.contour,
+      contourSource: { template: "keyhole", shift: [0, 0], ops },
+    };
+    const hash = (forged: unknown): string => {
+      const e = encodeShell(edited);
+      if (!e.ok) throw new Error(e.reason);
+      const state = payloadOf(e.hash);
+      state.c = { ...(state.c as Record<string, unknown>), o: forged };
+      return rehash(e.hash, state);
+    };
+    const unknown = decodeShell(hash([{ k: "z", id: "upper" }]));
+    expect(unknown?.ok).toBe(false);
+    if (unknown !== null && !unknown.ok) expect(unknown.reason).toContain("this build cannot make");
+    const offPiece = decodeShell(hash([{ k: "s", id: "upper", at: 1.5 }]));
+    expect(offPiece?.ok).toBe(false);
+    if (offPiece !== null && !offPiece.ok) expect(offPiece.reason).toContain("not a point along it");
+    // Understood and inapplicable: there is no piece called `nowhere`, and the refusal says WHICH
+    // edit rather than blaming the recipe's parameters.
+    const cannot = decodeShell(hash([{ k: "d", id: "upper" }, { k: "d", id: "nowhere" }]));
+    expect(cannot?.ok).toBe(false);
+    if (cannot !== null && !cannot.ok) {
+      expect(cannot.reason).toContain("edit 2");
+      expect(cannot.reason).toContain("does not apply");
+    }
   });
 
   it("CHECKS the origin claim rather than trusting it — M8 step 4.4b", () => {

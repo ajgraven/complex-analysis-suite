@@ -16,8 +16,10 @@
 // test that pins the rule and one that pins today's answer.
 import { describe, expect, it } from "vitest";
 import {
+  applyOps,
   deletePiece,
   endpointSpec,
+  fractionAlong,
   insertPiece,
   renamePiece,
   reorderPieces,
@@ -960,5 +962,40 @@ describe("reverseContour", () => {
     const base = circleTemplate([0, 0], 1);
     const withSide = { ...base, pieces: base.pieces.map((p) => ({ ...p, side: "above" as const })) };
     expect(reverseContour(withSide).pieces[0].side).toBe("above");
+  });
+});
+
+describe("the edit list — M8 step 4.4b", () => {
+  it("reports WHICH op could not be applied, and stops there", () => {
+    // A refusal is named rather than skipped: carrying on would rebuild a contour that is not the
+    // one the list describes, and a permalink would then open that in place of what was shared.
+    // The index is what a reader can act on, so it is the index that is checked.
+    const base = keyholeTemplate(4, 0.15);
+    const good = applyOps(base, [{ k: "d", id: "upper" }]);
+    expect(good.ok).toBe(true);
+    const bad = applyOps(base, [{ k: "d", id: "upper" }, { k: "d", id: "nowhere" }, { k: "R" }]);
+    expect(bad.ok).toBe(false);
+    if (bad.ok) return;
+    expect(bad.at).toBe(1);
+    expect(bad.op).toEqual({ k: "d", id: "nowhere" });
+  });
+
+  it("gives `fractionAlong` no answer where there is no division to record", () => {
+    // **Its one caller cannot reach either refusal**, because the shell asks only after `splitPiece`
+    // has accepted the same point on the same piece — so this is the function's own contract rather
+    // than a path through the app. Kept for that reason: a helper whose result goes onto the wire
+    // should not depend on an invariant established in another module, and the alternative to
+    // returning null is a `NaN` in a permalink.
+    const base = semicircleTemplate(4);
+    expect(fractionAlong(base, "nowhere", [0, 0])).toBeNull();
+    expect(fractionAlong(base, "diameter", [0, 0])).toBeCloseTo(0.5, 12);
+    // A piece with no length has no fraction along it: the projection is 0/0.
+    const degenerate: Contour = {
+      ...base,
+      pieces: base.pieces.map((q) =>
+        q.id !== "diameter" ? q : { ...q, geom: { kind: "segment", from: { x: 1, y: 1 }, to: { x: 1, y: 1 } } },
+      ),
+    };
+    expect(fractionAlong(degenerate, "diameter", [1, 1])).toBeNull();
   });
 });

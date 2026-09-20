@@ -1494,17 +1494,26 @@ describe("insert-by-drag: a new vertex on a piece — M8 step 4.3", () => {
     expect(app.currentState().contour.pieces).toHaveLength(1);
   });
 
-  it("drops the template RECIPE, because a divided template is not one", () => {
-    // `contourSource` claims the contour is `translate(build(t), shift)`. After a division it is
-    // not, and `viewState.ts` rebuilds the recipe and compares before minting a link — so leaving
-    // the field would swap a true refusal for a caught lie. (Both refuse today; step 4.4 is where
-    // an edited contour gets a wire form.)
+  it("RECORDS the division on the recipe, as a fraction along the piece", () => {
+    // **Revised at step 4.4b.** Until then this branch set `contourSource` to null, on the reading
+    // that `translate(build(t), shift)` is not a divided template — true, and it cost the reader
+    // the link. The recipe carries the reader's own operations now, so the field stays true; the
+    // fraction is what is recorded rather than the point, because a point would re-divide at a
+    // place the geometry no longer passes through once a slider moved.
     const { app, ink } = mountStage();
     expect(app.currentState().contourSource, "the sandbox did not start from a template").not.toBeNull();
+    expect(app.currentState().contourSource?.ops ?? []).toHaveLength(0);
     const [x, y] = onCircle(app, Math.PI / 2);
     ink.dispatchEvent(pointer("pointerdown", x, y, { shiftKey: true }));
     ink.dispatchEvent(pointer("pointerup", x, y));
-    expect(app.currentState().contourSource).toBeNull();
+    const source = app.currentState().contourSource;
+    expect(source?.template).toBe("circle");
+    expect(source?.ops).toHaveLength(1);
+    const op = source?.ops?.[0];
+    expect(op?.k).toBe("s");
+    // A quarter turn along a full circle, which is where the press was — the number, not just its
+    // presence, because an op recording the wrong fraction rebuilds a different contour.
+    expect(op !== undefined && op.k === "s" ? op.at : -1).toBeCloseTo(0.25, 6);
     // The parked sandbox contour moves with it, as it does for every other contour edit — a state
     // whose `contour` and `sandboxContour` disagree loses the edit at the next mode switch.
     expect(app.currentState().sandboxContour).toBe(app.currentState().contour);

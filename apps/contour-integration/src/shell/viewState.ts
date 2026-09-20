@@ -31,7 +31,7 @@
 // M6.0 expected to be the headroom, is worth 4%: the bulk is structural, not decimal.
 import { decodeViewState, encodeViewState } from "@cas/interchange";
 import { Frac } from "@cas/exact";
-import { renamePiece, setParam, setRole, translateContour } from "../engine/contour/edit.js";
+import { applyOps, renamePiece, setParam, setRole, translateContour, type ContourOp } from "../engine/contour/edit.js";
 import type { Contour, LemmaId, PieceRole } from "../engine/contour/model.js";
 import type { Bindings } from "../families/schema.js";
 import { effectiveBranch, type BranchChoice, type BranchPoint, type CutArc } from "../kernel/branch/model.js";
@@ -134,6 +134,17 @@ interface TemplateContourWire extends Annotations {
   readonly p?: Readonly<Record<string, number>>;
   /** The accumulated rigid translation, when non-zero. */
   readonly d?: readonly [number, number];
+  /**
+   * The reader's structural edits, replayed BEFORE the shift — M8 step 4.4b.
+   *
+   * **What was DONE, not what it became.** §4.4 proposed carrying a structurally edited template as
+   * a pen wire; measured over the ten templates, that conversion changes the LEDGER for four of
+   * them, because a full turn has no chord for a bulge to express and a rebuilt arc's centre lands
+   * 2.2e-16 off the origin where `arcRadius` demands zero. The ops keep the parameters, the
+   * symbolic geometry and the exactly-centred arcs by not re-describing the curve at all. See
+   * `ContourSource.ops` for why the shift comes last and what that costs.
+   */
+  readonly o?: readonly ContourOp[];
 }
 
 /**
@@ -285,6 +296,11 @@ function bareRecipe(wire: ContourWire): Contour | null {
     if (contour.params[name] === undefined) return null;
     contour = setParam(contour, name, value);
   }
+  if (wire.o !== undefined && wire.o.length > 0) {
+    const replayed = applyOps(contour, wire.o);
+    if (!replayed.ok) return null;
+    contour = replayed.contour;
+  }
   const d = wire.d;
   return d === undefined ? contour : translateContour(contour, [d[0], d[1]]);
 }
@@ -347,6 +363,59 @@ function annotationsOut(contour: Contour, bare: Contour): Annotations | null {
     ...(Object.keys(r).length === 0 ? {} : { r }),
     ...(Object.keys(n).length === 0 ? {} : { n }),
   };
+}
+
+/**
+ * Read a link's edit list, or refuse by name — M8 step 4.4b.
+ *
+ * **Shape only; whether the ops APPLY is {@link applyOps}' question and is asked on the rebuild.**
+ * Splitting it that way keeps one definition of "this operation does not apply" — the engine's,
+ * which every operation states by returning the contour it was given — instead of a second copy
+ * here that would have to know when a piece is too short to divide or when a list is not a
+ * permutation.
+ */
+function opsIn(
+  raw: unknown,
+): { readonly ok: true; readonly ops: readonly ContourOp[] } | { readonly ok: false; readonly reason: string } {
+  if (!Array.isArray(raw)) return { ok: false, reason: "the contour's edit list in this link is not a list" };
+  const out: ContourOp[] = [];
+  for (const [i, entry] of raw.entries()) {
+    if (entry === null || typeof entry !== "object") {
+      return { ok: false, reason: `edit ${i + 1} of the contour in this link is not an object` };
+    }
+    const e = entry as Record<string, unknown>;
+    const named = (): string | null => (isStr(e.id) && e.id !== "" ? e.id : null);
+    if (e.k === "R") {
+      out.push({ k: "R" });
+      continue;
+    }
+    const id = named();
+    if (id === null) return { ok: false, reason: `edit ${i + 1} of the contour in this link names no piece` };
+    if (e.k === "d" || e.k === "r") out.push({ k: e.k, id });
+    else if (e.k === "i") {
+      if (e.of !== "segment" && e.of !== "arc") {
+        return { ok: false, reason: `edit ${i + 1} of the contour in this link inserts a '${String(e.of)}', which is not a kind of piece` };
+      }
+      out.push({ k: "i", id, of: e.of });
+    } else if (e.k === "m") {
+      if (e.by !== 1 && e.by !== -1) {
+        return { ok: false, reason: `edit ${i + 1} of the contour in this link moves a piece by ${String(e.by)}, which is not one place` };
+      }
+      out.push({ k: "m", id, by: e.by });
+    } else if (e.k === "s") {
+      // **The fraction is bounded here and the DEGENERACY is not.** `0 < at < 1` is what "a point
+      // strictly inside the piece" means and is decidable from the number alone; whether the halves
+      // are long enough to be pieces depends on the contour, which `splitPieceAt`'s own floor asks
+      // at replay — and asking it twice is how two answers come to disagree.
+      if (!isNum(e.at) || e.at <= 0 || e.at >= 1) {
+        return { ok: false, reason: `edit ${i + 1} of the contour in this link divides a piece at ${String(e.at)}, which is not a point along it` };
+      }
+      out.push({ k: "s", id, at: e.at });
+    } else {
+      return { ok: false, reason: `edit ${i + 1} of the contour in this link is a '${String(e.k)}', which this build cannot make` };
+    }
+  }
+  return { ok: true, ops: out };
 }
 
 /**
@@ -551,9 +620,11 @@ function contourOut(
   const values = paramValues(contour);
   const p = same(values, paramValues(fresh)) ? undefined : values;
   const moved = source.shift[0] !== 0 || source.shift[1] !== 0;
+  const ops = source.ops ?? [];
   const skeleton: TemplateContourWire = {
     t: source.template,
     ...(p === undefined ? {} : { p }),
+    ...(ops.length === 0 ? {} : { o: ops }),
     ...(moved ? { d: [source.shift[0], source.shift[1]] as const } : {}),
   };
   // **A role or a name the reader changed rides ON the recipe — M8 step 4.4.** The recipe still
@@ -578,14 +649,24 @@ function contourOut(
   // reconstruction is not the contour on screen, the link would reopen a different shape, and
   // refusing is the only honest answer. This is what makes `contourSource` falsifiable rather than
   // merely believed — the same posture the ledger takes to a record's own declarations.
+  //
+  // **Two instruments, because there are two situations** (step 4.4b). With no ops the rebuild is
+  // deterministic from the same inputs, so the comparison is structural equality and there is no
+  // reason to weaken it. With ops, it is not: the replay puts the division before the shift where
+  // the reader put it after, and the two agree to **1.3e-15** rather than to the bit — measured
+  // over every template, every piece and four fractions. So a contour carrying ops is checked by
+  // SHAPE, at `sameShape`'s 1e-9, which is six orders above that noise and many below anything a
+  // reader could draw.
   const rebuilt = fromRecipe(wire);
-  if (rebuilt === null || !same(rebuilt.pieces, contour.pieces)) {
+  const reproduces =
+    rebuilt !== null && (ops.length === 0 ? same(rebuilt.pieces, contour.pieces) : sameShape(rebuilt, contour));
+  if (!reproduces) {
     return {
       ok: false,
       reason:
         `the contour's recipe (template '${source.template}', shift ` +
-        `[${source.shift[0]}, ${source.shift[1]}]) does not rebuild the contour on screen, so a ` +
-        "link made from it would open a different one",
+        `[${source.shift[0]}, ${source.shift[1]}]${ops.length === 0 ? "" : `, ${ops.length} edit${ops.length === 1 ? "" : "s"}`}) ` +
+        "does not rebuild the contour on screen, so a link made from it would open a different one",
     };
   }
   return { ok: true, wire };
@@ -834,14 +915,36 @@ export function decodeShell(hashOrLink: string): DecodeResult | null {
         }
       }
       if (c.d !== undefined && !isPair(c.d)) return { ok: false, reason: "the contour's shift in this link is not a pair of numbers" };
+      let ops: readonly ContourOp[] = [];
+      if (c.o !== undefined) {
+        const read = opsIn(c.o);
+        if (!read.ok) return { ok: false, reason: read.reason };
+        ops = read.ops;
+      }
       const skeleton: TemplateContourWire = {
         t: c.t as TemplateId,
         ...(c.p === undefined ? {} : { p: params }),
+        ...(ops.length === 0 ? {} : { o: ops }),
         ...(c.d === undefined ? {} : { d: c.d as [number, number] }),
       };
+      // **The two ways this fails are told apart, because they are a reader's two questions** — a
+      // parameter the template does not have, or an edit that does not apply to the contour the
+      // rest of the recipe describes. Built in two steps for that reason alone: `bareRecipe` has no
+      // other use for a reason, and `applyOps` already returns which op and where.
+      const unedited = bareRecipe({ t: c.t as TemplateId, ...(c.p === undefined ? {} : { p: params }) });
+      if (unedited === null) {
+        return { ok: false, reason: `the contour recipe in this link names a parameter template '${String(c.t)}' does not have` };
+      }
+      const replay = applyOps(unedited, ops);
+      if (!replay.ok) {
+        return {
+          ok: false,
+          reason: `edit ${replay.at + 1} of the contour in this link does not apply to the contour it describes`,
+        };
+      }
       const bare = bareRecipe(skeleton);
       if (bare === null) {
-        return { ok: false, reason: `the contour recipe in this link names a parameter template '${String(c.t)}' does not have` };
+        return { ok: false, reason: `the contour recipe in this link could not be rebuilt` };
       }
       const marks = annotationsIn(c, bare.pieces.length);
       if (!marks.ok) return { ok: false, reason: marks.reason };
@@ -850,7 +953,11 @@ export function decodeShell(hashOrLink: string): DecodeResult | null {
         return { ok: false, reason: `the contour recipe in this link names a parameter template '${String(c.t)}' does not have` };
       }
       contour = built;
-      contourSource = { template: c.t as TemplateId, shift: c.d === undefined ? [0, 0] : (c.d as [number, number]) };
+      contourSource = {
+        template: c.t as TemplateId,
+        shift: c.d === undefined ? [0, 0] : (c.d as [number, number]),
+        ...(ops.length === 0 ? {} : { ops }),
+      };
     }
   }
 

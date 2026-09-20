@@ -39,7 +39,7 @@ import { runDeclared, type SandboxDeclaration } from "../engine/declaredRun.js";
 import { checkSplit, type SplitCheck } from "../engine/splitCheck.js";
 import type { QuadratureBudget, PathFn } from "../engine/contour/integrate.js";
 import { type Contour } from "../engine/contour/model.js";
-import { setParam } from "../engine/contour/edit.js";
+import { setParam, type ContourOp } from "../engine/contour/edit.js";
 import { effectiveBranch, NO_BRANCH, type BranchChoice } from "../kernel/branch/model.js";
 import type { DeclaredOrder } from "../kernel/branch/declaration.js";
 import type { DeclaredProduct } from "../kernel/branch/declared.js";
@@ -210,6 +210,19 @@ export interface ContourSource {
   readonly template: TemplateId;
   /** The accumulated rigid translation since the template was built. */
   readonly shift: Cx;
+  /**
+   * The reader's structural edits, in the order they were made — M8 step 4.4b.
+   *
+   * **The recipe is `translate(ops(params(build(t))), shift)`, and the ops come BEFORE the shift.**
+   * That is not the order a reader works in — they divide, then drag, then divide again — and it
+   * does not have to be: every op but the division commutes with translation exactly, and the
+   * division commutes with it to **1.3e-15**, measured over every template, every piece and four
+   * fractions. Six orders below `sameShape`'s floor and far below anything a reader can see, so the
+   * one thing it costs is that a contour carrying ops is verified by SHAPE rather than by structural
+   * equality — the rebuild is no longer deterministic in its last bits, and `viewState.ts` says so
+   * where it makes the comparison.
+   */
+  readonly ops?: readonly ContourOp[];
 }
 
 /** The state the app boots into, minus the contour, which the caller supplies from a template. */

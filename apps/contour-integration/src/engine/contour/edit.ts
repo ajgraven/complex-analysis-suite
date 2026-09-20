@@ -665,22 +665,30 @@ interface Division {
  * is the honest quantity, *where along this line the foot of the perpendicular falls*, and the
  * floor is left as the one place that decides whether that is a division at all.
  */
-function segmentSplit(
+/**
+ * How far along the chord `from → to` the point `at` projects.
+ *
+ * **No guard on a zero-length segment, and the sweep is why.** One was written here, and nothing
+ * could kill it: a point has length 0, so the fraction comes out `0/0` and {@link splitPieceAt}'s
+ * floor refuses it as a degenerate half — which it IS, twice over. The guard was one rule spelled
+ * in two places, which is how two answers come to disagree. What makes that safe rather than clever
+ * is the shape the floor is written in: a NEGATED `>`, so a `NaN` fails it, and the refusal is
+ * pinned by a test rather than by this paragraph.
+ */
+function segmentFraction(from: Cx, to: Cx, at: Cx): number {
+  const vx = to[0] - from[0];
+  const vy = to[1] - from[1];
+  return ((at[0] - from[0]) * vx + (at[1] - from[1]) * vy) / (vx * vx + vy * vy);
+}
+
+function segmentDivide(
   geom: Extract<Geom, { readonly kind: "segment" }>,
   from: Cx,
   to: Cx,
-  at: Cx,
-): Division | null {
+  fraction: number,
+): Division {
   const vx = to[0] - from[0];
   const vy = to[1] - from[1];
-  const len2 = vx * vx + vy * vy;
-  // **No guard on a zero-length segment, and the sweep is why.** One was written here, and nothing
-  // could kill it: a point has length 0, so `fraction` comes out `0/0` and {@link splitPiece}'s
-  // floor refuses it as a degenerate half — which it IS, twice over. The guard was one rule spelled
-  // in two places, which is how two answers come to disagree. What makes that safe rather than
-  // clever is the shape the floor is written in: a NEGATED `>`, so a `NaN` fails it, and the
-  // refusal is pinned by a test rather than by this paragraph.
-  const fraction = ((at[0] - from[0]) * vx + (at[1] - from[1]) * vy) / len2;
   const x = lerpScalar(geom.from.x, geom.to.x, fraction);
   const y = lerpScalar(geom.from.y, geom.to.y, fraction);
   const mid: PointSpec =
@@ -737,26 +745,41 @@ function segmentSplit(
  * (`endpointSpec`'s own measurement), so the symbolic and literal forms agree everywhere in the
  * corpus and the choice is made on the principle rather than on a difference.
  */
-function arcSplit(
+/**
+ * How far round the arc the point `at` lies, as a fraction of its sweep.
+ *
+ * A zero sweep is a point on a circle, and {@link segmentFraction}'s note applies unchanged: the
+ * fraction comes out non-finite, the piece's length is zero, and the floor refuses it.
+ */
+function arcFraction(
   geom: Extract<Geom, { readonly kind: "arc" }>,
   params: Contour["params"],
   at: Cx,
-): Division | null {
+): number {
   const cx = resolveScalar(geom.center.x, params);
   const cy = resolveScalar(geom.center.y, params);
   const theta0 = resolveScalar(geom.theta0, params);
   const sweep = resolveScalar(geom.theta1, params) - theta0;
-  // A zero sweep is a point on a circle, and {@link segmentSplit}'s note applies unchanged: the
-  // division comes out non-finite, its length is zero, and the floor refuses it.
   const turn = Math.PI * 2;
   // The offset from the start angle, read in the sweep's OWN direction: `[0, 2π)` for a positive
   // sweep and `(−2π, 0]` for a negative one. Reducing modulo a turn first is what lets a full
   // circle — whose `theta1` is `theta0 + 2π` — be divided at any angle at all, and taking the
   // direction from the sweep is what keeps a clockwise arc's fraction positive.
   const raw = (((Math.atan2(at[1] - cy, at[0] - cx) - theta0) % turn) + turn) % turn;
-  const offset = sweep < 0 ? raw - turn : raw;
-  const fraction = offset / sweep;
-  const mid = lerpScalar(geom.theta0, geom.theta1, fraction) ?? theta0 + offset;
+  return (sweep < 0 ? raw - turn : raw) / sweep;
+}
+
+function arcDivide(
+  geom: Extract<Geom, { readonly kind: "arc" }>,
+  params: Contour["params"],
+  fraction: number,
+): Division {
+  // The literal fallback is {@link lerpScalar}'s own, and it is kept rather than refused for
+  // `endpointSpec`'s reason: a vertex at today's numbers beats no vertex at all. Resolved here
+  // rather than carried in from the fraction, so the two entry points cannot differ on it.
+  const theta0 = resolveScalar(geom.theta0, params);
+  const sweep = resolveScalar(geom.theta1, params) - theta0;
+  const mid = lerpScalar(geom.theta0, geom.theta1, fraction) ?? theta0 + fraction * sweep;
   // Spread, so `center` and `radius` are the very objects the original carried — reason 3 above is
   // a claim about identity, and a rebuilt copy would satisfy it only until someone rounded one.
   return { fraction, first: { ...geom, theta1: mid }, second: { ...geom, theta0: mid } };
@@ -851,24 +874,56 @@ function halfRole(role: PieceRole): PieceRole {
  * for this operation is the whole of what there is to see.
  */
 export function splitPiece(contour: Contour, id: string, at: Cx, tolerance = JOIN_TOL): Contour {
+  const piece = contour.pieces.find((p) => p.id === id);
+  if (piece === undefined) return contour;
+  const shape = resolve(piece.geom, contour.params);
+  if (!(distanceToPoint(shape, at) <= tolerance)) return contour;
+  return splitPieceAt(contour, id, splitFraction(piece, contour.params, shape, at));
+}
+
+/**
+ * Where `at` falls along a piece, as a fraction of its own parameter.
+ *
+ * **This is what a division IS, and {@link splitPieceAt} is why that matters** — step 4.4b. A point
+ * is how a POINTER expresses one, and a point cannot be replayed: a permalink that carried one
+ * would re-divide a contour whose parameters had moved at a place its own geometry no longer
+ * passes through, and the halves' shared `PointSpec` is symbolic precisely so that it follows the
+ * slider. The fraction follows it too, and costs one number instead of two.
+ *
+ * Non-finite for a degenerate piece, which {@link splitPieceAt}'s floor refuses — see its note on
+ * why neither helper carries a guard of its own.
+ */
+function splitFraction(piece: Piece, params: Contour["params"], shape: Resolved, at: Cx): number {
+  return piece.geom.kind === "segment"
+    ? segmentFraction(startPoint(shape), endPoint(shape), at)
+    : arcFraction(piece.geom, params, at);
+}
+
+/**
+ * Divide one piece in two a `fraction` of the way along it — {@link splitPiece} by the quantity it
+ * actually uses, and the form a permalink carries (step 4.4b).
+ *
+ * Everything {@link splitPiece} documents about the halves, their roles, their ids and their shared
+ * seam holds here unchanged; what this entry point does not do is decide WHERE, so it has two
+ * refusals rather than three — an unknown id, and a degenerate half.
+ */
+export function splitPieceAt(contour: Contour, id: string, fraction: number): Contour {
   const index = contour.pieces.findIndex((p) => p.id === id);
   if (index < 0) return contour;
   const piece = contour.pieces[index];
   const shape = resolve(piece.geom, contour.params);
-  if (!(distanceToPoint(shape, at) <= tolerance)) return contour;
 
   const divide =
     piece.geom.kind === "segment"
-      ? segmentSplit(piece.geom, startPoint(shape), endPoint(shape), at)
-      : arcSplit(piece.geom, contour.params, at);
-  if (divide === null) return contour;
+      ? segmentDivide(piece.geom, startPoint(shape), endPoint(shape), fraction)
+      : arcDivide(piece.geom, contour.params, fraction);
 
   // **Both comparisons are NEGATED `>` rather than `<=`**, so that a non-finite fraction refuses
-  // rather than passing: that is what lets {@link segmentSplit} and {@link arcSplit} carry no
+  // rather than passing: that is what lets {@link segmentDivide} and {@link arcDivide} carry no
   // degeneracy guard of their own, a zero-length piece arriving here as `NaN` on both clauses.
   const length = arcLength(shape);
-  if (!(divide.fraction * length > JOIN_TOL)) return contour;
-  if (!((1 - divide.fraction) * length > JOIN_TOL)) return contour;
+  if (!(fraction * length > JOIN_TOL)) return contour;
+  if (!((1 - fraction) * length > JOIN_TOL)) return contour;
 
   // `lemma` is destructured away rather than overwritten, for `setRole`'s reason: the field must be
   // ABSENT when the role no longer has anything for it to be about, so that a deep comparison, the
@@ -958,4 +1013,100 @@ export function setRole(
       return keep === undefined ? { ...rest, role } : { ...rest, role, lemma: keep };
     }),
   };
+}
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+// THE EDIT LIST — M8 step 4.4b.
+//
+// **A structurally edited template is carried as WHAT WAS DONE TO IT, not as what it became.** The
+// plan proposed serialising one as a pen wire, its vertices and bulges; measured over the ten
+// templates, that conversion changes the LEDGER for four of them. A full turn has a zero-length
+// chord, so no bulge can express it and `circle`'s only piece comes back a degenerate segment; and
+// an arc's centre returns 2.2e-16 off the origin, where `arcRadius` demands exactly zero. An edit
+// list keeps the parameters, the symbolic geometry and the exactly-centred arcs, because it does
+// not re-describe the curve at all — it replays the reader's own operations onto the template the
+// recipe already names.
+//
+// **Every op is expressible because every editing action in the shell is one of these six.** The
+// division carries a FRACTION rather than a point, which is what makes it replayable: a point would
+// re-divide a contour whose slider has moved at a place its geometry no longer passes through,
+// while the fraction follows the parameter exactly as the halves' shared `PointSpec` does.
+
+/** One replayable editing action. Keys are short because they ride in a URL. */
+export type ContourOp =
+  | { readonly k: "d"; readonly id: string }
+  | { readonly k: "i"; readonly id: string; readonly of: "segment" | "arc" }
+  | { readonly k: "m"; readonly id: string; readonly by: -1 | 1 }
+  | { readonly k: "r"; readonly id: string }
+  | { readonly k: "R" }
+  | { readonly k: "s"; readonly id: string; readonly at: number };
+
+/**
+ * Move one piece by one place — the row's reorder, expressed as {@link reorderPieces}' permutation.
+ *
+ * `reorderPieces` takes the whole order because a permutation is what it can verify; a reader moves
+ * one row. The translation lives here rather than in the shell so that the gesture and the replay
+ * cannot come to mean different things — which is the second-consumer rule arriving at the moment
+ * the edit list needed the same operation the Contour card's arrows make.
+ */
+export function movePiece(contour: Contour, id: string, by: -1 | 1): Contour {
+  const ids = contour.pieces.map((p) => p.id);
+  const at = ids.indexOf(id);
+  const to = at + by;
+  // At either end there is nowhere to go, and a wrap would move the piece the whole way across the
+  // list on a keypress that means "one step".
+  //
+  // **The range half is a recorded equivalent, kept deliberately.** Dropping it is unobservable:
+  // the swap would write `undefined` into the id list, and `reorderPieces` refuses that as a
+  // non-permutation (or, at `to === ids.length`, as a list of the wrong length) and returns the
+  // contour by reference. The same outcome by a longer road. It stays because "there is nowhere to
+  // go" and "that is not a permutation" are different statements, and relying on the second would
+  // couple this list's ends to the other function's validation shape.
+  if (at < 0 || to < 0 || to >= ids.length) return contour;
+  const next = [...ids];
+  next[at] = ids[to];
+  next[to] = ids[at];
+  return reorderPieces(contour, next);
+}
+
+/**
+ * Replay an edit list onto a contour, or say which op could not be applied.
+ *
+ * **A refusal is named rather than skipped.** Every operation in this section refuses by returning
+ * the contour BY REFERENCE, so an op that does not apply is exactly an op whose result is the very
+ * contour it was given — and carrying on would rebuild a contour that is not the one the list
+ * describes, which a permalink would then open in place of what was shared. The index is reported
+ * because the ops are positional: which one failed is the only thing a reader could act on.
+ */
+export function applyOps(
+  contour: Contour,
+  ops: readonly ContourOp[],
+): { readonly ok: true; readonly contour: Contour } | { readonly ok: false; readonly at: number; readonly op: ContourOp } {
+  let out = contour;
+  for (let i = 0; i < ops.length; i++) {
+    const op = ops[i];
+    const next =
+      op.k === "d"
+        ? deletePiece(out, op.id)
+        : op.k === "i"
+          ? insertPiece(out, op.id, op.of)
+          : op.k === "m"
+            ? movePiece(out, op.id, op.by)
+            : op.k === "r"
+              ? reversePiece(out, op.id)
+              : op.k === "R"
+                ? reverseContour(out)
+                : splitPieceAt(out, op.id, op.at);
+    if (next === out) return { ok: false, at: i, op };
+    out = next;
+  }
+  return { ok: true, contour: out };
+}
+
+/** Where `at` falls along the piece `id`, for a caller recording a division it is about to make. */
+export function fractionAlong(contour: Contour, id: string, at: Cx): number | null {
+  const piece = contour.pieces.find((p) => p.id === id);
+  if (piece === undefined) return null;
+  const f = splitFraction(piece, contour.params, resolve(piece.geom, contour.params), at);
+  return Number.isFinite(f) ? f : null;
 }

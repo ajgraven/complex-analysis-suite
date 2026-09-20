@@ -13,7 +13,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mountShell2, type Shell2Handle } from "../src/shell/app.js";
 import { roleLabel } from "../src/engine/vocabulary.js";
 import { semicircleTemplate } from "../src/engine/contour/templates.js";
+import { splitPieceAt, translateContour } from "../src/engine/contour/edit.js";
+import type { Cx } from "../src/kernel/geom.js";
+import { sameShape } from "../src/engine/contour/pen.js";
 import { decodeShell, encodeShell } from "../src/shell/viewState.js";
+import { compile, defaultState, resolveState, type ShellState } from "../src/shell/state.js";
 
 const mounted: Shell2Handle[] = [];
 afterEach(() => {
@@ -230,14 +234,15 @@ describe("every edit is one undo entry", () => {
     // one adjustment continued.
     const { root, app } = mount();
     // **The first edit is spent deliberately**, and the sweep is why: `changeKey` is the set of
-    // CHANGED FIELD NAMES, and the first edit after a template also clears `contourSource` — so it
-    // has a different key from every edit after it and could never have coalesced with one. A test
-    // that used it would pass with the whole exception removed. From here on the key is identical,
-    // which is the case the exception exists for.
+    // CHANGED FIELD NAMES, and until step 4.4b the first edit after a template also CLEARED
+    // `contourSource` where later ones left it alone — so it had a different key from every edit
+    // after it and could never have coalesced with one. A test that used it would pass with the
+    // whole exception removed. The recipe now absorbs every structural edit, so all of them write
+    // the same three fields; the edit is still spent, because a fixture whose stability depends on
+    // which step it is read in is not one to rest an exception on.
     app.actions().insertPiece("arc", "segment");
     const three = ids(app);
     expect(three).toHaveLength(3);
-    expect(app.currentState().contourSource).toBeNull();
 
     toolIn(rowOf(root, three[1]), "move later").click();
     const afterMove = ids(app);
@@ -337,21 +342,20 @@ describe("the contour that is edited is the SANDBOX's", () => {
     select.dispatchEvent(new Event("change", { bubbles: true }));
     expect(app.currentState().contourSource?.template).toBe("semicircle");
 
-    // **And the contrast, over ALL FOUR structural operations.** Without it the claim above would
-    // pass on an app that had simply stopped clearing the field — and asserting one operation would
-    // leave the other three free to keep a recipe that no longer rebuilds them, which is a template
-    // picker showing `keyhole` for a contour that is not one. The partition is the rule, so the test
-    // is the partition.
+    // **And the contrast, over ALL FOUR structural operations** — revised at step 4.4b, which is
+    // where the recipe learned to absorb them. Until then each one CLEARED it, and the reader lost
+    // the link; now each one appends the operation it made, so the field stays true in a stronger
+    // sense than before: it says not only which template but what was done to it.
     //
     // On the KEYHOLE, because `reversePiece` applies to a full turn and to nothing else — reversing
     // any other piece swaps endpoints its neighbours still want, so the operation refuses and
     // `editPieces` commits nothing. The keyhole is the one template with four pieces, two of them
     // circles; on a semicircle the reverse case would silently be testing a refusal.
-    for (const [what, edit] of [
-      ["insert", (a: Shell2Handle) => a.actions().insertPiece("upper", "segment")],
-      ["delete", (a: Shell2Handle) => a.actions().deletePiece("upper")],
-      ["move", (a: Shell2Handle) => a.actions().movePiece("upper", 1)],
-      ["reverse", (a: Shell2Handle) => a.actions().reversePiece("outer")],
+    for (const [what, kind, edit] of [
+      ["insert", "i", (a: Shell2Handle) => a.actions().insertPiece("upper", "segment")],
+      ["delete", "d", (a: Shell2Handle) => a.actions().deletePiece("upper")],
+      ["move", "m", (a: Shell2Handle) => a.actions().movePiece("upper", 1)],
+      ["reverse", "r", (a: Shell2Handle) => a.actions().reversePiece("outer")],
     ] as const) {
       const { app: fresh } = mount();
       fresh.actions().setTemplate("keyhole");
@@ -359,8 +363,106 @@ describe("the contour that is edited is the SANDBOX's", () => {
       const before = fresh.currentState().contour;
       edit(fresh);
       expect(fresh.currentState().contour, `the ${what} was refused, so the case is vacuous`).not.toBe(before);
-      expect(fresh.currentState().contourSource, `${what} kept the recipe`).toBeNull();
+      const source = fresh.currentState().contourSource;
+      expect(source?.template, `${what} dropped the recipe`).toBe("keyhole");
+      expect(source?.ops?.map((o) => o.k), `${what} recorded the wrong operation`).toEqual([kind]);
+      // **And the link is the point of recording it.** The rebuild is compared against the contour
+      // on screen before a link is minted, so a `true` here is the recipe reproducing the edit
+      // rather than merely claiming to.
+      const e = encodeShell(fresh.currentState());
+      expect(e.ok, e.ok ? "" : e.reason).toBe(true);
     }
+  });
+
+  it("reopens an EDITED template's link with the same ledger rows — step 4.4b's gate", () => {
+    // The step's own Done-when, and it is asserted on the LEDGER rather than on the contour: what a
+    // reader loses when a recipe cannot carry an edit is the argument, not the picture. §4.4's
+    // proposed carrier — serialise a structurally edited template as a pen wire — fails exactly
+    // here for four of the ten templates, which is why the ops list exists.
+    const { app } = mount();
+    app.actions().setTemplate("semicircle");
+    app.actions().setExpr("1/(1+z^2)");
+    app.actions().insertPiece("arc", "segment");
+    app.actions().movePiece("arc", -1);
+    const before = app.currentState();
+    const rows = (s: ShellState): string => {
+      const r = resolveState(s, compile(s.expr));
+      const a = r.kind === "plain" || r.kind === "declared" ? r.analysis : null;
+      if (a === null) return `no analysis (${r.kind})`;
+      return [
+        `closes=${String(a.ledger.closes)}`,
+        ...a.ledger.rows.map((x) => `${x.constraint}|${x.status}|${x.evidence.level}|${x.claim}`),
+      ].join("\n");
+    };
+    const e = encodeShell(before);
+    expect(e.ok, e.ok ? "" : e.reason).toBe(true);
+    if (!e.ok) return;
+    const back = decodeShell(e.hash);
+    expect(back?.ok).toBe(true);
+    if (back === null || !back.ok) return;
+    expect(back.state.contour.pieces.map((p) => p.id)).toEqual(before.contour.pieces.map((p) => p.id));
+    expect(rows(back.state)).toBe(rows(before));
+    // The recipe comes back too, so a second edit appends rather than starting over.
+    expect(back.state.contourSource?.ops?.map((o) => o.k)).toEqual(["i", "m"]);
+  });
+
+  it("keeps the recipe through a REVERSAL, which is what the comment always claimed", () => {
+    // `reverseContour`'s comment said the recipe is kept; the code had cleared it since the
+    // cutover, and step 4.4a recorded the discrepancy with the repair it needed — a wire flag
+    // rather than a lie about the recipe, since a reversal is one bit and commutes with both the
+    // parameters and the shift. This is that flag, as an op like any other.
+    const { app } = mount();
+    expect(app.currentState().contourSource?.template).toBe("semicircle");
+    const before = app.currentState().contour.pieces.map((p) => p.id);
+    app.actions().reverseContour();
+    expect(app.currentState().contour.pieces.map((p) => p.id)).not.toEqual(before);
+    expect(app.currentState().contourSource?.ops?.map((o) => o.k)).toEqual(["R"]);
+    const e = encodeShell(app.currentState());
+    expect(e.ok, e.ok ? "" : e.reason).toBe(true);
+    if (!e.ok) return;
+    const back = decodeShell(e.hash);
+    expect(back?.ok).toBe(true);
+    if (back === null || !back.ok) return;
+    expect(back.state.contour.pieces.map((p) => p.id)).toEqual(
+      app.currentState().contour.pieces.map((p) => p.id),
+    );
+  });
+
+  it("mints a link for a contour DRAGGED and then divided, which the exact check refuses", () => {
+    // **The only sequence where the two comparisons differ, and finding it took a measurement.** A
+    // first draft edited and THEN dragged, which the exact check accepts — because every op but the
+    // division commutes with translation exactly, and an insert applied before the shift is the very
+    // same pieces as one applied after. The division is the exception, at 1.3e-15: replayed before
+    // the shift it lands a last bit away from where the reader's own drag-then-divide put it. So the
+    // recipe's verification uses `sameShape` whenever ops are present — measured, with the exact
+    // check kept here this link is REFUSED — and a test that did not drag first pinned nothing.
+    const shift: Cx = [1.5, -2.25];
+    const dragged = translateContour(semicircleTemplate(4), shift);
+    // **A SEGMENT, and that is the whole of it.** An arc's join is `lerpScalar(theta0, theta1, f)`,
+    // which never touches the translated centre, so dividing one commutes with the shift exactly and
+    // the fixture would again pin nothing. A segment's join is the lerp of two TRANSLATED endpoints
+    // against the translate of their lerp — the same number to 1.3e-15 and not the same expression.
+    const divided = splitPieceAt(dragged, "diameter", 0.3);
+    expect(divided, "the fixture's own division was refused").not.toBe(dragged);
+    const state: ShellState = {
+      ...defaultState(semicircleTemplate(4)),
+      expr: "1/(1+z^2)",
+      contour: divided,
+      sandboxContour: divided,
+      contourSource: { template: "semicircle", shift, ops: [{ k: "s", id: "diameter", at: 0.3 }] },
+    };
+    const e = encodeShell(state);
+    expect(e.ok, e.ok ? "" : e.reason).toBe(true);
+    if (!e.ok) return;
+    const back = decodeShell(e.hash);
+    expect(back?.ok).toBe(true);
+    if (back === null || !back.ok) return;
+    expect(back.state.contour.pieces.map((q) => q.id)).toEqual(divided.pieces.map((q) => q.id));
+    expect(back.state.contourSource?.shift).toEqual(shift);
+    expect(sameShape(back.state.contour, divided)).toBe(true);
+    // And the gap is REAL rather than asserted: the two replay orders are not the same object, so
+    // the shape comparison is doing work the structural one would refuse.
+    expect(JSON.stringify(back.state.contour.pieces)).not.toBe(JSON.stringify(divided.pieces));
   });
 
   it("puts a RENAMED template contour in a link, which is what keeping the recipe buys", () => {
