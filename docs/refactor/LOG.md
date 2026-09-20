@@ -2738,3 +2738,70 @@ reader of the LOG needs to know without opening it.
   recorded per item, is [`../contour-integration/M8/browser-pass.md`](../contour-integration/M8/browser-pass.md);
   what survived the rebuild and what deliberately did not is
   [`../contour-integration/M8/parity.md`](../contour-integration/M8/parity.md), row by row.
+
+## 2026-09-20 · branch claude/inspiring-keller-5sizwl — Contour Integration: the post-M8 review and its remediation (ADR-0045)
+
+- **What.** A full-app review of `apps/contour-integration` at `5ebfa54` by ten parallel read-only
+  reviewers on disjoint slices, consolidated in
+  [`docs/review/2026-09-20-contour-integration-review/REPORT.md`](../review/2026-09-20-contour-integration-review/REPORT.md)
+  (the ten slice reports, with every reproduction, under `slices/`), then nine work packages in
+  parallel git worktrees per [`REMEDIATION-PLAN.md`](../review/2026-09-20-contour-integration-review/REMEDIATION-PLAN.md),
+  merged 2b → 2a → 1a → 3 → 5 → 4 → 6 → 1b → 7 with the app's node suite after each merge and the
+  full gate, the browser suite and `pnpm a11y --strict` at the end.
+- **The mathematics is sound.** All 28 closed forms and 94 fixture values re-derived from scratch
+  (tanh-sinh / exp-sinh, Euler–Maclaurin) agree to 1e-12 or better; the merged and log residues, the
+  recognisers, `Res(f,∞)`, the exponent fold and Gauss–Legendre check against independent
+  computations; every bound dominates the integral it bounds. Nothing in the engine's arithmetic
+  changed.
+- **The theme.** Nine confirmed bugs were one gap — the gate on SHOWING a value applied on some
+  surfaces and not others, and on LEGALITY where the same argument applies to KILL. ADR-0045 makes it
+  one predicate, `valueRefusal(integral, ledger, of)`, and integration corrected its first draft:
+  `∮` is earned by LEGALITY and CATCH, the target by all four rows, and asking the target's clause of
+  the `∮` surfaces withheld `z/(1+z²)`'s exact `∮ = πi` on the semicircle — so the caller names which.
+- **Per package.** *2b* (`f58228e`): the polygonisation cap a named refusal (24/36 wrong-and-decided
+  windings → refused, 8.2 s → 56 ms), closure relative to scale, `setParam` clamps, the root finder
+  injected where two refusals were false, a subnormal no longer throws, `panelPlan(len, ∞)` takes the
+  minimum plan (F2/E3/C2 3,630 → 326 ms, every cross-check number smaller), `piBounds` memoised
+  (2.48 ms → 0.07 µs); sweep 33/33. *2a* (`f1013d6`): Jordan takes the arc's window and refuses
+  outside its half-plane (88× false bound), six producers answer `"unestablished"`, the angle cap
+  on L4/L5, `KILL`/`GROWS` reworded, `cutSegmentsDropped`; sweep 29/31 (one real survivor: a
+  clockwise full circle passing containment). *1a* (`2606d9d`): `disposalEstablishes` requires a
+  non-refusing certificate, `reproduces` checks the piece runs the target's length and a finite
+  constant exists; sweep 23/25. *3* (`6faada3`): sliders clamp to `constraints` through a TOTAL
+  reader, `domain: "integer"` → `admits`, the D7 wedge is a 2 ms refusal (the cost was `N = 2·lcm`
+  at denominator 4.7e14, not a loop), four corpus claims nothing read now tested; sweep 24/24.
+  *5* (`c454099`): the sweep loop put away on link/undo/destroy (`endSweep` from the three callers
+  that reset the session), Play one undo entry, the pen put away on a fold, typing at the draft
+  budget (553 → 53 ms), grabs gated on the sandbox; sweep 21/22. *4* (`e5bc9a0`): distinct keys
+  (11 refusing states through `patch`), cards follow the slider, B3's decimal with its sentence,
+  `mathSpoken` on 97 names, the caption spoken, the focus trap skips `[hidden]`, `env.v` read;
+  sweep 39/42. *6* (`e6b35d8`): `drawnBranch` (0 → 63–187 cut pixels on all seven tier-D records),
+  one reader for the iso default, a strength in `[0,1]` with the pole guard, the GPU cut correction
+  WIRED (and two `declaredReference` defects it exposed, worked around in `referenceRays`), context
+  loss, rail overflow, a render key; browser suite 20/220 → 22/232; sweep 26/26. *1b* (`861e1f5`):
+  ADR-0045, the derivation and stepper gated, the accumulator takes the ledger, Pass 5 gated on a
+  failed row (sixteen bindings refuse by name), `levelOfSolved` one function, two `closed` guards;
+  sweep 24/25. *7* (`7f3a29a`): 21 documents corrected from measurement.
+- **Integration** (four commits on the branch): two assertions follow reworded refusals; the cuts card's monodromy block
+  reads `drawnBranch`; `valueRefusal`'s two tiers; the Result card and caption on the gate; the
+  test census and node counts filled from the gate. The per-contour-page a11y figures are
+  46/60/39/43, not the 57/71/50/54 M8 step 5.2 recorded and ADR-0044 was said not to have moved —
+  it moved each by the nav's eleven; the remediation moved none (landing-page tree diffed between
+  the two builds: 46 → 46).
+- **Left open, recorded.** The denylist's source sweep still reads `src/shell/**` + `src/engine/**`
+  (`test/kernelWords.test.ts` covers `kernel/bounds` + `kernel/branch`); `src/families/**` measured
+  at 30 non-record and 181 record-file offenders under its rules, most in `traps`/`notes` that never
+  render — widening it needs a rule about which record fields reach a reader. `kernel/branch/declared.ts`'s
+  `declaredReference` (a `(b − z)^ν` ray at `θ₀ + π`; keyed by factor id where the geometry names
+  the point) is worked around in `stageView.referenceRays`. `kernel/branchResidue.ts:380`'s lcm
+  power wants a defence-in-depth cap. The Target card drops the identity's RHS off-fixture because
+  `families/latex.ts`'s `identityLatex` builds from `golden.value`, a constant. The `reproduces`
+  MULTIPLE itself is still unchecked — the declared coefficient never reaches the ledger, and the
+  plumbing (an `analyse.ts` input beside `imported`, populated from `FamilyPiece.coefficients`, well-posed
+  for one-unknown families only) is written out in the WP1a report on the branch's scratch record and
+  in ADR-0045's action items. `mergedResidue.ts:145`'s comment, `factorise`
+  memoisation, `system.ts:410`'s realify guard and `solveImported`'s per-unknown certificates —
+  all read, none live. `M6/M7/M8-plan.md` still name three deleted specs (dated plans).
+- **Green.** Gate **599 files / 6818 tests** (592 / 6643 before), lint/typecheck/build silent; the
+  app's browser suite **22 / 232**; `pnpm a11y --strict` **682 interactive nodes across 20 pages, 0
+  unnamed**, no regressions.

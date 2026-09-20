@@ -997,7 +997,7 @@ and screenshots. Plan: [`M8-plan.md`](M8-plan.md); the step-by-step record is
 > 6,475 tests** with lint, typecheck and build silent; the app's browser suite is 20 files / 220
 > tests; the a11y roster is **zero rules and zero nodes** on all four audited contour states with
 > `{}` baselines, and `scripts/a11y-audit.mjs` now walks each page's accessibility TREE beside axe
-> (**0 unnamed** of ⚠ measured at integration interactive nodes across the suite — *this said 845,
+> (**0 unnamed** of 682 interactive nodes across the suite — *this said 845,
 > measured at M8 step 5.2; ADR-0044's removal of the bar then measured 792 → 682, and the 845/792
 > pair is unreconciled, so the suite total is re-run rather than remembered*). The browser pass is
 > [`M8/browser-pass.md`](M8/browser-pass.md), recorded per item.

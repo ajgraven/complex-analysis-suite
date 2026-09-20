@@ -859,8 +859,8 @@ drill end to end, a worked example stepped and played. It found the Result card 
 integrand* about a REFUSED DECLARATION with the integrand still in the box, and printing a refused
 claim raw above a typeset copy of itself — both fixed. The accessibility baseline is **zero axe rules
 and zero nodes** on all four audited states, and `scripts/a11y-audit.mjs` now walks each page's
-accessibility TREE beside axe: **57 / 71 / 50 / 54 interactive nodes on the four states and 0
-unnamed**, **⚠ measured at integration** across the whole suite *(this said 845, measured at M8
+accessibility TREE beside axe: **46 / 60 / 39 / 43 interactive nodes on the four states (57 / 71 / 50 / 54 at M8 step 5.2, before ADR-0044 withdrew the nav's eleven from each) and 0
+unnamed**, **682** across the whole suite *(this said 845, measured at M8
 step 5.2; ADR-0044's removal of the suite bar then measured 792 → 682, and the 845/792 pair is
 unreconciled — so the suite total is re-run rather than remembered. The four per-page figures above
 ADR-0044 did not move)*. That walk earns its place by measurement — a

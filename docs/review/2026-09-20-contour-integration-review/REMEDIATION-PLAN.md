@@ -56,3 +56,24 @@ the browser suite, `pnpm a11y --strict`, the census and the docs' measured numbe
 | **5 State & control** | `shell/app.ts`, `undo.ts`, `session.ts`, `render.ts`, `stageController.ts`, `sweep.ts`, tests `sweepApp`, `shell2State`, `shell2`, `undo` | 4.1, 4.2, 4.3, 4.4, 2.1's grab gating, Escape releases a grab, `saveFigure` rejection, comments |
 | **6 Stage & GPU** | `shell/stageView.ts`, `ui/**`, `cards/cuts.ts:83`, `*.browser.test.ts` | 2.1 (draw `run.branch`), 2.2, 2.3, 2.4 (wire), 2.5, 2.6, 4.7, buffer leak, `layout(location=0)`, dynamic `declaredParity` count, dead CSS |
 | **7 Docs** | Everything outside `src/`/`test/` in REPORT §5 except `docs/DECISIONS.md`'s ADR-0045 | Every §5 row that is not a `src` comment; counts left as `⚠ measured at integration` |
+
+## Executed (2026-09-20)
+
+| WP | commit | sweep | note |
+|---|---|---|---|
+| 2b | `f58228e` | 33/33 | first merged; `ledger-dump.txt` regenerated (every cross-check number smaller) |
+| 2a | `f1013d6` | 29/31 | needed three `ledger.ts` lines from 1a (the arc window to Jordan) |
+| 1a | `2606d9d` | 23/25 | carried 2a's three lines; `disposalEstablishes` exported |
+| 3 | `6faada3` | 24/24 | the D7 cost was `N = 2·lcm` at denominator 4.7e14, capped at 10 000 in `families/` |
+| 5 | `c454099` | 21/22 | `endSweep` from `applyStateNow`/`restore`/`destroy`; a `"resolve"` and a `"type"` commit reason |
+| 4 | `e5bc9a0` | 39/42 | the Target card drops the identity's RHS off-fixture (`identityLatex` builds from a constant) |
+| 6 | `e6b35d8` | 26/26 | browser suite 20/220 → 22/232; two `declaredReference` defects worked around in `stageView` |
+| 1b | `861e1f5` | 24/25 | `valueRefusal`; its clause 4 (`closes === false`) dropped by measurement |
+| 7 | `7f3a29a` | — | six placeholders filled at integration |
+
+Integration commits: two reworded-refusal assertions; the cuts card's monodromy block through
+`drawnBranch`; `valueRefusal(…, of)` two-tiered (the first draft withheld `z/(1+z²)`'s exact `∮ = πi`
+on the semicircle); the Result card and caption on the gate, `levelOfSolved` imported from the engine;
+the census. **Gate 599 / 6818, browser 22 / 232, a11y 682 / 0.** Open items are listed in
+`docs/refactor/LOG.md`'s entry of this date; the denylist's `src/families/**` widening (30 non-record
+and 181 record-file offenders under its rules, most never rendered) was deliberately not done here.

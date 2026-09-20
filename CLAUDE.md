@@ -99,7 +99,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **⚠ measured at integration** test files / **⚠ measured at integration** tests
+Green is **599 test files / 6818 tests**
 *(592 files / 6643 tests before the 2026-09-20 remediation — the `--reporter=json` artefact and
 HEAD's own commit message both say so; this line had said 593 / 6649)* with lint and typecheck
 silent. `pnpm lint` includes `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the
@@ -1353,16 +1353,47 @@ re-established at 5.1 and 5.2, a walk reading `aria-label ?? textContent` report
 on a page whose tree has none. **A sentence the engine composed correctly can still reach a reader wrong**:
 the Result card said *There is no integrand* about a refused declaration with the integrand still in the
 box, and printed a refused claim raw above a typeset copy of itself. And `scripts/a11y-audit.mjs` now walks
-each page's accessibility tree beside axe — **⚠ measured at integration interactive nodes across 20 pages,
+each page's accessibility tree beside axe — **682 interactive nodes across 20 pages,
 0 unnamed** *(this said 845, measured at M8 step 5.2; ADR-0044's removal of the bar then measured
 792 → **682**, and the 845/792 pair is itself unreconciled — so the total is re-run rather than
-remembered. The per-contour-page figures ADR-0044 did not move are 57/71/50/54)* — because
+remembered. the per-contour-page figures are 46/60/39/43 — ADR-0044 DID move them, by the nav's eleven nodes each, from step 5.2's 57/71/50/54, and the 2026-09-20 remediation moved none, measured by diffing the landing page's tree between the two builds)* — because
 a `<div tabindex="0">` with no name is a tab stop a screen reader announces as nothing and **axe calls that
 page clean**. Plan: [`docs/contour-integration/M8-plan.md`](docs/contour-integration/M8-plan.md); the
 step-by-step record, with every finding and every sweep, is
 [`docs/contour-integration/M8/STATUS.md`](docs/contour-integration/M8/STATUS.md), the owner's click-through
 checklist [`M8/browser-pass.md`](docs/contour-integration/M8/browser-pass.md), and what survived the rebuild
 and what deliberately did not is [`M8/parity.md`](docs/contour-integration/M8/parity.md), row by row.
+
+**Done — the post-M8 review and its remediation (2026-09-20, ADR-0045).** Ten parallel read-only
+reviews of the app at `5ebfa54` found **the mathematics sound** — all 28 closed forms and 94 fixtures
+re-derived independently to 1e-12 or better, every kernel primitive and every bound checked against an
+independent computation — and the defects in the GATING of what may be shown: nine confirmed bugs were
+one gap, "nothing prints a value the argument has not earned" implemented on some surfaces and not
+others, and on LEGALITY where the same argument applies to KILL. Nine work packages then ran in
+parallel, each in its own git worktree with its own mutation sweep (33/33, 29/31, 23/25, 24/25, 24/24,
+39/42, 21/22, 26/26 — 219 mutants, 7 recorded equivalents), and merged in dependency order with the
+gate after each merge. The report, the ten slice reports with every reproduction, and the plan are
+[`docs/review/2026-09-20-contour-integration-review/`](docs/review/2026-09-20-contour-integration-review/).
+Four findings worth carrying. **A value is earned by different rows than a target**, and the first
+draft of the one gate got that wrong: `∮ f dz` is earned by LEGALITY and CATCH alone, the integral the
+contour DETERMINES by all four, and asking the target's clause of the `∮` line withheld the one number
+the sandbox exists to show (`z/(1+z²)` on the semicircle: `∮ = πi` exactly, a failing KILL row, no
+target) — so `valueRefusal(integral, ledger, of)` makes the caller SAY which it is showing
+([ADR-0045](docs/DECISIONS.md)). **A refusal that carries the field a consumer reads is a claim**: six
+bound producers returned `⚠` refusals with `asymptotics: "vanishes"`, the ledger read only that field,
+and `1/(1+z²)` at `R = 0.5` was "The argument is complete." — closed on the ledger's side (a `⚠` level
+never establishes) and the producers' (a refusal that reached no bound answers `"unestablished"`), so it
+cannot be forgotten a seventh time. **The instruments had blind spots shaped like the defects**: the
+denylist read `src/shell/**` and `src/engine/**`, and `KILL` reached the screen from `src/kernel/bounds/`;
+it exempted attributes on a premise step 3.6 retired, and 45 `aria-label`s carried raw LaTeX; no test
+rendered a REFUSING gallery state through `patch`, and a duplicate DOM key left the previous binding's
+`=` answer beside a new refusal on seven records. **And the M8 cutover dropped the record's own branch
+cut from the stage** (`stageView` read the sandbox's `state.branch`, never `run.branch`), which
+`M8/parity.md` had not recorded — the seven tier-D records draw it again, and the GPU cut-correction
+layer M4.7d specified is wired for the first time. Measured after: F2/E3/C2 recompute 3,630 → 326 ms
+(`panelPlan(len, ∞)` had been taking the MAXIMUM plan), a keystroke in the integrand box 553 → 53 ms,
+`piUpper()` 2.48 ms → 0.07 µs, a hover 33 ms of GL → none, the D7 tab-wedge a 2 ms refusal by name.
+Green: **599 files / 6818 tests**, the browser suite 22 / 232, `pnpm a11y --strict` 682 nodes / 0 unnamed.
 
 Work in small, reviewable commits. Pause at each phase/milestone gate for review before proceeding.
 When a command or path in the docs is marked `⚠ verify`, check it against the actual repo

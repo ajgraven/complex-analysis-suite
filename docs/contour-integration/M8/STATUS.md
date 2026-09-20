@@ -2417,3 +2417,10 @@ that execute it are
 [`REMEDIATION-PLAN.md`](../../review/2026-09-20-contour-integration-review/REMEDIATION-PLAN.md).
 Where a finding above was reported as closed and the review found it still live, the paragraph says
 so inline rather than being deleted — §3.2's surviving sweep loop is the one such case in this file.
+
+**Executed (2026-09-20).** All nine work packages landed on `claude/inspiring-keller-5sizwl`, each with
+its own mutation sweep (219 mutants, 7 recorded equivalents), and the integration corrected ADR-0045's
+first draft (`∮` is earned by LEGALITY and CATCH, the target by all four rows — the gate takes
+`of: "contour" | "target"`). Gate 599 files / 6818 tests, browser 22 / 232, `pnpm a11y --strict`
+682 / 0 unnamed. Per-package numbers and the items left open are in
+[`docs/refactor/LOG.md`](../../refactor/LOG.md)'s entry of the same date.
