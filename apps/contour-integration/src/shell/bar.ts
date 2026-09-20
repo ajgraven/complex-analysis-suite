@@ -36,16 +36,17 @@ const MODES: readonly { readonly id: ShellMode; readonly label: string; readonly
 /**
  * The segmented mode control.
  *
- * **`aria-pressed` is written as a STRING on purpose.** `dom.ts` maps a boolean prop to attribute
- * presence — `true` sets it empty and `false` REMOVES it — so `aria-pressed: mode === m.id` would
- * leave the two unpressed segments with no `aria-pressed` at all, which is not "this toggle is off"
- * but "this is an ordinary button". A reader on a screen reader would then hear one toggle and two
- * plain buttons where the truth is one control with three positions, exactly one of them taken.
+ * **`aria-pressed` is written as a STRING**, and `dom.ts` has since grown the case that would make
+ * a boolean work too: it special-cases an `aria-*` prop and writes `String(value)`, so `false`
+ * becomes `aria-pressed="false"` rather than being removed. That defect is the one this line was
+ * written against — an absent `aria-pressed` says *this is not a toggle at all* — and it is fixed
+ * at the general layer. The string stays because it is what this control MEANS: three positions,
+ * exactly one taken, said the same way at both call sites below.
  *
- * Every segment is rendered and none is disabled, `drill` included. `setMode("drill")` refuses when
- * there is no task open and says so through the notice channel; that refusal is the action's, and a
- * bar that pre-empted it would have to re-derive "is a drill available?" — a second reader of a
- * question one module already answers, and the way the two come to disagree.
+ * Every segment is rendered and none is disabled, `drill` included. `setMode("drill")` with no task
+ * open opens the front door's Practice tab (M8 step 3.4) rather than refusing; either way the
+ * decision is the action's, and a bar that pre-empted it would have to re-derive "is a drill
+ * available?" — a second reader of a question one module already answers.
  */
 function modeControl(ctx: CardContext): Desc {
   const mode = shellMode(ctx.state);
@@ -82,10 +83,10 @@ function modeControl(ctx: CardContext): Desc {
  * The stage-mode control — M8 step 1.9.
  *
  * A second segmented group, and the shape is deliberately the SAME as the mode control's: three
- * positions there, four here, `aria-pressed` written as a string for the same reason (`dom.ts` maps
- * a boolean prop to attribute PRESENCE, so `false` would remove it and turn an unpressed segment
- * into a plain button — one toggle and three ordinary buttons where the truth is one control with
- * four positions, exactly one taken).
+ * positions there, four here, `aria-pressed` written as a string for the same reason — one control
+ * with four positions, exactly one taken, said the same way in both places. (`dom.ts` would handle
+ * a boolean correctly now: an `aria-*` prop is written as `String(value)` rather than by presence.
+ * See {@link modeControl}.)
  *
  * **It is in the bar and not in a card**, unlike the modulus-contour toggle it sits beside in
  * spirit, because it is a property of the whole stage rather than of the branch cuts: a reader who
@@ -138,9 +139,9 @@ function stageModeControl(ctx: CardContext): Desc {
  * formula with its LaTeX — which is right inside a sentence and wrong as the whole name of a
  * control, where `\int_{0}^{\infty}...` is what a reader would hear instead of "by the unit circle".
  *
- * The front door is step 1.8's and `openFrontDoor` announces that it is not built yet. The button is
- * neither disabled nor apologetic: it is in the shape it will keep, and a control that swallows a
- * click is the thing being avoided, not a missing one.
+ * The button opens the front door (step 1.8's, built): eight classics over an eight-group taxonomy,
+ * and the Practice tab the mode control's Drill segment also reaches. Neither disabled nor
+ * apologetic — a control that swallows a click is the thing being avoided.
  */
 function recordButton(ctx: CardContext): Desc {
   const { resolution, actions } = ctx;

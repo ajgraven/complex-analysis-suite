@@ -1,8 +1,8 @@
-// The new shell's mount — M8 step 1.1, plan §4.0.
+// The shell's mount — M8 step 1.1, plan §4.0.
 //
-// Reached with `?shell=new`; `src/main.ts` boots the old shell otherwise, so between 1.1 and 1.12
-// the app on this branch still opens the shell a reader knows and the new one is never
-// half-migrated. At 1.12 this directory becomes `src/shell/` and there is one shell again.
+// Between 1.1 and 1.12 it was reached with `?shell=new` while `src/main.ts` went on booting the old
+// shell, so the app was never half-migrated; at the 1.12 cutover the old shell was deleted, this
+// directory became `src/shell/` and `main.ts` lost the branch. There is one shell.
 //
 // **One door.** Every state change goes through `commit(next, why)`: resolve, store, render, draw,
 // mark the hash dirty. The old shell had roughly a dozen paths that each did some of that and the
@@ -61,7 +61,7 @@ import { argumentOf } from "./argument.js";
 import type { Contour, Params } from "../engine/contour/model.js";
 import type { Cx } from "../kernel/geom.js";
 
-/** A mounted shell, from the outside — the same two functions the old shell exposes. */
+/** A mounted shell, from the outside — the same two functions the old shell exposed. */
 export interface Shell2Handle {
   readonly currentState: () => ShellState;
   readonly applyState: (next: ShellState) => void;
@@ -111,7 +111,7 @@ const DRAFT_EVALUATIONS = 768;
 const STAGE_KEYS =
   "The complex plane. Arrow keys pan, plus and minus zoom. Press Enter to grab the contour, one " +
   "of its radius handles, or a branch point or branch cut, after which the arrow keys move what " +
-  "you grabbed and shift with an arrow pans.";
+  "you grabbed and shift with an arrow pans. Press Escape to let go.";
 
 /** How long after the last change the address bar catches up. The old shell's number. */
 const HASH_SETTLE_MS = 250;
@@ -349,6 +349,16 @@ export function mountShell2(root: Element): Shell2Handle {
    * way: a sweep started on one record goes on calling `setParam` against the NEXT record's
    * contour for the rest of its three seconds.
    *
+   * **So every path that resets the session has to call it, and the review found three that did
+   * not.** `commit` calls it when the ARGUMENT moved, which covers `setFixture`, `setMode`,
+   * `toSandbox` and an edited expression — and covers nothing that arrives at an
+   * argument-identical state. Measured on the cold start: press Play, then Ctrl+Z, and the loop
+   * schedules a frame on every one of the next ten ticks (rAF calls 25 → 35); the same after
+   * `applyState` of the state the app is already in, and after `destroy()` it is 23 → 43 because
+   * the loop is both spinning AND still committing into a shell nobody can see. `resetTransient`
+   * cannot fix it from its side — the frame handle is a closure local — so the three callers that
+   * reset the session (`applyStateNow`, `restore`, `destroy`) each call this beside it.
+   *
    * It does not commit. The callers that need a settle make their own, and the ones that abandon
    * the run are about to commit something else.
    */
@@ -413,9 +423,16 @@ export function mountShell2(root: Element): Shell2Handle {
     // successive refinement does not converge on a segment of length `2R`, while the same rungs
     // under `Step` — a full-budget commit — read 2.22144. Five extra resolves over a three-second
     // sweep, at the five moments the reader is being asked to look at a number.
+    //
+    // **And it is `"resolve"`, not `"edit"`** — the review's finding. An `"edit"` here closes the
+    // gesture run mid-animation (`undo.ts` rule 3), so the next frame's `"gesture"` commit opened
+    // a new one and pushed: one press of Play left FOUR undo entries and Ctrl+Z walked the sweep's
+    // own ladder, `R` = 6931 → 577 → 48 → 4, instead of undoing the press. The reason changes no
+    // number here — the state is the one the app is already in, so `changeKey` is null and every
+    // other rule would have returned — which is why the defect could ship green.
     const wasScrubbing = session.scrubbing;
     session.scrubbing = false;
-    commit(state, "edit");
+    commit(state, "resolve");
     session.scrubbing = wasScrubbing;
     const settled = session.sweep;
     if (settled === null) return;
@@ -509,9 +526,37 @@ export function mountShell2(root: Element): Shell2Handle {
     return { ...state.contourSource, ops: [...(state.contourSource.ops ?? []), keeps] };
   }
 
+  // ── typing — the review's 4.4 ────────────────────────────────────────────────────────────────
+  //
+  // **A keystroke is a frame of a gesture, and it had been a finished edit.** `setExpr` committed
+  // `"edit"`, and the draft-budget rule below reads only `session.gesture`, `session.scrubbing` and
+  // `why === "gesture"` — none of which typing can be — so every prefix a reader typed was resolved
+  // at the full quadrature budget on the main thread. Measured on the keyhole, typing
+  // `1/(1+z^4)/(z^2+2)`, best of three: **1,031.9 ms for the seventeen keystrokes, 553.1 of them on
+  // the first**; isolating `resolveState` on that one intermediate `"1"`, **689.1 ms at the full
+  // budget against 3.0 ms at the draft one**, 230×. A page frozen for half a second on one
+  // character. After: 340.0 ms for the sequence, 52.9 on the first.
+  //
+  // So it takes the slider's shape: draft on `input`, one full-budget settle once the reader stops.
+  // The settle is a commit of the state the app is already in, so it pushes no undo entry
+  // (`changeKey` is null) and the typed expression stays ONE entry through rule 7's coalescing, as
+  // it always was — the reason is `"type"` rather than `"gesture"` for exactly that, and `undo.ts`
+  // says so on the union member.
+  //
+  // **It rides `syncHash`'s timer rather than owning one**, which is not thrift: a second idle timer
+  // would be a second answer to *has the reader stopped?*, and the two would come apart the first
+  // time one of their windows moved. Measured when the settle DID own a 200 ms timer of its own:
+  // its commit restarted the 250 ms hash timer behind it, so the address bar landed 450 ms after the
+  // last keystroke instead of 250 — three permalink tests went red on a change that was supposed to
+  // be about arithmetic. One timer means one moment at which the app agrees the reader has stopped.
+  let typingSettle = false;
+
   const actions: ShellActions = {
     fitContour: () => controller?.fitContour(),
-    setExpr: (src) => commit({ ...state, expr: src }, "edit"),
+    setExpr: (src) => {
+      typingSettle = true;
+      commit({ ...state, expr: src }, "type");
+    },
     // A fixture change is a different binding AND a different contour, and the record rebuilds both
     // — which is M6.1's finding, that in gallery mode the contour is an OUTPUT. So nothing is carried
     // over: the overrides a reader set on the previous fixture describe parameters this one may not
@@ -800,10 +845,26 @@ export function mountShell2(root: Element): Shell2Handle {
           URL.revokeObjectURL(url);
         }, 10_000);
         say(DONE.saveFigure, "=");
-      });
+      },
+      // **The REJECTION, which had no handler at all.** `bytes === null` was covered; a throw inside
+      // `figureBytes` — `stageView.plate`, `getComputedStyle`, `drawFigure`, `injectPngText` — became
+      // an unhandled rejection with no notice and no banner, since the fatal boundary is synchronous
+      // around the mount alone. `copyFigure` was already covered, because its inner rejection
+      // propagates through `clipboard.write`'s own `.then(ok, fail)`; this is the same two-armed
+      // shape, said once here rather than inferred from the other button.
+      () => say(FAILED.drawFigure, "⚠"));
     },
 
     setMode: (mode) => {
+      // **THE PEN GOES AWAY FIRST — M7.4's finding, reopened through a different door.** M7.4 put
+      // the pen away on leaving the sandbox and on every `applyState`; a mode change is neither,
+      // and "Worked example" folds the left rail, which removes the Contour card — and with it the
+      // pen's Close / Undo / Cancel — from the DOM while `session.pen` stays non-null. The pen
+      // takes `pointerdown` before any grab test, deliberately, so the reader's next click on the
+      // stage placed a vertex into a path with no visible controls and Enter committed it. Put
+      // away rather than given floating controls, because a half-drawn path is not a state worth
+      // carrying across a change of mode — which is the decision M7.4 already recorded.
+      controller?.penStop();
       // Whichever field the derivation reads, and only that one.
       //
       // **Pressing Drill with no rung open opens the front door's Practice tab** — M8 step 3.4.
@@ -836,6 +897,11 @@ export function mountShell2(root: Element): Shell2Handle {
       commit({ ...state, drill: null, workedExample: mode === "worked" }, "edit");
     },
     setRail: (side, folded) => {
+      // **Folding the LEFT rail takes the pen's controls off screen**, because the Contour card is
+      // in `LEFT_CARDS` and a folded rail draws its name and its toggle and nothing else. Same
+      // defect as `setMode`'s and the same repair; gated on the side, because the right rail holds
+      // nothing the pen needs and putting the tool away there would be a second surprise.
+      if (side === "left" && folded) controller?.penStop();
       session.rails = { ...session.rails, [side]: folded };
       render2();
     },
@@ -1105,11 +1171,12 @@ export function mountShell2(root: Element): Shell2Handle {
   /**
    * Undo and redo — M8 step 1.11.
    *
-   * On the SESSION's arrays rather than in a closure, so `resetTransient` goes on clearing them and
-   * the comment beside them stays true. `applyStateNow` calls `resetTransient` before its `commit`,
-   * so a link clears the stacks twice over — once there and once through `record`'s `"link"` rule —
-   * which is belt and braces on the one transition where an inherited history would be restoring a
-   * state from somebody else's reading.
+   * On the SESSION's arrays rather than in a closure, so a test can read a history without the
+   * module that owns it. **`resetTransient` does NOT clear them** — `session.ts` says at length
+   * why they came off its list, and this comment said the opposite until the review measured it:
+   * four entries survive a direct call unchanged. A link clears them in exactly one place,
+   * `record`'s `"link"` rule, which is the module that knows what a run and a coalescing window
+   * are; `restore` needs the stacks intact, and that is the whole reason for the split.
    */
   const undoStacks = createUndo(session);
 
@@ -1142,9 +1209,10 @@ export function mountShell2(root: Element): Shell2Handle {
     if (argumentMoved) session.contrast = null;
     if (next.expr !== state.expr) compiled = compile(next.expr);
     state = next;
-    // A draft budget while a gesture is live and the full one on settle — the plan's rule. At 1.1
-    // nothing drags yet, so this is the shape rather than an optimisation already earning its keep.
-    const draft = session.gesture !== "none" || session.scrubbing || why === "gesture";
+    // A draft budget while a gesture is live and the full one on settle — the plan's rule. A
+    // KEYSTROKE is one of those, which the review's 4.4 measured and `typingSettle` above states:
+    // a reader mid-expression is in the middle of a gesture as surely as a finger on a slider is.
+    const draft = session.gesture !== "none" || session.scrubbing || why === "gesture" || why === "type";
     resolution = resolveState(state, compiled, draft ? { maxEvaluations: DRAFT_EVALUATIONS } : undefined);
     // **Through `render2`, not a second copy of its body.** It was a copy, and the two came apart
     // the first time one of them grew a line: the arrival banner was added to `render2` and a
@@ -1213,6 +1281,17 @@ export function mountShell2(root: Element): Shell2Handle {
    * removing; the one that matters is the one that decides whether a timer exists at all.
    */
   function writeHash(): void {
+    hashTimer = 0;
+    // **The typing settle, discharged HERE** — the reader has been idle for `HASH_SETTLE_MS`, which
+    // is the same question the settle asks. The commit re-resolves at the full budget and asks for a
+    // sync of its own; that sync is this write, happening now, so its timer is dropped rather than
+    // left to fire on a hash that cannot have changed (the state is the one the app is already in).
+    if (typingSettle) {
+      typingSettle = false;
+      commit(state, "edit");
+      window.clearTimeout(hashTimer);
+      hashTimer = 0;
+    }
     // The reader has acted, so a sentence about the link they arrived on is no longer about them.
     if (session.linkRefusal !== null) {
       session.linkRefusal = null;
@@ -1308,6 +1387,11 @@ export function mountShell2(root: Element): Shell2Handle {
     // M7.4's decision, for the same reason `applyStateNow` takes it: a restored state inherits no
     // half-drawn path, no grading that would unmask a rung's answer, and no hover pointing at a
     // piece it does not have. The CONTROLLER's locals go with them.
+    //
+    // **And the sweep's, which are a THIRD set of locals `resetTransient` cannot see** — see
+    // {@link endSweep}. An undo of a state reached during a sweep is argument-identical more often
+    // than not, so `commit`'s own guard is exactly the one that does not fire here.
+    endSweep();
     resetTransient(session);
     controller?.reset();
     // **The CAMERA is the reader's, not the entry's.** A camera move is not an undo entry (see
@@ -1328,6 +1412,10 @@ export function mountShell2(root: Element): Shell2Handle {
     const wanted: ShellState = { ...next, view: clampView(next.view) };
     // M7.4's decision, structural here: a restored state inherits no half-drawn path, no grading
     // that would unmask a rung's own answer, and no hover pointing at a piece it does not have.
+    //
+    // **The sweep first**, because this is the door a permalink, a contrast cell and a drill rung
+    // all come through and none of them need move the argument — see {@link endSweep}.
+    endSweep();
     resetTransient(session);
     // And the CONTROLLER's own locals, which `resetTransient` cannot see — M7.4's defect exactly.
     controller?.reset();
@@ -1381,6 +1469,17 @@ export function mountShell2(root: Element): Shell2Handle {
   };
 
   const onKeyDown = (ev: KeyboardEvent): void => {
+    // **Escape abandons a half-drawn path from WHEREVER focus is**, which is the other half of the
+    // review's pen finding: the pen's own Escape is bound on the ink canvas, so a reader who had
+    // just clicked the rail's fold toggle — or any other control — had no keyboard way out of a
+    // tool whose buttons had gone. `modal.ts` stops Escape on its backdrop, so a dialog over the
+    // stage still shuts itself rather than abandoning the path underneath it.
+    if (ev.key === "Escape") {
+      if (session.pen === null) return;
+      ev.preventDefault();
+      controller?.penStop();
+      return;
+    }
     if (ev.key !== "z" && ev.key !== "Z") return;
     if (!ev.ctrlKey && !ev.metaKey) return;
     if (isEditable(ev.target)) return;
@@ -1412,6 +1511,10 @@ export function mountShell2(root: Element): Shell2Handle {
     destroy: () => {
       document.removeEventListener("keydown", onKeyDown);
       window.clearTimeout(hashTimer);
+      // **A torn-down shell that is still animating is the worst of the three**, because there is
+      // nothing on screen to say so: the loop went on committing, re-resolving and re-rendering
+      // into a detached tree, and the closure held the whole shell alive. See {@link endSweep}.
+      endSweep();
       controller?.destroy();
       frontDoor.destroy();
       stageView.destroy();
