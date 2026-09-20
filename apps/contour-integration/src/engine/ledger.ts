@@ -210,6 +210,21 @@ function arcExtent(g: Resolved): Frac | null {
   return extent === null || extent.isZero() ? null : extent;
 }
 
+/**
+ * The arc's two endpoints in units of π, for a lemma whose hypothesis is about WHERE the arc lies.
+ *
+ * `arcExtent` above answers how FAR it sweeps, which is what an ML bound multiplies by; Jordan's
+ * lemma needs the window itself, because `|e^{iaz}|` is bounded on one half-plane and grows on the
+ * other. Undefined when either endpoint is not a readable multiple of π — `jordanArcBound` then
+ * refuses rather than assuming the semicircle it used to.
+ */
+function arcWindow(g: Resolved): { readonly from: Frac; readonly to: Frac } | undefined {
+  if (g.kind !== "arc") return undefined;
+  const from = asPiMultiple(g.theta0);
+  const to = asPiMultiple(g.theta1);
+  return from === null || to === null ? undefined : { from, to };
+}
+
 /** The radius of an arc as an exact rational, when it is one. */
 function arcRadius(g: Resolved): Frac | null {
   if (g.kind !== "arc") return null;
@@ -369,7 +384,7 @@ function disposeArc(
     if (!exponential.a.isZero()) {
       const mid = (g.theta0 + g.theta1) / 2;
       const half = Math.sin(mid) >= 0 ? "upper" : "lower";
-      return jordanArcBound(exponential.num, exponential.den, exponential.a, half, R, param);
+      return jordanArcBound(exponential.num, exponential.den, exponential.a, half, R, param, arcWindow(g));
     }
     // The degenerate case above: the factor is there and its frequency is zero, so the hypothesis
     // `a > 0` is vacuous rather than violated and what remains is the ML estimate.
@@ -427,7 +442,7 @@ function disposeArc(
     // Which half the arc lies in decides everything; read it off the arc's own midpoint.
     const mid = (g.theta0 + g.theta1) / 2;
     const half = Math.sin(mid) >= 0 ? "upper" : "lower";
-    return jordanArcBound(exponential.num, exponential.den, exponential.a, half, R, param);
+    return jordanArcBound(exponential.num, exponential.den, exponential.a, half, R, param, arcWindow(g));
   }
 
   // A ZERO FREQUENCY MUST SWITCH LEMMAS, not report an infinite bound. Jordan's constant is π/|a|,
@@ -786,6 +801,140 @@ export interface LedgerInput {
     /** The closed set's own sentence about the atom it rests on. */
     readonly source: string;
   }[];
+}
+
+/**
+ * Did this disposal establish that the piece vanishes in the limit?
+ *
+ * **TWO FIELDS, AND EITHER ONE CAN STOP THE ROW.** `asymptotics` is read off the DEGREE GAP, which
+ * a producer computes before it discovers whether a bound exists at all — so six of the nine
+ * (`mlArcBound`, `jordanArcBound`, `branchArcBound`, `dogboneArcBound`, `logArcBound`,
+ * `stripSideBound`) returned a `⚠` REFUSAL still carrying `"vanishes"`, and the KILL row read only
+ * that field. Measured: `1/(1+z²)` on the semicircle at `R = 0.5` — one drag from the slider's own
+ * start of 0.1 — gave a *satisfied* row beside a `⚠` certificate saying a pole may lie on or
+ * outside the arc, then `closes = true`, `failedAt = null`, the headline "The argument is complete."
+ * and a target of `0` where the integral is 0.9273.
+ *
+ * The producers are being repaired too, and this is the half that cannot be forgotten a seventh
+ * time: **a certificate that REFUSED establishes nothing**, whatever its asymptotics say, and the
+ * two fields disagreeing is itself the defect. Exported so the rule can be asserted directly — once
+ * the producers no longer disagree, no contour reaches this through `evaluateLedger`, and a test
+ * that could only get here through one would quietly stop testing it.
+ */
+export function disposalEstablishes(disposal: {
+  readonly asymptotics: ArcBound["asymptotics"];
+  readonly certificate: Certificate;
+}): boolean {
+  return disposal.asymptotics === "vanishes" && disposal.certificate.level !== "⚠";
+}
+
+/**
+ * How far two lengths may differ and still be one length.
+ *
+ * Both are read off the SAME resolved contour by the same function, so the corpus's agreement is
+ * exact or one ulp: measured over every `reproduces` piece of every fixture — 36 of them — the
+ * relative difference is `0` in 35 cases and `1.1e-16` in the wedge's at one binding. A tolerance
+ * nine orders above that is not a fit; it is room for a parameter the record computes two ways.
+ */
+const REPRODUCES_TOL = 1e-9;
+
+/**
+ * Is this piece really a constant multiple of the target? — and if not, say so.
+ *
+ * **IT WAS MINTED `=` ON FAITH**, which turned a demonstrably failing argument into "The argument is
+ * complete." on one click: `z/(1+z²)` on the upper semicircle at `R = 50` has an arc that goes to
+ * `iπ` and a bound that is a flat 3.143 at every radius, so the honest ledger fails at the arc — and
+ * relabelling that arc as a multiple of the target made it `closes = true`, `failedAt = null`,
+ * headline complete. M7.3 measured the same hole from the other side (four of the ten templates
+ * "close" for B1 because each carries such a piece) and worked around it in the drill's MENU; this
+ * is the row itself.
+ *
+ * **What the evidence here can and cannot decide.** The multiple is FAMILY data — `instantiate.ts`
+ * drops the coefficient rows, so the runtime piece carries a role and no constant, and the ledger
+ * cannot compare against a declared `−λ`, `−e^{2πiα}` or `−ω·μ`. What it can decide is the two
+ * clauses beneath that constant, and both are falsifiable from what is already computed:
+ *
+ *  1. the piece is the target TRAVERSED AGAIN, so it runs the target's own length (exact geometry,
+ *     off the same `arcLength` the quadrature uses); and
+ *  2. some finite constant relates the two integrals at all, which fails outright when the target
+ *     integrates to zero and this piece does not — the reported case, where the diameter's integral
+ *     is `0` by oddness against the arc's `iπ`.
+ *
+ * Clause 1 alone refuses the reported case (a semicircle of radius 50 runs 157.1 against the
+ * diameter's 100), and clause 2 catches a piece of the right length carrying the wrong value.
+ * Checking the constant ITSELF needs the record's coefficient threaded in beside `imported`;
+ * until then the row says what it checked and no more.
+ */
+function reproducesEvidence(
+  piece: Piece,
+  k: number,
+  spec: readonly Piece[],
+  pieces: readonly Resolved[],
+  integral: ContourIntegral,
+): { ok: boolean; certificate: Certificate; repair?: string } {
+  const claim = `the piece ${piece.name} is a constant multiple of the target`;
+  const targets = spec.map((p, i) => ({ p, i })).filter(({ p }) => p.role === "target");
+  if (targets.length !== 1) {
+    return {
+      ok: false,
+      certificate: refuse(
+        claim,
+        targets.length === 0
+          ? "no piece of this contour is the target, so there is nothing for this one to be a multiple of"
+          : `${targets.length} pieces are marked as the target, so which one this is a multiple of is not decided`,
+      ),
+      repair: "mark exactly one piece as the target, or give this one a vanishing lemma",
+    };
+  }
+
+  const mine = arcLength(pieces[k]);
+  const theirs = arcLength(pieces[targets[0].i]);
+  if (Math.abs(mine - theirs) > REPRODUCES_TOL * Math.max(mine, theirs)) {
+    return {
+      ok: false,
+      certificate: refuse(
+        claim,
+        `it is the target traversed again, so it runs the target's own length — and it runs ${mine.toPrecision(4)} against ${theirs.toPrecision(4)}`,
+      ),
+      repair: "give this piece a vanishing lemma, or close the contour so that it retraces the target",
+    };
+  }
+
+  const mineValue = integral.pieces[k]?.value;
+  const theirsValue = integral.pieces[targets[0].i]?.value;
+  if (mineValue === undefined || theirsValue === undefined) {
+    return {
+      ok: false,
+      certificate: unknown(
+        claim,
+        "the quadrature has no value for one of the two pieces, so the multiple could not be checked",
+      ),
+      repair: "raise the resolution, or move the contour off the singularity the quadrature refused",
+    };
+  }
+  const mineSize = Math.hypot(mineValue[0], mineValue[1]);
+  const theirsSize = Math.hypot(theirsValue[0], theirsValue[1]);
+  if (theirsSize <= REPRODUCES_TOL * Math.max(mineSize, theirsSize)) {
+    return {
+      ok: false,
+      certificate: refuse(
+        claim,
+        `the target integrates to 0 here while this piece integrates to ${mineSize.toExponential(3)}, so no constant multiple of the one is the other`,
+      ),
+      repair: "give this piece a vanishing lemma, or close the contour so that it retraces the target",
+    };
+  }
+
+  return {
+    ok: true,
+    // The multiple itself is FAMILY data — the runtime piece has a role and no coefficient row — so
+    // the row names the mechanism and the linear system reports the factor. Same split as
+    // `solveTarget`'s.
+    certificate: exact(
+      "the piece reproduces the unknown",
+      "the piece runs the target's own length and integrates to a constant multiple of it; its coefficient enters the linear system",
+    ),
+  };
 }
 
 /**
@@ -1440,18 +1589,16 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
     // unknown, and that multiple is the whole mechanism of a keyhole. Its own row says so, rather
     // than reporting a quadrature of a piece whose value the argument never uses.
     if (piece.role === "reproduces") {
-      // The multiple itself is FAMILY data — the runtime piece has a role and no coefficient row —
-      // so the row names the mechanism and Pass 5 reports the factor. Same split as `solveTarget`'s.
+      const evidence = reproducesEvidence(piece, k, spec, pieces, integral);
+      if (!evidence.ok) killFailed = true;
       push(
         rowFrom(
           "KILL",
-          "satisfied",
+          evidence.ok ? "satisfied" : "failed",
           claimOf("kill.reproduces", { piece: pieceArg(piece) }),
-          exact(
-            "the piece reproduces the unknown",
-            "the piece is a constant multiple of the target; its coefficient enters the linear system",
-          ),
+          evidence.certificate,
           piece.id,
+          evidence.repair,
         ),
       );
       continue;
@@ -1606,7 +1753,8 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
       continue;
     }
 
-    const ok = disposal.asymptotics === "vanishes";
+    const refused = disposal.certificate.level === "⚠";
+    const ok = disposalEstablishes(disposal);
     if (!ok) killFailed = true;
     push(
       rowFrom(
@@ -1626,8 +1774,21 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
         ok
           ? undefined
           : disposal.asymptotics === "diverges"
-            ? "close the contour through the other half-plane"
-            : "The ML-estimate does not vanish; Jordan's lemma or an indentation may still apply.",
+            ? // FIRST, and a test caught the ordering: Jordan's wrong-half-plane return is BOTH a
+              // `⚠` and a `"diverges"`, and it is the one refusal in the directory that knows the
+              // repair. Asking about the level before the asymptotics took that sentence away.
+              "close the contour through the other half-plane"
+            : refused
+              ? // Otherwise a refusal's own claim ends in its repair — "take a larger $R$" — so a
+                // second one would repeat it. The sentence below would be worse: no bound was
+                // computed at all, so "the ML-estimate does not vanish" is a statement about a
+                // number nothing produced. **This is also the `"unestablished"` case**, the
+                // asymptotics the bound producers answer where they reach no bound: every one of
+                // those returns is a refusal, so the LEVEL decides it and no second test on the
+                // name is needed — and a producer that one day answered it without refusing would
+                // be caught here rather than given the wrong sentence.
+                undefined
+              : "The ML-estimate does not vanish; Jordan's lemma or an indentation may still apply.",
         disposal.evaluated,
       ),
     );
@@ -1708,11 +1869,14 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
     rows.every((r) => r.status !== "failed") &&
     theorem.exactValue !== undefined;
 
+  // **THE EXACT VALUE OR NOTHING**, and the sweep's rule again. A quadrature fallback stood here and
+  // could never be read: `value` is handed out as `closes ? value : undefined` below, and `closes`
+  // already requires `theorem.exactValue !== undefined`. Worse than dead — what it would have
+  // printed is `integral.value[0].toPrecision(10)`, the REAL PART alone, under a label saying
+  // `∮ f dz`, for every integral whose answer is not real.
   const value = theorem.exactValue
     ? { text: theorem.exactValue.text, numeric: theorem.exactValue.value }
-    : integral.value
-      ? { text: `${integral.value[0].toPrecision(10)}`, numeric: integral.value }
-      : undefined;
+    : undefined;
 
   certificates.push(...theorem.verdict.certificates);
 
