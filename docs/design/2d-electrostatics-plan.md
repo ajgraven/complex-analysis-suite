@@ -57,12 +57,14 @@ Milestones are numbered **ES-n**. Nothing below is committed beyond ES-0.
   trimmed to sandbox + airfoil + polygon (the airfoil has since moved to 2D Hydrodynamics, ADR-0037, leaving
   the sandbox + polygon); now-unused deps pruned (`@cas/core`, `@cas/expr`, `@cas/faber`,
   `@cas/conformal`), leaving `@cas/export`, `@cas/flow`, `@cas/gpu`, `@cas/interchange`, `@cas/ui`; the shared
-  **nav header** (`mountNavHeader`) adopted on its pages.
+  **nav header** (`mountNavHeader`) adopted on its pages. *(withdrawn — [ADR-0044](../DECISIONS.md) removed the in-app suite navigation header from every app; the launcher is the unified menu. Noted 2026-09-20.)*
 - **ES-1 — the theorem gallery** (the spine, above). A gallery index + per-theorem curated state and
   overlay, built on the sandbox. Honest labelling throughout (`=`/`≈`).
 - **ES-2 — the `flow` interchange kind.** The free-field state as an `@cas/interchange` payload (deferred
   at M2.4c / ADR-0007, "gate on a second consumer") — export a field, and accept one from a sibling; the
-  natural wiring target for the nav header's U7 hand-off picker.
+  natural wiring target for the nav header's U7 hand-off picker. *(U7 and the header are both
+  withdrawn — [ADR-0044](../DECISIONS.md); a cross-app hand-off belongs in the panel that owns the
+  state. Noted 2026-09-20.)*
 - **ES-3 — worker offload for the SC fit.** The polygon exterior/interior Schwarz–Christoffel solve runs
   on the main thread today; move it onto `@cas/ui`'s `createComputeClient` (worker offload + coalescing)
   so a reentrant refit never janks the drag (a review finding).

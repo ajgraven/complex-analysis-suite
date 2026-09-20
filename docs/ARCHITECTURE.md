@@ -374,7 +374,10 @@ tools:
 - `apps/correspondences` is **built but not published** (kept in the build for CI parity; the
   launcher lists it as a non-linking "Coming soon" card). Publishing it means adding one `cp` to
   the assemble step and turning that card into a link.
-- There are **two** workflows: `ci.yml` (jobs `build` + `browser`) and `deploy-pages.yml`. The
+- There are **two** workflows: `ci.yml` (jobs `build` + `browser` + the non-blocking `a11y`) and
+  `deploy-pages.yml`. *(Corrected 2026-09-20: the enumeration said `build` + `browser`; `ci.yml`
+  defines `build:` at 46, `browser:` at 131 and `a11y:` at 187. The "two workflows" half is right —
+  there are exactly two files.)* The
   `browser` job — the real-WebGL2 numeric backstop — lives only in CI and is *not* a publish
   blocker, so a GPU-only regression can reach the live site while still failing CI.
 - Packages are **not** separately *published* (all `workspace:*`); the five `dist/`-built packages

@@ -450,6 +450,9 @@ Unguided sandboxes fail (Kirschner/Sweller/Clark) and animation per se doesn't h
 the mitigations that *are* supported — PhET-style implicit scaffolding, faded worked examples with
 self-explanation prompts, prediction-before-manipulation, contrasting triads — are in M7 (§7's round-3
 scoping takes two of them: contrasting triads and fading, without the prompts).
+*(Amended 2026-09-20: M8 step 3.4 then took a third — exactly ONE prediction prompt, forced-choice,
+asked before the drill's menu exists and graded from the ledger, with `contour-integration-predict`
+its own entry in the a11y roster. §7's deferred list no longer carries "prediction".)*
 
 ### 5.3 Colour and type
 
@@ -831,7 +834,10 @@ Rectangle/strip with quasi-period `λ` (E1–E3), wedge with the L6 bound (F1–
 > no transcendental, so a square at an INTEGER half-width ran its sides through the kernel's poles
 > while LEGALITY said every singularity was clear. The half-integer constraint is now
 > ENFORCED, by a bound that refuses any other half-width — from the geometry rather than from
-> `through: "halfIntegers"`, which is still unread. **D-2 is
+> `through: "halfIntegers"`, which was then still unread *(re-measured 2026-09-20: M8 step 3.2 gave
+> it two readers in `src/families/instantiate.ts` — it clamps the limit range to `MAX_SERIES_N` and
+> emits `admits: "integers"`. The geometric refusal stands and is strictly stronger, since it catches
+> a dragged contour too)*. **D-2 is
 > executed** — research 03 §8's bound is not a bound — **and corrected**: the shortfall is 4.9% at
 > `N = 3` and 27.8% at `N = 25`, growing toward the missing factor of π, so the gallery's "30–40 % at
 > every N" is the asymptote rather than the typical case. [`M5-plan.md`](M5-plan.md) §M5.5 and
@@ -900,7 +906,9 @@ live; the `deploy-pages.yml` line.
 > **M6.1 is DONE** — the shell has a state object (`src/shell/state.ts`: `ShellState`, and
 > `resolveState` as the app's three compute branches in one pure function of it) and `mountApp` returns
 > `currentState()` / `applyState(s)`. Proven a no-op byte for byte over the whole visible rail, and
-> carrying `test/shell.test.ts`, the first test to reach `src/shell/app.ts`.
+> carrying `test/shell.test.ts`, the first test to reach `src/shell/app.ts`. *(That spec was deleted
+> at the M8 cutover; its assertions are `test/shell2State.test.ts`'s, row by row in
+> [`M8/parity.md`](M8/parity.md). Repointed 2026-09-20.)*
 >
 > **M6.2, M6.3 and M6.4 are DONE too, so M6's gate is met**: permalinks round-trip by verdict across
 > the whole corpus, the exported figure carries its own link and verdict, and the page audits clean
@@ -925,8 +933,9 @@ live; the `deploy-pages.yml` line.
 integrands, different ledger outcomes (plain ML; Jordan; indentation + p.v.). The faded
 contour-choice drill runs in four stages — contour given + ledger filled → you fill the ledger → you
 pick from a menu → you draw freely — with fading tied to progress (expertise reversal). **No prose
-lessons, no prediction or self-explanation prompts**; everything else stays PhET-style implicit
-scaffolding in affordances, defaults and constraints. Plus the **pen tool**, inherited from M1.
+lessons, no prediction or self-explanation prompts** *(superseded in part 2026-09-20: M8 step 3.4
+shipped exactly one prediction prompt — forced-choice, before the menu, graded from the ledger)*;
+everything else stays PhET-style implicit scaffolding in affordances, defaults and constraints. Plus the **pen tool**, inherited from M1.
 **Gate:** every declared contrast's difference set is verified against the engine; **every drill
 stage is addressable by permalink**, so it travels under M6's round-trip-by-verdict test; a
 hand-drawn contour closes and its ledger is indistinguishable in kind from a template's.
@@ -939,7 +948,9 @@ hand-drawn contour closes and its ledger is indistinguishable in kind from a tem
 > to the identical verdict and ledger rows (`test/drill.test.ts`), and one of them is audited by the
 > a11y roster through its own permalink; and a hand-drawn contour closes with the same four
 > constraints, the same statuses and the same `2πi` as the circle template around the same pole
-> (`test/pen.test.ts`). Each slice's findings are in [`M7-plan.md`](M7-plan.md); the three worth
+> (`test/pen.test.ts` — *deleted at the M8 cutover; that gate is `test/drawnArgument.test.ts` now,
+> and the pen's shell behaviours are `test/shell2Page.test.ts`'s. Repointed 2026-09-20*). Each
+> slice's findings are in [`M7-plan.md`](M7-plan.md); the three worth
 > carrying forward are that **asserting each ledger row is not a task** (a faded worked example is
 > faded from a correct argument, so all 30 of its rows are satisfied and ticking "satisfied" scores
 > 30/30 — the drill asks the KILL column instead), that **the ledger takes the `reproduces` role on
@@ -956,7 +967,9 @@ hand-drawn contour closes and its ledger is indistinguishable in kind from a tem
 > permalink is a CORRECTNESS surface here rather than a convenience (a dropped `branch.window`
 > restores the same picture computing a different integral — M5.1's shadowed-`branch` bug, which
 > field-by-field equality would pass), so the round trip is verified by VERDICT; `src/shell/app.ts`
-> is 2,511 lines reached by ZERO tests, so the first slice lifts its state out of the closure rather
+> is 2,511 lines reached by ZERO tests *(that was the PRE-M8 file, measured at M6.1; `wc -l` on the
+> rebuilt `src/shell/app.ts` reads 1,422, reached by nineteen suites — re-measured 2026-09-20)*, so
+> the first slice lifts its state out of the closure rather
 > than building a feature; **this gate says nothing about the teaching layer**, which is in the scope
 > paragraph above with no completion criterion; and the contrasting triad turns out to be **two
 > fixtures of ONE record plus one record** — measured — differing in exactly one ledger row between
@@ -984,7 +997,9 @@ and screenshots. Plan: [`M8-plan.md`](M8-plan.md); the step-by-step record is
 > 6,475 tests** with lint, typecheck and build silent; the app's browser suite is 20 files / 220
 > tests; the a11y roster is **zero rules and zero nodes** on all four audited contour states with
 > `{}` baselines, and `scripts/a11y-audit.mjs` now walks each page's accessibility TREE beside axe
-> (**0 unnamed** of 845 interactive nodes across the suite). The browser pass is
+> (**0 unnamed** of ⚠ measured at integration interactive nodes across the suite — *this said 845,
+> measured at M8 step 5.2; ADR-0044's removal of the bar then measured 792 → 682, and the 845/792
+> pair is unreconciled, so the suite total is re-run rather than remembered*). The browser pass is
 > [`M8/browser-pass.md`](M8/browser-pass.md), recorded per item.
 >
 > **Three things the milestone established that outlive it.** (1) **The gates were the weakest part
@@ -1007,7 +1022,7 @@ milestone that wants it should re-argue it against those three points. ·
 Argument principle / Rouché mode (research 03 §10) · Bromwich and inverse Mellin (§12) · algebraic
 functions `wⁿ = R(z)` · Arb/FLINT WASM tier 3, behind a "Prove it" button for non-rational `f` ·
 cross-app `@cas/interchange` hand-off (needs a new payload kind + `VERSION` bump — defer until a
-real hand-off exists) · prediction and self-explanation prompts · 3-D Riemann-sheet view ·
+real hand-off exists) · self-explanation prompts · 3-D Riemann-sheet view ·
 df64 deep zoom · migrating QD onto `@cas/rigor`.
 
 ---
@@ -1085,7 +1100,9 @@ fresh TS + Vite app borrowing patterns from each sibling.
   lazily-loaded Arb/FLINT WASM behind a "Prove it" button is the documented escape hatch for
   non-rational `f`, deferred past v1.
 - **Teaching layer = contrasting triads + faded drill only**, as gallery organisation rather than
-  lessons. No prose lessons, no prediction or self-explanation prompts.
+  lessons. No prose lessons, no prediction or self-explanation prompts. *(Amended 2026-09-20: M8
+  step 3.4 took exactly one prediction prompt — forced-choice, graded from the ledger — and it is
+  struck from §7's deferred list. Self-explanation prompts stay deferred.)*
 - **Pólya work/flux as a named Stage toggle in M3**, adjacent to the Ledger.
 
 ### Resolved by recommendation (raise it if you disagree)

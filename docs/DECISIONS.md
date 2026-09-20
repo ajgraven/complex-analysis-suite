@@ -4002,6 +4002,9 @@ students, as an exploration instrument first with a pedagogical mode.
   DOM-free suites (codec by verdict, figure caption, contrast ladder, drill, engine and kernel) are the
   safety net and are untouched.
 - The `@cas/ui` nav header stays hard-coded dark; a full light theme is deferred (plan P3).
+  **(Moot — [ADR-0044](#adr-0044-withdraw-the-in-app-suite-navigation-header-the-launcher-is-the-unified-menu)
+  deleted the header from `@cas/ui` and from every app. Marked 2026-09-20; ADR-0016 AI-5 and U7 were
+  marked at the time and this bullet was missed.)**
 - Supersedes PLAN §5's two-left-rails table for this app; the ten interaction rules and the P0
   pedagogical constraints stand.
 
