@@ -28,7 +28,7 @@ import { exact, refuse, type Certificate } from "@cas/rigor";
 import { ExpSum } from "./expSum.js";
 import { Exponent } from "./exponent.js";
 import { formatGauss } from "./formatExact.js";
-import { unitRoot } from "./unitRoot.js";
+import { DENOMINATORS, unitRoot } from "./unitRoot.js";
 
 /** A denominator of the shape `b_n z^n + b₀`, with every root on the unit circle. */
 export interface CyclotomicForm {
@@ -38,9 +38,6 @@ export interface CyclotomicForm {
   readonly constant: Gauss;
   readonly leading: Gauss;
 }
-
-/** The denominators whose ROOT RATIO is a representable root of unity — see `branchResidue.ts`. */
-const RATIO_DENOMINATORS = [1n, 2n, 3n, 4n, 6n];
 
 /**
  * Read `Q` as `b_n z^n + b₀` with unit-modulus roots, or report that it is not that shape.
@@ -62,7 +59,12 @@ export function asCyclotomic(q: QiPoly): CyclotomicForm | null {
   const ratio = constant.div(leading).neg();
   const [re, im] = ratio.toTuple();
   const guess = Math.atan2(im, re) / Math.PI;
-  for (const m of RATIO_DENOMINATORS) {
+  // `unitRoot.ts`'s own list, imported rather than copied: it is written there precisely so there is
+  // one, and the copy that used to sit here was the same five entries. Two of them — 3 and 6 — cannot
+  // match anything, because their primitive roots carry a `√3` and the `asGauss()` gate below takes
+  // only `±1, ±i`; that narrowing is left to the gate rather than pre-applied here, so the list stays
+  // the one source of truth and nothing looks load-bearing that is not.
+  for (const m of DENOMINATORS) {
     for (const nudge of [0, 2, -2]) {
       const k = BigInt(Math.round((guess + nudge) * Number(m)));
       const candidate = unitRoot(k, m);

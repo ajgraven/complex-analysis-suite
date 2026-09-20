@@ -20,7 +20,7 @@ import { toExactRational } from "./exactRational.js";
 import { decideEntire, entireRefusal } from "./entire.js";
 import { asExponentialTimesRational } from "./exponentialFactor.js";
 import { asExponentialSum, isEntire, residueAtZero, type ExpRationalForm } from "./exponentialSum.js";
-import { exactPolesOf, weightedSum, type AlgebraicPole } from "./algebraic.js";
+import { exactPolesOf, weightedSum, type AlgebraicPole, type RootFinder } from "./algebraic.js";
 import { formatSqrtExt } from "./formatExact.js";
 import { LATEX } from "./notation.js";
 import { ExpSum, formatExpSum, jordanExponent, weightedExpSum } from "./expSum.js";
@@ -213,6 +213,22 @@ function rootsOf(den: Poly): { roots: Cx[]; converged: boolean; iterations: numb
   };
 }
 
+/**
+ * The Durand–Kerner candidate closure `exactPolesOf` deflates against.
+ *
+ * **Exported because omitting it makes a refusal say something FALSE.** Without a finder
+ * `splitWithDeflation` has no candidates, so any denominator that is neither degree ≤ 2 nor an even
+ * binomial is declined — and the caller then reports that the roots are not expressible. Measured on
+ * `D(w) = 1 + w + w² + w³`, whose roots are `−1, ±i`: `expLattice.polesInBand` refused
+ * `1/(1+e^z+e^{2z}+e^{3z})` as inexpressible where this finder pins all three exactly, and
+ * `kernelResidue.cofactorResidues` refused the cubic cofactor `(z²+¼)(z−⅓)` the same way. A refusal
+ * naming a pole that is not there is the kind of row this arc has been removing.
+ */
+export const numericRoots: RootFinder = (factor) => {
+  const coeffs = trim(toFloatPoly(factor));
+  return coeffs.length <= 1 ? [] : rootsOf(coeffs).roots;
+};
+
 const toPole = (p: AlgebraicPole): Pole => ({
   at: p.at.toTuple(),
   order: p.order,
@@ -246,10 +262,7 @@ export function findPoles(ast: Node, c: Cx = [0, 0], a: Cx = [0, 0]): PoleReport
     const denFloat = trim(toFloatPoly(den));
     // Root-finding is injected, and each squarefree factor is solved separately — see exactResidues
     // for why that matters for a repeated root.
-    const report = exactPolesOf(num, den, (factor) => {
-      const coeffs = trim(toFloatPoly(factor));
-      return coeffs.length <= 1 ? [] : rootsOf(coeffs).roots;
-    });
+    const report = exactPolesOf(num, den, numericRoots);
 
     const certificates: Certificate[] = [
       exactCert(
@@ -350,10 +363,7 @@ export function findPoles(ast: Node, c: Cx = [0, 0], a: Cx = [0, 0]): PoleReport
   // repeated pole declines to the locations-only report rather than guessing.
   const exponential = asExponentialTimesRational(ast);
   if (exponential) {
-    const structure = exactPolesOf(exponential.num, exponential.den, (factor) => {
-      const coeffs = trim(toFloatPoly(factor));
-      return coeffs.length <= 1 ? [] : rootsOf(coeffs).roots;
-    });
+    const structure = exactPolesOf(exponential.num, exponential.den, numericRoots);
     if (structure.poles.length > 0) {
       const allSimple = structure.poles.every((p) => p.order === 1);
       const exactResidues = structure.complete && allSimple;

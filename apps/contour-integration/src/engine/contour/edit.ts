@@ -15,7 +15,14 @@
 // accident. Free-hand path editing — adding, removing and moving individual points — needs the pen
 // tool's own semantics for closure and is not this module.
 import type { Cx, Resolved } from "../../kernel/geom.js";
-import { arcLength, distanceToPoint, endPoint, pointAt, startPoint } from "../../kernel/geom.js";
+import {
+  arcLength,
+  distanceToPoint,
+  endPoint,
+  joinTolerance,
+  pointAt,
+  startPoint,
+} from "../../kernel/geom.js";
 import {
   resolve,
   resolveAll,
@@ -142,11 +149,27 @@ export function radiusDragValue(
   return { param: scalar.param, value };
 }
 
-/** Apply a parameter edit to a contour, leaving its geometry alone. */
+/**
+ * Apply a parameter edit to a contour, leaving its geometry alone.
+ *
+ * **What this now GUARANTEES, for every caller:** the stored value is finite and inside the
+ * parameter's declared `range`. A value outside it lands on the nearer bound; a non-finite one is
+ * refused, returning the contour BY REFERENCE (the section header's rule) rather than clamping
+ * `NaN` to something that looks deliberate.
+ *
+ * It did neither before, and the range was therefore a suggestion: the sliders stop at `1e6` but
+ * nothing else did, so a hand-edited or stale link could seat `R` at `1e7` — measured, a contour the
+ * app then declared not closed, on `isClosed`'s old absolute tolerance. That half is fixed at its
+ * own end (see {@link joinTolerance}); this is the other half, and it is the one that keeps the
+ * value a reader sees, the value the slider shows and the value the ledger reads the same number.
+ */
 export function setParam(contour: Contour, name: string, value: number): Contour {
   const param = contour.params[name];
   if (param === undefined) return contour;
-  return { ...contour, params: { ...contour.params, [name]: { ...param, value } } };
+  if (!Number.isFinite(value)) return contour;
+  const [lo, hi] = param.range;
+  const clamped = Math.min(hi, Math.max(lo, value));
+  return { ...contour, params: { ...contour.params, [name]: { ...param, value: clamped } } };
 }
 
 /** The handle nearest `at`, within `tolerance` plot units, or null. */
@@ -291,19 +314,18 @@ function reverseGeom(geom: Geom): Geom {
 /**
  * When two endpoints are the SAME point.
  *
- * `kernel/geom.ts`'s `isClosed` decides closure at a default `1e-9`, and both the ledger and
+ * `kernel/geom.ts`'s `isClosed` decides closure at `joinTolerance(pieces)`, and both the ledger and
  * `integrate.ts` call it with that default — so this is not a free choice. A looser number here
  * would leave a seam unjoined that the ledger still calls open; a tighter one would mint a
- * zero-length piece into the reader's piece list at a seam the ledger was perfectly happy with. It
- * is kept in step BY HAND, because `isClosed` publishes its tolerance as a parameter default rather
- * than as an exported constant, and `contourEdit.test.ts` therefore asserts the agreement at both
- * ends (a 1e-10 gap: no join, and `isClosed` says closed; a 1e-8 gap: a join, and `isClosed` said
- * open) rather than trusting this paragraph.
+ * zero-length piece into the reader's piece list at a seam the ledger was perfectly happy with.
+ *
+ * It used to be kept in step by hand, as a second literal `1e-9`; it is now the SAME FUNCTION, so
+ * the two cannot drift and both scale with the contour — see {@link joinTolerance} for why an
+ * absolute number was wrong. `contourEdit.test.ts` still asserts the agreement at both ends (a
+ * 1e-10 gap: no join, and `isClosed` says closed; a 1e-8 gap: a join, and `isClosed` said open)
+ * rather than trusting this paragraph.
  */
-const JOIN_TOL = 1e-9;
-
-/** Are these the same point, at {@link JOIN_TOL}? */
-const meets = (a: Cx, b: Cx): boolean => Math.hypot(a[0] - b[0], a[1] - b[1]) <= JOIN_TOL;
+const meets = (a: Cx, b: Cx, tol: number): boolean => Math.hypot(a[0] - b[0], a[1] - b[1]) <= tol;
 
 /**
  * Multiply an affine scalar by a LITERAL, staying affine — or `null` where the form cannot hold it.
@@ -491,11 +513,12 @@ function straightPiece(
 function rejoin(contour: Contour, pieces: readonly Piece[]): Contour {
   const used = new Set(pieces.map((p) => p.id));
   const shapes = pieces.map((p) => resolve(p.geom, contour.params));
+  const tol = joinTolerance(shapes);
   const out: Piece[] = [];
   for (let k = 0; k < pieces.length; k++) {
     out.push(pieces[k]);
     const j = (k + 1) % pieces.length;
-    if (meets(endPoint(shapes[k]), startPoint(shapes[j]))) continue;
+    if (meets(endPoint(shapes[k]), startPoint(shapes[j]), tol)) continue;
     out.push(
       straightPiece(endSpec(pieces[k], shapes[k]), startSpec(pieces[j], shapes[j]), used, out.length, JOIN),
     );
@@ -527,7 +550,9 @@ export function reversePiece(contour: Contour, id: string): Contour {
   const index = contour.pieces.findIndex((p) => p.id === id);
   if (index < 0) return contour;
   const shape = resolve(contour.pieces[index].geom, contour.params);
-  if (!meets(startPoint(shape), endPoint(shape))) return contour;
+  // The whole contour's scale, not the piece's: the seam this decides is the one the ledger reads,
+  // and `isClosed` is asked about the list.
+  if (!meets(startPoint(shape), endPoint(shape), joinTolerance(resolveAll(contour)))) return contour;
   return {
     ...contour,
     pieces: contour.pieces.map((p, k) => (k === index ? { ...p, geom: reverseGeom(p.geom) } : p)),
@@ -850,9 +875,9 @@ function halfRole(role: PieceRole): PieceRole {
  *  2. **A point that is not on the piece**, judged with `distanceToPoint` — the very function
  *     `onContour` and `pieceAt` hit-test with, so "on the piece" means one thing to the gesture
  *     that starts a split and to the operation that performs it. The default `tolerance` is
- *     {@link JOIN_TOL}, which is the caller saying *the point is already on the piece*; a caller
+ *     {@link joinTolerance}, which is the caller saying *the point is already on the piece*; a caller
  *     working from a pointer passes its own grab radius, because only it knows the zoom.
- *  3. **A degenerate half.** Both halves must be longer than {@link JOIN_TOL}, measured with
+ *  3. **A degenerate half.** Both halves must be longer than {@link joinTolerance}, measured with
  *     `arcLength` — which is the same threshold, and therefore the same sentence, as {@link meets}:
  *     a half shorter than that is one whose two ends MEET, so it is a point wearing a piece's row
  *     in the rail. Stated as a length rather than as `0 < fraction < 1` because it is one
@@ -873,7 +898,12 @@ function halfRole(role: PieceRole): PieceRole {
  * halves in one colour would leave the reader looking at exactly the picture they had before, which
  * for this operation is the whole of what there is to see.
  */
-export function splitPiece(contour: Contour, id: string, at: Cx, tolerance = JOIN_TOL): Contour {
+export function splitPiece(
+  contour: Contour,
+  id: string,
+  at: Cx,
+  tolerance = joinTolerance(resolveAll(contour)),
+): Contour {
   const piece = contour.pieces.find((p) => p.id === id);
   if (piece === undefined) return contour;
   const shape = resolve(piece.geom, contour.params);
@@ -922,8 +952,9 @@ export function splitPieceAt(contour: Contour, id: string, fraction: number): Co
   // rather than passing: that is what lets {@link segmentDivide} and {@link arcDivide} carry no
   // degeneracy guard of their own, a zero-length piece arriving here as `NaN` on both clauses.
   const length = arcLength(shape);
-  if (!(fraction * length > JOIN_TOL)) return contour;
-  if (!((1 - fraction) * length > JOIN_TOL)) return contour;
+  const floor = joinTolerance(resolveAll(contour));
+  if (!(fraction * length > floor)) return contour;
+  if (!((1 - fraction) * length > floor)) return contour;
 
   // `lemma` is destructured away rather than overwritten, for `setRole`'s reason: the field must be
   // ABSENT when the role no longer has anything for it to be about, so that a deep comparison, the

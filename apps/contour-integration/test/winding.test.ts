@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { doubleToFrac, orient2d } from "../src/kernel/exactPredicates.js";
 import { windingNumber } from "../src/kernel/winding.js";
-import type { Cx, Resolved } from "../src/kernel/geom.js";
+import {
+  MAX_POLYGON_CHORDS,
+  finestSagitta,
+  polygonise,
+  type Cx,
+  type Resolved,
+} from "../src/kernel/geom.js";
 import { resolveAll } from "../src/engine/contour/model.js";
 import { circleTemplate, rectangleTemplate } from "../src/engine/contour/templates.js";
 
@@ -122,7 +128,8 @@ describe("windingNumber", () => {
 
   it("stays decided arbitrarily close to the contour, as long as it is clear of it", () => {
     // The polygonisation is chosen from the clearance, so shrinking the clearance refines the
-    // polygon rather than degrading the answer. This is the property that makes arcs admissible.
+    // polygon rather than degrading the answer. This is the property that makes arcs admissible —
+    // and it holds only while the refinement can actually be delivered, which is the next test.
     for (const eps of [1e-3, 1e-6, 1e-9]) {
       const r = windingNumber(circle(1), [1 - eps, 0]);
       expect(r.decided).toBe(true);
@@ -132,6 +139,89 @@ describe("windingNumber", () => {
       const r = windingNumber(circle(1), [1 + eps, 0]);
       expect(r.decided).toBe(true);
       expect(r.n).toBe(0);
+    }
+  });
+
+  it("refuses by name where the polygon cannot carry the homotopy the answer rests on", () => {
+    // `polygonise` caps at MAX_POLYGON_CHORDS, and past that cap it returns a polyline COARSER than
+    // it was asked for. Measured on this circle before the cap became a refusal: the cap's sagitta
+    // is 4.93e-6 where `clearance/4` asks for 5.25e-7, and 24 of 36 points sampled near chord
+    // midpoints at clearances 2.1e-6 … 4.8e-6 — every one genuinely INSIDE — came back `n: 0` with
+    // `decided: true`. A wrong winding number is a whole residue, not a perturbation.
+    const R = 1e6;
+    const big: Resolved[] = [
+      { kind: "arc", center: [0, 0], radius: R, theta0: 0, theta1: 2 * Math.PI },
+    ];
+    const finest = finestSagitta(big[0]);
+    expect(finest / R).toBeCloseTo(1 - Math.cos(Math.PI / MAX_POLYGON_CHORDS), 18);
+
+    for (const cl of [2.1e-6, 3.0e-6, 4.0e-6, 4.8e-6]) {
+      const th = Math.PI / MAX_POLYGON_CHORDS; // a chord midpoint, where the sagitta is worst
+      const at: Cx = [(R - cl) * Math.cos(th), (R - cl) * Math.sin(th)];
+      const r = windingNumber(big, at);
+      expect(r.decided, `clearance ${cl}`).toBe(false);
+      expect(r.reason, `clearance ${cl}`).toMatch(/cannot be resolved past/);
+      // …and the refusal quotes the number it is refusing ON, so the reason is checkable rather
+      // than merely present: a refusal reached through the clearance floor instead would name the
+      // point's distance and nothing about the arcs.
+      expect(r.reason, `clearance ${cl}`).toContain(finest.toExponential(2));
+    }
+
+    // Above `4 × finest` it is decided, and right — so this is a BAND and not a blanket, which is
+    // what stops the block above passing because large circles refuse everything.
+    for (const cl of [8 * finest, 100 * finest]) {
+      const r = windingNumber(big, [R - cl, 0]);
+      expect(r.decided, `clearance ${cl}`).toBe(true);
+      expect(r.n, `clearance ${cl}`).toBe(1);
+    }
+  });
+
+  it("reports the sagitta it DELIVERED, which is the cap's once the cap binds", () => {
+    // The number has to be the polygon's own, not a constant that happens to satisfy every `≤`:
+    // `sagitta: 0` would pass the guarantee test below and would make `finestSagitta`'s refusal the
+    // only thing standing between a capped polyline and a decided winding number.
+    const arc: Resolved = { kind: "arc", center: [0, 0], radius: 5, theta0: 0, theta1: Math.PI };
+    for (const asked of [1, 1e-3, 1e-9]) {
+      const got = polygonise(arc, asked).sagitta;
+      expect(got, `asked ${asked}`).toBeGreaterThan(0);
+      expect(got, `asked ${asked}`).toBeLessThanOrEqual(asked);
+      // …and it really is `r(1 − cos(sweep/2n))` for the n it laid down.
+      const n = polygonise(arc, asked).points.length - 1;
+      expect(got).toBeCloseTo(5 * (1 - Math.cos(Math.PI / (2 * n))), 18);
+    }
+    // Past the cap the delivered sagitta is exactly the finest the cap allows — coarser than asked,
+    // which is the whole reason it is reported.
+    const capped = polygonise(arc, 1e-30);
+    expect(capped.points).toHaveLength(MAX_POLYGON_CHORDS + 1);
+    expect(capped.sagitta).toBe(finestSagitta(arc));
+    expect(capped.sagitta).toBeGreaterThan(1e-30);
+    // A segment is exact, so zero there is a fact rather than a placeholder.
+    expect(polygonise({ kind: "segment", from: [0, 0], to: [1, 1] }, 1e-30).sagitta).toBe(0);
+  });
+
+  it("never decides from a polygon coarser than the sagitta the decision rests on", () => {
+    // The guarantee `polygonise`'s docstring makes, asserted from the sagitta it now REPORTS rather
+    // than from the vertex count. At every scale and every clearance: wherever `decided` is true,
+    // the delivered sagitta is within the `clearance/4` the homotopy argument spends.
+    for (const R of [1, 1e3, 1e6, 1e9]) {
+      const pieces: Resolved[] = [
+        { kind: "arc", center: [0, 0], radius: R, theta0: 0, theta1: 2 * Math.PI },
+      ];
+      let decided = 0;
+      for (const rel of [1e-1, 1e-4, 1e-7, 1e-9, 1e-10, 1e-11, 1e-12]) {
+        const r = windingNumber(pieces, [R - R * rel, 0]);
+        if (!r.decided) continue;
+        decided += 1;
+        expect(r.n, `R=${R} rel=${rel}`).toBe(1);
+        for (const g of pieces) {
+          expect(
+            polygonise(g, r.clearance / 4).sagitta,
+            `R=${R} rel=${rel}`,
+          ).toBeLessThanOrEqual(r.clearance / 4);
+        }
+      }
+      // Anti-vacuity: "wherever decided" would be satisfied by deciding nothing.
+      expect(decided, `R=${R}`).toBeGreaterThanOrEqual(4);
     }
   });
 });

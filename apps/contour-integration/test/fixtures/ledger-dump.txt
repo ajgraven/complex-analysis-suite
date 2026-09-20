@@ -1145,7 +1145,7 @@ T	cover	Target	The target integral as a piece of the contour.
 D	cover	=	satisfied		the target is a piece of the contour	declared by the piece list	
 T	solve	Solution	The residue theorem, solved for the target.
 S	solve	the residue theorem	$\oint_\gamma f(z)\,dz = 2\pi i \sum_k \operatorname{Ind}_\gamma(a_k)\operatorname{Res}(f, a_k)$
-S	solve	independent cross-check	the quadrature agrees with it to 6.73e-12 — agreement is evidence, not proof — the two share no machinery, which is the point
+S	solve	independent cross-check	the quadrature agrees with it to 1.15e-13 — agreement is evidence, not proof — the two share no machinery, which is the point
 S	solve	boundary terms · the $R \to \infty$ semicircle	contributes $-\pi$ — a known limit, not zero
 S	solve	the system	$\sum_i (a_i t + b_i) = \oint_\gamma f(z)\,dz$, solved for $t$
 D	solve	=	satisfied		$\oint_\gamma f(z)\,dz = 0$	exact residues over $\mathbb{Q}(i)$, exact winding numbers, and the residue theorem	
@@ -1174,7 +1174,7 @@ T	cover	Target	The target integral as a piece of the contour.
 D	cover	=	satisfied		the target is a piece of the contour	declared by the piece list	
 T	solve	Solution	The residue theorem, solved for the target.
 S	solve	the residue theorem	$\oint_\gamma f(z)\,dz = 2\pi i \sum_k \operatorname{Ind}_\gamma(a_k)\operatorname{Res}(f, a_k)$
-S	solve	independent cross-check	the quadrature agrees with it to 6.73e-12 — agreement is evidence, not proof — the two share no machinery, which is the point
+S	solve	independent cross-check	the quadrature agrees with it to 1.15e-13 — agreement is evidence, not proof — the two share no machinery, which is the point
 S	solve	boundary terms · the $R \to \infty$ semicircle	contributes $-\pi$ — a known limit, not zero
 S	solve	the system	$\sum_i (a_i t + b_i) = \oint_\gamma f(z)\,dz$, solved for $t$
 D	solve	=	satisfied		$\oint_\gamma f(z)\,dz = 0$	exact residues over $\mathbb{Q}(i)$, exact winding numbers, and the residue theorem	
@@ -3038,7 +3038,7 @@ P	kill	true	the limit rests on $\operatorname{Re}(q_2) = -1$ alone: the rectangl
 P	kill	false	$e^{\max \operatorname{Re} Q}$ is transcendental, so the bound's value is a float — the limit is what the lemma needs, and that rests on the sign alone
 D	kill	=	satisfied	the saddle line $\operatorname{Im} z = b/2$	the saddle line $\operatorname{Im} z = b/2$ = $-e^{-\frac{1}{4}} \cdot \sqrt{\pi}$ — a known integral, not derived here	imported, not derived here — on $\operatorname{Im} z = b/2$ the integrand collapses to $e^{-x^2-b^2/4}$; the remaining $\int_{\mathbb{R}} e^{-x^2}dx = \Gamma(1/2) = \sqrt{\pi}$ is imported, not derived here	
 P	kill	true	$\Gamma(1/2) = \sqrt{\pi}$ — the Gaussian $\int_{\mathbb{R}} e^{-x^2}dx = \sqrt{\pi}$, established by polar coordinates, not by any contour
-P	kill	true	an independent check: the quadrature of this piece is 3.07e-13 away (2.2e-11% of it) — at a finite limit parameter that gap is the piece's own tail
+P	kill	true	an independent check: the quadrature of this piece is 3.77e-15 away (2.7e-13% of it) — at a finite limit parameter that gap is the piece's own tail
 D	kill	≤	satisfied	the left vertical $x = -R$	the vertical side: $\left|\int f\,dz\right| \le 1.160e-16$ at $\operatorname{Re} z = −6$, and $\to 0$ as $R \to \infty$ because the bound is $O(e^{(−1)R^2})$ and that exponent is negative	the ML-estimate on a vertical side, with $\max|f|$ the exact maximum of a quadratic in $\mathbb{Q}$	
 P	kill	true	$\max|f|$ on the side is attained, not majorised: $\operatorname{Re} Q(c+iy)$ is the exact quadratic $y^2 - y - 36$, whose maximum on the segment is at $y = 0$
 P	kill	true	the limit rests on $\operatorname{Re}(q_2) = -1$ alone: the rectangle's height is fixed, so as $R \to \infty$ the vertex leaves the segment and the bound is $O(e^{\operatorname{Re}(q_2)R^2})$
@@ -3047,7 +3047,7 @@ T	cover	Target	The target integral as a piece of the contour.
 D	cover	=	satisfied		the target is a piece of the contour	declared by the piece list	
 T	solve	Solution	The residue theorem, solved for the target.
 S	solve	the residue theorem	$\oint_\gamma f(z)\,dz = 2\pi i \sum_k \operatorname{Ind}_\gamma(a_k)\operatorname{Res}(f, a_k)$
-S	solve	independent cross-check	the quadrature agrees with it to 1.75e-13 — agreement is evidence, not proof — the two share no machinery, which is the point
+S	solve	independent cross-check	the quadrature agrees with it to 1.14e-15 — agreement is evidence, not proof — the two share no machinery, which is the point
 S	solve	the system	$\sum_i (a_i t + b_i) = \oint_\gamma f(z)\,dz$, solved for $t$
 D	solve	=	satisfied		$\oint_\gamma f(z)\,dz = 0$	exact residues over $\mathbb{Q}(i)$, exact winding numbers, and the residue theorem	
 D	solve	=	satisfied		$I = e^{-\frac{1}{4}} \cdot \sqrt{\pi}$	the contour encloses nothing, so the linear system reads $Mt = -\sum(\text{imported values})$, split into its real and imaginary parts and solved exactly over $\mathbb{Q}$ · imported, not derived here — on $\operatorname{Im} z = b/2$ the integrand collapses to $e^{-x^2-b^2/4}$; the remaining $\int_{\mathbb{R}} e^{-x^2}dx = \Gamma(1/2) = \sqrt{\pi}$ is imported, not derived here	
@@ -3081,7 +3081,7 @@ P	kill	true	the limit rests on $\operatorname{Re}(q_2) = -1$ alone: the rectangl
 P	kill	false	$e^{\max \operatorname{Re} Q}$ is transcendental, so the bound's value is a float — the limit is what the lemma needs, and that rests on the sign alone
 D	kill	=	satisfied	the saddle line $\operatorname{Im} z = b/2$	the saddle line $\operatorname{Im} z = b/2$ = $-e^{-\frac{289}{400}} \cdot \sqrt{\pi}$ — a known integral, not derived here	imported, not derived here — on $\operatorname{Im} z = b/2$ the integrand collapses to $e^{-x^2-b^2/4}$; the remaining $\int_{\mathbb{R}} e^{-x^2}dx = \Gamma(1/2) = \sqrt{\pi}$ is imported, not derived here	
 P	kill	true	$\Gamma(1/2) = \sqrt{\pi}$ — the Gaussian $\int_{\mathbb{R}} e^{-x^2}dx = \sqrt{\pi}$, established by polar coordinates, not by any contour
-P	kill	true	an independent check: the quadrature of this piece is 1.87e-13 away (2.2e-11% of it) — at a finite limit parameter that gap is the piece's own tail
+P	kill	true	an independent check: the quadrature of this piece is 3.44e-15 away (4.0e-13% of it) — at a finite limit parameter that gap is the piece's own tail
 D	kill	≤	satisfied	the left vertical $x = -R$	the vertical side: $\left|\int f\,dz\right| \le 1.972e-16$ at $\operatorname{Re} z = −6$, and $\to 0$ as $R \to \infty$ because the bound is $O(e^{(−1)R^2})$ and that exponent is negative	the ML-estimate on a vertical side, with $\max|f|$ the exact maximum of a quadratic in $\mathbb{Q}$	
 P	kill	true	$\max|f|$ on the side is attained, not majorised: $\operatorname{Re} Q(c+iy)$ is the exact quadratic $y^2 - \frac{17}{10}y - 36$, whose maximum on the segment is at $y = 0$
 P	kill	true	the limit rests on $\operatorname{Re}(q_2) = -1$ alone: the rectangle's height is fixed, so as $R \to \infty$ the vertex leaves the segment and the bound is $O(e^{\operatorname{Re}(q_2)R^2})$
@@ -3090,7 +3090,7 @@ T	cover	Target	The target integral as a piece of the contour.
 D	cover	=	satisfied		the target is a piece of the contour	declared by the piece list	
 T	solve	Solution	The residue theorem, solved for the target.
 S	solve	the residue theorem	$\oint_\gamma f(z)\,dz = 2\pi i \sum_k \operatorname{Ind}_\gamma(a_k)\operatorname{Res}(f, a_k)$
-S	solve	independent cross-check	the quadrature agrees with it to 3.41e-13 — agreement is evidence, not proof — the two share no machinery, which is the point
+S	solve	independent cross-check	the quadrature agrees with it to 1.51e-15 — agreement is evidence, not proof — the two share no machinery, which is the point
 S	solve	the system	$\sum_i (a_i t + b_i) = \oint_\gamma f(z)\,dz$, solved for $t$
 D	solve	=	satisfied		$\oint_\gamma f(z)\,dz = 0$	exact residues over $\mathbb{Q}(i)$, exact winding numbers, and the residue theorem	
 D	solve	=	satisfied		$I = e^{-\frac{289}{400}} \cdot \sqrt{\pi}$	the contour encloses nothing, so the linear system reads $Mt = -\sum(\text{imported values})$, split into its real and imaginary parts and solved exactly over $\mathbb{Q}$ · imported, not derived here — on $\operatorname{Im} z = b/2$ the integrand collapses to $e^{-x^2-b^2/4}$; the remaining $\int_{\mathbb{R}} e^{-x^2}dx = \Gamma(1/2) = \sqrt{\pi}$ is imported, not derived here	
@@ -3124,7 +3124,7 @@ P	kill	true	the limit rests on $\operatorname{Re}(q_2) = -1$ alone: the rectangl
 P	kill	false	$e^{\max \operatorname{Re} Q}$ is transcendental, so the bound's value is a float — the limit is what the lemma needs, and that rests on the sign alone
 D	kill	=	satisfied	the saddle line $\operatorname{Im} z = b/2$	the saddle line $\operatorname{Im} z = b/2$ = $-e^{-\frac{9}{4}} \cdot \sqrt{\pi}$ — a known integral, not derived here	imported, not derived here — on $\operatorname{Im} z = b/2$ the integrand collapses to $e^{-x^2-b^2/4}$; the remaining $\int_{\mathbb{R}} e^{-x^2}dx = \Gamma(1/2) = \sqrt{\pi}$ is imported, not derived here	
 P	kill	true	$\Gamma(1/2) = \sqrt{\pi}$ — the Gaussian $\int_{\mathbb{R}} e^{-x^2}dx = \sqrt{\pi}$, established by polar coordinates, not by any contour
-P	kill	true	an independent check: the quadrature of this piece is 3.71e-14 away (2.0e-11% of it) — at a finite limit parameter that gap is the piece's own tail
+P	kill	true	an independent check: the quadrature of this piece is 6.66e-16 away (3.6e-13% of it) — at a finite limit parameter that gap is the piece's own tail
 D	kill	≤	satisfied	the left vertical $x = -R$	the vertical side: $\left|\int f\,dz\right| \le 3.479e-16$ at $\operatorname{Re} z = −6$, and $\to 0$ as $R \to \infty$ because the bound is $O(e^{(−1)R^2})$ and that exponent is negative	the ML-estimate on a vertical side, with $\max|f|$ the exact maximum of a quadratic in $\mathbb{Q}$	
 P	kill	true	$\max|f|$ on the side is attained, not majorised: $\operatorname{Re} Q(c+iy)$ is the exact quadratic $y^2 - 3y - 36$, whose maximum on the segment is at $y = 0$
 P	kill	true	the limit rests on $\operatorname{Re}(q_2) = -1$ alone: the rectangle's height is fixed, so as $R \to \infty$ the vertex leaves the segment and the bound is $O(e^{\operatorname{Re}(q_2)R^2})$
@@ -3133,7 +3133,7 @@ T	cover	Target	The target integral as a piece of the contour.
 D	cover	=	satisfied		the target is a piece of the contour	declared by the piece list	
 T	solve	Solution	The residue theorem, solved for the target.
 S	solve	the residue theorem	$\oint_\gamma f(z)\,dz = 2\pi i \sum_k \operatorname{Ind}_\gamma(a_k)\operatorname{Res}(f, a_k)$
-S	solve	independent cross-check	the quadrature agrees with it to 6.46e-14 — agreement is evidence, not proof — the two share no machinery, which is the point
+S	solve	independent cross-check	the quadrature agrees with it to 5.09e-16 — agreement is evidence, not proof — the two share no machinery, which is the point
 S	solve	the system	$\sum_i (a_i t + b_i) = \oint_\gamma f(z)\,dz$, solved for $t$
 D	solve	=	satisfied		$\oint_\gamma f(z)\,dz = 0$	exact residues over $\mathbb{Q}(i)$, exact winding numbers, and the residue theorem	
 D	solve	=	satisfied		$I = e^{-\frac{9}{4}} \cdot \sqrt{\pi}$	the contour encloses nothing, so the linear system reads $Mt = -\sum(\text{imported values})$, split into its real and imaginary parts and solved exactly over $\mathbb{Q}$ · imported, not derived here — on $\operatorname{Im} z = b/2$ the integrand collapses to $e^{-x^2-b^2/4}$; the remaining $\int_{\mathbb{R}} e^{-x^2}dx = \Gamma(1/2) = \sqrt{\pi}$ is imported, not derived here	
@@ -3167,7 +3167,7 @@ P	kill	true	the limit rests on $\operatorname{Re}(q_2) = -1$ alone: the rectangl
 P	kill	false	$e^{\max \operatorname{Re} Q}$ is transcendental, so the bound's value is a float — the limit is what the lemma needs, and that rests on the sign alone
 D	kill	=	satisfied	the saddle line $\operatorname{Im} z = b/2$	the saddle line $\operatorname{Im} z = b/2$ = $-e^{-\frac{169}{16}} \cdot \sqrt{\pi}$ — a known integral, not derived here	imported, not derived here — on $\operatorname{Im} z = b/2$ the integrand collapses to $e^{-x^2-b^2/4}$; the remaining $\int_{\mathbb{R}} e^{-x^2}dx = \Gamma(1/2) = \sqrt{\pi}$ is imported, not derived here	
 P	kill	true	$\Gamma(1/2) = \sqrt{\pi}$ — the Gaussian $\int_{\mathbb{R}} e^{-x^2}dx = \sqrt{\pi}$, established by polar coordinates, not by any contour
-P	kill	true	an independent check: the quadrature of this piece is 1.06e-17 away (2.3e-11% of it) — at a finite limit parameter that gap is the piece's own tail
+P	kill	true	an independent check: the quadrature of this piece is 1.83e-19 away (4.0e-13% of it) — at a finite limit parameter that gap is the piece's own tail
 D	kill	≤	satisfied	the left vertical $x = -R$	the vertical side: $\left|\int f\,dz\right| \le 7.538e-16$ at $\operatorname{Re} z = −6$, and $\to 0$ as $R \to \infty$ because the bound is $O(e^{(−1)R^2})$ and that exponent is negative	the ML-estimate on a vertical side, with $\max|f|$ the exact maximum of a quadratic in $\mathbb{Q}$	
 P	kill	true	$\max|f|$ on the side is attained, not majorised: $\operatorname{Re} Q(c+iy)$ is the exact quadratic $y^2 - \frac{13}{2}y - 36$, whose maximum on the segment is at $y = 0$
 P	kill	true	the limit rests on $\operatorname{Re}(q_2) = -1$ alone: the rectangle's height is fixed, so as $R \to \infty$ the vertex leaves the segment and the bound is $O(e^{\operatorname{Re}(q_2)R^2})$
@@ -3176,7 +3176,7 @@ T	cover	Target	The target integral as a piece of the contour.
 D	cover	=	satisfied		the target is a piece of the contour	declared by the piece list	
 T	solve	Solution	The residue theorem, solved for the target.
 S	solve	the residue theorem	$\oint_\gamma f(z)\,dz = 2\pi i \sum_k \operatorname{Ind}_\gamma(a_k)\operatorname{Res}(f, a_k)$
-S	solve	independent cross-check	the quadrature agrees with it to 2.73e-16 — agreement is evidence, not proof — the two share no machinery, which is the point
+S	solve	independent cross-check	the quadrature agrees with it to 1.01e-16 — agreement is evidence, not proof — the two share no machinery, which is the point
 S	solve	the system	$\sum_i (a_i t + b_i) = \oint_\gamma f(z)\,dz$, solved for $t$
 D	solve	=	satisfied		$\oint_\gamma f(z)\,dz = 0$	exact residues over $\mathbb{Q}(i)$, exact winding numbers, and the residue theorem	
 D	solve	=	satisfied		$I = e^{-\frac{169}{16}} \cdot \sqrt{\pi}$	the contour encloses nothing, so the linear system reads $Mt = -\sum(\text{imported values})$, split into its real and imaginary parts and solved exactly over $\mathbb{Q}$ · imported, not derived here — on $\operatorname{Im} z = b/2$ the integrand collapses to $e^{-x^2-b^2/4}$; the remaining $\int_{\mathbb{R}} e^{-x^2}dx = \Gamma(1/2) = \sqrt{\pi}$ is imported, not derived here	
@@ -3358,12 +3358,12 @@ P	kill	true	$\psi = n\theta$ carries the arc's range $1\pi/4$ to $1\pi/2$, which
 P	kill	true	the bound is $O(R^{-1})$, and $1 - n < 0$ exactly when $n > 1$
 D	kill	=	satisfied	the return ray $\arg z = \pi/(2n)$	the return ray $\arg z = \pi/(2n)$ = $-\frac{1}{2} \cdot e^{\frac{i\pi}{4}} \cdot \sqrt{\pi}$ — a known integral, not derived here	imported, not derived here — on this ray $e^{iz^n} = e^{-t^n}$; $\int_0^\infty e^{-t^n}dt = \Gamma(1+1/n)$ is imported (the real substitution $u = t^n$), and the leading minus is the reversed traversal	
 P	kill	true	$\Gamma(1/2) = \sqrt{\pi}$ — the Gaussian $\int_{\mathbb{R}} e^{-x^2}dx = \sqrt{\pi}$, established by polar coordinates, not by any contour
-P	kill	true	an independent check: the quadrature of this piece is 1.00e-14 away (1.1e-12% of it) — at a finite limit parameter that gap is the piece's own tail
+P	kill	true	an independent check: the quadrature of this piece is 1.73e-15 away (1.9e-13% of it) — at a finite limit parameter that gap is the piece's own tail
 T	cover	Target	The target integral as a piece of the contour.
 D	cover	=	satisfied		the target is a piece of the contour	declared by the piece list	
 T	solve	Solution	The residue theorem, solved for the target.
 S	solve	the residue theorem	$\oint_\gamma f(z)\,dz = 2\pi i \sum_k \operatorname{Ind}_\gamma(a_k)\operatorname{Res}(f, a_k)$
-S	solve	independent cross-check	the quadrature agrees with it to 5.32e-14 — agreement is evidence, not proof — the two share no machinery, which is the point
+S	solve	independent cross-check	the quadrature agrees with it to 1.74e-16 — agreement is evidence, not proof — the two share no machinery, which is the point
 S	solve	the system	$\sum_i (a_i t + b_i) = \oint_\gamma f(z)\,dz$, solved for $t$
 D	solve	=	satisfied		$\oint_\gamma f(z)\,dz = 0$	exact residues over $\mathbb{Q}(i)$, exact winding numbers, and the residue theorem	
 D	solve	=	satisfied		$I = \frac{\sqrt{2}}{4} \cdot \sqrt{\pi}$	the contour encloses nothing, so the linear system reads $Mt = -\sum(\text{imported values})$, split into its real and imaginary parts and solved exactly over $\mathbb{Q}$ · imported, not derived here — on this ray $e^{iz^n} = e^{-t^n}$; $\int_0^\infty e^{-t^n}dt = \Gamma(1+1/n)$ is imported (the real substitution $u = t^n$), and the leading minus is the reversed traversal	
@@ -3395,12 +3395,12 @@ P	kill	true	$\psi = n\theta$ carries the arc's range $1\pi/6$ to $1\pi/2$, which
 P	kill	true	the bound is $O(R^{-2})$, and $1 - n < 0$ exactly when $n > 1$
 D	kill	=	satisfied	the return ray $\arg z = \pi/(2n)$	the return ray $\arg z = \pi/(2n)$ = $-e^{\frac{i\pi}{6}} \cdot \Gamma\left(\frac{4}{3}\right)$ — a known integral, not derived here	imported, not derived here — on this ray $e^{iz^n} = e^{-t^n}$; $\int_0^\infty e^{-t^n}dt = \Gamma(1+1/n)$ is imported (the real substitution $u = t^n$), and the leading minus is the reversed traversal	
 P	kill	true	$\Gamma\left(\frac{4}{3}\right) = \int_0^{\infty} t^{1/3}e^{-t}\,dt$ — the Gamma function at a rational argument, established by the real substitution $u = t^n$ and not by any contour
-P	kill	true	an independent check: the quadrature of this piece is 6.79e-15 away (7.6e-13% of it) — at a finite limit parameter that gap is the piece's own tail
+P	kill	true	an independent check: the quadrature of this piece is 1.64e-15 away (1.8e-13% of it) — at a finite limit parameter that gap is the piece's own tail
 T	cover	Target	The target integral as a piece of the contour.
 D	cover	=	satisfied		the target is a piece of the contour	declared by the piece list	
 T	solve	Solution	The residue theorem, solved for the target.
 S	solve	the residue theorem	$\oint_\gamma f(z)\,dz = 2\pi i \sum_k \operatorname{Ind}_\gamma(a_k)\operatorname{Res}(f, a_k)$
-S	solve	independent cross-check	the quadrature agrees with it to 3.64e-15 — agreement is evidence, not proof — the two share no machinery, which is the point
+S	solve	independent cross-check	the quadrature agrees with it to 4.47e-15 — agreement is evidence, not proof — the two share no machinery, which is the point
 S	solve	the system	$\sum_i (a_i t + b_i) = \oint_\gamma f(z)\,dz$, solved for $t$
 D	solve	=	satisfied		$\oint_\gamma f(z)\,dz = 0$	exact residues over $\mathbb{Q}(i)$, exact winding numbers, and the residue theorem	
 D	solve	=	satisfied		$I = \frac{\sqrt{3}}{2} \cdot \Gamma\left(\frac{4}{3}\right)$	the contour encloses nothing, so the linear system reads $Mt = -\sum(\text{imported values})$, split into its real and imaginary parts and solved exactly over $\mathbb{Q}$ · imported, not derived here — on this ray $e^{iz^n} = e^{-t^n}$; $\int_0^\infty e^{-t^n}dt = \Gamma(1+1/n)$ is imported (the real substitution $u = t^n$), and the leading minus is the reversed traversal	
