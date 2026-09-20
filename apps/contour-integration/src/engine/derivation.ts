@@ -35,7 +35,7 @@ import type { ContourIntegral } from "./contour/integrate.js";
 import type { Piece } from "./contour/model.js";
 import { LATEX } from "../kernel/notation.js";
 import { constraintLabel, stageTitle, type StageId } from "./vocabulary.js";
-import type { ConstraintId, LedgerResult, LedgerRow } from "./ledger.js";
+import { valueRefusal, type ConstraintId, type LedgerResult, type LedgerRow } from "./ledger.js";
 import { RESIDUE_THEOREM_IDENTITY, type ResidueTheoremResult } from "./residueTheorem.js";
 
 // Declared in `vocabulary.ts` beside the titles it maps to (M8 step 0.2), re-exported here.
@@ -205,6 +205,25 @@ export interface Conclusion extends Statement {
   readonly level: Level;
 }
 
+/**
+ * The level an ANSWER carries — the badge beside the value, never the argument-wide meet.
+ *
+ * Lifted out of `shell/cards/result.ts` at the 2026-09-20 review, where it was the card's private
+ * rule and this file had a second one (`assembleVerdict(solved.certificates)`). Its own reason is
+ * unchanged: the record's verdict about the solved value is the THEOREM's where there is one,
+ * because the ledger's meet carries a vanishing arc's `≤` — a true statement about the weakest step
+ * and a false one about the answer (DESIGN §4 Pass 3).
+ *
+ * `engine/` rather than `shell/` because two surfaces read it and the card is only one of them; the
+ * sandbox keeps its own `≈`, which is a fact about the sandbox and not about this function.
+ */
+export function levelOfSolved(
+  theorem: Pick<ResidueTheoremResult, "exactValue" | "verdict">,
+  integral: Pick<ContourIntegral, "verdict">,
+): Level {
+  return theorem.exactValue !== undefined ? theorem.verdict.level : integral.verdict.level;
+}
+
 const STAGE_OF: Readonly<Record<ConstraintId, StageId>> = {
   LEGALITY: "legality",
   CATCH: "catch",
@@ -314,7 +333,22 @@ export function buildDerivation(input: DerivationInput): Derivation {
     label: "the residue theorem",
     text: theorem.identity ?? RESIDUE_THEOREM_IDENTITY,
   });
-  if (theorem.exactValue !== undefined) {
+  // **THE GATE, and it is the app's — ADR-0045.** This card used to add the `∮` line on
+  // `theorem.exactValue !== undefined` alone, so a LEGALITY refusal the result card beside it
+  // honoured reached a reader here as `= 2πi`: measured on `1/(z+3)` over `|z+3| = 1` with a cut
+  // down ℝ₋ and no side declared, where the ledger withholds its own `value` and this line printed
+  // one anyway. The refusal takes the line's place rather than leaving a silence, because a reader
+  // who saw a number here yesterday needs to be told why there is none today.
+  const withheld = valueRefusal(integral, ledger);
+  if (withheld !== null) {
+    say("solve", {
+      label: "no value",
+      text:
+        withheld.repair === undefined
+          ? withheld.claim
+          : `${withheld.claim} — ${withheld.repair}`,
+    });
+  } else if (theorem.exactValue !== undefined) {
     add(
       "solve",
       lineFromVerdict(
@@ -328,7 +362,9 @@ export function buildDerivation(input: DerivationInput): Derivation {
   // observation about two computed numbers; no certificate was minted for the comparison, and
   // inventing a level for it here is the exact move this file exists to avoid. Its force comes from
   // the two routes sharing no machinery, which the text says outright.
-  if (theorem.agrees !== undefined) {
+  // Under the same gate: "the two routes agree to 2.7e-15" is a claim about a number, and a number
+  // the app is refusing to print is not one it may corroborate either.
+  if (theorem.agrees !== undefined && withheld === null) {
     say("solve", {
       label: "independent cross-check",
       text:
@@ -428,18 +464,28 @@ export function buildDerivation(input: DerivationInput): Derivation {
   // and Pass 5 consumes only the limit. Carrying the argument's meet onto the answer would cap every
   // gallery result at `≤` and contradict PLAN §2's own worked ledger, which prints `[≤]` on the KILL
   // row and `[=]` on the conclusion.
-  const conclusionVerdict =
-    solved !== undefined ? assembleVerdict(solved.certificates) : theorem.verdict;
+  //
+  // It is {@link levelOfSolved} and not `assembleVerdict(solved.certificates)`, which is the 2026-09-20
+  // review's B3: the result card has always used the first and this card used the second, and over the
+  // 28 records × 94 fixtures they disagree exactly once — `jordan-quartic`, where the card read `=`
+  // off the exponential-basis `∮` and this card read `?` off Pass 5's *"the target's closed form"*
+  // certificate. One answer, two surfaces, two labels; the level now comes from one function.
   const conclusion: Conclusion | undefined = !closes
     ? undefined
     : solved !== undefined
       ? {
           label: "the integral",
-          text: solved.text ?? `≈ ${solved.value}`,
-          level: conclusionVerdict.level,
+          // `latex` before the decimal: a form the record found and could not spell in text is
+          // still a form. (Measured on the one record that reaches the fallback — B3, whose
+          // `solved` carries NEITHER, correcting the review's reading that its `latex` was present
+          // and dropped — so this guards a shape the corpus does not currently have.) The `≈` on
+          // the last fallback stays and is not a second badge: it labels the DECIMAL, the way the
+          // result card's numerics block prints `≈ …` under an exact `∮`.
+          text: solved.text ?? solved.latex ?? `≈ ${solved.value}`,
+          level: levelOfSolved(theorem, integral),
         }
       : ledger.value !== undefined
-        ? { label: "∮ f dz", text: ledger.value.text, level: conclusionVerdict.level }
+        ? { label: "∮ f dz", text: ledger.value.text, level: theorem.verdict.level }
         : undefined;
 
   const stages = DERIVATION_STAGES.map((stage) => {

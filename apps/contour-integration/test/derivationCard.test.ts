@@ -602,8 +602,19 @@ describe("the Derivation card", () => {
   //
   // **A literal would survive a one-record test**, which is how this one was written: `badge("=")`
   // passes against any record whose conclusion IS exact, and almost all of them are. So two records
-  // are drawn and the two glyphs are required to DIFFER — `jordan-quartic` concludes at `?`, because
-  // its own certificates say so — which no constant can satisfy.
+  // were drawn and the two glyphs required to DIFFER — `jordan-quartic` concluded at `?`, because
+  // its own certificates said so.
+  //
+  // **ADR-0045 took that device away, and the measurement is why.** The `?` was the defect: the
+  // result card derived the same answer's badge with `levelOfSolved` and read `=`, so one surface
+  // called it exact and the other undecided. Both read `levelOfSolved` now — and `closes` requires
+  // an exact `∮`, so measured over all 28 records at their primary fixtures and five sandbox
+  // states, **every conclusion the app can draw is `=`**. No record-driven pair can differ, and no
+  // record-driven test can kill a literal here any more. What replaces it is the property the
+  // comment above is actually about: the conclusion's badge is NOT the argument-wide meet, so it
+  // must differ from a line badge on the same card — both records carry a `≤` arc. The literal is
+  // killed on the engine side instead, in `derivation.test.ts`, where `levelOfSolved` can be given
+  // a theorem that says something else.
   it("badges the conclusion from the conclusion's own evidence", () => {
     const drawn: string[] = [];
     for (const record of ["mellin-keyhole", "jordan-quartic"]) {
@@ -628,9 +639,15 @@ describe("the Derivation card", () => {
       const text = expected?.text ?? "";
       expect(text.length, record).toBeGreaterThan(0);
       if (!text.includes("$")) expect(conclusion?.textContent ?? "", record).toContain(text);
+      // NOT the meet: the same card carries a `≤` on the arc, and the answer is `=` beside it.
+      const lineBadges = [...derivationOf(state).card.querySelectorAll<HTMLElement>("li > .badge")].map(
+        (b) => b.textContent,
+      );
+      expect(lineBadges, record).toContain("≤");
+      expect(lineBadges.some((b) => b !== badge?.textContent), record).toBe(true);
       drawn.push(badge?.textContent ?? "");
     }
-    expect(new Set(drawn).size).toBe(2);
+    expect(drawn).toHaveLength(2);
   });
 
   // The ✓/✗ on an audit step comes from `Step.ok` and from nothing else — not from the sentence,

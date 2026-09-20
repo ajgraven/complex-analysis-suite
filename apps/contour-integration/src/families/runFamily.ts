@@ -47,7 +47,8 @@ import {
 } from "./solveImported.js";
 import { mergedResidue } from "../kernel/mergedResidue.js";
 import { checkDeclaredCollisions, escalations } from "./collisionCheck.js";
-import { legalityRefusal } from "../engine/ledger.js";
+import { legalityRefusal, valueRefusal } from "../engine/ledger.js";
+import { constraintLabel, type ConstraintId } from "../engine/vocabulary.js";
 import { assembleVerdict, estimate, exact, meet, type Certificate } from "@cas/rigor";
 import type { RatPi } from "../kernel/ratPi.js";
 import type { Bindings } from "./system.js";
@@ -388,20 +389,68 @@ function solveWithin(
   options: RunOptions,
   chain: ReadonlySet<string>,
 ): SolveFamilyResult {
+  // **NOTHING MAY REPORT A VALUE WHILE THE ARGUMENT DOES NOT CLOSE** — ADR-0045, and the same gate
+  // every other surface takes. It is applied to the RESULT rather than ahead of the solve, which
+  // measuring decided: a route refuses for reasons of its own (*"carries no summation kernel"*,
+  // *"no exact closed-contour value"*, *"Pass 5 refused"*) and those are far better sentences than
+  // a ledger headline, so a gate in front of the dispatch would replace each of them with
+  // *"a boundary term does not vanish"*. What it must stop is a value coming BACK.
+  //
+  // **Its predecessor asked `legalityRefusal` and stopped one constraint short.** Measured at the
+  // 2026-09-20 review: fifteen bindings over six records where a KILL row FAILS — D1 at `α = 1.5`
+  // declares `0 < α < 1`, the arc row reads *"it diverges as R → ∞"*, and Pass 5 returned
+  // `= −π` for `∫₀^∞ x^{1/2}/(1+x) dx`, which diverges. All fifteen integrals diverge and every
+  // badge was `=`.
+  const out = solveDispatch(family, golden, options, chain);
+  if (!out.ok || out.run === undefined) return out;
+  const withheld = valueRefusal(out.run.integral, out.run.ledger);
+  if (withheld === null) return out;
+  return {
+    ok: false,
+    run: out.run,
+    // **The RECORD's title and the reader's word for the constraint** — neither the slug nor
+    // `LEGALITY` (2026-09-20 review): this string reaches the result card verbatim through
+    // `StateResolution.note`, and `test/denylist.test.ts` reads string literals out of
+    // `src/shell/**` and `src/engine/**` only, so `src/families/**` is the one path neither half
+    // of it covers and both had been reader-visible since M4.2. `constraintLabel` is where a house
+    // id becomes a word — the FAILING constraint's word, since *"hypotheses"* would be false of a
+    // diverging arc.
+    reason: refusalSentence(family, withheld),
+  };
+}
+
+/** The refusal a reader gets: the record's own name, the failing group's, the row's claim. */
+function refusalSentence(
+  family: Family,
+  withheld: { readonly claim: string; readonly repair?: string; readonly constraint?: ConstraintId },
+): string {
+  const group =
+    withheld.constraint === undefined ? "" : `${constraintLabel(withheld.constraint).toLowerCase()} — `;
+  const repair = withheld.repair === undefined ? "" : ` (${withheld.repair})`;
+  return `${family.title}: ${group}${withheld.claim}${repair}`;
+}
+
+/** `solveWithin`'s body: LEGALITY, then the route. Wrapped by the gate above. */
+function solveDispatch(
+  family: Family,
+  golden: Golden,
+  options: RunOptions,
+  chain: ReadonlySet<string>,
+): SolveFamilyResult {
   const r = runFamily(family, golden, options);
   if (!r.ok) return r;
 
-  // NOTHING MAY REPORT A VALUE WHILE A LEGALITY ROW REFUSES — the same gate the result card takes,
-  // and it belongs here for the same reason. Pass 5 reads the residue sum and the piece limits and
-  // knows nothing about whether the contour was legal; D1 under the principal determination is the
-  // case that proves it, since its circles cross the relocated cut untagged while the solve goes on
-  // to produce a perfectly confident complex number for a real integral.
+  // LEGALITY still stops the solve BEFORE it runs, where the wider gate above stops its result.
+  // The two are not redundant: D1 under the principal determination produces a perfectly confident
+  // complex number for a real integral, and Pass 5 reads the residue sum and the piece limits and
+  // knows nothing about whether the contour was legal — so there is no point spending the solve,
+  // and the LEGALITY row's claim is already the best sentence available.
   const illegal = legalityRefusal(r.run.ledger);
   if (illegal !== undefined) {
     return {
       ok: false,
       run: r.run,
-      reason: `${family.id}: LEGALITY refuses — ${illegal.claim}${illegal.repair === undefined ? "" : ` (${illegal.repair})`}`,
+      reason: refusalSentence(family, { ...illegal, constraint: "LEGALITY" }),
     };
   }
 

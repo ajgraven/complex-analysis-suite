@@ -15,6 +15,7 @@
 // mistakes to be hidden. `Σ Δz` closing visibly to zero on a closed contour is free, immediate, and
 // makes the point that what is being summed is a product, not a displacement.
 import { arcLength, pointAt, type Cx, type Resolved } from "../../kernel/geom.js";
+import { valueRefusal, type LedgerResult } from "../ledger.js";
 import type { ContourIntegral, PathFn } from "./integrate.js";
 import type { CutSide } from "./model.js";
 
@@ -137,6 +138,12 @@ export function accumulate(
  * through a double pole cheerfully reports −376.98i. Refusing the integral while still showing a
  * partial sum beside it would hand the reader the very number the refusal exists to withhold.
  *
+ * **And `integral.value === undefined` was only half of that rule** (2026-09-20 review). A LEGALITY
+ * refusal leaves the quadrature perfectly happy — a circle crossing a branch cut with no side
+ * declared integrates to `6.283005874i` and the result card prints `⚠ Refused` — so the trail went
+ * on being drawn, and its readout ended at the number the card had just withheld. The ledger is
+ * asked here, through {@link valueRefusal}, so the picture and the value are refused together.
+ *
  * Living here rather than in the view is the point: the rule is then covered by the engine's tests
  * instead of resting on every future panel remembering to ask.
  */
@@ -144,6 +151,13 @@ export function accumulateForIntegral(
   f: PathFn,
   pieces: readonly Resolved[],
   integral: ContourIntegral,
+  /**
+   * The ledger, or `null` where the caller has none.
+   *
+   * `null` is not "no objection": it is the older, narrower rule, kept for a caller that genuinely
+   * has not run the ledger. Every caller in the app passes one.
+   */
+  ledger: LedgerResult | null,
   steps?: number,
   /**
    * Each piece's declared `side`, parallel to `pieces`.
@@ -156,5 +170,6 @@ export function accumulateForIntegral(
   sides?: readonly (CutSide | undefined)[],
 ): Accumulation | null {
   if (integral.value === undefined) return null;
+  if (valueRefusal(integral, ledger) !== null) return null;
   return accumulate(f, pieces, steps, sides);
 }
