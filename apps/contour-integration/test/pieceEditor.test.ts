@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mountShell2, type Shell2Handle } from "../src/shell/app.js";
 import { roleLabel } from "../src/engine/vocabulary.js";
 import { semicircleTemplate } from "../src/engine/contour/templates.js";
+import { decodeShell, encodeShell } from "../src/shell/viewState.js";
 
 const mounted: Shell2Handle[] = [];
 afterEach(() => {
@@ -310,11 +311,14 @@ describe("every edit is one undo entry", () => {
 });
 
 describe("the contour that is edited is the SANDBOX's", () => {
-  it("drops the template recipe, because an edited list is not that template any more", () => {
-    // `viewState.ts` rebuilds a contour from its recipe and verifies it before minting a link. A
-    // recipe kept past an edit would rebuild the TEMPLATE — so the link would be refused rather
-    // than wrong, which is still a capability lost for no reason. `reverseContour` keeps its recipe
-    // and is the contrast: the same template at the same parameters, walked the other way.
+  it("KEEPS the template recipe through an annotation edit, and drops it on a structural one", () => {
+    // **Revised at step 4.4, and measuring is why.** 4.3 cleared `contourSource` on every edit, on
+    // the reading that an edited list is not that template any more. That is true of a STRUCTURAL
+    // edit and false of a rename: a role or a name moves no point, so the recipe still rebuilds the
+    // curve exactly and the codec carries the two annotations as a diff on top of it. Clearing it
+    // cost the link entirely — `penPath` refuses a contour whose ids are not the pen's, so a
+    // renamed template had no serialisation at all — and cost the template picker its own selection
+    // and the drill its menu match, both of which read this field.
     const { root, app } = mount();
     expect(app.currentState().contourSource?.template).toBe("semicircle");
     toolIn(rowOf(root, "diameter"), "rename").click();
@@ -322,10 +326,62 @@ describe("the contour that is edited is the SANDBOX's", () => {
     if (box === null) return;
     box.value = "the base";
     box.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-    expect(app.currentState().contourSource).toBeNull();
-    // The parked sandbox contour follows, so leaving for a record and coming back does not undo
-    // the edit.
+    expect(app.currentState().contour.pieces[0].name).toBe("the base");
+    expect(app.currentState().contourSource?.template).toBe("semicircle");
+    // The parked sandbox contour follows, so leaving for a record and coming back keeps the edit.
     expect(app.currentState().sandboxContour?.pieces[0].name).toBe("the base");
+    // A role is the same kind of change and keeps it too.
+    const select = rowOf(root, "arc").querySelector<HTMLSelectElement>("select.pieceRole");
+    if (select === null) return;
+    select.value = "L2";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(app.currentState().contourSource?.template).toBe("semicircle");
+
+    // **And the contrast, over ALL FOUR structural operations.** Without it the claim above would
+    // pass on an app that had simply stopped clearing the field — and asserting one operation would
+    // leave the other three free to keep a recipe that no longer rebuilds them, which is a template
+    // picker showing `keyhole` for a contour that is not one. The partition is the rule, so the test
+    // is the partition.
+    //
+    // On the KEYHOLE, because `reversePiece` applies to a full turn and to nothing else — reversing
+    // any other piece swaps endpoints its neighbours still want, so the operation refuses and
+    // `editPieces` commits nothing. The keyhole is the one template with four pieces, two of them
+    // circles; on a semicircle the reverse case would silently be testing a refusal.
+    for (const [what, edit] of [
+      ["insert", (a: Shell2Handle) => a.actions().insertPiece("upper", "segment")],
+      ["delete", (a: Shell2Handle) => a.actions().deletePiece("upper")],
+      ["move", (a: Shell2Handle) => a.actions().movePiece("upper", 1)],
+      ["reverse", (a: Shell2Handle) => a.actions().reversePiece("outer")],
+    ] as const) {
+      const { app: fresh } = mount();
+      fresh.actions().setTemplate("keyhole");
+      expect(fresh.currentState().contourSource?.template).toBe("keyhole");
+      const before = fresh.currentState().contour;
+      edit(fresh);
+      expect(fresh.currentState().contour, `the ${what} was refused, so the case is vacuous`).not.toBe(before);
+      expect(fresh.currentState().contourSource, `${what} kept the recipe`).toBeNull();
+    }
+  });
+
+  it("puts a RENAMED template contour in a link, which is what keeping the recipe buys", () => {
+    // The consequence, at the surface a reader meets: step 4.3 left an edited template contour with
+    // no permalink at all, because the recipe was gone and `penPath` refuses a contour whose pieces
+    // are not the pen's. Asserted through `encodeShell` rather than through the button, so the
+    // refusal's own reason is visible when it comes back.
+    const { root, app } = mount();
+    toolIn(rowOf(root, "diameter"), "rename").click();
+    const box = rowOf(root, "diameter").querySelector<HTMLInputElement>("input.pieceRename");
+    if (box === null) return;
+    box.value = "the base";
+    box.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    const e = encodeShell(app.currentState());
+    expect(e.ok, e.ok ? "" : e.reason).toBe(true);
+    if (!e.ok) return;
+    const back = decodeShell(e.hash);
+    expect(back?.ok).toBe(true);
+    if (back === null || !back.ok) return;
+    expect(back.state.contour.pieces[0].name).toBe("the base");
+    expect(back.state.contourSource?.template).toBe("semicircle");
   });
 
   it("leaves the template's own pieces alone until something is edited", () => {

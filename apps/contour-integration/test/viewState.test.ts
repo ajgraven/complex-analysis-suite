@@ -69,6 +69,18 @@ function payloadOf(hash: string): Record<string, unknown> {
   return env.state as Record<string, unknown>;
 }
 
+/**
+ * Put a rewritten state object back into a hash, in the SAME alphabet {@link payloadOf} read.
+ *
+ * `@cas/interchange` uses base64url, so a `btoa` round trip would differ from the codec's own the
+ * moment a payload carried a `+` or a `/` — which is a test that depends on its fixture's bytes.
+ */
+function rehash(hash: string, state: Record<string, unknown>): string {
+  const env = JSON.parse(atob(hash.slice(4).replace(/-/g, "+").replace(/_/g, "/"))) as Record<string, unknown>;
+  const json = JSON.stringify({ ...env, state });
+  return `#vs=${btoa(json).replace(/\+/g, "-").replace(/\//g, "_")}`;
+}
+
 /** Encode, decode into a FRESH state, and hand back both the decoded state and its hash. */
 function roundTrip(s: ShellState): { state: ShellState; hash: string } {
   const enc = encodeShell(s);
@@ -459,12 +471,69 @@ describe("a link that cannot be honoured refuses BY NAME", () => {
     expect(ok.ok, ok.ok ? "" : ok.reason).toBe(true);
   });
 
-  it("a drawn contour whose pieces carry ROLES — because the wire cannot hold them yet", () => {
-    // M8 step 4.2. The pen carries roles now, so a drawn contour can BE an argument; the wire form
-    // that carries them is step 4.4. `sameShape` compares geometry and nothing else, so a link
-    // minted today would VERIFY perfectly and open the same curve with every piece `free` — the
-    // reader's argument gone, and no sign it was ever there. Refusing is M7.2's own posture, and
-    // the refusal is what says which step has to come next.
+  it("a role this build does not have, and a lemma on a role that cannot hold one", () => {
+    // M8 step 4.4. The two refusals that make the annotation maps a correctness surface rather than
+    // a bag of strings: a role the build cannot honour, and a claim the MODEL cannot hold. The
+    // second is the sharper one — `setRole` drops a lemma from a non-`vanish` piece silently and is
+    // right to, so a link saying `"target:L2"` would open with the lemma gone and nothing to say it
+    // had been there. Checked before `setRole` ever sees it.
+    // Built by minting a real link and REWRITING its contour object, so everything around the two
+    // maps is exactly what the codec itself produces — a hand-built envelope would be testing this
+    // file's idea of the format.
+    const wire = (c: Record<string, unknown>): string => {
+      const drawn = penContour({ nodes: [{ at: [-1, -1] }, { at: [1, -1] }, { at: [0, 1] }], closed: true });
+      const e = encodeShell({ ...base(), contour: drawn, contourSource: null, sandboxContour: drawn });
+      if (!e.ok) throw new Error(e.reason);
+      const state = payloadOf(e.hash);
+      state.c = { ...(state.c as Record<string, unknown>), ...c };
+      return rehash(e.hash, state);
+    };
+    const unknownRole = decodeShell(wire({ r: { "0": "hypotenuse" } }));
+    expect(unknownRole?.ok).toBe(false);
+    if (unknownRole !== null && !unknownRole.ok) {
+      expect(unknownRole.reason).toContain("hypotenuse");
+      expect(unknownRole.reason).toContain("this build does not have");
+    }
+    const lemmaOnTarget = decodeShell(wire({ r: { "0": "target:L2" } }));
+    expect(lemmaOnTarget?.ok).toBe(false);
+    if (lemmaOnTarget !== null && !lemmaOnTarget.ok) {
+      expect(lemmaOnTarget.reason).toContain("only a vanishing piece");
+    }
+    // A lemma this build does not know, on a role that CAN hold one — the case the role check above
+    // cannot reach, and the one a future lemma id would arrive as.
+    const unknownLemma = decodeShell(wire({ r: { "0": "vanish:L9" } }));
+    expect(unknownLemma?.ok).toBe(false);
+    if (unknownLemma !== null && !unknownLemma.ok) {
+      expect(unknownLemma.reason).toContain("L9");
+      expect(unknownLemma.reason).toContain("not a lemma this build knows");
+    }
+    // An empty name. `renamePiece` refuses one by returning the contour, so without this check the
+    // link would open with the ORIGINAL name and no sign that it had asked for anything else —
+    // silence where a refusal belongs, which is the one outcome this file rules out.
+    for (const blank of ["", "   "]) {
+      const empty = decodeShell(wire({ n: { "0": blank } }));
+      expect(empty?.ok, `'${blank}' was accepted`).toBe(false);
+      if (empty !== null && !empty.ok) expect(empty.reason).toContain("empty string");
+    }
+    // Out of range, which is what an index-keyed map has instead of an id.
+    const noSuchPiece = decodeShell(wire({ r: { "9": "target" } }));
+    expect(noSuchPiece?.ok).toBe(false);
+    if (noSuchPiece !== null && !noSuchPiece.ok) expect(noSuchPiece.reason).toContain("piece 9");
+    // **And the pairing**: the same wire with a role the build DOES have decodes, so the three
+    // refusals are about what was written and not about the shape carrying them.
+    const fine = decodeShell(wire({ r: { "0": "target", "2": "vanish:L2" } }));
+    expect(fine?.ok, fine !== null && !fine.ok ? fine.reason : "").toBe(true);
+    if (fine !== null && fine.ok) {
+      expect(fine.state.contour.pieces[0].role).toBe("target");
+      expect(fine.state.contour.pieces[2].lemma).toBe("L2");
+    }
+  });
+
+  it("carries a DRAWN argument's roles, names and all — M8 step 4.4", () => {
+    // Step 4.2 refused this link by name, because `sameShape` compares geometry and nothing else:
+    // a link minted then would have VERIFIED perfectly and opened the same curve with every piece
+    // back at `free`, the reader's argument gone and no sign it had been there. The refusal was the
+    // signal; this is the answer to it.
     const drawn = penContour({
       nodes: [
         { at: [-1, -1], role: "target" },
@@ -473,21 +542,50 @@ describe("a link that cannot be honoured refuses BY NAME", () => {
       ],
       closed: true,
     });
-    const e = encodeShell({ ...base(), contour: drawn, contourSource: null, sandboxContour: drawn });
-    expect(e.ok).toBe(false);
-    if (!e.ok) {
-      expect(e.reason).toContain("2 of its pieces");
-      expect(e.reason).toContain("argument stripped out");
+    const named = { ...drawn, pieces: drawn.pieces.map((q, i) => (i === 1 ? { ...q, name: "the reader's own words" } : q)) };
+    const e = encodeShell({ ...base(), contour: named, contourSource: null, sandboxContour: named });
+    expect(e.ok, e.ok ? "" : e.reason).toBe(true);
+    if (!e.ok) return;
+    const back = decodeShell(e.hash);
+    expect(back?.ok).toBe(true);
+    if (back === null || !back.ok) return;
+    // Piece by piece, because the diff is keyed by INDEX and an off-by-one would still round-trip
+    // the SET of roles while attaching each to the wrong piece.
+    expect(back.state.contour.pieces.map((q) => `${q.role}${q.lemma ?? ""}|${q.name}`)).toEqual(
+      named.pieces.map((q) => `${q.role}${q.lemma ?? ""}|${q.name}`),
+    );
+  });
+
+  it("bounds an OPEN path's indices by its PIECES, which it has one fewer of than vertices", () => {
+    // **The refusal has to name the reason, not only refuse.** A three-vertex open path is two
+    // pieces, so index 2 is out of range — but bounding by the VERTEX count instead accepts it, and
+    // the link then fails a few lines later with "could not be rebuilt", which blames the geometry
+    // for a fault in the annotation map. Measured: the closed case cannot tell the two bounds apart,
+    // because a closed path has exactly as many pieces as vertices.
+    const open = penContour({ nodes: [{ at: [-1, -1] }, { at: [1, -1] }, { at: [0, 1] }], closed: false });
+    expect(open.pieces).toHaveLength(2);
+    const e = encodeShell({ ...base(), contour: open, contourSource: null, sandboxContour: open });
+    expect(e.ok, e.ok ? "" : e.reason).toBe(true);
+    if (!e.ok) return;
+    const state = payloadOf(e.hash);
+    state.c = { ...(state.c as Record<string, unknown>), r: { "2": "target" } };
+    const back = decodeShell(rehash(e.hash, state));
+    expect(back?.ok).toBe(false);
+    if (back !== null && !back.ok) {
+      expect(back.reason).toContain("piece 2");
+      expect(back.reason).toContain("has 2");
+      expect(back.reason, "the refusal blamed the geometry").not.toContain("could not be rebuilt");
     }
-    // **And the pairing**: the SAME curve with no role assigned links perfectly, so the refusal is
-    // about the roles and not about the shape. Without this the test would pass on a codec that had
-    // simply stopped encoding drawn contours.
-    const bare = penContour({
-      nodes: [{ at: [-1, -1] }, { at: [1, -1] }, { at: [0, 1] }],
-      closed: true,
-    });
-    const okBare = encodeShell({ ...base(), contour: bare, contourSource: null, sandboxContour: bare });
-    expect(okBare.ok).toBe(true);
+  });
+
+  it("costs NOTHING when nothing is annotated, so every link minted before step 4.4 is unchanged", () => {
+    // The diff rule, measured rather than asserted: a contour whose roles and names are exactly what
+    // its own recipe rebuilds carries neither map, so the bytes are the bytes they always were.
+    const bare = penContour({ nodes: [{ at: [-1, -1] }, { at: [1, -1] }, { at: [0, 1] }], closed: true });
+    const e = encodeShell({ ...base(), contour: bare, contourSource: null, sandboxContour: bare });
+    expect(e.ok).toBe(true);
+    if (!e.ok) return;
+    expect(Object.keys(payloadOf(e.hash).c as Record<string, unknown>).sort()).toEqual(["v"]);
   });
 });
 

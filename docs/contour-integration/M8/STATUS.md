@@ -152,9 +152,23 @@ changed.
   spelling could be mutated** — the split's precedence on the stage, and `"edit-step"`'s exception
   in `undo.ts`, whose guard and whose window-close have different cases and were each satisfying
   the other's test.
-  **Next execution action: step 4.4** (the wire form carries roles — `PenContourWire` gains `r` and
-  `n`, a structurally edited template is serialised as a pen wire, and the round-trip-by-verdict
-  test gains edited contours).
+  **4.4a is done — THE WIRE CARRIES THE ARGUMENT, and the step SPLIT because measuring the plan's
+  own carrier falsified it.** Both wire forms gain `r` (piece index → `role` or `role:lemma`) and
+  `n` (index → name), diffed against what the recipe itself rebuilds, so a contour nobody has
+  annotated costs zero bytes and every link minted before this step is byte-identical. `editPieces`
+  now KEEPS `contourSource` for the two operations that move no point, which is what 4.3 had got
+  wrong: it cleared the recipe on every edit, so renaming one piece of a keyhole left the reader
+  with **no link at all**. The plan's serialisation for a *structurally* edited template — carry it
+  as a pen wire — changes the ledger for **four of the ten templates**, because a full-turn arc has
+  a zero-length chord that no bulge can express and an arc's centre comes back 2.2e-16 off the
+  origin where `arcRadius` demands exactly zero; so that half is **4.4b**, and the measurement
+  points it at an ops list on the recipe rather than at vertices. Six findings; the one that
+  matters beyond this file is that committing a rename **threw on every Enter and every Escape** —
+  Chromium fires `blur` on a removed element synchronously inside `patch`, so the handler re-entered
+  the renderer — which no jsdom test could see and the whole app suite stayed green through.
+  **Next execution action: step 4.4b** (the structural half — a template's deletions, insertions,
+  reorders, reversals and divisions as an ops list on the recipe, which keeps the parameters and the
+  exactly-centred arcs a pen wire loses).
   **Step 1.12 is done — THE CUTOVER.** `main.ts` stops choosing, the old `src/shell/app.ts` (3,700
   lines), `src/ui/app.css` and four of its test files are deleted, and `src/shell2/` has BECOME
   `src/shell/`. [`parity.md`](parity.md) is complete. The parity sweep found two capabilities the new
@@ -185,6 +199,7 @@ changed.
 
 | date | step | commit | notes |
 |---|---|---|---|
+| 2026-09-20 | **4.4a** | (this commit) | **THE WIRE FORM CARRIES ROLES — and the step split, because measuring the plan's own carrier falsified it.** `TemplateContourWire` and `PenContourWire` both gain `r` (piece index → `role` or `role:lemma`) and `n` (index → name), carried as a DIFF against `bareRecipe(wire)` — one rule for both forms, since `penContour` assigns every piece `PEN_ROLE` where a template assigns its own — so a contour nobody annotated carries neither map and every link minted before this step is byte-identical. Measured: a keyhole is 68 characters plain, 118 with one 24-character name and 140 with all four pieces re-roled; a twelve-vertex drawn path 674 and 720 with two roles. **4.3 had left every edited template contour with NO LINK AT ALL** — it cleared `contourSource` on every edit, and `penPath` refuses a contour whose ids are not the pen's, so a rename produced *"this contour came from neither a template nor the pen"*; `editPieces` now keeps the recipe for the two operations that move no point, which also gives the Contour card's template `<select>` and the drill's menu match their field back. **The plan's pen-wire carrier for a STRUCTURALLY edited template changes the ledger for four of the ten templates** — a full-turn arc has a zero-length chord no bulge can express (`circle`'s only piece becomes a degenerate segment) and an arc's centre returns 2.2e-16 off the origin where `arcRadius` demands exactly zero — so that half is **4.4b**, pointed at an ops list on the recipe. The decoder refuses by name an unknown role, an unknown lemma, an out-of-range index, an empty name and — the sharp one — **a lemma on a role that cannot hold one**, because `setRole` drops it silently and is right to. Also: committing a rename **threw on every Enter and every Escape** (`NotFoundError`, Chromium firing `blur` inside `patch`, invisible to jsdom and to a green app suite), fixed by the shell's own no-op rule and pinned by a browser test measured to fail without it; and `reverseContour`'s comment has said the opposite of its code since the cutover. Sweep: **MUTSCORE**. Browser-verified at 1440x950 (an annotated template link reopens with identical piece rows, identical Result card and the template picker still reading `semicircle`), app browser suite **20 files / 220 tests**, full gate green: **586 files / 6,459 tests** |
 | 2026-09-20 | **4.3** | (this commit) | **THE LIST EDITOR, AND THE CURVE DIVIDED.** Seven actions on the Contour card's rows — a role `<select>`, a status glyph, rename in place, delete, insert, reverse and Alt+↑/↓ reorder — over `engine/contour/edit.ts`'s pure operations, plus an eighth operation `splitPiece` reached by **Shift-dragging the curve**, which inserts the vertex and drags it in ONE gesture and ONE undo entry. **The menu is four vanishing lemmas and two known limits, not the plan's eight**: measured at 4.1, `L7` is the `reproduces` ROLE rather than a bound, `L8` is an identity about the whole integral, and the strip/square sides and the branch/log arcs are `L1`/`L2` dispatched by geometry. A division's count rule **has no cases** (always `n + 1`) because the halves share the very `PointSpec` or `theta` they meet at; a segment's join point is SYMBOLIC (`(1−t)·a + t·b`, which at `N = 9` sits where a frozen literal would be **7.0 units off the side**), and an arc is divided **on its own circle** rather than at the pointer, because `arcRadius` refuses any centre that is not exactly `(0,0)` and a new circle would silently destroy a vanishing arc's `≤` — at the cost of up to 11 px, 0.073 units at the default camera, which the drag makes recoverable. **A role the ledger DECIDES is inherited by both halves; a role it takes ON FAITH is dropped to `free`** — so dividing a `residue` circle changes no number and dividing the target stops the app reporting one. Undo gains `"edit-step"`, because rule 7 coalesces by CHANGED FIELD NAMES and every contour edit writes the same three fields, so two deletions inside 800 ms would leave one press of Ctrl+Z to bring back neither. Eleven findings, including that the commonest state in the app had no entry in the role menu, that `cycleGrab` had been reading LaTeX aloud since 3.6 in the one surface that pass could not reach, and that **the rename box's Escape guard was documented as protecting the pen and the modals when it protects neither** — both handlers are outside the box's ancestry, and the test aimed at the pen passed with the line removed. Sweeps: **13/13 with one equivalent** on the shell half (both undo mutants and the Escape mutant closed on a second pass, each by a test that had been pinning the outcome without the reason) and **39 mutants — 35 killed by the suite, 1 by `tsc`, 3 equivalents** on the stage half. Browser-verified at 1440x950 (cursor `grab` → `cell` under Shift; one Shift-drag takes the default circle to two pieces), axe clean in the sandbox and with a rename box open, app browser suite **19 files / 218 tests**, full gate green: **586 files / 6,455 tests** |
 | 2026-09-19 | **4.2** | (this commit) | **A DRAWN CONTOUR THAT IS AN ARGUMENT.** `PenNode` carries a `role` and a `lemma`; `penContour` emits them (a lemma only onto a `vanish` piece, the rule `setRole` enforces from the other side) and `penPath` reads them back off the piece — **the one field of a node that is carried rather than derived**, because everything else is recovered from the curve and a role has no geometric shadow. **The step's own premise turned out false**: the plan says the arc readers *read template arcs only*, and measuring first showed a drawn upper semicircle already closing and reporting π with the template's certificate sentence for sentence — `LedgerInput` carries RESOLVED geometry, so a bound's hypotheses never ask where a piece came from. What a drawn arc actually lacked was a way to BE centred at the origin: a hand drag of the apex to 7.6 instead of 8 puts the centre at `(0, 0.4105)`, **5 % of the radius**, and `arcRadius` refuses it — rightly. So the pen grew two named snaps, *the reflection of a vertex in the origin* and *an arc centred at the origin*, the second of which builds the arc and applies `arcRadius`'s own test before firing. Measured over 100,000 random chords: antipodal endpoints (what the first snap produces) give an exactly-zero centre **100,000 times of 100,000**; merely equidistant ones, 26 % and a property of the ROOT; equidistant to rounding, impossible. The two snaps are one feature. The codec **refuses** a link from a role-bearing drawn contour, because `sameShape` compares geometry alone and the link would open the same curve with the argument stripped out — M7.2's posture, and the refusal names step 4.4. `penBow` was rebuilding its node as `{at, bulge}` and would have discarded the new fields silently; found by the sweep. **And the gate harness was reporting the BUILD's exit code**, so steps 3.6 and 4.1 were pushed with `pnpm lint` red on a shadowed helper — the two rows are corrected above and the harness now reports each phase. Sweeps: **5/5** on the pen and codec half, **15/15** on the snaps. Full gate green with lint, typecheck, test and build each reported separately: **585 files / 6,412 tests** |
 
@@ -269,6 +284,76 @@ changed.
 | 2026-09-15 | **0.5b-ii** | 573fb8c | the five rules through `kernel/bounds/*`, the three theorem identities, `derivation.ts`'s solve stage and `solveTarget.ts`; `latex` on the solved value; 65 wording-pinned tests updated; 191 → 152 flagged |
 
 ## Findings (things learned while executing; each names its step)
+
+- **(4.4) THE PLAN'S OWN CARRIER FOR A STRUCTURALLY EDITED TEMPLATE LOSES THE ARGUMENT, AND THE
+  MEASUREMENT IS WHY THE STEP IS SPLIT.** §4.4 says an edited template is serialised as a pen wire
+  — "its vertices and bulges, since the recipe no longer rebuilds it". Run against the ten
+  templates, that conversion changes the LEDGER for **four of them**, which is the step's own
+  Done-when inverted. Two causes, neither float noise. **A full-turn arc has a zero-length chord**,
+  so a bulge — one number, which is exactly why 4.2 chose it — cannot express it at all: `circle`'s
+  single piece comes back as a degenerate SEGMENT, as does `keyhole`'s outer circle, and `circle`'s
+  CATCH row goes from `satisfied` to `failed`. And **an arc's centre comes back off the origin** —
+  2.2e-16 for `wedge`, 8.9e-16 for `indented`'s outer arc — where `arcRadius` refuses any centre
+  that is not exactly `(0,0)`, so `wedge`, `keyhole` and `indented` each lose a KILL row to
+  `unknown` and all four stop closing. So this step carries the ANNOTATIONS (the step's own title:
+  the wire form carries roles) and a structural edit keeps refusing by name; the structural half is
+  **4.4b**, and the measurement points it at an ops list on the recipe rather than at vertices,
+  because that keeps the parameters, the symbolic geometry and the exactly-centred arcs.
+
+- **(4.4) AFTER 4.3, EVERY EDIT OF A TEMPLATE CONTOUR LEFT THE READER WITH NO LINK AT ALL — A
+  RENAME INCLUDED.** Measured first, and it is worse than it reads: 4.3 cleared `contourSource` on
+  every edit, `contourOut` then takes the pen branch, and `penPath` refuses any contour whose piece
+  ids are not the pen's — so renaming one piece of a keyhole produced *"this contour came from
+  neither a template nor the pen"*. The repair is not a special case but a distinction the field
+  already implied: **a role and a name move no point**, so `translate(TEMPLATES[t].build(), shift)`
+  still describes the curve exactly and only the two things a rebuild cannot recover are carried.
+  `editPieces` keeps the recipe for those two operations and clears it for the four structural
+  ones. Two surfaces nobody had connected to this come back with it: the Contour card's template
+  `<select>` reads `contourSource?.template` and had gone blank, and the drill's menu match reads
+  the same field.
+
+- **(4.4) THE ANNOTATIONS ARE A DIFF AGAINST THE REBUILD, WHICH IS ONE RULE FOR BOTH WIRE FORMS.**
+  Not against the template's fresh build — the two differ for the pen wire, where `penContour`
+  assigns every piece `PEN_ROLE` — so diffing against `bareRecipe(wire)` makes one rule cover both
+  and makes "nothing annotated" cost exactly nothing: a drawn contour with no roles carries `{v}`
+  and nothing else, so every link minted before this step is byte-identical. Measured: a keyhole is
+  68 characters plain, 118 with a 24-character name on one piece and 140 with all four pieces
+  re-roled; a twelve-vertex drawn path is 674 and 720 with two roles. Roughly 18–23 characters a
+  piece, against research 07 §6's ~2 kB.
+
+- **(4.4) `setRole` DROPS A LEMMA FROM A NON-`vanish` PIECE SILENTLY, AND IS RIGHT TO** — so the
+  codec has to refuse `"target:L2"` before `setRole` ever sees it. A lemma is a statement about how
+  a VANISHING piece is disposed of; on a `target` there is nothing for it to be about. Applying the
+  link and letting the model clean up would open the same curve with the reader's lemma gone and
+  nothing to say it had been there, which is the failure this whole file exists to prevent — so the
+  refusal names the piece, the lemma and the role, and the decoded roles then go through `setRole`
+  and `renamePiece` rather than being written as fields, so a contour that arrived in a link obeys
+  the same invariants as one a reader edited.
+
+- **(4.4) A `<select>`'s OWN CHANGE THREW ON EVERY ENTER AND EVERY ESCAPE, AND ONLY A BROWSER COULD
+  SEE IT.** Committing a rename re-renders, the render removes the focused `<input>`, **Chromium
+  fires `blur` on the removed element synchronously inside `patch`**, and the blur handler's own
+  `setRenaming(null)` started a second render that removed the node the first was still holding:
+  `NotFoundError: The node to be removed is no longer a child of this node`, thrown out of an event
+  handler, while the rename itself went through and the whole app suite stayed green. **jsdom does
+  not fire blur on removal**, so no jsdom test could have reached it. The fix is the shell's own "an
+  edit that changes nothing changes nothing" rule reaching the one action with no commit to apply it
+  — `setRenaming` returns early when the value is the one it holds — and it is pinned by a browser
+  test that reads `window.onerror`, measured to fail with the guard removed and to pass with it.
+  **`dom.ts` is deliberately NOT hardened to tolerate the re-entrancy as well**: guarding the
+  removal with `node.parentNode === parent` also silences it, which would be one rule spelled twice
+  and neither spelling then mutable — step 4.3's finding, in the next step — and `patch` throwing is
+  the only thing that put this in front of anyone at all, exactly as its duplicate-key `throw` is
+  meant to.
+
+- **(4.4) A COMMENT AND ITS CODE HAD SAID OPPOSITE THINGS SINCE THE CUTOVER.** `reverseContour`'s
+  comment reads *"`contourSource` is kept: a reversal is still the same template at the same
+  parameters"*; the line below it has always written `contourSource: null`. Clearing is the right
+  half — a reversal changes the piece order and every piece's direction, so the recipe does not
+  rebuild it and the verification would refuse a link minted from one — and what the stale comment
+  was right about is the cost: a reversed template contour has no link at all. The repair is a wire
+  flag (a reversal is one bit, and commutes with both the parameters and the shift) rather than a
+  lie about the recipe, and it belongs with 4.4b's other structural edits.
 
 - **(4.3) THE ROLE MENU IS NOT THE PLAN'S LIST, AND STEP 4.1 IS WHY.** The plan offers *ML estimate
   / Jordan's lemma / large-arc limit / branch arc / log arc / wedge bound / strip side / square

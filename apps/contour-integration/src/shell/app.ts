@@ -465,11 +465,30 @@ export function mountShell2(root: Element): Shell2Handle {
    * the identity test below is the whole of "was this edit legal?" — and a refused edit commits
    * nothing at all rather than pushing an undo entry for a state that did not move. That is rule 4
    * of the undo stack arriving one layer up, where it costs one line instead of a special case.
+   *
+   * **`keeps` is whether the recipe SURVIVES, and step 4.4 measured why it is not one answer.** A
+   * role or a name moves no point, so `translate(TEMPLATES[t].build(), shift)` still describes the
+   * curve exactly and `viewState.ts` carries the two annotations on top of it — which keeps the
+   * parameters, the template picker's own selection and the drill's menu match, all of which read
+   * `contourSource`. A structural edit is different in kind: the piece list is no longer the one
+   * that recipe builds, and the measurement is unambiguous about what carrying it as vertices
+   * instead would cost — a full-turn arc has a zero-length chord, so the bulge cannot express it at
+   * all and `circle`'s only piece becomes a degenerate segment, while an arc's centre comes back
+   * 2.2e-16 off the origin and `arcRadius` refuses anything that is not exactly there. Four of the
+   * ten templates lose ledger rows that way. So a structural edit clears the recipe and says so,
+   * and the wire form that carries one is its own step.
    */
-  function editPieces(op: (c: Contour) => Contour, why: CommitReason = "edit-step"): void {
+  function editPieces(
+    op: (c: Contour) => Contour,
+    why: CommitReason = "edit-step",
+    keeps: "the recipe" | "nothing" = "nothing",
+  ): void {
     const next = op(state.contour);
     if (next === state.contour) return;
-    commit({ ...state, contour: next, sandboxContour: next, contourSource: null }, why);
+    commit(
+      { ...state, contour: next, sandboxContour: next, contourSource: keeps === "the recipe" ? state.contourSource : null },
+      why,
+    );
   }
 
   /**
@@ -546,9 +565,14 @@ export function mountShell2(root: Element): Shell2Handle {
       );
       controller?.fitContour();
     },
-    // `contourSource` is kept: a reversal is still the same template at the same parameters, and
-    // `viewState.ts` rebuilds from the recipe, so DROPPING it would refuse to mint a link for a
-    // contour that has one. The recipe's own verification is what would catch it if that were wrong.
+    // **The comment here said the recipe is KEPT, and the line below has always cleared it** —
+    // found at step 4.4, reading the two together. Clearing is the right half: a reversal changes
+    // the piece order and every piece's direction, so `translate(TEMPLATES[t].build(), shift)` does
+    // not rebuild it and the recipe's own verification would refuse a link minted from one. What
+    // the stale comment was right about is the cost — a reversed template contour has no link at
+    // all, because `penPath` refuses a contour whose ids are not the pen's. The repair is a wire
+    // flag rather than a lie about the recipe (a reversal is one bit, and commutes with both the
+    // parameters and the shift), and it belongs with the other structural edits.
     reverseContour: () => {
       const flipped = reverseContour(state.contour);
       commit({ ...state, contour: flipped, sandboxContour: flipped, contourSource: null }, "edit");
@@ -557,24 +581,22 @@ export function mountShell2(root: Element): Shell2Handle {
     // ── the piece list, editable — M8 step 4.3 ──────────────────────────────────────────────
     //
     // **One helper and six callers**, because what is the same about them is everything except the
-    // operation: each applies a pure function from `engine/contour/edit.ts`, each drops the
-    // template recipe, and each is its own undo entry. Writing that out six times is six places for
-    // one of them to forget the recipe — which is the bug `contourSource` exists to prevent, on the
-    // other side.
+    // operation: each applies a pure function from `engine/contour/edit.ts`, each says whether the
+    // template recipe survives it, and each is its own undo entry. Writing that out six times is
+    // six places for one of them to answer the recipe question differently — which is the bug
+    // `contourSource` exists to prevent, on the other side.
     //
-    // **`contourSource` goes to null and `reverseContour` above shows why that is not automatic.**
-    // A reversal is the same template at the same parameters, so it keeps its recipe; an edited
-    // piece list is not a template any more, and a recipe that claimed otherwise would rebuild a
-    // different contour the first time a link was opened. `viewState.ts` verifies the recipe before
-    // minting a link, so the failure would be caught — as a refused link rather than as a wrong
-    // one, which is still a capability lost for no reason.
+    // **The recipe question has TWO answers, and step 4.4 measured which is which.** A role and a
+    // name move no point, so the recipe still rebuilds the curve and the codec carries the two
+    // annotations as a diff on top of it; the other four change the piece list itself, and a recipe
+    // claiming otherwise would rebuild a different contour the first time a link was opened.
     //
     // **`"edit-step"`, not `"edit"`**: two deletions inside 800 ms are two acts, and rule 7 would
     // otherwise merge them (every contour edit changes the same fields, so `changeKey` cannot tell
     // them apart). The exception is the inline rename, which commits as an ordinary edit because
     // typing IS one adjustment continued.
-    setPieceRole: (id, role, lemma) => editPieces((c) => setRole(c, id, role, lemma)),
-    renamePiece: (id, name) => editPieces((c) => renamePiece(c, id, name), "edit"),
+    setPieceRole: (id, role, lemma) => editPieces((c) => setRole(c, id, role, lemma), "edit-step", "the recipe"),
+    renamePiece: (id, name) => editPieces((c) => renamePiece(c, id, name), "edit", "the recipe"),
     deletePiece: (id) => editPieces((c) => deletePiece(c, id)),
     insertPiece: (afterId, kind) => editPieces((c) => insertPiece(c, afterId, kind)),
     movePiece: (id, by) => editPieces((c) => moveOne(c, id, by)),
@@ -582,6 +604,24 @@ export function mountShell2(root: Element): Shell2Handle {
     // Session only, so no commit and no undo entry: opening a text box is not an edit, and an undo
     // that closed one would spend the reader's step on nothing.
     setRenaming: (id) => {
+      // **A no-op must do NOTHING, and this one was re-entering the renderer.** Found at step 4.4
+      // in a real browser: committing a rename with Enter re-renders, the render removes the input,
+      // Chromium fires `blur` on the removed element SYNCHRONOUSLY inside `patch`, and the blur
+      // handler's own `setRenaming(null)` started a second render that removed the node the first
+      // was still holding — `NotFoundError: The node to be removed is no longer a child of this
+      // node`, thrown out of an event handler on every Enter and every Escape. jsdom does not fire
+      // blur on removal, so no jsdom test could have seen it. This is the shell's own "an edit that
+      // changes nothing changes nothing" rule reaching the one action that had no commit to apply
+      // it for it.
+      //
+      // **`dom.ts` is deliberately NOT hardened to tolerate it.** Guarding the removal there with
+      // `node.parentNode === parent` also silences this, which is precisely the objection: the two
+      // fixes would be one rule spelled twice and neither could then be mutated — step 4.3's own
+      // finding, twice over — and the throw is what put this defect in front of anyone at all. A
+      // render re-entered from inside a render is a bug wherever it happens, and `patch` throwing
+      // is the only thing that says so; the duplicate-key `throw` a few lines above it is there for
+      // the same reason.
+      if (session.renaming === id) return;
       session.renaming = id;
       render2();
       // **The focus is the SHELL's business, and it has to come after the patch** — the box does not

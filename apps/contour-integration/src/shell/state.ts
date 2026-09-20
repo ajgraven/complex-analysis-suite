@@ -198,7 +198,14 @@ export interface DrillState {
   readonly stage: 1 | 2 | 3 | 4;
 }
 
-/** The recipe a sandbox contour was built from — see {@link ShellState.contourSource}. */
+/**
+ * The recipe a sandbox contour was built from — see {@link ShellState.contourSource}.
+ *
+ * **It describes the CURVE, and from step 4.4 the codec carries the rest.** A role or a name the
+ * reader changed moves no point, so this recipe still rebuilds the geometry exactly and the wire
+ * form carries the two annotations as a diff on top of it; a structural edit sets the field to
+ * `null`, because the piece list is then no longer the one this template builds.
+ */
 export interface ContourSource {
   readonly template: TemplateId;
   /** The accumulated rigid translation since the template was built. */
