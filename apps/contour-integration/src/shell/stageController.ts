@@ -16,7 +16,7 @@ import { applyBranchGrab, branchHandles, sameBranchGrab, type BranchHandle } fro
 import { nearestHandle, onContour, pieceAt, radiusDragValue, splitPiece, translateContour, type Handle } from "../engine/contour/edit.js";
 import { arcThroughBulge, bulgeFromApex, penContour } from "../engine/contour/pen.js";
 import { clampView, panBy, scale, screenToPlot, zoomAt, type View, type Viewport } from "../kernel/camera.js";
-import { pointAt, type Cx, type Resolved } from "../kernel/geom.js";
+import { isOriginCentred, pointAt, type Cx, type Resolved } from "../kernel/geom.js";
 import type { PoleReport } from "../kernel/poles.js";
 import { mathSpoken } from "./math.js";
 import { drawnContour } from "./state.js";
@@ -202,9 +202,10 @@ function originCentredBulge(from: Cx, to: Cx, current: number, tol: number): num
   for (const b of roots) {
     if (!(Math.abs(b - current) <= tol)) continue;
     const arc = arcThroughBulge(from, to, b);
-    // `arcRadius`'s test, character for character, so the two cannot come to disagree about what
-    // "centred at the origin" means. A signed zero passes both, since `-0 !== 0` is false.
-    if (arc === null || arc.center[0] !== 0 || arc.center[1] !== 0) continue;
+    // `arcRadius`'s test, THROUGH the predicate rather than spelled again — step 4.4b made it a
+    // shared function once a third reader (`penPath`, deciding whether a link may carry the claim)
+    // needed the same question answered the same way.
+    if (arc === null || !isOriginCentred({ kind: "arc", ...arc })) continue;
     return b;
   }
   return null;

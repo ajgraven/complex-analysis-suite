@@ -41,7 +41,7 @@ import { isStageMode, type StageMode } from "../ui/stage/mode.js";
 import { defaultState, offeredCorpus, type ContourSource, type DrillState, type ShellState } from "./state.js";
 import { DRILL_STAGES, taskById } from "./drill.js";
 import { TEMPLATES, type TemplateId } from "./templates.js";
-import { penContour, penPath, sameShape, STRAIGHT } from "../engine/contour/pen.js";
+import { originArc, penContour, penPath, sameShape, STRAIGHT } from "../engine/contour/pen.js";
 
 /** This app's namespace in the shared envelope. */
 const APP = "ci";
@@ -155,6 +155,15 @@ interface PenContourWire extends Annotations {
   readonly b?: Readonly<Record<string, number>>;
   /** `1` when the path is OPEN. Absent means closed, which is what a finished contour is. */
   readonly o?: 1;
+  /**
+   * The piece indices whose arc is centred EXACTLY on the origin — M8 step 4.4b.
+   *
+   * A list rather than a map, because the claim has no value: a piece either makes it or does not.
+   * See `PenNode.centred` for what it costs to leave it out — measured, a drawn semicircle that
+   * closes with a `≤` reopens from its own permalink not closing at all, because the rebuilt centre
+   * lands 8.9e-16 off and `arcRadius` demands exactly zero.
+   */
+  readonly k?: readonly number[];
 }
 
 /** Either form. The template one is unchanged, so every link minted before the pen still decodes. */
@@ -261,9 +270,11 @@ function fromRecipe(wire: ContourWire): Contour | null {
 function bareRecipe(wire: ContourWire): Contour | null {
   if (isPenWire(wire)) {
     if (wire.v.length < 2) return null;
+    const centred = new Set(wire.k ?? []);
     const nodes = wire.v.map((at, i) => {
       const bulge = wire.b?.[String(i)];
-      return bulge === undefined ? { at } : { at, bulge };
+      const mark = centred.has(i) ? { centred: true as const } : {};
+      return bulge === undefined ? { at, ...mark } : { at, bulge, ...mark };
     });
     return penContour({ nodes, closed: wire.o !== 1 });
   }
@@ -430,9 +441,33 @@ function penWireIn(
   if (c.o !== undefined && c.o !== 1) {
     return { ok: false, reason: "the drawn contour's closure flag in this link is neither absent nor 1" };
   }
+  const centred: number[] = [];
+  if (c.k !== undefined) {
+    if (!Array.isArray(c.k)) return { ok: false, reason: "the drawn contour's centred arcs in this link are not a list" };
+    for (const i of c.k as unknown[]) {
+      if (!Number.isInteger(i) || (i as number) < 0 || (i as number) >= vs.length) {
+        return { ok: false, reason: `this link centres piece ${String(i)} of a drawn contour that has no such piece` };
+      }
+      // **The claim is CHECKED, not trusted.** A piece centred on the origin has both its ends the
+      // same distance from it — that is the statement that some circle about the origin passes
+      // through both at all — and a link saying otherwise is asking for an arc that does not exist.
+      // Building the nearest thing instead would put a `≤` on geometry that cannot carry it, which
+      // is the whole reason the claim is on the wire.
+      const from = vs[i as number];
+      const to = vs[((i as number) + 1) % vs.length];
+      if (originArc(from, to, { theta0: 0, theta1: 1 }) === null) {
+        return {
+          ok: false,
+          reason: `this link says piece ${String(i)} of a drawn contour is centred at the origin, but its two ends are not the same distance from it`,
+        };
+      }
+      centred.push(i as number);
+    }
+  }
   const skeleton: PenContourWire = {
     v: vs,
     ...(Object.keys(bulges).length === 0 ? {} : { b: bulges }),
+    ...(centred.length === 0 ? {} : { k: centred }),
     ...(c.o === 1 ? { o: 1 as const } : {}),
   };
   // The piece count is asked of the REBUILD rather than of `vs`, because an open path has one more
@@ -471,12 +506,15 @@ function contourOut(
     // it had ever been there. That refusal was the signal this step exists to answer, exactly as
     // the pen's own missing serialisation was the signal before it.
     const bulges: Record<string, number> = {};
+    const centred: number[] = [];
     path.nodes.forEach((n, i) => {
       if (n.bulge !== undefined && Math.abs(n.bulge) >= STRAIGHT) bulges[String(i)] = n.bulge;
+      if (n.centred === true) centred.push(i);
     });
     const skeleton: PenContourWire = {
       v: path.nodes.map((n) => [n.at[0], n.at[1]] as const),
       ...(Object.keys(bulges).length === 0 ? {} : { b: bulges }),
+      ...(centred.length === 0 ? {} : { k: centred }),
       ...(path.closed ? {} : { o: 1 as const }),
     };
     const bare = bareRecipe(skeleton);

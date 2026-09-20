@@ -22,6 +22,19 @@ export type Resolved =
       readonly theta1: number;
     };
 
+/**
+ * Whether an arc's centre passes `arcRadius`'s own test — exactly `(0, 0)`, both components.
+ *
+ * **Exported so the three readers share one definition.** `ledger.ts` asks it to decide whether a
+ * certified bound applies, `stageController.ts`'s snap asks it to decide whether to fire, and
+ * {@link penPath} asks it to decide whether the claim is true before carrying it. Written three
+ * times, the first disagreement would be a link that promises a bound the geometry cannot carry.
+ * A signed zero passes, since `-0 !== 0` is false.
+ */
+export function isOriginCentred(g: Resolved): boolean {
+  return g.kind === "arc" && g.center[0] === 0 && g.center[1] === 0;
+}
+
 /** z(t) for t ∈ [0, 1]. */
 export function pointAt(g: Resolved, t: number): Cx {
   if (g.kind === "segment") {

@@ -166,9 +166,23 @@ changed.
   matters beyond this file is that committing a rename **threw on every Enter and every Escape** —
   Chromium fires `blur` on a removed element synchronously inside `patch`, so the handler re-entered
   the renderer — which no jsdom test could see and the whole app suite stayed green through.
-  **Next execution action: step 4.4b** (the structural half — a template's deletions, insertions,
-  reorders, reversals and divisions as an ops list on the recipe, which keeps the parameters and the
-  exactly-centred arcs a pen wire loses).
+  **4.4b is under way, and its FIRST commit is a defect that shipped in step 4.2.** Measuring the
+  structural half found something older and worse: a drawn argument that closes with a certified `≤`
+  reopens **from its own permalink not closing at all**. The link verifies — `sameShape` compares
+  sampled points at 1e-9 and the two curves agree to 1e-15 — but `penPath` reads the chord and the
+  apex back off the arc through `cos`/`sin`, so the rebuilt centre lands at `(0, 8.9e-16)` where
+  `arcRadius` demands exactly `(0, 0)`. Recomputing the bulge from the arc's own centre is an
+  improvement and not a fix (64.3% exact against 49.5% over 8,000 antipodal arcs), so
+  `PenNode.centred` joins `role` and `lemma` as a field that is CARRIED, under the rule all three
+  share: *a claim with no reliable geometric shadow is carried, not re-derived.* `originArc` honours
+  it by construction, the decoder refuses a claim whose two ends are not the same distance from the
+  origin, and `isOriginCentred` — which had three spellings, two of them comments promising to stay
+  in step — is now one function in `kernel/geom.ts`. Five findings; the one beyond this app is that
+  **nothing pinned the origin test as an EQUALITY**, so loosening it to `|c| < 1e-9` left the suite
+  green and would have re-admitted every arc the round trip was mis-centring.
+  **Next execution action: the rest of 4.4b** (the structural ops list — a template's deletions,
+  insertions, reorders, reversals and divisions carried on the recipe, which keeps the parameters and
+  the exactly-centred arcs a pen wire loses).
   **Step 1.12 is done — THE CUTOVER.** `main.ts` stops choosing, the old `src/shell/app.ts` (3,700
   lines), `src/ui/app.css` and four of its test files are deleted, and `src/shell2/` has BECOME
   `src/shell/`. [`parity.md`](parity.md) is complete. The parity sweep found two capabilities the new
@@ -199,6 +213,7 @@ changed.
 
 | date | step | commit | notes |
 |---|---|---|---|
+| 2026-09-20 | **4.4b (1/2)** | (this commit) | **THE ARC'S CENTRE IS CARRIED, BECAUSE A BULGE CANNOT HOLD IT — and the defect it fixes shipped in step 4.2.** Measured before the step's own subject was touched: the plan's figure, an upper semicircle of radius 8 drawn with 4.2's snap, reports `π` with a certified `≤` and reopens from its own permalink with `closes = false`, the KILL row at `unknown` and no target value. The link VERIFIES on the way out; what moves is the CENTRE, because `penPath` reads the chord and the apex back through `cos`/`sin`, recovers a bulge of `7.999999999999999`, and `arcThroughBulge` rebuilds the centre at `(0, 8.9e-16)` where `arcRadius` demands exactly zero. **Recomputing the bulge from the arc's own centre and radius is an improvement and NOT a fix** — 64.3% exactly centred against the apex route's 49.5% over 8,000 antipodal arcs — so `PenNode.centred` joins `role` and `lemma` as a field carried rather than derived, at one integer per arc on the wire. `originArc` writes the centre down as a literal zero and reads BOTH angles from the endpoints, taking only the discrete branch from the bulge-built arc (carrying its sweep over left the far end 3.6e-9 out against the near end's 1.6e-9), with the radius the MEAN of the two ends so neither is privileged. The decoder REFUSES a claim whose ends are not the same distance from the origin — that is the statement that such a circle exists — rather than building the nearest thing. `isOriginCentred` moves to `kernel/geom.ts` and its three spellings become one; **nothing had pinned it as an EQUALITY**, so the sweep's `|c| < 1e-9` mutant left the suite green, and it is now asserted at 1e-12, 1e-16, `Number.MIN_VALUE`, a signed-zero case and an exactly-zero control. Sweep: **11 mutants, 11 killed, no equivalents** (three closed on a second pass, two of them the same carelessness about which end the reconstruction favours). Full gate green: **586 files / 6,465 tests**; app browser suite **20 files / 220 tests** |
 | 2026-09-20 | **4.4a** | (this commit) | **THE WIRE FORM CARRIES ROLES — and the step split, because measuring the plan's own carrier falsified it.** `TemplateContourWire` and `PenContourWire` both gain `r` (piece index → `role` or `role:lemma`) and `n` (index → name), carried as a DIFF against `bareRecipe(wire)` — one rule for both forms, since `penContour` assigns every piece `PEN_ROLE` where a template assigns its own — so a contour nobody annotated carries neither map and every link minted before this step is byte-identical. Measured: a keyhole is 68 characters plain, 118 with one 24-character name and 140 with all four pieces re-roled; a twelve-vertex drawn path 674 and 720 with two roles. **4.3 had left every edited template contour with NO LINK AT ALL** — it cleared `contourSource` on every edit, and `penPath` refuses a contour whose ids are not the pen's, so a rename produced *"this contour came from neither a template nor the pen"*; `editPieces` now keeps the recipe for the two operations that move no point, which also gives the Contour card's template `<select>` and the drill's menu match their field back. **The plan's pen-wire carrier for a STRUCTURALLY edited template changes the ledger for four of the ten templates** — a full-turn arc has a zero-length chord no bulge can express (`circle`'s only piece becomes a degenerate segment) and an arc's centre returns 2.2e-16 off the origin where `arcRadius` demands exactly zero — so that half is **4.4b**, pointed at an ops list on the recipe. The decoder refuses by name an unknown role, an unknown lemma, an out-of-range index, an empty name and — the sharp one — **a lemma on a role that cannot hold one**, because `setRole` drops it silently and is right to. Also: committing a rename **threw on every Enter and every Escape** (`NotFoundError`, Chromium firing `blur` inside `patch`, invisible to jsdom and to a green app suite), fixed by the shell's own no-op rule and pinned by a browser test measured to fail without it; and `reverseContour`'s comment has said the opposite of its code since the cutover. Sweep: **MUTSCORE**. Browser-verified at 1440x950 (an annotated template link reopens with identical piece rows, identical Result card and the template picker still reading `semicircle`), app browser suite **20 files / 220 tests**, full gate green: **586 files / 6,459 tests** |
 | 2026-09-20 | **4.3** | (this commit) | **THE LIST EDITOR, AND THE CURVE DIVIDED.** Seven actions on the Contour card's rows — a role `<select>`, a status glyph, rename in place, delete, insert, reverse and Alt+↑/↓ reorder — over `engine/contour/edit.ts`'s pure operations, plus an eighth operation `splitPiece` reached by **Shift-dragging the curve**, which inserts the vertex and drags it in ONE gesture and ONE undo entry. **The menu is four vanishing lemmas and two known limits, not the plan's eight**: measured at 4.1, `L7` is the `reproduces` ROLE rather than a bound, `L8` is an identity about the whole integral, and the strip/square sides and the branch/log arcs are `L1`/`L2` dispatched by geometry. A division's count rule **has no cases** (always `n + 1`) because the halves share the very `PointSpec` or `theta` they meet at; a segment's join point is SYMBOLIC (`(1−t)·a + t·b`, which at `N = 9` sits where a frozen literal would be **7.0 units off the side**), and an arc is divided **on its own circle** rather than at the pointer, because `arcRadius` refuses any centre that is not exactly `(0,0)` and a new circle would silently destroy a vanishing arc's `≤` — at the cost of up to 11 px, 0.073 units at the default camera, which the drag makes recoverable. **A role the ledger DECIDES is inherited by both halves; a role it takes ON FAITH is dropped to `free`** — so dividing a `residue` circle changes no number and dividing the target stops the app reporting one. Undo gains `"edit-step"`, because rule 7 coalesces by CHANGED FIELD NAMES and every contour edit writes the same three fields, so two deletions inside 800 ms would leave one press of Ctrl+Z to bring back neither. Eleven findings, including that the commonest state in the app had no entry in the role menu, that `cycleGrab` had been reading LaTeX aloud since 3.6 in the one surface that pass could not reach, and that **the rename box's Escape guard was documented as protecting the pen and the modals when it protects neither** — both handlers are outside the box's ancestry, and the test aimed at the pen passed with the line removed. Sweeps: **13/13 with one equivalent** on the shell half (both undo mutants and the Escape mutant closed on a second pass, each by a test that had been pinning the outcome without the reason) and **39 mutants — 35 killed by the suite, 1 by `tsc`, 3 equivalents** on the stage half. Browser-verified at 1440x950 (cursor `grab` → `cell` under Shift; one Shift-drag takes the default circle to two pieces), axe clean in the sandbox and with a rename box open, app browser suite **19 files / 218 tests**, full gate green: **586 files / 6,455 tests** |
 | 2026-09-19 | **4.2** | (this commit) | **A DRAWN CONTOUR THAT IS AN ARGUMENT.** `PenNode` carries a `role` and a `lemma`; `penContour` emits them (a lemma only onto a `vanish` piece, the rule `setRole` enforces from the other side) and `penPath` reads them back off the piece — **the one field of a node that is carried rather than derived**, because everything else is recovered from the curve and a role has no geometric shadow. **The step's own premise turned out false**: the plan says the arc readers *read template arcs only*, and measuring first showed a drawn upper semicircle already closing and reporting π with the template's certificate sentence for sentence — `LedgerInput` carries RESOLVED geometry, so a bound's hypotheses never ask where a piece came from. What a drawn arc actually lacked was a way to BE centred at the origin: a hand drag of the apex to 7.6 instead of 8 puts the centre at `(0, 0.4105)`, **5 % of the radius**, and `arcRadius` refuses it — rightly. So the pen grew two named snaps, *the reflection of a vertex in the origin* and *an arc centred at the origin*, the second of which builds the arc and applies `arcRadius`'s own test before firing. Measured over 100,000 random chords: antipodal endpoints (what the first snap produces) give an exactly-zero centre **100,000 times of 100,000**; merely equidistant ones, 26 % and a property of the ROOT; equidistant to rounding, impossible. The two snaps are one feature. The codec **refuses** a link from a role-bearing drawn contour, because `sameShape` compares geometry alone and the link would open the same curve with the argument stripped out — M7.2's posture, and the refusal names step 4.4. `penBow` was rebuilding its node as `{at, bulge}` and would have discarded the new fields silently; found by the sweep. **And the gate harness was reporting the BUILD's exit code**, so steps 3.6 and 4.1 were pushed with `pnpm lint` red on a shadowed helper — the two rows are corrected above and the harness now reports each phase. Sweeps: **5/5** on the pen and codec half, **15/15** on the snaps. Full gate green with lint, typecheck, test and build each reported separately: **585 files / 6,412 tests** |
@@ -284,6 +299,54 @@ changed.
 | 2026-09-15 | **0.5b-ii** | 573fb8c | the five rules through `kernel/bounds/*`, the three theorem identities, `derivation.ts`'s solve stage and `solveTarget.ts`; `latex` on the solved value; 65 wording-pinned tests updated; 191 → 152 flagged |
 
 ## Findings (things learned while executing; each names its step)
+
+- **(4.4b) A DRAWN ARGUMENT THAT CLOSES REOPENED FROM ITS OWN PERMALINK NOT CLOSING, AND THE DEFECT
+  SHIPPED IN STEP 4.2.** Measured before anything was written: the plan's own figure — an upper
+  semicircle of radius 8 drawn with 4.2's snap, its base the target and its arc declaring the ML
+  estimate — reports `π` with a certified `≤`, and its link reopens with `closes = false`, the KILL
+  row at `unknown` and no target value at all. The link VERIFIES on the way out, because `sameShape`
+  compares sampled points at 1e-9 and the two curves agree to 1e-15. What moved is the CENTRE:
+  `penPath` reads the chord and the apex back off the arc through `cos`/`sin`, recovers a bulge of
+  `7.999999999999999`, and `arcThroughBulge` rebuilds the centre at `(0, 8.9e-16)` — where
+  `arcRadius` demands exactly `(0, 0)`, because every certified arc bound reasons from the reverse
+  triangle inequality on `|z| = R` about the origin. Step 4.2 gave the pen a way to BE centred and
+  4.4a put the roles on the wire; the one thing left was the fact that makes the bound apply.
+
+- **(4.4b) RECOMPUTING THE BULGE FROM THE ARC IS AN IMPROVEMENT AND NOT A FIX, WHICH IS WHY THE
+  CLAIM IS CARRIED.** The obvious repair is to stop sampling: given the arc's own centre and radius,
+  `b = k ± R` with `k = (C − M)·n`, no trig on the apex. Measured over 8,000 antipodal arcs it lands
+  exactly on the origin **64.3%** of the time against the apex route's **49.5%** — better, and a
+  third of drawn arguments still lose their bound. Nothing derived from a double reaches 100%, so
+  `PenNode.centred` joins `role` and `lemma` as a field that is carried rather than recovered, and
+  the step's rule is one sentence for all three: **a claim with no reliable geometric shadow is
+  carried, not re-derived.** It costs one integer per centred arc on the wire (`k: [1]`).
+
+- **(4.4b) THE CLAIM IS HONOURED BY CONSTRUCTION AND CHECKED ON ARRIVAL.** `originArc` writes the
+  centre down as a literal zero and reads both angles from the ENDPOINTS, taking only the discrete
+  branch — which way round, and how far — from the bulge-built arc. Carrying that arc's sweep over
+  wholesale looks equivalent and is not: its angles are measured about the very centre this replaces,
+  so on a chord at the edge of the claim's tolerance it left the far end **3.6e-9** out against the
+  near end's 1.6e-9. The radius is the MEAN of the two ends' distances, so neither is privileged:
+  the gap between them is the reader's and no circle about the origin closes it, but spending all of
+  it on one end is a choice this function has no reason to make. The decoder refuses a claim whose
+  two ends are not the same distance from the origin — that is the statement that such a circle
+  exists at all — rather than building the nearest thing, which would mint a `≤` from geometry that
+  never carried one.
+
+- **(4.4b) NOTHING PINNED THAT THE ORIGIN TEST IS AN EQUALITY, and the sweep is what asked.**
+  Loosening `isOriginCentred` from `c === 0` to `|c| < 1e-9` — the obvious "float noise" reading, and
+  the one that would have made this whole repair unnecessary — left the suite green. It would also
+  have silently re-admitted every arc the round trip was mis-centring, which is how a `≤` comes to
+  stand on a curve that does not carry it. It is asserted now at `1e-12`, `1e-16` and
+  `Number.MIN_VALUE`, with the exactly-zero control beside it and a signed-zero case, since `-0` IS
+  the origin and only an equality gets that right for the right reason.
+
+- **(4.4b) THE PREDICATE HAD THREE SPELLINGS AND NOW HAS ONE.** `ledger.ts` asked it to decide
+  whether a bound applies, `stageController.ts`'s snap asked it to decide whether to fire, and
+  `penPath` now asks it to decide whether a link may carry the claim. Two of the three already said
+  so in comments ("`arcRadius`'s test, character for character"), which is the shape of agreement
+  that survives exactly until someone edits one of them; `isOriginCentred` lives in `kernel/geom.ts`,
+  which owns `Resolved` and which all three already import.
 
 - **(4.4) THE PLAN'S OWN CARRIER FOR A STRUCTURALLY EDITED TEMPLATE LOSES THE ARGUMENT, AND THE
   MEASUREMENT IS WHY THE STEP IS SPLIT.** §4.4 says an edited template is serialised as a pen wire

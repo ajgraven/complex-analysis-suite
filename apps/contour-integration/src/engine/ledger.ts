@@ -33,7 +33,7 @@ import {
 } from "./claims.js";
 import type { Node } from "@cas/expr";
 import type { Cx, Resolved } from "../kernel/geom.js";
-import { arcLength, endPoint, isClosed, startPoint } from "../kernel/geom.js";
+import { arcLength, endPoint, isClosed, isOriginCentred, startPoint } from "../kernel/geom.js";
 import { clearance, windingNumber } from "../kernel/winding.js";
 import { checkAdmissibility } from "../kernel/branch/admissibility.js";
 import { classifyAgainstCut, needsSide } from "../kernel/branch/crossing.js";
@@ -220,7 +220,11 @@ function arcRadius(g: Resolved): Frac | null {
   // happened to be centred at 0, so the hypothesis was true by accident; the dogbone's end caps sit
   // at its branch points and are the first that are not. Returning null here reports honestly that
   // no bound of this shape applies, instead of certifying one that does not.
-  if (g.center[0] !== 0 || g.center[1] !== 0) return null;
+  // {@link isOriginCentred} rather than the comparison written out here, because three modules ask
+  // this question — this one to decide whether a bound applies, the pen's snap to decide whether to
+  // fire, and `penPath` to decide whether the claim may be carried in a link — and the first time
+  // the three spellings disagreed, one of them would be promising a `≤` the geometry cannot carry.
+  if (!isOriginCentred(g)) return null;
   const r = g.radius;
   if (!Number.isFinite(r) || r <= 0) return null;
   // The radius comes from a slider, so it is a double; the simplest rational that round-trips is the

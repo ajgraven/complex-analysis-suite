@@ -13,14 +13,17 @@
 import { describe, expect, it } from "vitest";
 import { makeComplexFn, parse } from "@cas/expr";
 
-import type { Cx } from "../src/kernel/geom.js";
+import { pointAt, type Cx } from "../src/kernel/geom.js";
 import { findPoles } from "../src/kernel/poles.js";
 import { integrateContour } from "../src/engine/contour/integrate.js";
 import { applyResidueTheorem } from "../src/engine/residueTheorem.js";
 import { evaluateLedger } from "../src/engine/ledger.js";
 import { resolveAll, type Contour } from "../src/engine/contour/model.js";
 import { semicircleTemplate } from "../src/engine/contour/templates.js";
-import { arcThroughBulge, penContour, penPath, type PenPath } from "../src/engine/contour/pen.js";
+import { arcThroughBulge, penContour, penPath, sameShape, type PenPath } from "../src/engine/contour/pen.js";
+import { defaultState, type ShellState } from "../src/shell/state.js";
+import { decodeShell, encodeShell } from "../src/shell/viewState.js";
+import { TEMPLATES } from "../src/shell/templates.js";
 
 function run(src: string, contour: Contour) {
   const ast = parse(src);
@@ -182,5 +185,116 @@ describe("the pen carries a role, because nothing in the plane says one", () => 
     const again = penContour(path);
     expect(again.pieces.map((p) => p.role)).toEqual(["target", "vanish"]);
     expect(again.pieces[1].lemma).toBe("L2");
+  });
+});
+
+describe("the arc's CENTRE is carried, because a bulge cannot hold it — M8 step 4.4b", () => {
+  // **The defect this section exists for shipped in step 4.2 and was found by measuring 4.4b.** The
+  // roles ride the wire since 4.4a, so a drawn argument survives a permalink — except that the one
+  // thing `arcRadius` insists on, a centre of EXACTLY `(0, 0)`, does not. `penPath` reads the chord
+  // and the apex back off the curve through `cos`/`sin`, so a semicircle of radius 8 whose centre
+  // is exactly the origin comes back with bulge `7.999999999999999` and a centre at `(0, 8.9e-16)`.
+  // The curve is the same to 1e-15 and the ARGUMENT is gone.
+  const linked = (path: PenPath): Contour => {
+    const drawn = penContour(path);
+    const state: ShellState = {
+      ...defaultState(TEMPLATES[0].build()),
+      expr: "1/(1+z^2)",
+      contour: drawn,
+      sandboxContour: drawn,
+      contourSource: null,
+    };
+    const e = encodeShell(state);
+    if (!e.ok) throw new Error(`encode refused: ${e.reason}`);
+    const back = decodeShell(e.hash);
+    if (back === null) throw new Error("decode found no link");
+    if (!back.ok) throw new Error(`decode refused: ${back.reason}`);
+    return back.state.contour;
+  };
+
+  it("reopens from its own permalink still closing, with the same bound and the same value", () => {
+    // **By VERDICT, not by centre.** The centre is the mechanism; what a reader loses is the
+    // argument, so that is what the test compares — and before the fix this was `closes=false`,
+    // a KILL row at `unknown`, and no target value at all.
+    const drawn = penContour(drawnSemicircle(8));
+    const before = run("1/(1+z^2)", drawn);
+    expect(before.closes).toBe(true);
+    expect(arcRow(before)?.evidence.level).toBe("≤");
+    const after = run("1/(1+z^2)", linked(drawnSemicircle(8)));
+    expect(after.closes, "the drawn argument did not survive its own link").toBe(true);
+    expect(arcRow(after)?.evidence.level).toBe("≤");
+    expect(after.rows.map((r) => `${r.constraint}|${r.status}|${r.evidence.level}`)).toEqual(
+      before.rows.map((r) => `${r.constraint}|${r.status}|${r.evidence.level}`),
+    );
+    expect(before.target?.text, "the fixture reports no value, so the comparison is vacuous").toBe("π");
+    expect(after.target?.text).toBe(before.target?.text);
+  });
+
+  it("restores the centre EXACTLY, and the curve is the one that was drawn", () => {
+    // Both halves, because either alone would pass on a wrong fix: a centre of exactly zero on a
+    // circle of the wrong radius is no better than an off-centre one on the right circle.
+    const drawn = penContour(drawnSemicircle(8));
+    const back = linked(drawnSemicircle(8));
+    const arc = resolveAll(back)[1];
+    expect(arc.kind).toBe("arc");
+    if (arc.kind !== "arc") return;
+    expect(arc.center).toEqual([0, 0]);
+    expect(sameShape(back, drawn), "the restored arc is a different curve").toBe(true);
+  });
+
+  it("rebuilds an arc through BOTH of its ends, not just the one it starts from", () => {
+    // **The claim's tolerance is looser than the geometry's, so the reconstruction has to be fair
+    // to both ends.** `ORIGIN_EPS` admits ends whose distances from the origin differ by 1e-9
+    // relative — that is what makes the claim checkable at all rather than a demand for bit
+    // equality — so taking the radius from ONE end can leave the other 2e-9 off, which on a radius
+    // of 8 is 1.6e-8 and above `sameShape`'s floor. The sweep found both spellings of the same
+    // carelessness (a radius from one end, and an end angle from the bulge-built arc's own centre
+    // rather than from the origin), and neither could be seen on an arc whose ends agree exactly.
+    //
+    // Forged rather than drawn, because the encoder never MAKES such a claim: it carries one only
+    // for an arc that is already exactly centred. What is under test is what the decoder does with
+    // one that arrives.
+    const R = 8;
+    const lopsided = R * (1 + 4e-10);
+    const from: Cx = [-R, 0];
+    const to: Cx = [lopsided, 0];
+    // The bulge and the claim ride the node the piece LEAVES, which is step 4.2's own rule.
+    const built = penContour({ nodes: [{ at: from, bulge: R, centred: true }, { at: to }], closed: false });
+    const arc = resolveAll(built)[0];
+    expect(arc.kind).toBe("arc");
+    if (arc.kind !== "arc") return;
+    expect(arc.center).toEqual([0, 0]);
+    // **The property is that the two misses are EQUAL**, not that either is small: the gap is the
+    // reader's, and no circle about the origin closes it. What the reconstruction owes them is not
+    // to spend it all on one end. Measured: the mean splits the 3.2e-9 gap into 1.6e-9 either side,
+    // where taking the radius from the start puts the whole of it on the finish.
+    const missFrom = Math.hypot(pointAt(arc, 0)[0] - from[0], pointAt(arc, 0)[1] - from[1]);
+    const missTo = Math.hypot(pointAt(arc, 1)[0] - to[0], pointAt(arc, 1)[1] - to[1]);
+    const gap = Math.abs(Math.hypot(to[0], to[1]) - Math.hypot(from[0], from[1]));
+    expect(gap).toBeGreaterThan(3e-9); // or the comparison below is between two zeros
+    expect(missFrom, "one end was privileged over the other").toBeCloseTo(missTo, 12);
+    expect(Math.max(missFrom, missTo)).toBeLessThan(gap * 0.6);
+  });
+
+  it("claims it only where it is TRUE, so an off-centre arc is not quietly re-centred", () => {
+    // The pairing. A hand drag to an apex of 7.6 puts the centre at `(0, −0.4105)` — step 4.2's own
+    // measurement — and `penPath` must not claim the origin for it, or the link would move the
+    // curve and mint a `≤` from geometry that never carried one.
+    const off: PenPath = {
+      nodes: [
+        { at: [-8, 0] as const, role: "target" as const },
+        { at: [8, 0] as const, bulge: 7.6, role: "vanish" as const, lemma: "L2" as const },
+      ],
+      closed: true,
+    };
+    const path = penPath(penContour(off));
+    expect(path?.nodes[1].centred).toBeUndefined();
+    expect(penPath(penContour(drawnSemicircle(8)))?.nodes[1].centred).toBe(true);
+    // And the refusal reaches the ledger rather than being a fact about a field: the off-centre
+    // arc gets no bound of this shape, before or after a link.
+    const back = linked(off);
+    const arc = resolveAll(back)[1];
+    expect(arc.kind === "arc" && arc.center[1] !== 0).toBe(true);
+    expect(arcRow(run("1/(1+z^2)", back))?.status).toBe("unknown");
   });
 });

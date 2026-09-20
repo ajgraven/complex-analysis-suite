@@ -21,7 +21,7 @@
 // DESIGN §2.2's "no sampled-point representation" is untouched, because these vertices are where the
 // reader clicked and not a discretisation of anything.
 
-import { pointAt, type Resolved } from "../../kernel/geom.js";
+import { isOriginCentred, pointAt, type Resolved } from "../../kernel/geom.js";
 import { resolveAll, type Contour, type LemmaId, type Piece, type PieceRole } from "./model.js";
 
 /** Where the reader clicked, and how the piece LEAVING that vertex bows. */
@@ -59,6 +59,30 @@ export interface PenNode {
    * disagree.
    */
   readonly lemma?: LemmaId;
+  /**
+   * That the arc leaving this vertex is centred EXACTLY on the origin — M8 step 4.4b.
+   *
+   * **The second field of a node that is carried rather than derived, and for {@link PenNode.role}'s
+   * reason one level down.** A bulge is one number and it does determine the circle — but only
+   * through `atan2` and `cos`/`sin`, and `arcRadius` demands a centre that is EXACTLY `(0, 0)`
+   * because every certified arc bound reasons from the reverse triangle inequality on `|z| = R`
+   * about the origin. Measured: an upper semicircle of radius 8 drawn with step 4.2's snap has its
+   * centre exactly at the origin and closes with a `≤`, but `penPath` reads the chord and the apex
+   * back off the curve through trig, recovers `7.999999999999999`, and `arcThroughBulge` then
+   * rebuilds the centre at `(0, 8.9e-16)` — so the SAME argument, reopened from its own permalink,
+   * lost its bound and stopped closing.
+   *
+   * **Recomputing the bulge from the arc's own centre and radius is an improvement and NOT a fix**:
+   * over 8,000 antipodal arcs it lands exactly on the origin 64.3% of the time against the apex
+   * route's 49.5%. Nothing derived from a double gets to 100%, which is what carrying the claim is
+   * for — and the claim is cheap, because `penContour` can build the arc from the endpoints and the
+   * sweep with the centre written down as a literal zero.
+   *
+   * Set by {@link penPath} exactly when the live arc passes `arcRadius`'s own test, so the two
+   * cannot come to disagree about what "centred at the origin" means; the codec validates it
+   * against the vertices before trusting it.
+   */
+  readonly centred?: true;
 }
 
 export interface PenPath {
@@ -167,6 +191,53 @@ export function bulgeFromApex(
 export const PEN_ROLE: PieceRole = "free";
 
 /**
+ * How far apart the two ends of a supposedly origin-centred arc may be, in radius.
+ *
+ * A claim, not a float epsilon: if the ends are not the same distance from the origin then NO circle
+ * about the origin passes through both, and the arc a link is asking for does not exist. The codec
+ * refuses beyond this rather than building the nearest thing, which is the same posture the recipe's
+ * own verification takes. It is the drawn-path tolerance {@link sameShape} uses, so "the same shape"
+ * means one thing across the module.
+ */
+export const ORIGIN_EPS = 1e-9;
+
+/**
+ * The arc from `from` to `to` about the ORIGIN, with the sweep `through` already chose.
+ *
+ * `null` when the two ends are not the same distance from the origin, because then no such arc
+ * exists — see {@link ORIGIN_EPS}. The radius is the mean of the two, so neither endpoint is
+ * privileged over the other; the angles come straight from `atan2` about `(0, 0)`, which is exact
+ * in the sense that matters here (the centre is a literal zero and no arithmetic can move it).
+ */
+export function originArc(
+  from: readonly [number, number],
+  to: readonly [number, number],
+  through: { readonly theta0: number; readonly theta1: number },
+): { center: readonly [number, number]; radius: number; theta0: number; theta1: number } | null {
+  const rFrom = Math.hypot(from[0], from[1]);
+  const rTo = Math.hypot(to[0], to[1]);
+  if (!(rFrom > 0) || !(rTo > 0)) return null;
+  if (Math.abs(rFrom - rTo) > ORIGIN_EPS * Math.max(rFrom, rTo)) return null;
+  // **Both angles come from the ENDPOINTS; `through` supplies only the BRANCH.** Carrying its sweep
+  // over wholesale looks equivalent and is not: its angles are measured about its own centre, which
+  // is the slightly-off one this function exists to replace, so the sweep it reports is the sweep
+  // between two points seen from the wrong place — measured on a chord at the edge of
+  // {@link ORIGIN_EPS}, that left the far end 3.6e-9 out against the near end's 1.6e-9. What is
+  // genuinely `through`'s to decide is discrete: which way round, and how far. So the end angle is
+  // read about the origin like the start angle, and then moved by whole turns to the branch nearest
+  // the sweep the bulge chose.
+  const theta0 = Math.atan2(from[1], from[0]);
+  const want = through.theta1 - through.theta0;
+  const turn = Math.PI * 2;
+  const raw = Math.atan2(to[1], to[0]) - theta0;
+  const sweep = raw + turn * Math.round((want - raw) / turn);
+  // The MEAN of the two radii, so neither end is privileged: the gap between them is the reader's
+  // and no circle about the origin closes it, but spending all of it on one end is a choice this
+  // function has no reason to make.
+  return { center: [0, 0], radius: (rFrom + rTo) / 2, theta0, theta1: theta0 + sweep };
+}
+
+/**
  * Turn a drawn path into a contour.
  *
  * Ids are positional (`pen0`, `pen1`, …) so that a redraw of the same path is the same contour, and
@@ -193,6 +264,11 @@ export function penContour(path: PenPath): Contour {
     // neither can see the other.
     const role = a.role ?? PEN_ROLE;
     const lemma = role === "vanish" && a.lemma !== undefined ? { lemma: a.lemma } : {};
+    // **The claim is honoured by CONSTRUCTION, not by correcting what the bulge built.** With the
+    // centre written down as a literal zero there is nothing left to round: the radius and both
+    // angles are read from the endpoints the reader clicked, and only the SWEEP — a discrete choice
+    // of which way round, already made by `arcThroughBulge` — is taken from the arc above.
+    const centred = arc !== null && a.centred === true ? originArc(a.at, b.at, arc) : null;
     pieces.push(
       arc === null
         ? {
@@ -212,10 +288,10 @@ export function penContour(path: PenPath): Contour {
             name: `drawn arc ${n}`,
             geom: {
               kind: "arc",
-              center: { x: arc.center[0], y: arc.center[1] },
-              radius: arc.radius,
-              theta0: arc.theta0,
-              theta1: arc.theta1,
+              center: { x: (centred ?? arc).center[0], y: (centred ?? arc).center[1] },
+              radius: (centred ?? arc).radius,
+              theta0: (centred ?? arc).theta0,
+              theta1: (centred ?? arc).theta1,
             },
             role,
             ...lemma,
@@ -270,7 +346,11 @@ export function penPath(contour: Contour): PenPath | null {
     // The bulge is the apex's signed offset from the chord's midpoint — the same quantity the drag
     // measured, through the same function.
     const bulge = bulgeFromApex(from, endOf(g), pointAt(g, 0.5));
-    return { at: [from[0], from[1]] as const, bulge, ...carried };
+    // **And whether it is centred on the origin, which the bulge CANNOT carry** — M8 step 4.4b, and
+    // the field's own note says what it costs not to. Read with `ledger.ts`'s test rather than a
+    // comparison written here, so the claim is true in exactly the sense the bound needs.
+    const centred = isOriginCentred(g) ? { centred: true as const } : {};
+    return { at: [from[0], from[1]] as const, bulge, ...centred, ...carried };
   });
 
   const first = startOf(resolved[0]);

@@ -91,6 +91,43 @@ describe("a declared lemma is HONOURED, and refused by name when it does not app
     expect(r.target?.text).toBe("π");
   });
 
+  it("refuses an arc whose centre is off the origin AT ALL, however little — M8 step 4.4b", () => {
+    // **The hypothesis is exact and the test for it has to be.** Every certified arc bound reasons
+    // from the reverse triangle inequality on the circle `|z| = R` ABOUT THE ORIGIN, so a bound read
+    // off an arc centred anywhere else is computed from the wrong geometry (M4.6c). Nothing pinned
+    // that the predicate is an EQUALITY until the 4.4b sweep asked: loosening it to `|c| < 1e-9` —
+    // the obvious "float noise" reading, and the one that would have made 4.4b's whole repair
+    // unnecessary — left the suite green. It would also have quietly re-admitted every arc the
+    // permalink round trip was mis-centring, which is how a `≤` comes to stand on a curve that does
+    // not carry it.
+    const base = semicircleTemplate(200);
+    const nudged = (dy: number): Contour => ({
+      ...base,
+      pieces: base.pieces.map((p) =>
+        p.id !== "arc"
+          ? p
+          : {
+              ...p,
+              role: "vanish" as const,
+              lemma: "L2" as const,
+              geom: p.geom.kind === "arc" ? { ...p.geom, center: { x: 0, y: dy } } : p.geom,
+            },
+      ),
+    });
+    // At exactly zero the bound is certified — the control, without which the line below would pass
+    // on an app that had stopped bounding arcs altogether.
+    expect(arcRow(run("1/(1+z^2)", nudged(0)))?.evidence.level).toBe("≤");
+    // And a displacement no reader could see, and no picture could show, is still not the origin.
+    for (const dy of [1e-12, 1e-16, Number.MIN_VALUE]) {
+      const row = arcRow(run("1/(1+z^2)", nudged(dy)));
+      expect(row?.evidence.level, `a centre at (0, ${dy}) was certified`).not.toBe("≤");
+      expect(row?.status).toBe("unknown");
+    }
+    // A signed zero IS the origin, which is the one case the equality has to get right by being an
+    // equality: `-0 !== 0` is false, and `Math.abs(-0) < eps` would have agreed by accident.
+    expect(arcRow(run("1/(1+z^2)", nudged(-0)))?.evidence.level).toBe("≤");
+  });
+
   it("refuses the ML estimate on an integrand with a live frequency, and says which bound applies", () => {
     // The plan's second test, on B1's sandbox twin. `max|f|` on the arc is `O(R^{-2})` in the upper
     // half-plane only because `|e^{iz}| ≤ 1` there; in the lower it is `e^{R}`. A reader who picks

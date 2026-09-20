@@ -556,6 +556,32 @@ describe("a link that cannot be honoured refuses BY NAME", () => {
     );
   });
 
+  it("CHECKS the origin claim rather than trusting it — M8 step 4.4b", () => {
+    // The claim says some circle about the origin passes through both ends, which is the statement
+    // that they are the same distance from it. A link saying otherwise is asking for an arc that
+    // does not exist, and building the nearest thing would mint a `≤` from geometry that cannot
+    // carry one — which is the whole reason the claim is on the wire rather than derived.
+    const lopsided = penContour({
+      nodes: [{ at: [-8, 0] }, { at: [3, 0], bulge: 5 }],
+      closed: true,
+    });
+    const e = encodeShell({ ...base(), contour: lopsided, contourSource: null, sandboxContour: lopsided });
+    expect(e.ok, e.ok ? "" : e.reason).toBe(true);
+    if (!e.ok) return;
+    const state = payloadOf(e.hash);
+    const forged = { ...(state.c as Record<string, unknown>), k: [1] };
+    const bad = decodeShell(rehash(e.hash, { ...state, c: forged }));
+    expect(bad?.ok).toBe(false);
+    if (bad !== null && !bad.ok) {
+      expect(bad.reason).toContain("centred at the origin");
+      expect(bad.reason).toContain("not the same distance");
+    }
+    // Out of range, which the list needs as much as the maps do.
+    const far = decodeShell(rehash(e.hash, { ...state, c: { ...(state.c as Record<string, unknown>), k: [7] } }));
+    expect(far?.ok).toBe(false);
+    if (far !== null && !far.ok) expect(far.reason).toContain("piece 7");
+  });
+
   it("bounds an OPEN path's indices by its PIECES, which it has one fewer of than vertices", () => {
     // **The refusal has to name the reason, not only refuse.** A three-vertex open path is two
     // pieces, so index 2 is out of range — but bounding by the VERTEX count instead accepts it, and
