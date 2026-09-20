@@ -317,6 +317,42 @@ describe("the modal — focus", () => {
     expect(document.activeElement, "Shift+Tab did not step backward inside the dialog").toBe(items[last - 1]);
   });
 
+  it("SKIPS everything inside a `[hidden]` panel, in both directions", () => {
+    // **The premise `FOCUSABLE`'s comment stood on was false, and the front door is why** — the
+    // 2026-09-20 review. *"Every control in these dialogs is visible by construction"* held while a
+    // dialog was one panel; `frontDoor.ts` has two, and `syncTabs` hides the one it is leaving
+    // WITHOUT emptying it. Measured on the mounted front door: Practice tab — 23 focusables, 16 of
+    // them inside the hidden records panel. A browser will not focus a `display: none` element, so
+    // `items[next].focus()` is a no-op and Tab stops advancing; jsdom focuses them happily, which
+    // is exactly why every test above passed.
+    const { modal, host } = harness((d) => {
+      const shown = document.createElement("div");
+      shown.append(button("Close"), button("Step"));
+      const hidden = document.createElement("div");
+      hidden.setAttribute("hidden", "");
+      hidden.append(button("buried one"), button("buried two"), button("buried three"));
+      d.append(shown, hidden);
+    });
+    modal.open();
+    const dialog = requireDialog(host);
+    const buried = [...dialog.querySelectorAll("button")].filter((b) => b.closest("[hidden]") !== null);
+    expect(buried, "nothing is hidden, so this asserts nothing").toHaveLength(3);
+    const visible = [...dialog.querySelectorAll("button")].filter((b) => b.closest("[hidden]") === null);
+    expect(visible).toHaveLength(2);
+
+    // Forward off the last VISIBLE control lands on the first visible one — not on the first buried
+    // one, which is what sits next in document order.
+    visible[visible.length - 1].focus();
+    press("Tab");
+    expect(document.activeElement, "Tab walked into the hidden panel").toBe(visible[0]);
+    // And backwards, where the hidden three are the tail of the list.
+    press("Tab", true);
+    expect(document.activeElement, "Shift+Tab wrapped onto a hidden control").toBe(visible[visible.length - 1]);
+    // Nothing buried is ever reached: four Tabs on a two-control cycle return to where they started.
+    for (let i = 0; i < 4; i++) press("Tab");
+    expect(buried).not.toContain(document.activeElement);
+  });
+
   it("sends Tab from the container to the first control, and Shift+Tab to the last", () => {
     // Where `open()` leaves focus is not in the cycle (`tabIndex = -1`, so `querySelectorAll` never
     // returns it), which makes the two moves out of it their own case. Get this wrong and a reader

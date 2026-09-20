@@ -599,6 +599,35 @@ describe("the front door — the two tabs", () => {
     expect(press("Escape"), "the strip swallowed a key that is not its own").toBe(true);
   });
 
+  it("keeps Tab out of the HIDDEN panel, on whichever tab is up", () => {
+    // **The trap cycled through the panel it had just hidden** — the 2026-09-20 review. `syncTabs`
+    // hides a panel without emptying it and `modal.ts`'s `FOCUSABLE` had no visibility filter, so
+    // on the Practice tab 16 of 23 matches sat inside the hidden records panel, between the tab
+    // strip and the practice list. `focus()` on a `display: none` element is a no-op in a browser,
+    // so Tab stalled there; jsdom focuses them, which is why the trap's own tests passed.
+    const { dialog } = mount();
+    dialog.open("practice");
+    const root = dialogOf();
+    expect(root, "no dialog").not.toBeNull();
+    if (root === null) return;
+    const all = [...root.querySelectorAll<HTMLElement>("a[href], button, input, select, textarea, [tabindex]")];
+    const buried = all.filter((el) => el.closest("[hidden]") !== null);
+    // The measurement, as an anti-vacuity clause: a panel that were emptied on hide would make the
+    // rest of this test true of nothing.
+    expect(buried.length, "the hidden panel holds no controls, so there is nothing to skip").toBeGreaterThan(5);
+
+    // Twenty Tabs from the tab strip, and not one of them lands on a buried control.
+    const visited: Element[] = [];
+    tab("practice").focus();
+    for (let i = 0; i < 20; i++) {
+      press("Tab");
+      visited.push(document.activeElement ?? document.body);
+    }
+    expect(visited.filter((el) => buried.includes(el as HTMLElement)), "Tab reached the hidden panel").toEqual([]);
+    // And it went SOMEWHERE — a trap that held focus on the dialog would satisfy the line above.
+    expect(new Set(visited).size, "Tab did not move at all").toBeGreaterThan(2);
+  });
+
   it("opens on the tab the caller names, and on Records with no argument", () => {
     // The bar's two segments name the tab they want. The no-argument call is the one that existed
     // before the strip did, so it must still be the records list — and the PAIRING is the second

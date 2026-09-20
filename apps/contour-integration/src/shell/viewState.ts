@@ -29,10 +29,11 @@
 // piece list is 1,098 of the worst case's 2,159 JSON bytes, putting that link at 2,838 B of URL
 // against research 07's ~2 kB warning, where the recipe lands it at 1,078 B. Rounding floats, which
 // M6.0 expected to be the headroom, is worth 4%: the bulk is structural, not decimal.
-import { decodeViewState, encodeViewState } from "@cas/interchange";
+import { decodeViewState, encodeViewState, VIEWSTATE_VERSION } from "@cas/interchange";
 import { Frac } from "@cas/exact";
 import { applyOps, renamePiece, setParam, setRole, translateContour, type ContourOp } from "../engine/contour/edit.js";
 import type { Contour, LemmaId, PieceRole } from "../engine/contour/model.js";
+import { lemmaLabel, roleLabel } from "../engine/vocabulary.js";
 import type { Bindings } from "../families/schema.js";
 import { effectiveBranch, type BranchChoice, type BranchPoint, type CutArc } from "../kernel/branch/model.js";
 import type { Cx } from "../kernel/geom.js";
@@ -450,21 +451,30 @@ function annotationsIn(
       }
       const [role, lemma, ...rest] = value.split(":");
       if (rest.length > 0) return { ok: false, reason: `the role of piece ${key} in this link, '${value}', is not a role` };
+      // **The UNKNOWN id is not quoted back**, which is the other half of the same rule: the two
+      // refusals below are about a role and a lemma this build does not have, so there is no label
+      // to print and echoing the link's own token would put an id on screen by a different door.
       if (!ROLES.includes(role as PieceRole)) {
-        return { ok: false, reason: `this link gives piece ${key} the role '${role}', which this build does not have` };
+        return { ok: false, reason: `this link gives piece ${key} a role this build does not have` };
       }
       if (lemma !== undefined) {
         if (!LEMMAS.includes(lemma as LemmaId)) {
-          return { ok: false, reason: `this link disposes of piece ${key} by '${lemma}', which is not a lemma this build knows` };
+          return { ok: false, reason: `this link disposes of piece ${key} by a lemma this build does not have` };
         }
         // **`setRole` would drop it silently, and that is the whole reason this is checked here.**
         // A lemma is a statement about how a VANISHING piece is disposed of; on any other role there
         // is nothing for it to be about, so a link carrying one is making a claim the model cannot
         // hold — and opening it with the lemma quietly gone is worse than not opening it.
+        // **By the reader's names for both** — the 2026-09-20 review. This sentence interpolated
+        // `L3` and `vanish`, a lemma id and a role id, into text a reader is shown when a link will
+        // not open; `engine/vocabulary.ts` is where each of those has a name, and both ids have
+        // already been checked against their own lists two lines up, so the labels are total here.
         if (role !== "vanish") {
           return {
             ok: false,
-            reason: `this link disposes of piece ${key} by ${lemma} while calling it '${role}', and only a vanishing piece is disposed of by a lemma`,
+            reason:
+              `this link disposes of piece ${key} by ${lemmaLabel(lemma as LemmaId)} while calling it a ` +
+              `${roleLabel(role as PieceRole)}, and only a vanishing piece is disposed of by a lemma`,
           };
         }
       }
@@ -859,6 +869,18 @@ export function decodeShell(hashOrLink: string): DecodeResult | null {
   if (env.app !== APP) {
     return { ok: false, reason: `this link belongs to another app in the suite ('${env.app}'), not to Contour Integration` };
   }
+  // **`v` is READ, which it was not** — the 2026-09-20 review. `@cas/interchange`'s own doc says the
+  // envelope decoder validates the shape and *"the caller checks `app` (and `v`, if it cares)"*, and
+  // this app cares: the envelope version is the only thing that says which STATE schema the payload
+  // is written in, and every field below is validated against today's. A future `v` decoded on
+  // today's readers is the failure this file's header names — something plausible instead of what
+  // was shared — so it is refused by name and the reader is told to open the newer app instead.
+  if (env.v !== VIEWSTATE_VERSION) {
+    return {
+      ok: false,
+      reason: `this link is written in view-state format ${env.v}, and this build reads format ${VIEWSTATE_VERSION}`,
+    };
+  }
   const w = env.state as Record<string, unknown>;
   const base = defaults();
   const gallery = w.m === "g";
@@ -909,8 +931,30 @@ export function decodeShell(hashOrLink: string): DecodeResult | null {
       const params: Record<string, number> = {};
       if (c.p !== undefined) {
         if (c.p === null || typeof c.p !== "object") return { ok: false, reason: "the contour's parameters in this link are not an object" };
+        // **The template's own DECLARED range, refused rather than clamped** — the 2026-09-20
+        // review. A link carrying `rho = -4` on a keyhole rebuilt a contour no slider can produce
+        // and no encode would have minted; the range is on the `Param` the template builds, which
+        // is where the slider reads it, so the two cannot come to disagree about what a legal value
+        // is. Refused rather than clamped because `setParam` clamps to the nearer bound, and a
+        // clamp here would open a DIFFERENT state under a link that claims to carry this one —
+        // this codec's posture since M6.2 is to refuse by name instead. It runs BEFORE
+        // `bareRecipe`, which is where the clamp would otherwise happen silently.
+        //
+        // **This is the SANDBOX's contour wire and nothing else** — the branch above is
+        // `!gallery`. A record's bindings do not come through here: they go through `instantiate`,
+        // which WIDENS a parameter's range to contain the value, deliberately, because a gallery
+        // link at D1's `α = 1.5` has to open at 1.5 for the ledger to refuse it BY NAME. Clamping
+        // a trap fixture would replace a named refusal with a plausible answer.
+        const declared = TEMPLATES.find((t) => t.id === c.t)?.build().params ?? {};
         for (const [k, v] of Object.entries(c.p as Record<string, unknown>)) {
           if (!isNum(v)) return { ok: false, reason: `the contour parameter '${k}' in this link is not a finite number` };
+          const range = declared[k]?.range;
+          if (range !== undefined && (v < range[0] || v > range[1])) {
+            return {
+              ok: false,
+              reason: `the contour parameter '${k}' in this link is ${v}, outside the ${range[0]} to ${range[1]} this contour allows`,
+            };
+          }
           params[k] = v;
         }
       }

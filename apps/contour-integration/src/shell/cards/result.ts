@@ -122,6 +122,12 @@ export const resultCard: Card = (ctx) => {
 
   const failed = ledger.rows.some((r) => r.status === "failed");
   const refused = integralRefusal(integral, ledger);
+  // **Whether Pass 5's answer can be SHOWN, asked once.** Three places used to ask it and two of
+  // them asked a different question: the solved block wanted a `text` or a `latex`, the note beneath
+  // wanted a `solved` at all, and `jordan-quartic` is the record where the two part company — Pass 5
+  // returns `value = 1.5442760096181358` with both spellings undefined, so the value was skipped and
+  // the sentence explaining the skip was skipped with it.
+  const printable = solved !== null && (solved.latex !== undefined || solved.text !== undefined);
 
   const head: Child[] = [
     // **The HEADLINE first**, because "does this argument close?" is the product. It is a `$…$`
@@ -144,7 +150,7 @@ export const resultCard: Card = (ctx) => {
       // is written in the `$…$` convention, so a reader of a refusal is exactly the reader who most
       // needs it read, and step 2.1's rule holds here as everywhere: a verdict is a sentence in that
       // convention wherever it is composed.
-      h("p", { key: "why", class: "muted small" }, ...mathText(refused.claim, "why")),
+      h("p", { key: "refusedWhy", class: "muted small" }, ...mathText(refused.claim, "why")),
       // **The repair goes through it too, and that half is an EQUIVALENT mutant** — recorded rather
       // than dropped. Measured: over all 28 records × 4 fixtures and eight hand-built refusing
       // states, no repair the app can reach carries `$` at all (`legalityRefusal`'s repairs are
@@ -161,7 +167,7 @@ export const resultCard: Card = (ctx) => {
   } else {
     // **What the RECORD asked for leads, where there is one.** C1 makes this unavoidable: its
     // contour encloses nothing, so `∮ = 0` while the integral it determines is π/2.
-    if (solved !== null && (solved.latex !== undefined || solved.text !== undefined)) {
+    if (printable && solved !== null) {
       head.push(
         h(
           "div",
@@ -172,6 +178,26 @@ export const resultCard: Card = (ctx) => {
             : math(solved.latex, { key: "m", display: true, label: solved.text ?? "" }),
         ),
         h("p", { key: "solvedName", class: "muted small" }, "the integral this contour determines"),
+      );
+    } else if (solved !== null) {
+      // **A value Pass 5 DETERMINED and cannot spell.** `jordan-quartic`'s answer is a sum of two
+      // exponential-basis terms with no `text` and no `latex`, so the block above cannot draw it —
+      // and until the 2026-09-20 review nothing else did either, which left the one number the
+      // record exists to produce off its own card with no sentence saying so. It is a decimal, so
+      // it is badged `≈` whatever the certificates say about the argument that reached it: the
+      // form is what carries `=`, and there is no form here.
+      head.push(
+        h(
+          "div",
+          { key: "decimal", class: "resultValue" },
+          badge("≈"),
+          h("span", { key: "t", class: "num" }, fmtNum(solved.value, 7)),
+        ),
+        h(
+          "p",
+          { key: "decimalName", class: "muted small" },
+          "the integral this contour determines — its closed form is not one this app can print, so it is given as a decimal",
+        ),
       );
     }
     // **The SANDBOX's own answer** — M8 step 4.1. A record has Pass 5 above and needs nothing here;
@@ -213,13 +239,18 @@ export const resultCard: Card = (ctx) => {
         // The IDENTITY, from the result rather than from a literal: a dogbone is solved by a
         // different equation, and printing the plain one above its answer states the very equation
         // D6 exists to show is inapplicable.
+        //
+        // **WHOLE, left hand side included.** There was a `.replace("∮ f dz = ", "")` here that
+        // could never match: all three identities are written in the `$…$` convention and begin
+        // `$\oint_\gamma f(z)\,dz = ` (`residueTheorem.ts`, `exteriorTheorem.ts`,
+        // `summationTheorem.ts`), so the literal occurs in none of them and the line has always
+        // printed the equation entire. Removed rather than implemented: the value above this line
+        // carries no `∮` of its own, so stripping the left hand side would leave a right hand side
+        // with nothing to be equal to.
         h(
           "p",
           { key: "id", class: "muted small" },
-          ...mathText(
-            `${(theorem.identity ?? RESIDUE_THEOREM_IDENTITY).replace("∮ f dz = ", "")}, from exact residues over ${field}`,
-            "idn",
-          ),
+          ...mathText(`${theorem.identity ?? RESIDUE_THEOREM_IDENTITY}, from exact residues over ${field}`, "idn"),
         ),
       );
     } else if (integral.value !== undefined) {
@@ -296,21 +327,40 @@ export const resultCard: Card = (ctx) => {
   );
 
   // ── the numerics ──────────────────────────────────────────────────────────────────────────
+  //
+  // **A REFUSAL CLOSES IT, and takes the total out of it** — the 2026-09-20 review. The default was
+  // `refused !== null || …`, so the one state in which this card prints no `∮` at all was the state
+  // that OPENED the disclosure and led it with `≈ 6.283i`: the number a reader takes away, three
+  // lines under `⚠ Refused` and the sentence at the top of this file saying there would be none.
+  // The per-piece table stays — it is the quadrature's own working, piece by piece, with no total in
+  // it — and a reader who opens the disclosure deliberately still gets it.
   const numerics = disclosure(
     ctx,
     "result:numerics",
-    refused !== null || theorem?.exactValue === undefined,
+    refused === null && theorem?.exactValue === undefined,
     "Numerics",
-    ...numericBody(integral, theorem),
+    ...numericBody(integral, theorem, refused !== null),
   );
 
   // **Why there is no target value, where there is a ledger and no answer** — M8 step 2.4. The solve
   // may refuse while the run itself is sound (a rank-deficient system, a route this example does not
   // carry), and `StateResolution.note` has held that sentence since step 1.1 with no reader at all:
   // the card showed `∮` and left the integral the example set out to determine unmentioned.
+  //
+  // **`printable`, not `solved === null`** — the 2026-09-20 review, measured on `jordan-quartic`,
+  // where Pass 5 returns a `value` with `text` and `latex` both undefined. The solved block above
+  // needs one of the two and is skipped; this note asked whether there was a `solved` AT ALL and was
+  // skipped as well, so both fixtures of that record withheld the record's own answer and said
+  // nothing about it. The two skips now read the same field.
+  //
+  // **And the key is not `"why"`.** It was, and so is the refusal's line above — two direct children
+  // of one `<section>` — so `patch` threw `two children of <section> share the key 'why'` on every
+  // state that refused AND carried a note: the throw came out of `render2` before `syncHash` and
+  // `scheduleDraw`, leaving the PREVIOUS binding's `=` answer on screen beside the new refusal and
+  // the address bar at the old state. Measured on eleven parameter states across seven records.
   const note =
-    ctx.resolution.kind === "gallery" && ctx.resolution.note !== null && solved === null
-      ? h("p", { key: "why", class: "muted small" }, ...mathText(`No value for the target: ${ctx.resolution.note}`, "rn"))
+    ctx.resolution.kind === "gallery" && ctx.resolution.note !== null && !printable
+      ? h("p", { key: "solveNote", class: "muted small" }, ...mathText(`No value for the target: ${ctx.resolution.note}`, "rn"))
       : null;
 
   return card("result", ...head, hypotheses, numerics, note);
@@ -331,19 +381,31 @@ function worstError(integral: ContourIntegral): number {
   return Math.max(0, ...integral.pieces.map((p) => p.errorEstimate));
 }
 
-function numericBody(integral: ContourIntegral, theorem: ResidueTheoremResult | null): Child[] {
+function numericBody(integral: ContourIntegral, theorem: ResidueTheoremResult | null, refused: boolean): Child[] {
   // **Three states, not two: agreement, disagreement, and NOTHING TO COMPARE.** Folding the third
   // into the second announced a disagreement of exactly 0.00e+0 for a keyhole, which reads as a
   // contradiction where there was simply no second route.
   if (integral.quadratureSkipped !== undefined) {
     return [
       h("p", { key: "skip", class: "verdict" }, badge("?"), " no quadrature to compare against"),
-      h("p", { key: "why", class: "muted small" }, integral.quadratureSkipped),
+      h("p", { key: "skipWhy", class: "muted small" }, integral.quadratureSkipped),
     ];
   }
   const err = worstError(integral);
   const out: Child[] = [];
-  if (integral.value !== undefined) {
+  // **The TOTAL is withheld under a refusal, and the withholding is said.** The quadrature ran and
+  // has a number; what it does not have is an argument entitling anyone to it, and a `≈` beside it
+  // under a heading is still the figure a reader writes down. The per-piece table below is a
+  // different thing — the rule's own working, with no total in it — so it stays.
+  if (refused) {
+    out.push(
+      h(
+        "p",
+        { key: "withheld", class: "muted small" },
+        "No total: the argument was refused, so nothing here establishes a value for the whole contour.",
+      ),
+    );
+  } else if (integral.value !== undefined) {
     out.push(
       h(
         "p",
@@ -353,7 +415,11 @@ function numericBody(integral: ContourIntegral, theorem: ResidueTheoremResult | 
       ),
     );
   }
-  if (theorem?.exactValue !== undefined) {
+  // **The cross-check goes with it.** Measured on D6 at `η = 1`: the theorem still has an
+  // `exactValue`, so this line read `≤ quadrature agrees to 9.38e-2` under a `⚠ Refused` headline —
+  // a statement that two routes agree about the very value the card is withholding, which is a
+  // claim about its credibility rather than a number, and the wrong claim.
+  if (!refused && theorem?.exactValue !== undefined) {
     out.push(
       h(
         "p",

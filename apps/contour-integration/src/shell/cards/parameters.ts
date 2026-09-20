@@ -19,8 +19,8 @@
 import { fmt } from "../../kernel/decimal.js";
 import { paramChannel } from "../../shell/state.js";
 import type { Param } from "../../engine/contour/model.js";
-import { limitTag, tagLabel } from "../../engine/vocabulary.js";
-import { mathText } from "../math.js";
+import { limitTag, paramSymbol, tagLabel } from "../../engine/vocabulary.js";
+import { mathSpoken, mathText } from "../math.js";
 import { h, type Desc } from "../dom.js";
 import { card, nothing, type Card } from "./card.js";
 
@@ -50,15 +50,23 @@ export const parametersCard: Card = ({ state, resolution, actions }) => {
 
   const rows: Desc[] = params.map((p) => {
     const channel = paramChannel(state, family, p.name);
+    // **`paramSymbol`, not the raw id** — the 2026-09-20 review. This card printed `R_lim = 4` and
+    // `sgnA = 1` where `vocabulary.ts` exists to print `R`, and the derivation's limit step — on
+    // screen at the same moment — already did: two names for one quantity at the one place the two
+    // are read together, which is the defect that map's own comment is about. Typeset, like the
+    // limit tag beside it; spoken through `mathSpoken` for the slider's name, since `\varepsilon`
+    // read out as a macro is the other half of the same lapse.
+    const symbol = paramSymbol(p.name);
+    const spoken = mathSpoken(`$${symbol}$`);
     const readout = h(
       "span",
       { key: "v", class: "num paramValue" },
-      `${p.name} = ${fmt(p.value)}`,
+      ...mathText(`$${symbol}$ = ${fmt(p.value)}`, `sym:${p.name}`),
     );
     if (channel === "derived") {
       return h(
         "div",
-        { key: `p:${p.name}`, class: "paramRow2" },
+        { key: `p:${p.name}`, class: "paramRow2", "data-param": p.name },
         readout,
         // Named rather than hidden: a reader who expects a slider should be told why there is none.
         h("span", { key: "t", class: "tag" }, tagLabel("derived")),
@@ -66,7 +74,11 @@ export const parametersCard: Card = ({ state, resolution, actions }) => {
     }
     return h(
       "label",
-      { key: `p:${p.name}`, class: "paramRow2" },
+      // **`data-param` is the row's ADDRESS** — the symbol above is typeset, so the parameter's id
+      // is no longer readable off the row's text (KaTeX lays a formula down twice, in HTML and in
+      // MathML, so `textContent` for `a` is `aa`). `contour.ts`'s `data-piece` is the same idea: an
+      // id belongs in an attribute a test can ask for and a reader never meets.
+      { key: `p:${p.name}`, class: "paramRow2", "data-param": p.name },
       readout,
       h("input", {
         key: "s",
@@ -75,7 +87,7 @@ export const parametersCard: Card = ({ state, resolution, actions }) => {
         min: "0",
         max: String(STOPS),
         value: String(Math.round(toStop(p, p.value))),
-        "aria-label": `${p.name}, currently ${fmt(p.value)}`,
+        "aria-label": `${spoken}, currently ${fmt(p.value)}`,
         onInput: (e: Event) => actions.setParam(p.name, fromStop(p, Number((e.target as HTMLInputElement).value))),
         // The draft budget while a finger is down, and the full one when it lifts — the stage's
         // `gesture` cannot see a rail slider, so the flag is how the budget hears about this one.

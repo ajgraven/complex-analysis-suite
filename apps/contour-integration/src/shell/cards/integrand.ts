@@ -21,10 +21,17 @@ import { integrandEmpty } from "../errors.js";
 
 export const integrandCard: Card = ({ state, resolution, actions }) => {
   if (resolution.kind === "gallery") {
+    // **At the bindings the RUN used, not at the fixture's** — the 2026-09-20 review. `run.bindings`
+    // is `{...golden.params, ...state.bindings}`, the merge `solveFamily` performs and the one the
+    // Result card's number comes out of, so reading it here is what makes the two rails describe one
+    // function. Reading `golden.params` instead is how A1 at `a = 5` answered `= π√6/6` under a left
+    // rail headed *what is being integrated* still typesetting `1/(2 + \cos θ)` — the `a = 2`
+    // fixture, with no error and nothing on screen to say which one was being integrated.
+    const at = resolution.run?.bindings ?? resolution.golden.params;
     return card(
       "integrand",
-      h("p", { key: "src", class: "muted small" }, "The record's, at this fixture:"),
-      math(contourIntegrandLatex(resolution.family, { at: resolution.golden.params }), {
+      h("p", { key: "src", class: "muted small" }, "The record's, at these values:"),
+      math(contourIntegrandLatex(resolution.family, { at }), {
         display: true,
         key: "m",
       }),

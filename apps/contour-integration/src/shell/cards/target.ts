@@ -24,6 +24,20 @@ export const targetCard: Card = (ctx) => {
   // The picker already says what a variant is; the line below says the integral alone.
   const variant = isVariant(family, golden);
 
+  // **AT THE BINDINGS THE RUN USED** — the 2026-09-20 review, the Integrand card's finding in the
+  // card beside it. `run.bindings` is `{...golden.params, ...state.bindings}`, the merge
+  // `solveFamily` performs, so moving a slider now moves this card with the answer instead of
+  // leaving the rail describing the fixture's function under a headline about a different one.
+  const at = resolution.run?.bindings ?? golden.params;
+  // **And the RIGHT HAND SIDE does not follow it, which measuring is what settled.** `golden.value`
+  // is the record's answer AT ITS FIXTURE and is already a constant — A1's is `2*pi/sqrt(3)`, not
+  // `2*pi/sqrt(a^2-b^2)` — so substituting new bindings into it changes nothing and would pair the
+  // integral at `a = 5` with the value at `a = 2`: a false identity, printed with the authority of
+  // the record. Off the fixture the record claims nothing, so the integral is shown alone, through
+  // the branch a variant fixture already takes for the same reason. (The general closed form could
+  // be substituted instead; `families/latex.ts` is where that would go.)
+  const atFixture = Object.entries(golden.params).every(([k, v]) => at[k] === v);
+
   // **AT RUNG iii THE LEFT RAIL WAS PRINTING THE ANSWER, and the menu's own sentence said it was
   // not** — M8 step 3.4, found by opening the rung in a browser. *"Only the integral is given"* is
   // what the drill card says while choosing a contour; what this card was giving was the closed
@@ -51,9 +65,9 @@ export const targetCard: Card = (ctx) => {
       h(
         "div",
         { key: `t${i}`, class: "targetLine" },
-        i === 0 && !variant && !masked
+        i === 0 && !variant && !masked && atFixture
           ? math(identityLatex(family, golden), { display: true, key: "m", label: identityText(family, golden) })
-          : math(targetLatex(t, { at: golden.params }), { display: true, key: "m" }),
+          : math(targetLatex(t, { at }), { display: true, key: "m" }),
         t.convergence === "absolute"
           ? null
           : h(

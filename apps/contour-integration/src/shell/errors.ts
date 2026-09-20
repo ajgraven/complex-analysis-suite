@@ -96,7 +96,15 @@ const LINK: readonly Rule[] = [
   { match: /may be truncated/, say: () => "This link is incomplete — it may have been cut short when it was copied." },
   { match: /names the gallery record/, say: () => "This link names a worked example this version does not have." },
   { match: /gallery mode but names no record/, say: () => "This link opens the gallery without naming an example." },
-  { match: /names fixture/, say: () => "This link names a fixture that worked example does not have." },
+  { match: /names fixture/, say: () => "This link names a fixture that this worked example does not have." },
+  // **A version and a range are both actionable**, which is why they are not left to the fallback:
+  // one tells a reader to open the newer app and the other tells them the link asks for a contour
+  // the app cannot build. Both refusals are the 2026-09-20 review's.
+  {
+    match: /view-state format/,
+    say: () => "This link was made by a different version of Contour Integration and cannot be opened here.",
+  },
+  { match: /this contour allows/, say: () => "This link sets a contour parameter outside the range this contour allows." },
   { match: /contour template|parameter template/, say: () => "This link names a contour this version does not have." },
   { match: /names the stage mode/, say: () => "This link names a backdrop this version does not have." },
   { match: /names the comparison/, say: () => "This link names a comparison this version does not have." },
