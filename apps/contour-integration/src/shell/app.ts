@@ -481,8 +481,8 @@ export function mountShell2(root: Element): Shell2Handle {
    */
   function editPieces(
     op: (c: Contour) => Contour,
-    why: CommitReason = "edit-step",
-    keeps: "the recipe" | "nothing" | ContourOp = "nothing",
+    why: CommitReason,
+    keeps: "the recipe" | ContourOp,
   ): void {
     const next = op(state.contour);
     if (next === state.contour) return;
@@ -492,15 +492,19 @@ export function mountShell2(root: Element): Shell2Handle {
   /**
    * What `contourSource` becomes after an edit — M8 step 4.4b.
    *
-   * Three answers, and they are the three kinds of edit. `"the recipe"` is an annotation: a role or
-   * a name moves no point, so the recipe still describes the curve and `viewState.ts` carries the
-   * difference as a diff. A {@link ContourOp} is a STRUCTURAL edit that the recipe can now absorb,
-   * by recording what was done rather than what it became. `"nothing"` is left for an edit that is
-   * neither — there is none today, and the case stays because the alternative is a default that
-   * silently makes a future one a lie.
+   * Two answers, and they are the two kinds of edit. `"the recipe"` is an annotation: a role or a
+   * name moves no point, so the recipe still describes the curve and `viewState.ts` carries the
+   * difference as a diff. A {@link ContourOp} is a STRUCTURAL edit that the recipe absorbs by
+   * recording what was DONE rather than what it became.
+   *
+   * **Required, with no default, which is the point.** A third answer — `"nothing"`, the recipe
+   * simply dropped — was written first and is unreachable: every operation the shell offers is one
+   * of the two above. Leaving it as the default would make the next editing action silently drop a
+   * reader's link, at exactly the moment nobody is thinking about links; requiring the argument
+   * makes that a compile error instead. Found reviewing the phase at step 4.5.
    */
-  function recipeAfter(keeps: "the recipe" | "nothing" | ContourOp): ShellState["contourSource"] {
-    if (keeps === "nothing" || state.contourSource === null) return null;
+  function recipeAfter(keeps: "the recipe" | ContourOp): ShellState["contourSource"] {
+    if (state.contourSource === null) return null;
     if (keeps === "the recipe") return state.contourSource;
     return { ...state.contourSource, ops: [...(state.contourSource.ops ?? []), keeps] };
   }
