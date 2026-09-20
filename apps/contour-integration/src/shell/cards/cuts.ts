@@ -31,6 +31,7 @@ import {
 } from "../../engine/branchEdit.js";
 import { declaredOrder } from "../../shell/state.js";
 import { effectiveBranch } from "../../kernel/branch/model.js";
+import { isoShown } from "../../ui/stage/mode.js";
 import { h, type Child } from "../dom.js";
 import { mathSpoken, mathText } from "../math.js";
 import { card, type Card } from "./card.js";
@@ -80,7 +81,11 @@ export const cutsCard: Card = ({ state, resolution, actions }) => {
       : resolution.kind === "declared"
         ? resolution.declared
         : null;
-  const isoOn = state.iso ?? declaredProduct !== null;
+  // The DEFAULT is the stage's, through one predicate — see `ui/stage/mode.ts`'s `isoShown`. This
+  // line and `stageView`'s `iso === true` were two readers of the same tri-state, which is why the
+  // control read pressed on every branch record while the stage drew nothing and the first click
+  // only un-pressed it.
+  const isoOn = isoShown(state.iso, declaredProduct !== null);
 
   const head: Child[] = [
     h(

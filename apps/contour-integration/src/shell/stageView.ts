@@ -16,11 +16,13 @@
 // guard compared object identity against a product rebuilt on every resolve.
 import { branchHandles, type BranchHandle } from "../engine/branchEdit.js";
 import { drawnCuts } from "../engine/branchEdit.js";
-import { effectiveBranch } from "../kernel/branch/model.js";
+import { NO_BRANCH, effectiveBranch, type BranchChoice } from "../kernel/branch/model.js";
+import { MAX_CUT_SEGMENTS, cutSegments, type CutSegment } from "../kernel/branch/correction.js";
 import { handlesOf, type Handle } from "../engine/contour/edit.js";
 import { resolveAll } from "../engine/contour/model.js";
 import { penContour } from "../engine/contour/pen.js";
 import type { Node } from "@cas/expr";
+import { Frac } from "@cas/exact";
 import type { DeclaredProduct } from "../kernel/branch/declared.js";
 import type { Cx, Resolved } from "../kernel/geom.js";
 import type { PoleReport } from "../kernel/poles.js";
@@ -29,7 +31,7 @@ import { scaleLabel, stepDetail } from "./stepDetail.js";
 import { showStepDetail } from "./state.js";
 import { plotToScreen, scale, type View, type Viewport } from "../kernel/camera.js";
 import { DARK_INK, LIGHT_INK, type InkTheme } from "../ui/inkTheme.js";
-import type { StageMode } from "../ui/stage/mode.js";
+import { ISO_STRENGTH, isoShown, type StageMode } from "../ui/stage/mode.js";
 import { drawPoleGlyph, drawTextbookPlate } from "../ui/stage/ink.js";
 import { drillMask } from "./drillPanel.js";
 import { drawBranchHandles, drawContour, drawPenPath, type InkOptions } from "../ui/stage/ink.js";
@@ -178,6 +180,125 @@ export function describeStage(input: {
   );
 }
 
+/**
+ * **The cut system the stage DRAWS — the record's under a record, the reader's in the sandbox.**
+ *
+ * `ShellState.branch` is by its own doc *"the SANDBOX's declared cut system. A record's own cuts are
+ * the record's and are not stored here."* The M8 stage read it unconditionally, so all seven tier-D
+ * records mounted with `points = 0`: no hatched cut, no `J = …` label, no admissibility colour, and
+ * the cuts card's "Crossing a cut" block empty. The only trace of D7's dogbone or D1's keyhole was
+ * the colour seam. The old shell drew `run.branch` (`708c6db:app.ts:383`) under the comment *"D1's
+ * `argRange` decides where the cut runs and the whole record is about what happens when it runs
+ * somewhere else, so a figure without it is missing the thing it is teaching"*; `M8/parity.md` does
+ * not list the loss as deliberate.
+ *
+ * `run.branch` was computed throughout and read by nothing (`engine/analyse.ts` returns it and
+ * `runFamily` spreads it into the run). A record that could not be RUN has no cuts to draw, which is
+ * `NO_BRANCH` rather than the sandbox's — falling back to `state.branch` there would put the
+ * reader's parked keyhole over a record that failed, which is the same class of mistake as the
+ * parked sandbox CONTOUR the M8 review found beside it.
+ *
+ * Pure and exported so the node gate can pin the choice; {@link handles} and `drawNow` both go
+ * through it, so what is drawn and what can be grabbed cannot come from different systems.
+ */
+export function drawnBranch(state: ShellState, resolution: StateResolution | undefined): BranchChoice {
+  return resolution?.kind === "gallery" ? (resolution.run?.branch ?? NO_BRANCH) : state.branch;
+}
+
+/**
+ * The declared branch product this state is drawn from, or `null` — a record's, or the sandbox's.
+ *
+ * Two things read it: the shader's branch half (through {@link programOf}) and the correction's
+ * REFERENCE, which is the per-factor argument window and cannot be inferred from the geometry
+ * (`correction.ts`'s `ReferenceDirections`). A plain sandbox expression has none, and that is why
+ * nothing is uploaded for one: `@cas/expr` compiles a determination this module cannot name, so
+ * correcting away from it would be inventing the thing D6 was drawn wrong by assuming.
+ */
+export function declaredProductOf(resolution: StateResolution | undefined): DeclaredProduct | null {
+  if (resolution === undefined) return null;
+  if (resolution.kind === "gallery") return resolution.run?.declared?.product ?? null;
+  if (resolution.kind === "declared") return resolution.declared;
+  return null;
+}
+
+/**
+ * How far a cut is followed before it is clipped, in plot units.
+ *
+ * **`drawnCuts`' own expression**, repeated here rather than inferred, because the seam and the
+ * hatching have to be clipped at the same place: a ray corrected only as far as the canvas edge
+ * would leave every pixel beyond it on the wrong side of a cut that in truth continues. Pinned in
+ * `test/cutStage.test.ts` against the polyline `drawnCuts` actually returns, so the two cannot drift.
+ */
+export function cutReach(view: View, vp: Viewport): number {
+  return (
+    4 *
+    (Math.hypot(view.center[0], view.center[1]) +
+      view.halfHeight * (1 + Math.max(1, vp.width) / Math.max(1, vp.height)))
+  );
+}
+
+/**
+ * Where each declared factor's reference cut RUNS, as a direction out of its branch point.
+ *
+ * **Not `declaredReference`, and D7 is why.** That function returns the argument window's lower
+ * edge, which is the direction of the cut of `z^α` — and a factor the record wrote `(b − z)^ν` has
+ * its discontinuity where `arg(b − z) = θ₀`, i.e. at `z = b − r·e^{iθ₀}`, a ray leaving `b` in the
+ * direction `θ₀ + π`. Measured before this existed: D7's `(b − z)^{1/4}` in the principal window put
+ * its reference ray from `b = 3` pointing LEFT, where the determination's discontinuity is on
+ * `(3, ∞)`, and the correction came out `1/4` on a whole wedge — so the stage would have drawn D7
+ * rotated by `e^{iπ/2}` off the sheet the ledger computes on. With the half turn it is `{0, 1}`, an
+ * integer everywhere, which is what `Σα ∈ ℤ` says it must be.
+ *
+ * **And it is keyed by POSITION, not by the factor's id** — the second half of the same finding.
+ * `cutSegments` looks its reference up by the BRANCH POINT's id, and in the sandbox those two names
+ * disagree: `buildDeclaration` calls its single factor `"b"` (`SINGLE_POINT_ID`) while the reader's
+ * geometry calls the point `"b1"` (`addBranchPoint` mints `b1, b2, …`), which is M6.1's own finding
+ * met in a third place. An id lookup then finds nothing, the reference ray is silently dropped, and
+ * the correction becomes `m_Γ` instead of `m_Γ − m_ref` — measured: the sandbox's freshly declared
+ * keyhole, whose cut IS its window ray, came out at `−1/2` over half the plane. A factor sits ON its
+ * branch point, and that is a fact no naming convention can disagree with.
+ *
+ * Here rather than in `kernel/branch/declared.ts` only because that file is not this change's to
+ * edit; `declaredReference`'s own doc says it returns *"where each factor's cut runs"*, so both
+ * halves belong there and this becomes one call again the moment they land.
+ */
+function referenceRays(product: DeclaredProduct, branch: BranchChoice): ReadonlyMap<string, Frac> {
+  const out = new Map<string, Frac>();
+  for (const factor of product.factors) {
+    const at = branch.points.find((p) => p.at[0] === factor.at[0] && p.at[1] === factor.at[1]);
+    const direction = factor.kind === "power" && factor.sign === -1 ? factor.window.add(Frac.ONE) : factor.window;
+    out.set(at?.id ?? factor.id, direction);
+  }
+  return out;
+}
+
+/**
+ * The (segment, weight) list the portrait's determination is corrected by — M4.7c's "one level up".
+ *
+ * Empty without a declared product, which is not a gap: `casDeclared` is what the reference IS, so
+ * with no declaration there is no reference and `cutFactor` must stay exactly 1.
+ *
+ * `truncated` is reported rather than silently dropped. `correction.ts` says a system needing more
+ * than `MAX_CUT_SEGMENTS` is *"truncated and SAID to be, rather than quietly drawn short — a picture
+ * missing an arc is a picture in a different determination"*; nothing said it, on either side.
+ */
+export function stageCuts(
+  state: ShellState,
+  resolution: StateResolution | undefined,
+  view: View,
+  vp: Viewport,
+): { readonly segments: readonly CutSegment[]; readonly base: Cx; readonly truncated: number } {
+  const product = declaredProductOf(resolution);
+  const branch = effectiveBranch(drawnBranch(state, resolution));
+  if (product === null) return { segments: [], base: branch.basePoint, truncated: 0 };
+  const segments = cutSegments(branch, cutReach(view, vp), referenceRays(product, branch));
+  return {
+    segments,
+    base: branch.basePoint,
+    truncated: Math.max(0, segments.length - MAX_CUT_SEGMENTS),
+  };
+}
+
 /** A pole's ring, in CSS pixels, before the order glyph is placed. */
 const POLE_R = 6;
 
@@ -196,6 +317,24 @@ export function createStageView(host: HTMLElement): StageView {
     stage = new GLStage(gl);
   } catch (e) {
     glError = e instanceof Error ? e.message : String(e);
+  }
+
+  /**
+   * The last draw, kept so the stage can redraw ITSELF when the GL context comes and goes.
+   *
+   * A context loss is not a state change the shell knows about — nothing recomputed, nothing was
+   * clicked — so there is no `commit` to ride and the frame has to be re-requested from here.
+   */
+  let lastDraw: StageDraw | null = null;
+  if (stage !== null) {
+    stage.onContextChange = () => {
+      // Both directions clear the keys: on a loss the program is gone, on a restore it is gone and
+      // a new one must be linked. `drawNow`'s own relink branch does the work; this only makes sure
+      // it is reached and that the notice on the overlay is repainted with the new state.
+      programKey = null;
+      renderKey = null;
+      if (lastDraw !== null) drawNow(lastDraw);
+    };
   }
 
   const viewport = (): Viewport => ({ width: host.clientWidth || 1, height: host.clientHeight || 1 });
@@ -226,6 +365,52 @@ export function createStageView(host: HTMLElement): StageView {
 
   /** The integrand the GL program is currently built for — by VALUE, not by identity (M5.1). */
   let programKey: string | null = null;
+
+  /**
+   * Everything the last GL frame was drawn from, as one string — the skip test for item 4.7.
+   *
+   * `null` means "the buffer does not hold a frame I can reuse": a clear, a relink, a lost context.
+   * Set from {@link renderKeyOf}, which is the only place that decides what the portrait depends on.
+   */
+  let renderKey: string | null = null;
+
+  /** How many cut segments the last draw could not upload. Shown on the overlay; 0 the rest of the time. */
+  let cutsTruncated = 0;
+
+  /**
+   * The portrait's whole input, as a string.
+   *
+   * Every field is one the shader reads. The device-pixel ratio is in it because `render` re-sizes
+   * the drawing buffer and a browser zoom changes it with nothing else moving; the cut segments are
+   * in it because a drag moves them while the program key — `d:${expr}:${declaration}:${sheet}` —
+   * deliberately carries no geometry at all, which is exactly what makes a relink unnecessary.
+   */
+  function renderKeyOf(
+    program: string,
+    view: View,
+    vp: Viewport,
+    opts: { readonly mode: StageMode; readonly wash?: number; readonly iso?: number },
+    cuts: { readonly segments: readonly CutSegment[]; readonly base: Cx },
+  ): string {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const segs = cuts.segments.map((s) => `${s.a[0]},${s.a[1]},${s.b[0]},${s.b[1]},${s.jump}`).join(";");
+    return [
+      program,
+      view.center[0],
+      view.center[1],
+      view.halfHeight,
+      vp.width,
+      vp.height,
+      dpr,
+      inkScale,
+      opts.mode,
+      opts.wash ?? 0,
+      opts.iso ?? 0,
+      cuts.base[0],
+      cuts.base[1],
+      segs,
+    ].join("|");
+  }
 
   /**
    * What the portrait is a picture OF, and the key that decides whether to relink.
@@ -298,7 +483,10 @@ export function createStageView(host: HTMLElement): StageView {
     resolution: StateResolution | undefined,
   ): { radius: readonly Handle[]; branch: readonly BranchHandle[] } => ({
     radius: handlesOf(drawnContour(state, resolution), resolvedPieces(state, resolution)),
-    branch: branchHandles(state.branch),
+    // **The same system `drawNow` draws**, through {@link drawnBranch}: a handle offered where no cut
+    // is drawn, or a cut drawn with no handle on it, is the `state.contour` mistake in the other
+    // register. What may be DRAGGED is `stageController`'s question, not this one.
+    branch: branchHandles(drawnBranch(state, resolution)),
   });
 
   /**
@@ -411,6 +599,7 @@ export function createStageView(host: HTMLElement): StageView {
   }
 
   function drawNow(d: StageDraw): void {
+    lastDraw = d;
     const vp = viewport();
     const t = inkTheme(d);
     const view = d.state.view;
@@ -418,6 +607,10 @@ export function createStageView(host: HTMLElement): StageView {
     // Once per draw, and read by the ink layer, the pole rings and the overlay alike — three
     // surfaces on one identifier, the rule the hover highlight has followed since step 1.10.
     const focus = focusOf(d);
+    // Before the overlay, because the overlay REPORTS the truncation: computing it inside the GL
+    // branch below would put the notice one frame behind the picture it is about.
+    const cuts = stageCuts(d.state, d.resolution, view, vp);
+    cutsTruncated = cuts.truncated;
 
     // **The overlay first, and unconditionally.** It is DOM, and the two returns below are both
     // about CANVAS — an absent 2D context, and an empty resolution. Drawing it at the end made a
@@ -437,6 +630,7 @@ export function createStageView(host: HTMLElement): StageView {
         // The buffer is still SIZED, because a clear of a stale buffer is a plate of the wrong shape.
         stage.resize(vp);
         stage.clearTo(paperRgb(t.paper));
+        renderKey = null;
         // The key is kept: the program built for this integrand is still the right one, so leaving
         // textbook mode redraws without a relink. It is cleared only when the integrand goes away.
         if (empty || program === null) programKey = null;
@@ -444,21 +638,42 @@ export function createStageView(host: HTMLElement): StageView {
         if (programKey !== null) {
           stage.clear();
           programKey = null;
+          renderKey = null;
         }
       } else {
         if (program.key !== programKey) {
           stage.setIntegrand(program.ast, program.declared);
           programKey = program.key;
+          renderKey = null;
         }
-        stage.render(view, vp, {
+        const opts = {
           mode: drawMode(d),
           // The light plate washes the portrait onto paper; every other draw leaves it alone.
           ...(d.plate === "light" ? { wash: 1, paper: paperRgb(t.paper) } : {}),
           // The reader's modulus-contour toggle is INDEPENDENT of the mode (plan §1.9), so it rides
           // alongside rather than being folded into it: `iso` the mode draws phase isolines every
           // 30°, `iso` the toggle draws |f| contours, and a reader may want either, both or neither.
-          ...(d.state.iso === true ? { iso: ISO_CONTOURS } : {}),
-        });
+          //
+          // **Through the same predicate the card's button reads** — `ui/stage/mode.ts`'s
+          // `isoShown` — because this read `iso === true` while the card defaulted `iso ?? declared`,
+          // so a tier-D record showed a pressed control over a portrait with no contours on it.
+          ...(isoShown(d.state.iso, program.declared !== undefined) ? { iso: ISO_STRENGTH } : {}),
+          // The branch-cut correction (item 2.4). Empty without a declared product, so a plain
+          // sandbox portrait is bit-for-bit what it always was.
+          ...(cuts.segments.length === 0 ? {} : { cuts: { segments: cuts.segments, base: cuts.base } }),
+        };
+        // **The GL portrait is skipped when nothing it depends on has moved.** A hover over the
+        // stage changes `session.hover` and nothing else, and the portrait is a function of
+        // (program, camera, viewport, mode, overlay, plate, cuts) alone — measured under SwiftShader
+        // at 900 × 600 before this: `render` cost 32.8–34.6 ms on EVERY pointer move, for a picture
+        // identical to the one already in the buffer. The buffer is persistent
+        // (`preserveDrawingBuffer: true`), so the last frame is still there to be composited and to
+        // be read back by the figure export.
+        const next = renderKeyOf(program.key, view, vp, opts, cuts);
+        if (next !== renderKey) {
+          stage.render(view, vp, opts);
+          renderKey = next;
+        }
       }
     }
 
@@ -495,7 +710,7 @@ export function createStageView(host: HTMLElement): StageView {
         at: handle.at,
         emphasis: d.session.gesture === "handle" && hoveredHandle === i ? "grabbed" : hoveredHandle === i ? "hover" : "none",
       })),
-      cuts: hidden ? [] : drawnCuts(effectiveBranch(d.state.branch), view, vp),
+      cuts: hidden ? [] : drawnCuts(effectiveBranch(drawnBranch(d.state, d.resolution)), view, vp),
       // **On an export plate too, unlike step 3.1c's callouts** — the rule being *nothing a link
       // cannot restore*, not *nothing but the contour*: the scrub position and this toggle are both
       // STATE and both in the codec, so these arrows are reproducible from the link the figure is
@@ -653,6 +868,35 @@ export function createStageView(host: HTMLElement): StageView {
       return `left:${Math.round(x)}px;top:${Math.round(y)}px`;
     };
 
+    // **What is wrong with the PORTRAIT, said on the portrait.** Both of these are about the
+    // picture rather than about the argument, so they belong here and not in a rail card — and
+    // neither may be silent: a black stage under a live `=` answer, and a cut system drawn short,
+    // are the two ways this layer can be wrong while everything around it still reads correct.
+    // `role="status"` rather than `alert`: it is not the reader's doing and there is nothing to fix.
+    if (stage?.contextLost === true) {
+      chips.push(
+        h(
+          "span",
+          { key: "glLost", class: "stageChip notice", role: "status" },
+          "⚠ The graphics context was lost. The phase portrait is waiting for the browser to restore it; " +
+            "every number beside it is unaffected.",
+        ),
+      );
+    }
+    if (cutsTruncated > 0) {
+      // `correction.ts`'s own promise, kept: *"a cut system that would need more is truncated and
+      // SAID to be, rather than quietly drawn short — a picture missing an arc is a picture in a
+      // different determination."* Nothing said it, on either side of the parity gate.
+      chips.push(
+        h(
+          "span",
+          { key: "cutCap", class: "stageChip notice", role: "status" },
+          `⚠ ${cutsTruncated} cut segment${cutsTruncated === 1 ? "" : "s"} past the shader's limit ` +
+            `of ${MAX_CUT_SEGMENTS} are not drawn, so the colouring past them is in a different determination.`,
+        ),
+      );
+    }
+
     // The pen's snap, beside the pointer. Research 07 rule 5: a snap that fires without saying so
     // has moved the reader's vertex somewhere they did not ask for.
     const pen = d.session.pen;
@@ -793,6 +1037,3 @@ export function createStageView(host: HTMLElement): StageView {
     },
   };
 }
-
-/** How many modulus contours `iso: true` means. The reader picks a count at a later step. */
-const ISO_CONTOURS = 8;

@@ -19,6 +19,7 @@ import { describe, expect, it } from "vitest";
 import { compileF, makeComplexFn } from "@cas/expr";
 import { COMPLEX_DERIVED_GLSL, COMPLEX_SINGLE_GLSL, createProgram } from "@cas/gpu";
 import { buildPhaseFrag, PHASE_VERT, STAGE_MODE_CODE } from "../src/ui/stage/phase.glsl.js";
+import { ISO_STRENGTH } from "../src/ui/stage/mode.js";
 import { cetC6Bytes } from "../src/ui/stage/cetC6.js";
 import { CUT_GLSL } from "../src/ui/stage/cut.glsl.js";
 import { declaredProductGlsl } from "../src/ui/stage/declared.glsl.js";
@@ -256,8 +257,16 @@ function pixelAt(gl: WebGL2RenderingContext, program: WebGLProgram, z: Cx, iso =
 describe("every branch record's generated program builds", () => {
   const cases = branchRuns();
 
-  it("covers all seven", () => {
-    expect(cases).toHaveLength(7);
+  // **DERIVED from the corpus, with a floor** — `shaderCompile.browser.test.ts`'s form, and the
+  // hazard CLAUDE.md names by name: a hardcoded count is what kept this suite red for three
+  // milestones, and here a literal `7` would have turned an ADDED branch record into a failure
+  // rather than into coverage. The floor is what stops the derivation passing on an empty list.
+  it("covers every record that declares a branch factor", () => {
+    const declared = offeredFamilies()
+      .tiers.flatMap((t) => t.families)
+      .filter((f) => f.branch !== undefined).length;
+    expect(cases).toHaveLength(declared);
+    expect(declared).toBeGreaterThanOrEqual(7);
   });
 
   it.each(cases.map((c) => [c.id, c] as const))("%s compiles and links", (_id, { run }) => {
@@ -408,10 +417,16 @@ describe("the modulus contours sit in the SAME places in both determinations", (
   // finds the crossing and bisecting `t − k` finds the band edge that serves as the control.
   const powers = branchRuns().filter((c) => c.product.factors.every((f) => f.kind === "power"));
 
-  /** The overlay's darkening at `z`, as a fraction of the pixel it darkens. */
+  /**
+   * The overlay's darkening at `z`, as a fraction of the pixel it darkens.
+   *
+   * **At the strength the APP passes**, imported rather than written as a literal `1`: the shipped
+   * value was `ISO_CONTOURS = 8` — a COUNT fed into a `[0,1]` strength uniform — while this probe
+   * used 1, so the one test that exercised the overlay was not exercising the overlay a reader sees.
+   */
   const inkAt = (gl: WebGL2RenderingContext, program: WebGLProgram, z: Cx): number => {
     const off = pixelAt(gl, program, z, 0);
-    const on = pixelAt(gl, program, z, 1);
+    const on = pixelAt(gl, program, z, ISO_STRENGTH);
     const base = Math.hypot(off[0], off[1], off[2]);
     if (base < 1e-6) return 0;
     return Math.hypot(on[0] - off[0], on[1] - off[1], on[2] - off[2]) / base;
