@@ -35,11 +35,12 @@
 // `−e^{iπa}` — the record's own expression. E2 at `ρ = i`: `Res_w = 1`, giving `−i·e^{−πξ/2}`.
 import { Frac, Gauss, QiPoly, SqrtExt } from "@cas/exact";
 import { fracCmp } from "./bounds/ratBound.js";
-import { exact, refuse, type Certificate } from "@cas/rigor";
+import { exact, type Certificate } from "@cas/rigor";
 import type { Node } from "@cas/expr";
 import { toExactRational } from "./exactRational.js";
 import { splitFactors } from "./exponentialFactor.js";
 import { exactPolesOf } from "./algebraic.js";
+import { numericRoots } from "./poles.js";
 import { ExpSum, formatExpSum } from "./expSum.js";
 import { Exponent } from "./exponent.js";
 import { formatSqrtExt } from "./formatExact.js";
@@ -298,7 +299,10 @@ export function polesInStrip(form: LatticeForm, height: Frac): StripResult {
 export function polesInBand(form: LatticeForm, lo: Frac, hi: Frac): StripResult {
   if (fracCmp(lo, hi) >= 0) return { ok: false, reason: "the band is empty" };
 
-  const report = exactPolesOf(form.num, form.den);
+  // The finder is passed, so the refusal below is about the roots and not about this call: without
+  // it `1/(1+e^z+e^{2z}+e^{3z})`, whose `D(w) = 1+w+w²+w³` has roots `−1, ±i`, was declined as
+  // inexpressible. Measured: three poles now, all exact.
+  const report = exactPolesOf(form.num, form.den, numericRoots);
   if (!report.complete) {
     return {
       ok: false,
@@ -371,9 +375,4 @@ export function polesInBand(form: LatticeForm, lo: Frac, hi: Frac): StripResult 
         "exact rational, and $\\operatorname{Res}_z = e^{az_0}\\operatorname{Res}_w(N/D, w_0)/w_0$ lands in $\\mathbb{Q}(i)(\\sqrt{d}) \\times e^{\\mathbb{Q}(i)\\pi}$",
     ),
   };
-}
-
-/** The refusal as a certificate, for a caller that wants to show why the strip was not read. */
-export function stripRefusal(reason: string): Certificate {
-  return refuse("the poles in the strip", reason);
 }

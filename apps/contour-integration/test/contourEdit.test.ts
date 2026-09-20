@@ -47,7 +47,16 @@ import {
 } from "../src/engine/contour/templates.js";
 import { integrateContour } from "../src/engine/contour/integrate.js";
 import { TEMPLATES } from "../src/shell/templates.js";
-import { arcLength, distanceToPoint, endPoint, isClosed, pointAt, startPoint, type Cx } from "../src/kernel/geom.js";
+import {
+  arcLength,
+  distanceToPoint,
+  endPoint,
+  isClosed,
+  pointAt,
+  startPoint,
+  type Cx,
+  type Resolved,
+} from "../src/kernel/geom.js";
 
 /** `1/z`, whose integral round the unit circle is the one number every reader knows. */
 const oneOverZ = ([x, y]: Cx): Cx => {
@@ -60,8 +69,10 @@ const TEN: readonly (readonly [string, Contour])[] = TEMPLATES.map((t) => [t.id,
 
 const dist = (a: Cx, b: Cx): number => Math.hypot(a[0] - b[0], a[1] - b[1]);
 
-/** `edit.ts`'s own tolerance, restated here so a drift in it shows up as a failure rather than as
- *  two files agreeing with each other. */
+/** The join tolerance AT TEMPLATE SCALE, restated here so a drift shows up as a failure rather than
+ *  as two files agreeing with each other. `geom.ts`'s rule is relative — `1e-9 × the longest piece`,
+ *  floored at 1 — and every contour in this block is a few units across, so the number is the same
+ *  one both files used to hold as a literal. The large-radius cases below are where they part. */
 const TOL = 1e-9;
 
 /** Does this piece begin where it ends? The property {@link reversePiece} turns on, and the one that
@@ -603,9 +614,10 @@ describe("the join: symbolic where it can be, literal where it cannot", () => {
   });
 
   it("decides a seam at the same tolerance `isClosed` decides closure", () => {
-    // `edit.ts` keeps its own copy of 1e-9 because `isClosed` publishes it as a parameter default.
-    // The probe is an IDENTITY reorder, which mints a join exactly where a seam is open — so the two
-    // numbers are compared through their behaviour rather than by reading them.
+    // `edit.ts` no longer keeps its own copy — both read `geom.ts`'s `joinTolerance`. The probe is
+    // an IDENTITY reorder, which mints a join exactly where a seam is open, so the two are still
+    // compared through their behaviour rather than by reading one number twice. The triangle's
+    // longest side is √2, so the tolerance here is 1.41e-9 and the two deltas straddle it as before.
     for (const [delta, joins] of [[1e-10, 0], [1e-8, 1]] as const) {
       const triangle: Contour = {
         pieces: [
@@ -620,6 +632,88 @@ describe("the join: symbolic where it can be, literal where it cannot", () => {
       expect(next.pieces, `delta=${delta}`).toHaveLength(3 + joins);
       expect(isClosed(resolveAll(next)), `delta=${delta}`).toBe(true);
     }
+  });
+
+  it("mints a join on the SAME rule `isClosed` uses, at a scale where an absolute 1e-9 would not", () => {
+    // `edit.ts` used to hold its own literal `1e-9`, kept in step by hand. Scaled up by 1e7 the two
+    // rules part: the triangle's longest side is 1.41e7, so a seam is dust below 1.41e-2, and a gap
+    // of 1e-2 is one `isClosed` calls closed and a hardcoded 1e-9 would mint a join across. An
+    // IDENTITY reorder is the probe, because it mints a join exactly where a seam is open.
+    const S = 1e7;
+    for (const [gap, joins] of [[1e-2, 0], [1, 1]] as const) {
+      const triangle: Contour = {
+        pieces: [
+          freePiece("a", { kind: "segment", from: { x: 0, y: 0 }, to: { x: S, y: 0 } }, 0),
+          freePiece("b", { kind: "segment", from: { x: S, y: 0 }, to: { x: 0, y: S } }, 1),
+          freePiece("c", { kind: "segment", from: { x: 0, y: S + gap }, to: { x: 0, y: 0 } }, 2),
+        ],
+        params: {},
+      };
+      expect(isClosed(resolveAll(triangle)), `gap=${gap}`).toBe(joins === 0);
+      expect(reorderPieces(triangle, ["a", "b", "c"]).pieces, `gap=${gap}`).toHaveLength(3 + joins);
+    }
+  });
+
+  it("calls a large contour closed, where an ABSOLUTE 1e-9 called it open", () => {
+    // The semicircle's seam is `R·sin(π)` dust — `1.2246e-16·R`, nothing to do with the shape. An
+    // absolute 1e-9 therefore had a THRESHOLD at R ≈ 8.17e6: measured, closed at R = 1e6 (gap
+    // 1.22e-10) and open at R = 1e7 (1.22e-9) and R = 1e9 (1.22e-7) — the ledger refusing the
+    // residue theorem on a contour that closes.
+    //
+    // Built as resolved geometry rather than through `setParam`, which now clamps `R` to the
+    // template's own `[1e-6, 1e6]` and so cannot reach these radii at all. `isClosed` still can:
+    // the pen draws its own pieces, and a record may declare a wider range.
+    for (const R of [1e6, 1e7, 1e9]) {
+      const pieces: Resolved[] = [
+        { kind: "segment", from: [-R, 0], to: [R, 0] },
+        { kind: "arc", center: [0, 0], radius: R, theta0: 0, theta1: Math.PI },
+      ];
+      const wrap = endPoint(pieces[1]);
+      const head = startPoint(pieces[0]);
+      const seam = Math.hypot(wrap[0] - head[0], wrap[1] - head[1]);
+      expect(seam, `R=${R} seam exists`).toBeGreaterThan(0);
+      expect(seam, `R=${R} is dust, not shape`).toBeLessThan(1e-15 * R);
+      expect(isClosed(pieces), `R=${R}`).toBe(true);
+      // Pinned against the OLD rule, so this cannot pass by the tolerance having been loosened
+      // everywhere: at 1e7 and 1e9 the seam really is over the absolute 1e-9 that used to decide it.
+      if (R > 8.2e6) expect(seam, `R=${R} vs the old absolute rule`).toBeGreaterThan(1e-9);
+    }
+  });
+
+  it("still calls a GENUINELY open contour open, at every one of those scales", () => {
+    // The other direction, and what stops the test above being satisfied by a tolerance of ∞: a gap
+    // that is part of the shape rather than rounding stays a gap however big the contour is.
+    for (const R of [1e6, 1e7, 1e9]) {
+      const open: Resolved[] = [
+        { kind: "segment", from: [0, 0], to: [R, 0] },
+        { kind: "segment", from: [R, 0], to: [0, R / 1000] },
+      ];
+      expect(isClosed(open), `R=${R}`).toBe(false);
+      // …and the gap really is the shape's: `R/1000`, eleven orders above the dust above.
+      expect(Math.hypot(0 - 0, R / 1000 - 0), `R=${R}`).toBeCloseTo(R / 1000, 6);
+    }
+  });
+});
+
+describe("`setParam` — the value a reader sees is the value the ledger reads", () => {
+  it("clamps to the parameter's declared range rather than taking any finite number", () => {
+    const c = semicircleTemplate(1);
+    const [lo, hi] = c.params["R"].range;
+    expect(hi).toBe(1e6);
+    expect(setParam(c, "R", 1e7).params["R"].value).toBe(hi);
+    expect(setParam(c, "R", -5).params["R"].value).toBe(lo);
+    // …and inside the range it is the identity, so the clamp is not a rounding of everything.
+    expect(setParam(c, "R", 17).params["R"].value).toBe(17);
+  });
+
+  it("refuses a non-finite value, returning the contour by reference", () => {
+    // Clamping `NaN` would store a number that looks deliberate: `Math.min(hi, Math.max(lo, NaN))`
+    // is `NaN`, and every geometry downstream would then be `NaN` with nothing saying why.
+    const c = semicircleTemplate(1);
+    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      expect(setParam(c, "R", bad), `${bad}`).toBe(c);
+    }
+    expect(setParam(c, "nosuchparam", 3)).toBe(c);
   });
 });
 

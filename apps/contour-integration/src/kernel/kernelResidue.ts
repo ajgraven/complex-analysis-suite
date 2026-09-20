@@ -31,6 +31,7 @@ import { exact, refuse, type Certificate } from "@cas/rigor";
 import { ExpSum } from "./expSum.js";
 import { Exponent } from "./exponent.js";
 import { exactPolesOf } from "./algebraic.js";
+import { numericRoots } from "./poles.js";
 import type { KernelKind, SummationKernel } from "./summationKernel.js";
 
 /**
@@ -121,7 +122,10 @@ export type CofactorResidues =
  * `mergedResidue.ts`'s. The two functions partition the pole set between them.
  */
 export function cofactorResidues(kernel: SummationKernel): CofactorResidues {
-  const report = exactPolesOf(kernel.num, kernel.den);
+  // With the root finder, so that the refusal below is about the cofactor and not about this call:
+  // without it the cubic `(z²+¼)(z−⅓)` was declined as not exactly pinned, where all three poles are
+  // Gaussian rationals.
+  const report = exactPolesOf(kernel.num, kernel.den, numericRoots);
   if (!report.complete) {
     const reason =
       "not every pole of the cofactor was pinned exactly, so the kernel cannot be evaluated at them — " +

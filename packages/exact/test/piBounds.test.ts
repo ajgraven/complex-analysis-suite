@@ -77,6 +77,28 @@ describe("piBounds", () => {
     expect(leq(PI_ABOVE, piUpper())).toBe(true);
   });
 
+  it("computes each term count once, handing back the very same Frac objects", () => {
+    // A pure function of one integer, memoised: the exact-rational Machin sum is not cheap, and it
+    // is paid inside every certified arc bound, once per side per recompute — measured at 2.48 ms
+    // per `piUpper()` call against 7.1e-5 ms. Asserted by OBJECT IDENTITY rather than by timing, the
+    // claim
+    // that cannot be flaky; `Frac` is immutable, so no consumer can tell the difference.
+    const a = piBounds(24);
+    const b = piBounds(24);
+    expect(b).toBe(a);
+    expect(b.lo).toBe(a.lo);
+    expect(b.hi).toBe(a.hi);
+    expect(piUpper()).toBe(a.hi);
+    expect(piLower()).toBe(a.lo);
+    // A DIFFERENT term count is its own entry — the cache is keyed, not one slot from which a
+    // second argument would silently be handed the first's answer.
+    const coarse = piBounds(8);
+    expect(coarse).not.toBe(a);
+    expect(coarse.hi.equals(a.hi)).toBe(false);
+    expect(piBounds(8)).toBe(coarse);
+    expect(piBounds(24)).toBe(a);
+  });
+
   it("never touches Math to produce the bound", () => {
     // A guard on the method rather than the value: a bound derived from a double is a bound on
     // nothing in particular.

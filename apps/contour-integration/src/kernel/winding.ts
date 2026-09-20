@@ -13,6 +13,7 @@
 import {
   distanceToPoint,
   endPoint,
+  finestSagitta,
   polygonise,
   startPoint,
   type Cx,
@@ -71,7 +72,7 @@ function toPolyline(pieces: readonly Resolved[], maxSagitta: number): Pt[] {
     if (last !== undefined && last[0] === q[0] && last[1] === q[1]) return;
     out.push(q);
   };
-  for (const g of pieces) for (const q of polygonise(g, maxSagitta)) push(q);
+  for (const g of pieces) for (const q of polygonise(g, maxSagitta).points) push(q);
   return out;
 }
 
@@ -102,7 +103,27 @@ export function windingNumber(pieces: readonly Resolved[], p: Cx): WindingResult
   }
 
   // s = clearance/4 makes the arc-to-chord homotopy provably miss p (see the file header).
-  const poly = toPolyline(pieces, cl / 4);
+  const wanted = cl / 4;
+
+  // **The homotopy argument is the whole of the exactness claim, so a polygon that cannot carry it
+  // is refused rather than used.** `polygonise` caps the chords it will lay down, and past that cap
+  // it returns a coarser polyline than it was asked for — silently, until this asked. Measured on a
+  // circle of radius 1e6, where the cap's sagitta is 4.93e-6: 24 of 36 points genuinely INSIDE the
+  // circle, at clearances 2.1e-6 to 4.8e-6, came back `n: 0, decided: true`. Asked here and not
+  // after the fact, because the answer is also what stops a million-vertex array being built for it.
+  const finest = Math.max(0, ...pieces.map(finestSagitta));
+  if (finest > wanted) {
+    return {
+      n: 0,
+      decided: false,
+      clearance: cl,
+      reason:
+        `the point is ${cl.toExponential(2)} from the contour, and its curved pieces cannot be ` +
+        `resolved past ${finest.toExponential(2)} — too coarse to decide which side of them it is on`,
+    };
+  }
+
+  const poly = toPolyline(pieces, wanted);
 
   // Closure is checked BEFORE degeneracy, so an open path is reported as open rather than as
   // "degenerate" — an open two-point path trips both, and only one of those is the useful diagnosis.

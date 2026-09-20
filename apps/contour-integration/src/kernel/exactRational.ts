@@ -38,6 +38,9 @@ export type ExactRationalResult =
 export function simplestRational(x: number): Frac {
   if (!Number.isFinite(x)) throw new Error("simplestRational: non-finite input");
   if (Number.isInteger(x)) return Frac.of(BigInt(x));
+  // A SUBNORMAL passes `Number.isFinite`, so `x = 5e-324` used to enter the loop below, overflow
+  // `1/frac` to `Infinity` and throw a `RangeError` out of `BigInt(Math.floor(Infinity))` — measured,
+  // `findPoles(parse("1/(z - 5e-324)"))` crashed rather than refusing. See the break inside it.
 
   // Continued fraction: x = a0 + 1/(a1 + 1/(a2 + …)); convergents p/q from the standard recurrence.
   let p0 = 1n;
@@ -48,6 +51,10 @@ export function simplestRational(x: number): Frac {
 
   for (let step = 0; step < 40 && frac !== 0; step++) {
     const r = 1 / frac;
+    // The docstring promises the dyadic fallback "if no convergent round-trips within the iteration
+    // budget", and this is what makes that reachable on a subnormal: `1/frac` overflows, and a
+    // partial convergent built from `Infinity` is not a convergent at all.
+    if (!Number.isFinite(r)) break;
     const a = BigInt(Math.floor(r));
     frac = r - Math.floor(r);
     const p2 = a * p1 + p0;
@@ -101,10 +108,40 @@ function constantInteger(node: Node): number | null {
 
 const MAX_DEGREE = 256;
 
+/**
+ * The widest coefficient this arithmetic will carry, in bits of numerator or denominator.
+ *
+ * `MAX_DEGREE` bounds a polynomial's LENGTH and nothing bounded the size of one entry: measured,
+ * `simplestRational(1e-300)` legitimately returns a 300-digit denominator, and a subnormal's dyadic
+ * fallback a 324-digit one, each of which then multiplies through every `QiPoly` product downstream.
+ *
+ * **The guard is here rather than in {@link simplestRational}** because here a refusal can be
+ * RETURNED. `simplestRational` has four callers outside this file that read a record's own vetted
+ * bindings and do not catch a `Refusal`, so refusing there would turn a bad literal into a thrown
+ * error — which is the defect this whole item is about, moved rather than fixed. 256 bits is 77
+ * digits; the widest literal any fixture or dragged handle in the corpus produces is under 60 bits.
+ */
+const MAX_COEFFICIENT_BITS = 256;
+
+const bitLength = (b: bigint): number => (b < 0n ? -b : b).toString(2).length;
+
+/** {@link simplestRational}, refused by name when the literal is one no `QiPoly` here should carry. */
+function exactLiteral(x: number): Frac {
+  const f = simplestRational(x);
+  const bits = Math.max(bitLength(f.n), bitLength(f.d));
+  if (bits > MAX_COEFFICIENT_BITS) {
+    refuse(
+      `the literal ${x} is the rational ${f.n}/${f.d}, which needs ${bits} bits — over the ` +
+        `${MAX_COEFFICIENT_BITS}-bit limit this arithmetic carries`,
+    );
+  }
+  return f;
+}
+
 function walk(node: Node, variable: string): Rat {
   switch (node.kind) {
     case "num":
-      return constRat(new Gauss(simplestRational(node.value), Frac.ZERO));
+      return constRat(new Gauss(exactLiteral(node.value), Frac.ZERO));
 
     case "const":
       if (node.name === "i") return constRat(new Gauss(Frac.ZERO, Frac.ONE));
@@ -162,6 +199,14 @@ export function toExactRational(ast: Node, variable = "z"): ExactRationalResult 
     return { ok: true, value: { num: r.num, den: r.den } };
   } catch (e) {
     if (e instanceof Refusal) return { ok: false, reason: e.message };
-    throw e;
+    // **A THROW out of here is not a claim either.** Everything this walks is user text or a record's
+    // own expression, and the caller's whole contract is "refuse, with a reason, and fall back to the
+    // numeric path". A `RangeError` from deep in the arithmetic reached the app as a crash instead —
+    // measured on `1/(z - 5e-324)` — so it is reported as what it is: an expression this could not
+    // read, naming what came back.
+    return {
+      ok: false,
+      reason: `the expression could not be read exactly over ℚ(i): ${e instanceof Error ? e.message : String(e)}`,
+    };
   }
 }

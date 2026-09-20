@@ -95,18 +95,49 @@ export function distanceToPoint(g: Resolved, p: Cx): number {
 }
 
 /**
- * Polygonise to a guaranteed accuracy: every point of the piece lies within `maxSagitta` of the
+ * The most chords {@link polygonise} will ever lay down on one arc.
+ *
+ * A ceiling on the work, not on the accuracy — and the difference is the point. `n` grows like
+ * `sweep/(2√(maxSagitta/r))`, so a query point at relative clearance `1e-10` already asks for ~444k
+ * vertices and anything tighter saturates this. Measured before it became a refusal: 36 winding
+ * queries at the cap took 8.2 s, each building and discarding a million-element array, and during a
+ * contour drag that is once per pole per frame.
+ */
+export const MAX_POLYGON_CHORDS = 1_000_000;
+
+/**
+ * The finest sagitta {@link polygonise} can deliver on this piece — 0 for a segment, which is exact.
+ *
+ * Asked BEFORE the polyline is built, so that a query the cap cannot serve is refused instead of
+ * being answered from a polygon coarser than it asked for. `windingNumber` is the reader.
+ */
+export function finestSagitta(g: Resolved): number {
+  if (g.kind === "segment") return 0;
+  const sweep = Math.abs(g.theta1 - g.theta0);
+  if (g.radius === 0 || sweep === 0) return 0;
+  return g.radius * (1 - Math.cos(sweep / (2 * MAX_POLYGON_CHORDS)));
+}
+
+/**
+ * Polygonise to a guaranteed accuracy: every point of the piece lies within `sagitta` of the
  * returned polyline.
  *
  * A segment is already exact. For an arc stepped in `n` equal angles the chord's maximum deviation
  * is the sagitta `r(1 − cos(sweep/2n))`, so inverting that gives `n` — an *a priori* bound, not a
  * refinement loop. That is what lets the winding number stay exactly decided while admitting curved
  * pieces (see kernel/winding.ts).
+ *
+ * **The `sagitta` that comes back is the one DELIVERED, not the one asked for**, and they differ
+ * exactly when {@link MAX_POLYGON_CHORDS} binds. Returning the points alone is how a caller came to
+ * read a guarantee off a polygon that did not carry it: at radius `1e6` the cap's sagitta is
+ * 4.93e-6 against a requested 2.5e-7 — 19.7× coarser at every radius, since both scale with `r` —
+ * and `windingNumber` then reported `decided: true` with the wrong integer for 24 of 36 sampled
+ * points genuinely inside the circle.
  */
-export function polygonise(g: Resolved, maxSagitta: number): Pt[] {
-  if (g.kind === "segment") return [startPoint(g), endPoint(g)];
+export function polygonise(g: Resolved, maxSagitta: number): { points: Pt[]; sagitta: number } {
+  if (g.kind === "segment") return { points: [startPoint(g), endPoint(g)], sagitta: 0 };
   const sweep = Math.abs(g.theta1 - g.theta0);
-  if (g.radius === 0 || sweep === 0) return [startPoint(g), endPoint(g)];
+  if (g.radius === 0 || sweep === 0) return { points: [startPoint(g), endPoint(g)], sagitta: 0 };
 
   const ratio = Math.min(1, Math.max(0, maxSagitta / g.radius));
   const fromSagitta = ratio >= 1 ? 1 : Math.max(1, Math.ceil(sweep / (2 * Math.acos(1 - ratio))));
@@ -115,14 +146,34 @@ export function polygonise(g: Resolved, maxSagitta: number): Pt[] {
   // single chord from its start point back to itself, and a two-vertex "polygon" has no interior.
   // More segments only ever tighten the sagitta, so the bound above is unaffected.
   const fromSweep = Math.ceil(sweep / (Math.PI / 2));
-  const capped = Math.min(Math.max(fromSagitta, fromSweep, 1), 1_000_000);
-  const out: Pt[] = [];
-  for (let k = 0; k <= capped; k++) out.push(pointAt(g, k / capped));
-  return out;
+  const n = Math.min(Math.max(fromSagitta, fromSweep, 1), MAX_POLYGON_CHORDS);
+  const points: Pt[] = [];
+  for (let k = 0; k <= n; k++) points.push(pointAt(g, k / n));
+  return { points, sagitta: g.radius * (1 - Math.cos(sweep / (2 * n))) };
+}
+
+/**
+ * How far two endpoints may be apart and still be the same point, for a contour of this size.
+ *
+ * **Relative, because the gap being tolerated is rounding dust and rounding dust scales.** The
+ * semicircle's seam is `R·sin(π)`, i.e. `1.2246e-16·R`: measured, an absolute `1e-9` called the
+ * template closed at `R = 1e6` (gap 1.22e-10) and OPEN at `R = 1e7` (gap 1.22e-9), so a hand-edited
+ * link past the sliders' `1e6` stop opened on a contour the app declared not closed. The scale is
+ * the longest piece, which is what `integrateContour` already computes for the clearance floor, and
+ * the `max(1, …)` keeps a small contour on the old absolute number.
+ *
+ * **One rule in one place**: {@link isClosed} takes it as its default and `engine/contour/edit.ts`
+ * imports it for the seam test, where the two were previously kept in step by hand.
+ */
+export const RELATIVE_JOIN_TOL = 1e-9;
+
+/** {@link RELATIVE_JOIN_TOL}, scaled to this contour. */
+export function joinTolerance(pieces: readonly Resolved[]): number {
+  return RELATIVE_JOIN_TOL * Math.max(1, ...pieces.map(arcLength));
 }
 
 /** Whether the traversal joins up end to end and returns to its start, within `tol`. */
-export function isClosed(pieces: readonly Resolved[], tol = 1e-9): boolean {
+export function isClosed(pieces: readonly Resolved[], tol = joinTolerance(pieces)): boolean {
   if (pieces.length === 0) return false;
   for (let k = 0; k < pieces.length - 1; k++) {
     const a = endPoint(pieces[k]);

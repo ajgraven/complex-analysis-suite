@@ -90,6 +90,12 @@ function snap(x: number, tol: number): Frac | null {
  */
 export function exactPoleAt(num: QiPoly, den: QiPoly, a: Gauss): ExactPole | null {
   if (!den.eval(a).isZero()) return null;
+  // `f ≡ 0` has no poles. Hoisted ABOVE the multiplicity count, where it used to sit as a ternary
+  // twelve lines below: `multiplicityAt` throws on the zero polynomial, so the guard protected
+  // nothing — measured, `exactPoleAt(QiPoly.zero(), z, 0)` threw `multiplicityAt: the zero
+  // polynomial`. No live path reaches it either, since `cancelCommon` removes the whole denominator
+  // first, but a guard that cannot fire reads as one that can.
+  if (num.isZero()) return null;
 
   const m = multiplicityAt(den, a) - multiplicityAt(num, a);
   if (m <= 0) return null; // the numerator cancels it: removable, not a pole
@@ -98,9 +104,7 @@ export function exactPoleAt(num: QiPoly, den: QiPoly, a: Gauss): ExactPole | nul
   const shiftedNum = num.shift(a);
   const shiftedDen = den.shift(a);
   const { order: denOrder, rest: G } = splitOrder(shiftedDen);
-  const { order: numOrder, rest: N } = num.isZero()
-    ? { order: 0, rest: QiPoly.zero() }
-    : splitOrder(shiftedNum);
+  const { order: numOrder, rest: N } = splitOrder(shiftedNum);
 
   // f(w+a) = w^{numOrder − denOrder} · N(w)/G(w), so the pole order must be denOrder − numOrder.
   // Cross-checking it against the multiplicity count above is free, and a disagreement would mean
