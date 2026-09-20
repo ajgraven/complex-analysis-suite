@@ -143,7 +143,7 @@ These are *mathematical* subtleties the reused code will encounter:
 >
 > 1. **Name:** repo `complex-analysis-suite`, scope `@cas/*`.
 > 2. **Git history:** preserved via `git subtree` (Phase 0).
-> 3. **Topology:** separate apps + a **unified menu** (launcher + shared nav); no unified
+> 3. **Topology:** separate apps + a **unified menu** (the launcher; the shared nav header was withdrawn — ADR-0044); no unified
 >    single-page shell — see [ARCHITECTURE §11](ARCHITECTURE.md#11-the-launcher-unified-menu-without-a-unified-shell).
 > 4. **Correspondence tool:** a **separate** app (`apps/correspondences`).
 > 5. **Package manager:** **pnpm** ([ADR-0004](DECISIONS.md#adr-0004-package-manager-pnpm-workspaces)).

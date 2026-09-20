@@ -14,7 +14,6 @@ import { mountShell2 } from "../src/shell/app.js";
 import { plotToScreen } from "../src/kernel/camera.js";
 
 import "katex/dist/katex.min.css";
-import "@cas/ui/nav.css";
 import "../src/ui/theme.css";
 import "../src/ui/shell.css";
 

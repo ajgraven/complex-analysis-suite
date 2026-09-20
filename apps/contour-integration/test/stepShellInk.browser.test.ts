@@ -35,7 +35,6 @@ import { DARK_INK } from "../src/ui/inkTheme.js";
 
 // The stylesheets `main.ts` loads. `shell2.browser.test.ts` records why each one is load-bearing.
 import "katex/dist/katex.min.css";
-import "@cas/ui/nav.css";
 import "../src/ui/theme.css";
 import "../src/ui/shell.css";
 

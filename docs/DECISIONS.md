@@ -46,6 +46,12 @@ Format follows Michael Nygard's ADR convention.
 | [0035](#adr-0035-the-conformal-casinterchange-form-polygon-schwarzchristoffel-maps-interchange-140)           | The `conformal` `@cas/interchange` form (polygon Schwarz–Christoffel maps, interchange 1.4.0)                  | Accepted |
 | [0040](#adr-0040-casrigor-extraction-by-reimplementation)                                                     | `@cas/rigor`: extraction by _reimplementation_                                                                 | Accepted |
 | [0036](#adr-0036-split-2d-electrostatics-into-three-apps-extract-casflow)                                     | Split `2d-electrostatics` into three apps; extract `@cas/flow`                                                 | Accepted |
+| [0037](#adr-0037)                                                                                              | The tenth published app — `apps/2d-hydrodynamics` (ideal flow past bodies, via conformal transplant)          | Accepted |
+| [0038](#adr-0038)                                                                                              | 2D Hydrodynamics — one page, domain-colored everywhere (unify the airfoil + gallery)                          | Accepted |
+| [0039](#adr-0039)                                                                                              | 2D Electrostatics — drop the hydrodynamic lens (electrostatic-only)                                           | Accepted |
+| [0041](#adr-0041)                                                                                              | Tier D's output basis is _carried_, not reduced; and Pass 5 moves to ℚ(i)(π)                                  | Accepted |
+| [0042](#adr-0042)                                                                                              | An exactly-known IMPORTED value is `=` on its form, with the import in its provenance                         | Accepted |
+| [0043](#adr-0043)                                                                                              | Contour Integration rebuilds its shell — two rails, a keyed renderer, KaTeX, textbook vocabulary              | Accepted |
 | [0044](#adr-0044-withdraw-the-in-app-suite-navigation-header-the-launcher-is-the-unified-menu)                | Withdraw the in-app suite navigation header (the launcher is the unified menu)                                 | Accepted |
 
 > **Status legend:** Proposed → Accepted (once you sign off) → Superseded/Deprecated.
@@ -3338,6 +3344,8 @@ sheds two clusters (so the moved surface is minimised and the `RM→polygon` con
 
 ---
 
+<a id="adr-0037"></a>
+
 ## ADR-0037: The tenth published app — `apps/2d-hydrodynamics` (ideal flow past bodies, via conformal transplant)
 
 **Status:** Accepted. A new **separate app** (decision #8 topology), anchored by the airfoil moved out of
@@ -3446,6 +3454,8 @@ vs. **flow past bodies, and lift** (Hydrodynamics).
 
 ---
 
+<a id="adr-0038"></a>
+
 ## ADR-0038: 2D Hydrodynamics — one page, domain-colored everywhere (unify the airfoil + gallery)
 
 **Status:** Accepted. An **internal restructure** of `apps/2d-hydrodynamics` (a single-page app + one render
@@ -3518,6 +3528,8 @@ look**, resting on one unifying identity and one render idiom.
 - **Trade-off accepted:** the airfoil's right pane is mesh-interpolated rather than per-pixel-exact (invisible
   at a fine mesh; a minor cosmetic softness only near a cusp), in exchange for one robust render path across
   every body.
+
+<a id="adr-0039"></a>
 
 ## ADR-0039: 2D Electrostatics — drop the hydrodynamic lens (electrostatic-only)
 
@@ -3681,6 +3693,8 @@ then has a target to migrate _to_ rather than a design to invent mid-port.
 
 ---
 
+<a id="adr-0041"></a>
+
 ## ADR-0041: Tier D's output basis is _carried_, not reduced; and Pass 5 moves to ℚ(i)(π)
 
 **Status:** Accepted **Date:** 2026-09 **Deciders:** Andrew
@@ -3831,6 +3845,8 @@ code path.
 
 ---
 
+<a id="adr-0042"></a>
+
 ## ADR-0042: An exactly-known IMPORTED value is `=` on its form, with the import in its provenance
 
 **Status:** Accepted **Date:** 2026-09 **Deciders:** Andrew
@@ -3919,6 +3935,8 @@ exactly the point where it is handing you a result from elsewhere.
    error in the value, so no tight verdict is available. What it separates is a converging tail from
    a different number — E3's is 1.5e-8 of the value at R = 4 and 2.2e-11 at R = 6, while the same
    record with one factor dropped is off by half the value.
+
+<a id="adr-0043"></a>
 
 ## ADR-0043: Contour Integration rebuilds its shell — two rails, a keyed renderer, KaTeX, textbook vocabulary
 
@@ -4137,10 +4155,22 @@ finding: **no app in the suite gets an in-app header.** The reasons worth record
 Staged in [`review/2026-09-16-complex-dynamics-review/NAV-WITHDRAWAL-PLAN.md`](review/2026-09-16-complex-dynamics-review/NAV-WITHDRAWAL-PLAN.md).
 
 1. [x] This ADR; TOC row; the CD remediation plan's "Decisions to record" entry resolved.
-2. [ ] **N1** — drop the call sites and CSS offsets in the four non-M8 apps (2D Electrostatics,
-       Hele-Shaw Flow, Potential Theory, 2D Hydrodynamics; six pages).
-3. [ ] **N2** — remove `navHeader.ts`, `nav.css`, `apps.ts`, the exports and the test from `@cas/ui`.
-4. [ ] **N3** — Contour Integration, through M8. *(Corrected at the M8 merge, 2026-09-20: the
+2. [x] **N1** — drop the call sites and CSS offsets in the four non-M8 apps (2D Electrostatics,
+       Hele-Shaw Flow, Potential Theory, 2D Hydrodynamics; six pages). **DONE** — six `nav.css`
+       imports, six `mountNavHeader` calls and twelve `var(--cas-nav-h, …)` offsets, each collapsed
+       to the fallback it already carried rather than left as a dead `var()`.
+3. [x] **N2** — remove `navHeader.ts`, `nav.css`, `apps.ts`, the exports and the test from `@cas/ui`.
+       **DONE**, with `SUITE_APPS` — §3's judgement call taken as written: nothing imports it after
+       N1 + N3, and the two places that enumerate the apps (`scripts/a11y-audit.mjs`,
+       `deploy-pages.yml`) carry their own lists. The package keeps three primitives and four test
+       files; `mountCanvas.test.ts` still exercises its jsdom environment.
+4. [x] **N3** — Contour Integration, **DONE** immediately after the M8 merge: the `.shell2Nav` host,
+       the import, the call, six `--cas-nav-h` declarations in `src/ui/shell.css`, and `nav.css` from
+       `main.ts` and eleven browser specs. Its two structural assertions are REPLACED rather than
+       deleted — `test/shell2.test.ts` now asserts that no `.cas-nav` exists and that `<main>` is the
+       root's first visible element, and `test/shell2.browser.test.ts` asserts the shell fills the
+       viewport from `y = 0` with the nav's absence checked rather than tolerated (its old `?? 0`
+       would have passed either way). *(Corrected at the M8 merge, 2026-09-20: the
        premise is false — **the new shell DOES mount it**. `src/shell/app.ts` imports
        `mountNavHeader` from `@cas/ui` and gives it its own `.shell2Nav` host prepended before
        `<main>`, which is M6.4's ordering finding carried over deliberately. So N3 is real work on the M8 shell
@@ -4150,5 +4180,32 @@ Staged in [`review/2026-09-16-complex-dynamics-review/NAV-WITHDRAWAL-PLAN.md`](r
        of the M8 PR deliberately: ADR-0044 landed on `master` while M8 was in flight, N1–N5 are all
        open, and N2 removes `navHeader.ts` from `@cas/ui` while four other apps still call it, so
        the sequencing is the owner's.)*
-5. [ ] **N4** — the documentation sweep listed under _Consequences_.
-6. [ ] **N5** — rebuild, re-run the a11y roster, re-record the baseline, explain every delta.
+5. [x] **N4** — the documentation sweep listed under _Consequences_. **DONE** — CLAUDE.md (the
+       `@cas/ui` primitive list, the ADR-0036 Stage 3 sentence), ARCHITECTURE §3, §11 item 2 and
+       §12, VISION §6, RISKS §Decisions 3, the root README's package tree, and the CD review's own
+       REPORT.md U5 + roadmap item, which now record that the finding stands and the remedy is the
+       opposite one. `packages/ui/README.md` does not exist, so that row was moot. The carried-over
+       **DECISIONS.md TOC rows for 0037–0039 and 0041–0043 are added**, and each links an
+       **explicit `<a id="adr-00NN">`** rather than a derived slug: measured against this file's own
+       47 anchors, a derived rule reproduces 39, and every miss turns on whether a removed `—`, `σ`
+       or `+` collapses its two spaces to one hyphen or two — `expr--interchange` says two,
+       `reflection-is` and `marks-validated` say one. N0 refused to guess an anchor and GitHub's
+       render API is not reachable from the execution session, so the target is written down
+       instead of inferred.
+6. [x] **N5** — rebuild, re-run the a11y roster, re-record the baseline, explain every delta.
+       **DONE, and the baseline needed no change**: not one rule or node count moved on any of the
+       20 pages, so re-recording would have been a 44-line reordering saying nothing and was
+       reverted. The `region` rule — §Consequences' named risk, since a page whose only landmark
+       *was* the nav could have GAINED findings — did not rise anywhere. The accessibility TREE
+       falls **792 → 682 interactive nodes, and the delta is exact**: eleven per page (one
+       *Back to the suite launcher* plus ten siblings) across the ten audited pages that carried
+       the bar, 10 × 11 = 110. Zero unnamed throughout. All seven pages spot-checked in Chromium at
+       1440×900 and 390×844: no `nav.cas-nav`, `--cas-nav-h` unset, and every app's own fixed
+       toolbar at `top = 0`.
+7. [~] **N6** — *where the hand-off UX lives now.* Its **discovery half is DONE**: `INTERCHANGE.md`
+       gains §7b, a table of every hand-off in the suite — producer, panel, payload, consumer, where
+       it lands — which is what U7 was really reaching for, in the place a reader looks. The
+       **consistency half is deliberately NOT done**: normalising the label and `title` of five
+       controls across Complex Dynamics, the plotter and Riemann Map is UI work in three apps this
+       removal does not otherwise touch, so it is left with its reason rather than taken on
+       unasked. CD's `window.prompt` import stays WP10 of the remediation plan.

@@ -10,7 +10,7 @@
 // recompute that wrote the URL, which is a question about ORDER that only exists when there are
 // several orders. At 1.1 `commit` does the first four; the hash (1.3) and the undo stack (1.11)
 // join it where the plan puts them.
-import { attachCanvasA11y, mountNavHeader } from "@cas/ui";
+import { attachCanvasA11y } from "@cas/ui";
 
 import { Frac } from "@cas/exact";
 
@@ -128,12 +128,13 @@ export function mountShell2(root: Element): Shell2Handle {
 
   // --- the frame ------------------------------------------------------------------------------
   //
-  // The nav gets its own host BEFORE `<main>`, which is M6.4's finding carried over rather than
-  // rediscovered: `mountNavHeader` ends with `container.appendChild(nav)`, so mounting it into the
-  // shell puts site navigation inside the page's one landmark AND makes it the last thing a screen
-  // reader reaches, while `position: fixed` draws it at the top.
-  const navHost = document.createElement("div");
-  navHost.className = "shell2Nav";
+  // **There is no suite nav.** It was here until ADR-0044 withdrew the in-app header from every app
+  // — the launcher is the unified menu — and what it took with it is M6.4's whole ordering problem:
+  // the mount ended with `container.appendChild(nav)` while `.cas-nav` was `position: fixed`, so the
+  // bar looked first and read LAST, after the entire rail, and the repair was a host prepended
+  // before `<main>`. A landmark may not contain site navigation and there is now none to contain,
+  // so `<main>` is simply the root's first element — which `test/shell2.test.ts` asserts as the
+  // invariant that survives the removal.
 
   // **The refusal gets its own element, OUTSIDE `<main>`** — M6.2's third finding. It is a fact
   // about how the page was opened rather than part of the argument, and it must not be the notice
@@ -199,8 +200,7 @@ export function mountShell2(root: Element): Shell2Handle {
   phoneLink.textContent = window.location.href;
   phone.append(phoneText, phoneLink);
 
-  root.replaceChildren(navHost, linkBox, shell, phone);
-  mountNavHeader(navHost, { current: "contour-integration" });
+  root.replaceChildren(linkBox, shell, phone);
 
   // --- the stage ------------------------------------------------------------------------------
   //

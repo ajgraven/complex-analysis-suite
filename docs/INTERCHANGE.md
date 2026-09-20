@@ -250,6 +250,32 @@ which is exactly why this is the *first* interop milestone and why it can land b
 hard extraction work. It exercises the keystone on the easy case, so the correspondence
 tool later inherits a proven path.
 
+## 7b. Where each hand-off lives
+
+**A hand-off carries STATE, so it sits in the panel that owns that state** —
+[ADR-0044](DECISIONS.md#adr-0044-withdraw-the-in-app-suite-navigation-header-the-launcher-is-the-unified-menu) §4,
+which withdrew the in-app nav bar and with it ADR-0032's U7, a generic "Send to…" picker in a header.
+A picker there would have had to ask the app for `accepts`/`hrefFor` anyway, so it bought placement
+rather than capability — and the placement was worse, because a reader looking for *"what can I do
+with these Laurent coefficients?"* is looking at the coefficients. **What U7 was really reaching for
+was discovery, and this table is it:** every hand-off the suite has, where it is, and where it lands.
+
+| producer | panel / control | payload | consumer | where it lands |
+|---|---|---|---|---|
+| Quadrature Domains | Schwarz tab → *Export map* | `form:"schwarz"` recipe (σ as closed-form φ + a branch of the inverse) | Complex Dynamics | the σ peer view — escape time, sphere, Böttcher, rays (ADR-0009) |
+| Quadrature Domains | Schwarz tab → *Export map* | a one-point unbounded QD, α read off the wire as the convention-neutral residue | Hele-Shaw Flow | `twist.html`, the exact Graven–Makarov evolver (golden `QD_TO_HELESHAW`) |
+| Complex Dynamics | Exterior-map panel → *Riemann Map ↗* | `kind:"map"` `LaurentMap` (the filled Julia set's Böttcher map ψ) | Riemann Map | the "import" disk-image source (golden `CD_TO_RM_BOTTCHER_LINK`, ADR-0017) |
+| Riemann Map | region picker → *Send to 2D Electrostatics* | `form:"conformal"` (a polygon's corners + interior angles) | 2D Electrostatics | the polygon transplant, which re-fits the flow past / inside K (ADR-0035) |
+| Complex Function Plotter | interop row → *Copy hand-off link* | a `#s=` link carrying the current map + view | any consumer of that kind | the receiving app's own import path |
+| — | Complex Dynamics' *Import map…* under the formula box | any envelope, pasted or by link | Complex Dynamics | decoded, validated, compiled through `expr` |
+
+Two things the table is deliberately honest about. The producing control's **label and `title` are not
+yet uniform** across the five — that consistency pass is N6 of the withdrawal plan
+([`review/2026-09-16-complex-dynamics-review/NAV-WITHDRAWAL-PLAN.md`](review/2026-09-16-complex-dynamics-review/NAV-WITHDRAWAL-PLAN.md)),
+and Complex Dynamics' `window.prompt` import is WP10 of that review's remediation plan. And the
+**launcher is the only cross-app navigation**: reaching an app you have no hand-off to is the
+launcher or the back button, which is ADR-0044's stated, accepted cost.
+
 ## 8. Validation & versioning rules
 
 - On decode: reject a mismatched `schema`; reject an unknown **major** `version` with a

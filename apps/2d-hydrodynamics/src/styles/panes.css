@@ -1,8 +1,8 @@
 /* 2D Hydrodynamics — the one-page two-pane transplant stylesheet (ADR-0038). Originally ported with the
    airfoil out of 2d-electrostatics (ADR-0037, HD-1); since HD-6 it is the app's single stylesheet: the
    base shell + toolbar/brand/pal-btn + the two-pane foil stage + sliders + the per-body control groups +
-   the readout + the body picker + the fatal banner. `--cas-nav-h` comes from @cas/ui/nav.css (the nav
-   header height). */
+   the readout + the body picker + the fatal banner. (It once offset its fixed chrome by the suite nav
+   header's height; the header is withdrawn — ADR-0044 — so the toolbar sits at y = 0.) */
 
 :root {
   --bg: #0f1115;
@@ -37,7 +37,7 @@ body {
 /* --- control surface (toolbar) ------------------------------------------------------------- */
 .toolbar {
   position: fixed;
-  top: var(--cas-nav-h, 0px);
+  top: 0;
   left: 0;
   right: 0;
   z-index: 5;
@@ -165,7 +165,7 @@ input[type="range"] {
   position: fixed;
   /* `top` is set precisely from the toolbar's measured height in main.ts (the toolbar wraps to a variable
      number of rows); this is only the pre-JS fallback. */
-  top: calc(var(--cas-nav-h, 0px) + 96px);
+  top: 96px;
   right: 0;
   bottom: 0;
   left: 0;

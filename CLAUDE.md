@@ -275,12 +275,13 @@ possibly non-univalent φ. Everything downstream (Faber images, ∂K, rendering)
 
 **`@cas/ui` — the shared browser shell (ADR-0032, U0–U6):** the **eleventh** package, and the suite's first
 extract-*ahead*-of-adoption of a **product** (not math) layer, prompted by a UX review that found the newer apps
-inherited the math rigor but not the product shell. `@cas/ui` collects four primitives ported from Complex
+inherited the math rigor but not the product shell. `@cas/ui` collects three primitives ported from Complex
 Dynamics' proven patterns — `mountCanvas`/`attachCanvasA11y` (accessible canvas: focusable `role="application"`
 overlay + keyboard, or `role="img"` for a static view), `runWithFatalBoundary`/`showFatalBanner` (init inside a
-WebGL2-aware fatal-error boundary), `createComputeClient` (worker-offload + coalescing + sync fallback + busy
-state), and `mountNavHeader` (back-to-launcher + sibling nav + a deferred "send to" hand-off picker) — plus the
-`SUITE_APPS` registry. It is the first package whose tests run under **jsdom**. Adopted app-by-app: **CD** (the
+WebGL2-aware fatal-error boundary), and `createComputeClient` (worker-offload + coalescing + sync fallback + busy
+state). There was a fourth — `mountNavHeader`, with the `SUITE_APPS` registry beneath it — **withdrawn from the
+package and from every app by [ADR-0044](docs/DECISIONS.md)**; the package's other three retro-justify the
+extract-ahead many times over. It is the first package whose tests run under **jsdom**. Adopted app-by-app: **CD** (the
 fatal boundary + `JuliaMetricsClient` on `createComputeClient`), **faber-transform**, **correspondences** (both
 pages), **riemann-map**, **argument-principle**, and the **plotter** — closing each app's a11y / fatal-error UX
 findings. **QD is deliberately NOT a consumer** (allowJs/vanilla and already product-mature; it took `@cas/schwarz`
@@ -1256,8 +1257,8 @@ See [MIGRATION](docs/MIGRATION.md) for the phase specs and gates.
 and retargeted the QD → Hele-Shaw hand-off (golden `QD_TO_HELESHAW`); Stage 2 carved `apps/potential-theory`
 (the conductor view), leaving 2D Electrostatics as the field sandbox + airfoil + polygon (its now-unused
 `@cas/core`/`@cas/expr`/`@cas/faber`/`@cas/conformal` deps pruned); Stage 3 adopted the shared nav header
-(`mountNavHeader` + `@cas/ui/nav.css`) across all three apps — their first consumers, a suite-wide rollout to
-the other seven left as a follow-on — added all three to the non-blocking a11y roster (baseline refreshed),
+across all three apps (**since WITHDRAWN — ADR-0044 removed the in-app header from every app; the launcher is
+the unified menu**), added all three to the non-blocking a11y roster (baseline refreshed),
 and split the studio plan into three per-app plans. Per-app plans:
 [`docs/design/2d-electrostatics-plan.md`](docs/design/2d-electrostatics-plan.md),
 [`docs/design/hele-shaw-flow-plan.md`](docs/design/hele-shaw-flow-plan.md),

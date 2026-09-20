@@ -7,8 +7,7 @@
 // Green / charge come from a log-lightning fit (`≈`) and the Green equipotentials are marching-squares
 // level curves of the g_K field. Fourth page of the app.
 import "./styles/main.css";
-import "@cas/ui/nav.css";
-import { runWithFatalBoundary, attachCanvasA11y, mountNavHeader, type CanvasKeyAction } from "@cas/ui";
+import { runWithFatalBoundary, attachCanvasA11y, type CanvasKeyAction } from "@cas/ui";
 import { POLYGON_PRESETS, Net2D, boundsOf, type Box, type NetCurve, type Pt } from "@cas/flow";
 import {
   diskDomain,
@@ -262,7 +261,6 @@ function main(): void {
   chargeLabel.hidden = true;
   fig.append(canvas, cap, hud, chargeLabel);
   stage.append(fig);
-  mountNavHeader(app, { current: "potential-theory" });
   app.append(bar, stage);
 
   const net = new Net2D(canvas);

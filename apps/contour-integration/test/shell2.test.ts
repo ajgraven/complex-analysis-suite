@@ -332,12 +332,20 @@ describe("the new shell's structure", () => {
     expect(root.querySelectorAll("h2").length).toBeGreaterThan(3);
   });
 
-  it("puts the suite nav BEFORE <main>, so it reads where it draws", () => {
+  it("mounts NO suite nav, and <main> is the root's first element", () => {
+    // **The invariant that survives ADR-0044.** This was *"puts the suite nav BEFORE `<main>`, so
+    // it reads where it draws"* — M6.4's finding, where `mountNavHeader` ended with `appendChild`
+    // while `.cas-nav` drew fixed at the top, so the bar read last, after the entire rail. The
+    // header is withdrawn from every app in the suite, so there is nothing to order: what has to
+    // stay true is that the landmark is not preceded by chrome that is not in it.
     const { root } = mount();
-    const nav = q(root, "nav.cas-nav");
+    expect(root.querySelector("nav.cas-nav")).toBeNull();
+    expect(root.querySelector("nav")).toBeNull();
     const main = q(root, "main");
-    expect(nav.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(main.contains(nav)).toBe(false);
+    // `linkBox` sits before `<main>` but is `hidden` until a link is refused (M6.2's third
+    // finding), so the first element a reader meets is the landmark.
+    const visible = [...root.children].filter((e) => !(e as HTMLElement).hidden);
+    expect(visible[0]).toBe(main);
   });
 
   it("names every canvas, or hides it explicitly", () => {

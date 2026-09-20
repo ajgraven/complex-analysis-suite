@@ -18,7 +18,6 @@ import { defaultState, resolveState } from "../src/shell/state.js";
 import { circleTemplate } from "../src/engine/contour/templates.js";
 
 import "katex/dist/katex.min.css";
-import "@cas/ui/nav.css";
 import "../src/ui/theme.css";
 import "../src/ui/shell.css";
 

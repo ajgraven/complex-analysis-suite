@@ -19,7 +19,7 @@ for why extraction is demand-driven rather than up-front.
 >   written for anything above U+00FF); `@cas/conformal`: the
 >   conformal-map builder extracted *ahead* of demand, ADR-0018; `@cas/faber`: the exterior Faber engine,
 >   ADR-0024; and an **eleventh**, **`@cas/ui`** — the shared **browser shell** (canvas a11y, a fatal-error
->   boundary, an off-thread compute client, a nav header) — extracted *ahead* of app adoption after a UX review
+>   boundary, an off-thread compute client) — extracted *ahead* of app adoption after a UX review
 >   proved the demand across the apps, ADR-0032). The **`quadrature`** package sketched in the layer diagram and
 >   §3 was **never extracted** — no second consumer needed the whole of it (the Correspondences app keeps its own
 >   σ-construction and parabolic-Tricorn model). Note `@cas/ui` is a **narrower** scope than the KaTeX/theming UI
@@ -161,7 +161,7 @@ instead of an ad-hoc JSON blob.
 
 ### `@cas/ui` — the shared UI kit *(this section = the would-be **KaTeX/theming** kit; the `@cas/ui` PACKAGE now exists as a narrower browser shell — ADR-0032)*
 > **Note (ADR-0032):** the `@cas/ui` **package** was extracted as the **browser shell** — canvas
-> accessibility, a fatal-error boundary, an off-thread compute client, and a suite nav header — a *different,
+> accessibility, a fatal-error boundary and an off-thread compute client — a *different,
 > narrower* scope than the KaTeX/inspector/theming kit this section sketches. The kit below remains
 > app-local (except the two halves already shared out, noted next). Read the rest of this section as the
 > original design intent for that kit, not the state of the package.
@@ -436,26 +436,25 @@ This is realized in two cheap, additive pieces:
    and a link to each. It sits at the suite's top-level GitHub Pages URL with each published app
    under a subpath beneath it — one combined deploy, not independent per-app sites (see §8). This
    is the "menu to select between apps."
-2. **A shared navigation header (piloted in three apps; suite-wide rollout is the open U7).** A small component,
-   `mountNavHeader`, now lives in the extracted **`@cas/ui`** package ([ADR-0032](DECISIONS.md#adr-0032-extract-casui-ahead-of-adoption-port-cds-product-shell))
-   with the `SUITE_APPS` registry — offering back-to-launcher + a jump to the sibling apps and, where a hand-off
-   is meaningful, a "send this to <app>" action over the [interchange](INTERCHANGE.md) deep-link codec. It is
-   **rendered by the three ADR-0036 apps** (2D Electrostatics, Hele-Shaw Flow, Potential Theory — its first
-   consumers, over a shared `@cas/ui/nav.css`) and by **2D Hydrodynamics** (ADR-0037); rolling it out to the
-   other seven apps (and wiring the hand-off picker to the known map kinds) is ADR-0032's remaining **U7**. This makes cross-navigation available *inside*
-   each app without merging them.
+2. **An in-app navigation header — piloted, then WITHDRAWN ([ADR-0044](DECISIONS.md#adr-0044-withdraw-the-in-app-suite-navigation-header-the-launcher-is-the-unified-menu)).**
+   `mountNavHeader` lived in `@cas/ui` with a `SUITE_APPS` registry and reached five apps across seven pages
+   before the rollout question came in front of the owner, whose answer was the opposite of the finding that
+   prompted it: **no app gets one.** It is foreign chrome over a full-bleed instrument (hard-coded dark at
+   `z-index: 6`, landing *on* each app's own toolbar unless five stylesheets compensated for it); partial
+   adoption advertised a suite two-thirds of the apps did not have; and the hand-off picker that was its
+   strongest argument belongs in the panel that owns the state, which is where every hand-off already is. The
+   package, the CSS, the registry, the five call sites and the twelve offsets are all gone. **Cross-app
+   movement is the launcher and the back button** — the accepted cost, recorded in the ADR.
 
 **Why not a unified shell.** A single-page shell that hosts every tool as a tab would
 have to own cross-tool routing, a shared global state store, and a merged build — a
 materially heavier product with its own failure modes, and it would fight the
 "independent, separately-deployable apps" property that keeps each tool simple and
-shippable. The launcher + shared-nav approach delivers the *experience* of a suite (one
-entry point, easy movement between tools, hand-off between them) at a fraction of the
-cost and coupling. If a unified shell is ever wanted, it can be added later as *another*
+shippable. The launcher delivers the *experience* of a suite (one entry point, movement
+between tools, hand-off between them) at a fraction of the cost and coupling. If a unified shell is ever wanted, it can be added later as *another*
 app that embeds the others — but it is explicitly out of scope now.
 
-The launcher is a static stub (`apps/launcher`) listing all ten published apps plus a "Coming soon" correspondences card (eleven cards in all); the shared-nav header's
-component (`mountNavHeader`) now lives in the extracted `@cas/ui` package (ADR-0032, §3) and is **rendered by the
-three ADR-0036 apps** (2D Electrostatics, Hele-Shaw Flow, Potential Theory) plus **2D Hydrodynamics** (ADR-0037) — rolling it out to the other seven
-apps (and wiring its "send this to <app>" hand-off picker to the interchange codec) is ADR-0032's remaining
-**U7**. See [MIGRATION](MIGRATION.md).
+The launcher is a static stub (`apps/launcher`) listing all ten published apps plus a "Coming soon"
+correspondences card (eleven cards in all), and it is the **whole** of the unified menu: the in-app nav header
+that once accompanied it is withdrawn (ADR-0044), and ADR-0032's U7 — wiring that header's hand-off picker to
+the interchange codec — is closed as withdrawn rather than done. See [MIGRATION](MIGRATION.md).

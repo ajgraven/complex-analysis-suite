@@ -119,7 +119,7 @@ complex-analysis-suite/
 │   ├── export/               ← @cas/export      PNG text-chunk reproducibility metadata, `tEXt` + `iTXt` (CD + plotter + Riemann Map + Argument Principle + 2D Electrostatics + 2D Hydrodynamics + Contour Integration)
 │   ├── conformal/            ← @cas/conformal   the conformal-map builder: Vandermonde–Arnoldi + lightning + forward map + interior/exterior Schwarz–Christoffel (Riemann Map + Faber Transform + @cas/flow)
 │   ├── faber/                ← @cas/faber       the exterior Faber-transform engine: Faber-polynomial recurrence, exact rational images, exterior-map Laurent jets (Quadrature Domains + Faber Transform + Potential Theory)
-│   ├── ui/                   ← @cas/ui          the shared browser shell: accessible canvas, fatal-error boundary, off-thread compute, direction ticks, and the suite nav header (WITHDRAWN by ADR-0044 — still present, removal staged as N1–N6)
+│   ├── ui/                   ← @cas/ui          the shared browser shell: accessible canvas, fatal-error boundary, off-thread compute, direction ticks
 │   ├── flow/                 ← @cas/flow        the conformal-transplant kernel: reference flows + flow-net + interior/exterior SC glue + closed-form exterior-map gallery + Net2D line-art (2D Electrostatics + 2D Hydrodynamics + Hele-Shaw Flow + Potential Theory)
 │   └── rigor/                ← @cas/rigor       the honest-labelling vocabulary: branded `Certificate` / `Verdict` values and their `meet`, so `=` cannot be written by hand (Contour Integration; QD keeps its own, ADR-0040)
 └── apps/                     ← thin applications; each a Vite build that consumes packages

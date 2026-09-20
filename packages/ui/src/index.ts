@@ -1,8 +1,10 @@
 // @cas/ui — the suite's shared browser SHELL (ADR-0028).
 //
-// Four primitives, each ported from a proven Complex Dynamics pattern, so every TS app in the suite gets
-// the product shell it currently omits (UX audit): accessibility, a fatal-error boundary, off-main-thread
-// compute, and cross-app navigation. Consumed via SOURCE by the suite's Vite/Vitest bundlers (no dist
+// THREE primitives, each ported from a proven Complex Dynamics pattern, so every TS app in the suite gets
+// the product shell it currently omits (UX audit): accessibility, a fatal-error boundary and
+// off-main-thread compute. There was a fourth — a suite navigation header, with `SUITE_APPS` beneath it —
+// withdrawn from the package and from every app by ADR-0044: the launcher is the unified menu, and a bar
+// adopted by five of twelve apps advertised a suite two-thirds of them did not have. Consumed via SOURCE by the suite's Vite/Vitest bundlers (no dist
 // build), like @cas/schwarz and @cas/conformal. QD is deliberately NOT a consumer (allowJs/vanilla and
 // already product-mature — ADR-0002 / ADR-0008 precedent). Adoption is app-by-app (U1 CD → U6), so U0
 // ships the package and its tests with no app touched.
@@ -21,12 +23,6 @@ export type { FatalBoundaryOptions } from "./fatalBoundary.js";
 
 export { createComputeClient } from "./computeClient.js";
 export type { ComputeClient, ComputeClientOptions } from "./computeClient.js";
-
-export { mountNavHeader } from "./navHeader.js";
-export type { NavHeaderOptions, NavHeader, HandoffConfig } from "./navHeader.js";
-
-export { SUITE_APPS } from "./apps.js";
-export type { SuiteApp } from "./apps.js";
 
 export { drawDirectionTicks } from "./canvasOverlay.js";
 export type { DirectionTicksOptions, Vec2 } from "./canvasOverlay.js";

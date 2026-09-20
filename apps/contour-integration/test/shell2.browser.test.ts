@@ -15,11 +15,10 @@ import { afterEach, expect, describe, it, vi } from "vitest";
 import { mountShell2 } from "../src/shell/app.js";
 import { GLStage } from "../src/ui/stage/glStage.js";
 // **The stylesheets `main.ts` loads, all of them.** Mounting without one does not give a plainer
-// layout, it gives a DIFFERENT one — M7.2 lost a slice to that. Without `nav.css` the suite nav is
-// an unstyled 287 px block instead of a fixed 48 px bar, so the first draft of the viewport test
-// below measured the shell against a window the nav was wrongly claiming a third of.
+// layout, it gives a DIFFERENT one — M7.2 lost a slice to that, and so did the viewport test below
+// when `@cas/ui/nav.css` was missing and the suite nav rendered as an unstyled 287 px block instead
+// of a fixed 48 px bar. (The nav itself is withdrawn — ADR-0044 — so that list is now two files.)
 import "katex/dist/katex.min.css";
-import "@cas/ui/nav.css";
 import "../src/ui/theme.css";
 import "../src/ui/shell.css";
 
@@ -115,22 +114,22 @@ describe("the new shell in a browser", () => {
     expect(colours.size, "the portrait is blank — the stage never rendered").toBeGreaterThan(12);
   });
 
-  it("FILLS the viewport below the fixed nav, rather than collapsing to its content", async () => {
+  it("FILLS the viewport from y = 0, rather than collapsing to its content", async () => {
     // The first draft used `height: 100%`, which needs a sized ancestor `#app` does not provide: the
-    // shell collapsed to 440 px in a 900 px window, leaving the stage 186 px tall — and, worse, it
-    // was anchored at y = 0 under a `position: fixed` nav that sits at z-index 6 and swallows the
-    // clicks in that band. This app shipped that defect once already; the old shell's own comment
-    // records it. Measured against the WINDOW, because that is the claim.
+    // shell collapsed to 440 px in a 900 px window, leaving the stage 186 px tall. It was also
+    // anchored under a `position: fixed` suite nav for a while, which is why this test used to
+    // subtract a bar's height; ADR-0044 withdrew the nav from every app, so the claim is now the
+    // simpler one — the shell IS the viewport. Measured against the WINDOW, because that is the
+    // claim, and the absence is asserted rather than tolerated: a `?? 0` would have passed either
+    // way and so would have said nothing.
     mountInBody();
     await drawn();
     const shell = document.querySelector("main.shell2");
-    const nav = document.querySelector("nav.cas-nav");
+    expect(document.querySelector("nav.cas-nav"), "the suite nav is withdrawn").toBeNull();
     if (shell === null) throw new Error("no shell");
     const r = shell.getBoundingClientRect();
-    const navH = nav?.getBoundingClientRect().height ?? 0;
-    expect(r.height).toBeCloseTo(window.innerHeight - navH, 0);
-    // It starts BELOW the nav rather than underneath it.
-    expect(r.top).toBeGreaterThanOrEqual(navH - 1);
+    expect(r.height).toBeCloseTo(window.innerHeight, 0);
+    expect(r.top).toBeCloseTo(0, 0);
     // And the stage gets the space, rather than the rails keeping it.
     const stage = document.querySelector("div.stage2")?.getBoundingClientRect();
     expect(stage?.height ?? 0).toBeGreaterThan(r.height / 2);
