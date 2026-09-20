@@ -229,6 +229,14 @@ export function runFamily(
       : powerFactorOf(family, bindings);
   const log = isLog ? logFactorOf(family, bindings) : { ok: false as const, reason: "the family's branch factor is a power" };
   const multi = several ? multiFactorOf(family, bindings) : { ok: false as const, reason: "the family declares at most one branch point" };
+  // **A MULTI-POINT RECORD THAT CANNOT BE READ IS A REFUSAL, NOT A ROUTE CHANGE.** The other two
+  // failures above mean "this is not that kind of family" and the reason is bookkeeping; this one
+  // means the record IS that kind and reading it failed, and falling through hands `findPoles` the
+  // whole multivalued integrand, which reports nothing and leaves Pass 5 to say only that there was
+  // no exact value — a sentence that names neither the parameter nor the wall. Measured over the
+  // corpus: every D6 and D7 fixture reads, so nothing reaches this but a value from a control or a
+  // permalink (`branchFactor.ts`'s exponent-denominator cap is the one that bites).
+  if (several && !multi.ok) return { ok: false, reason: `${family.id}: ${multi.reason}` };
   const cofactor = power.ok ? power.rational : log.ok ? log.rational : multi.ok ? multi.rational : null;
   // **A STRIP FAMILY BRINGS ITS OWN POLE LIST**, and that is the difference between it and the three
   // branch routes above. Those hand `findPoles` a rational COFACTOR and let it work; a strip's poles

@@ -1,10 +1,30 @@
 // The Family record — DESIGN.md §5's v2 schema, in executable form.
 //
-// A Family is DATA. Every field is either executable or renderable; nothing is prose-for-humans-only
-// except `traps[].message` and the `note` fields. That constraint is what makes the 28 gallery
-// entries a specification rather than a pile of examples: a record that cannot be expressed here is
-// a finding about the schema, and a record that loads but fails an invariant is a finding about the
-// record (GALLERY.md §5).
+// A Family is DATA, and the 28 gallery entries are a SPECIFICATION rather than a pile of examples:
+// a record that cannot be expressed here is a finding about the schema, and a record that loads but
+// fails an invariant is a finding about the record (GALLERY.md §5).
+//
+// **The aspiration is that every field is executable or renderable. Measured, 31,694 characters of
+// record text are read by nothing yet**, and saying otherwise (this note used to claim the only
+// prose was `traps[].message` and the `note` fields) invites a reader to take the rest on faith.
+// Three groups, and they are different kinds of gap:
+//
+//   * **AWAITING THE PREDICATE INTERPRETER** — `hypotheses[].check`, `traps[].detect` and
+//     `vanishingLemmas[].discharge` are validated for NAMESPACE well-formedness and no further;
+//     `index.ts`'s guard already says so honestly for those three, and the counts are 133, 136 and
+//     45. The engine computes the same questions its own way — the Result card's "what was checked"
+//     table is the computed LEDGER, not the record's `hypotheses`.
+//   * **STATED FOR THE READER, DECIDED BY THE ENGINE** — `branch.admissibility` (7 records; the
+//     engine runs `checkAdmissibility`), `branch.effectiveCut` (2), `auxiliary.principalValue` (2),
+//     `halfPlaneLadder` (3), `residueSelection.set` (19). These are worth keeping BECAUSE the engine
+//     decides them: a record and an engine that disagree is a finding, and `records.test.ts` now
+//     cross-checks `residueSelection.rule` against the poles the engine actually weights.
+//   * **NO READER AND NO PRODUCER** — `family.rigor` (required on all 28), `restrictions` (declared
+//     by none), `VanishingLemma.rigorOf*`, `targets[].substitution.inverse` and
+//     `contour.residueAtInfinity`. Each of these carries its own note saying so.
+//
+// `parameters[].domain` and `parameters[].constraints` were in that last group until the
+// 2026-09-20 review; `instantiate.ts` reads both now (`constraints.ts`).
 //
 // GEOMETRY IS THE RUNTIME TYPE, NOT A STRING. The gallery's JSONC writes `"x": "-R"`; this schema
 // reuses `engine/contour/model.ts`'s affine `Scalar`, so the same value that a record declares is
@@ -26,7 +46,6 @@ export type { LemmaId } from "../engine/contour/model.js";
  */
 export type Bindings = Readonly<Record<string, string | number | boolean>>;
 
-/** GALLERY.md §1: six templates plus `square` for tier G. Everything else is parameterisation. */
 /**
  * How a branch point acts, and with which argument convention.
  *
@@ -113,6 +132,14 @@ export interface BranchSpec {
   readonly effectiveCut?: string;
 }
 
+/**
+ * The contour shapes a record may name — EIGHT, and all eight are used by the corpus.
+ *
+ * (The count lived as a dangling comment at the top of this file reading "six templates plus
+ * `square`", which listed seven and named eight; measured 2026-09-20 and moved here, where the
+ * list it counts is.) Everything else is parameterisation: `wedge` takes `n` rather than an angle,
+ * so "the angle must be exactly `2π/n`" is unrepresentable rather than checked.
+ */
 export type TemplateId =
   | "circle"
   | "semicircle"
@@ -253,9 +280,17 @@ export interface VanishingLemma {
   readonly lemma: LemmaId;
   readonly sideCondition: string;
   readonly discharge: string;
-  /** The finite-`p` bound `|∫| ≤ B(p)` — a bound, so typically `≤`. */
+  /**
+   * What each of the three statements would be labelled — the finite-`p` bound `|∫| ≤ B(p)`, the
+   * limit statement Pass 5 substitutes, and the fallback when only a number is available.
+   *
+   * **All three are read by nothing** (measured 2026-09-20, `grep` over `src/`; the middle one used
+   * to say "this is what the verdict consumes", which named a reader that does not exist). The
+   * levels a reader sees come from the CERTIFICATES the bound modules mint, which is the right
+   * source — they are computed from the arithmetic that was actually done, where these are the
+   * record's expectation of it. They are the obvious cross-check and nothing cross-checks them yet.
+   */
   readonly rigorOfBound: Level;
-  /** The limit statement pass 5 actually substitutes. This is what the verdict consumes. */
   readonly rigorOfLimit: Level;
   readonly rigorIfNumericOnly: Level;
 }
@@ -465,7 +500,15 @@ export interface Family {
     readonly constraints: readonly string[];
   }[];
 
-  /** Scope the whole family's claim is restricted to; travels into the verdict. */
+  /**
+   * Scope the whole family's claim is restricted to.
+   *
+   * **Declared by no record and read by nothing** (measured 2026-09-20; this note used to say it
+   * "travels into the verdict", which named a reader that does not exist — `derivation.ts`'s
+   * `verdict.restrictions` is `@cas/rigor`'s field of the same name and is filled from elsewhere).
+   * Kept because a record whose claim really is conditional needs somewhere to say so, and the
+   * schema is the specification; the day one declares one, this is where the reader goes.
+   */
   readonly restrictions?: readonly string[];
 
   readonly hypotheses: readonly Hypothesis[];
@@ -503,14 +546,18 @@ export interface Family {
       /**
        * That the limit is taken through contours whose HALF-WIDTH is a half-integer — tier G's `Γ_N`.
        *
-       * **DECLARED AND STILL UNREAD, and this note exists so that is not mistaken for done.** The
-       * constraint itself IS enforced, but from the geometry rather than from here:
-       * `kernel/bounds/squareSide.ts` refuses any half-width that is not `N + ½`, because at an
-       * integer the kernel's sup is infinite and in between it is finite for one contour but not
-       * uniform as the width approaches an integer. That check is strictly stronger than reading
-       * this field would be — it catches a contour the user has DRAGGED, which a record's
-       * declaration cannot — so the field stays a statement of intent with no reader until a G
-       * record exists to declare it (M5.6).
+       * **READ SINCE M8 STEP 3.2**, in `instantiate.ts` and twice: `:64` caps the range at
+       * `MAX_SERIES_N`, because what binds above the lattice is COST, and `:133` emits
+       * `Param.admits: "integers"` so the sweep's ladder and the scrub's arrow land on it. (This
+       * note said the field was unread until the 2026-09-20 review found it contradicting a comment
+       * in the same directory.)
+       *
+       * **The stronger check is still the geometry's**, and it is what makes the constraint
+       * ENFORCED rather than merely offered: `kernel/bounds/squareSide.ts` refuses any half-width
+       * that is not `N + ½` — at an integer the kernel's sup is infinite, and in between it is
+       * finite for one contour but not uniform as the width approaches an integer — and it catches
+       * a contour the reader has DRAGGED, which no declaration can. What this field changes is that
+       * the controls stop producing values that bound has to refuse.
        */
       readonly through?: "halfIntegers";
       /**

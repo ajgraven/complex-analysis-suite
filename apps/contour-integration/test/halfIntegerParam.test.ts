@@ -46,8 +46,29 @@ function corpus(): { readonly records: number; readonly rows: Row[] } {
 }
 
 const CORPUS = corpus();
-const CONSTRAINED = CORPUS.rows.filter((r) => r.param.admits !== undefined);
+/**
+ * **TWO lattices, and they arrive from different fields.**
+ *
+ * `through: "halfIntegers"` is tier G's statement about the CONTOUR (`Γ_N` has half-width `N + ½`)
+ * and reaches a LIMIT parameter; `domain: "integer"` is seven records' statement about a family
+ * parameter and reaches an ordinary one. They meet at `Param.admits` because the controls only ever
+ * ask that question, and they are separated here because everything else about them differs — the
+ * limit one has a sweep plan and a log scale, the family one has neither.
+ */
+const CONSTRAINED = CORPUS.rows.filter((r) => r.param.admits !== undefined && r.param.limit !== undefined);
+const INTEGER_PARAMS = CORPUS.rows.filter((r) => r.param.admits !== undefined && r.param.limit === undefined);
 const CONTINUOUS = CORPUS.rows.filter((r) => r.param.admits === undefined && r.param.limit !== undefined);
+
+/** The seven records the corpus declares `domain: "integer"` on — asserted, not assumed, below. */
+const INTEGER_RECORDS = [
+  "circle-cos-n-theta",
+  "circle-cif-taylor",
+  "keyhole-x-to-the-n",
+  "log-squared-keyhole",
+  "log-cubed-keyhole",
+  "wedge-rational-power",
+  "wedge-fresnel",
+];
 
 const planOf = (p: Param): SweepPlan => {
   const plan = planSweep(p);
@@ -72,6 +93,30 @@ function killRowsAt(record: string, param: string, value: number): { statuses: s
 }
 
 describe("which parameters the corpus constrains", () => {
+  it("carries `domain: \"integer\"` through to the lattice, on exactly the seven records that declare it", () => {
+    // The translation `through: "halfIntegers"` already gets, for the other field the schema uses to
+    // say a parameter counts something. It was declared and dropped until the 2026-09-20 review
+    // measured what that costs: A3's `n` is an order, and the scrub's first arrow press asked for
+    // 2.31 — where the app refuses honestly, at the integrand, rather than answering, so this is a
+    // control that stops producing values the record has to refuse and not a correctness fix.
+    const declaring = [...loadFamilies().families.values()]
+      .filter((f) => f.parameters.some((p) => p.domain === "integer"))
+      .map((f) => f.id);
+    expect([...declaring].sort()).toEqual([...INTEGER_RECORDS].sort());
+    expect(INTEGER_PARAMS).toHaveLength(7);
+    expect(INTEGER_PARAMS.map((r) => r.record).sort()).toEqual([...INTEGER_RECORDS].sort());
+    for (const { record, param } of INTEGER_PARAMS) {
+      expect(`${record}/${param.name}: ${param.admits}`).toBe(`${record}/${param.name}: integers`);
+      expect(Number.isInteger(param.value), `${record}/${param.name}`).toBe(true);
+      // One press moves by one, where a thousandth of the range would not have left the value.
+      expect(steppedValue(param, 1)).toBe(param.value + 1);
+    }
+    // And the REAL parameters of the same records stay continuous — D3 declares `a` real beside its
+    // integer `n`, so a lattice keyed on the record rather than on the parameter would quantise it.
+    const reals = CORPUS.rows.filter((r) => INTEGER_RECORDS.includes(r.record) && r.param.admits === undefined);
+    expect(reals.filter((r) => r.param.name === "a")).toHaveLength(1);
+  });
+
   it("is exactly what tier G declares — three records, one parameter each", () => {
     const declaring = [...loadFamilies().families.values()]
       .filter((f) => f.contour.limitParams.some((l) => l.through !== undefined))

@@ -92,9 +92,12 @@ export interface ResidueTermInputs {
  * site, and `text` stopped being common to all of them — four test files and the derivation panel
  * went red at once. That is the right shape of complaint, and `SolvedValue` is the right answer to
  * it: it is already documented as "what every consumer of a solved family needs", and its `text` is
- * already OPTIONAL, which is exactly the sum route's position. `π/sin` has a formatter and `coth`
- * does not yet, so this carries a number and no form — a fact about the formatter, not about the
- * value, which is exact.
+ * already OPTIONAL, which is exactly the sum route's position — a route may carry a number and no
+ * form, and the optionality is what lets it.
+ *
+ * It is not what happens here any more: `asHyperbolicForm` below sets both `form` and `text`, and
+ * the golden corpus pins `series-cot-kernel → "(4π/3)·coth(3π/4)"`. This note used to say `coth`
+ * had no formatter, in the file that formats it (measured 2026-09-20).
  */
 export interface SolvedResidueTerm extends SolvedValue {
   readonly targetId: string;

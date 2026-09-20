@@ -113,6 +113,9 @@ describe("the claim the record card prints", () => {
 
   it("shows a general closed form only where that form is true here", () => {
     const wrong: string[] = [];
+    const prose = new Set<string>();
+    let proseFixtures = 0;
+    let evaluated = 0;
     for (const { family, golden, where } of fixtures) {
       const { general } = closedFormClaim(family, golden);
       if (general === null) continue;
@@ -123,8 +126,16 @@ describe("the claim the record card prints", () => {
         // A general form need not be an evaluable expression: D4 and D5 state a relation between
         // named unknowns ("T1 = -pi/4 and T0 = pi/4 for R = 1/(1+x^2)^2"). Those carry their own
         // scope in words and are gated by `simplifiedWhen`, which the next test pins.
+        //
+        // **Counted rather than swallowed.** An unbounded `continue` here would let the whole test
+        // go vacuous the day a general form stopped parsing — every record would land in this
+        // branch and the assertion below would be about nothing. So the records that take it are
+        // pinned BY NAME, and the count of fixtures with them.
+        prose.add(family.id);
+        proseFixtures += 1;
         continue;
       }
+      evaluated += 1;
       if (!close(got, want(golden))) {
         wrong.push(
           `${where}: the general form "${general}" is ${got[0]} + ${got[1]}i here, but the value is ${want(golden)[0]} + ${want(golden)[1]}i`,
@@ -132,6 +143,9 @@ describe("the claim the record card prints", () => {
       }
     }
     expect(wrong).toEqual([]);
+    expect([...prose].sort()).toEqual(["log-cubed-keyhole", "log-squared-keyhole"]);
+    expect(proseFixtures).toBe(2);
+    expect(evaluated).toBe(55);
   });
 
   // The five records whose simplified form is restricted. Each must be WITHHELD somewhere and SHOWN
