@@ -452,6 +452,18 @@ describe("the Branch cuts card", () => {
     expect(card.querySelector('button[aria-label^="remove branch point"]')).toBeNull();
   });
 
+  it("shows a RECORD's own crossing monodromy, read from the system the stage draws", () => {
+    // The 2026-09-20 review (REPORT §2.1): `state.branch` is the sandbox's system, so under a
+    // tier-D record the "Crossing a cut" block was absent — and present under NO record at all.
+    const { host } = rail(gallery("mellin-keyhole"));
+    const card = q(host, '[data-card="cuts"]');
+    expect(card.textContent ?? "").toContain("Crossing a cut");
+    expect(card.querySelectorAll("ul.pieces2 li").length, "no monodromy row").toBeGreaterThan(0);
+    // and a record with no branch says nothing about crossing one.
+    const plain = q(rail(gallery("circle-linear-cos")).host, '[data-card="cuts"]');
+    expect(plain.textContent ?? "").not.toContain("Crossing a cut");
+  });
+
   it("names each branch point's controls by its LABEL, not by its internal id", () => {
     // **`order of branch point b1`** — the 2026-09-20 review, measured on the sandbox keyhole. `b1`
     // is the id M6.1's `SINGLE_POINT_ID` bug was about, and the row typesets the reader's name for

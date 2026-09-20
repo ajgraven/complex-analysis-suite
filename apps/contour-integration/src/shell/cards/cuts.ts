@@ -33,6 +33,7 @@ import { declaredOrder } from "../../shell/state.js";
 import { effectiveBranch } from "../../kernel/branch/model.js";
 import { isoShown } from "../../ui/stage/mode.js";
 import { h, type Child } from "../dom.js";
+import { drawnBranch } from "../stageView.js";
 import { mathSpoken, mathText } from "../math.js";
 import { card, type Card } from "./card.js";
 
@@ -117,7 +118,11 @@ export const cutsCard: Card = ({ state, resolution, actions }) => {
           ),
         )
       : null,
-    monodromy(shown),
+    // **The system the STAGE draws, not the sandbox's.** Under a record `state.branch` is the reader's
+    // parked sandbox system (its own doc says so), and reading it here left the "Crossing a cut"
+    // block absent for every tier-D record at the 2026-09-20 review — the same defect as the stage's,
+    // through the same field. `drawnBranch` is the one decision, shared with `stageView`.
+    monodromy(effectiveBranch(drawnBranch(state, resolution))),
   ];
 
   if (state.mode !== "sandbox") {
