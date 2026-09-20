@@ -1,9 +1,11 @@
 /* The visual system — M8 step 1.2. Tokens, type, surfaces, controls.
  *
- * **Everything here that is not a token declaration is scoped under `.shell2`.** `index.html` loads
- * this sheet for both shells, and a bare `button { … }` rule would restyle the old shell — which
- * step 1.2's own file list says to leave alone until 1.12. The tokens themselves are inert until
- * something reads them.
+ * **Everything here that is not a token declaration is scoped under `.shell2`.** That began as
+ * protection: while both shells shared a page a bare `button { … }` rule would have restyled the old
+ * one. The old shell went at step 1.12 and the scoping stays, for a reason that outlived it — the
+ * page also holds the phone notice, the link-refusal banner and the front door's dialog, which live
+ * OUTSIDE the grid and are styled deliberately rather than by inheritance (the DOCUMENT block below
+ * is what the deletion made necessary). The tokens themselves are inert until something reads them.
  *
  * Dark is the app's committed look, so the dark values are the ones on `:root`; `[data-theme=light]`
  * overrides for the figure export's light plate and a later light theme. The phase portrait is DATA
@@ -79,10 +81,10 @@
    The DOCUMENT — M8 step 1.12.
 
    **These were `app.css`'s, and deleting it took them with it.** Scoping every rule under `.shell2`
-   was right while both shells shared a page (the note at the top of this file says why), and it left
-   the document itself unstyled the moment the other sheet went: `body` fell back to the browser's
-   serif on a white ground, and everything OUTSIDE the grid — the phone notice, the link-refusal
-   banner — was drawn in it. Measured in a real browser at 390 px, which is the only place it shows.
+   left the document itself unstyled the moment the other sheet went: `body` fell back to the
+   browser's serif on a white ground, and everything OUTSIDE the grid — the phone notice, the
+   link-refusal banner — was drawn in it. Measured in a real browser at 390 px, which is the only
+   place it shows.
 
    The values are `app.css`'s, read from this file's own tokens rather than copied: one font stack,
    one ground, one ink.

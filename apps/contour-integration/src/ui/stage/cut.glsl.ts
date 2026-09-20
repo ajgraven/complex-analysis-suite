@@ -8,6 +8,13 @@
 // executes this in real WebGL2 over a grid and compares against the TS, which is the only way that
 // agreement means anything.
 //
+// **The app reaches this block through `GLStage.render`'s `cuts` option**, and it did not for four
+// milestones: `uCutCount` was written as a literal 0 and `uCutSeg`/`uCutJump`/`uCutBase` were not
+// even in the uniform-location list, so the parity gate above was guarding a path nothing ran and a
+// dragged cut moved the hatching while the colour seam stayed where it was. `stageView.drawNow`
+// uploads `cutSegments(effectiveBranch(branch), reach, declaredReference(product))` now, and
+// `test/cutStage.browser.test.ts` measures the seam moving on the app's own canvas.
+//
 // Single precision only, deliberately. `cvec` is `vec2` here; the df64 build's `cvec` is a `vec4` and
 // `length()` / `atan()` do not apply to it. Deep zoom into a cut is not on M4's path, and a snippet
 // that compiled under both aliases while being wrong under one would be worse than one that does not

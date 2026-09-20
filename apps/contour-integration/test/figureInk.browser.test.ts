@@ -13,9 +13,10 @@
 // route to it. Three things about the route are worth writing down, because each one is a way for
 // this file to end up measuring an artefact instead of the product:
 //
-//  - **The stylesheets are the app's own, all four of them.** `src/ui/app.css` went with the old
-//    shell; `theme.css` and `shell.css` are what `main.ts` loads now. Mounting without one does not
-//    give a plainer layout, it gives a DIFFERENT one, and the plate's size comes from the canvases'
+//  - **The stylesheets are the app's own, all THREE of them** — `katex.min.css` from `src/main.ts`,
+//    `theme.css` and `shell.css` from `index.html`. (`src/ui/app.css` went with the old shell at
+//    step 1.12; the count here said four until it was counted.) Mounting without one does not give
+//    a plainer layout, it gives a DIFFERENT one, and the plate's size comes from the canvases'
 //    laid-out size — so a shell with no stylesheet exports a picture of a collapsed grid.
 //  - **The root is given a desktop box.** The browser harness's viewport is 1280 x 900 but its body
 //    has no size at all; M7.2 spent a slice discovering that a test aimed at an unsized stage is

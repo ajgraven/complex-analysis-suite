@@ -31,9 +31,17 @@
 
 import type { StageMode } from "./mode.js";
 
-/** Vertex shader for a full-viewport triangle pair. */
+/**
+ * Vertex shader for a full-viewport triangle pair.
+ *
+ * **`layout(location = 0)` is not decoration.** `GLStage.initGeometry` enables attribute 0 and points
+ * it at the quad, while `@cas/gpu`'s `createProgram` never calls `bindAttribLocation` — so without
+ * this the app's own stage was relying on every driver happening to assign 0 to a program's single
+ * attribute. The two parity probes already avoid the question by calling `getAttribLocation`; the
+ * stage cannot, because it builds its VAO before any program exists.
+ */
 export const PHASE_VERT = `#version 300 es
-in vec2 aPos;
+layout(location = 0) in vec2 aPos;
 out vec2 vUv;
 void main() {
   vUv = aPos * 0.5 + 0.5;
@@ -155,6 +163,19 @@ void main() {
   vec2 z = vec2(mix(uRange.x, uRange.y, vUv.x), mix(uRange.z, uRange.w, vUv.y));
   cvec w = ${value};
 
+  // **WHICH DETERMINATION THE PICTURE IS IN** — 'kernel/branch/correction.ts', wired here rather
+  // than left as a shader half nothing called. 'casDeclared' evaluates each factor in the window
+  // the record (or the reader) DECLARED; the cut system on screen may be somewhere else — dragged
+  // off its window ray, or swung to the base point's shadow — and the correction is the difference
+  // of the two crossing counts, so a dragged cut moves the seam instead of sliding the hatching
+  // over a portrait that stays put.
+  //
+  // Behind 'uCutCount' because zero has to be EXACTLY zero: 'cutFactor' at m = 0 is
+  // '(cos 0, sin 0)', and GLSL ES §4.5.1 allows sin/cos an ABSOLUTE 2^-11, so an unconditional
+  // multiply would put a 5e-4 rotation on every pixel of every portrait the app draws — including
+  // the ones with no branch factor at all, where there is nothing to correct.
+  if (uCutCount > 0) w = cmul(cutFactor(z), w);
+
   float re = w.x;
   float im = w.y;
 
@@ -255,10 +276,18 @@ void main() {
   // band MIDPOINT rather than at fract(t) = 0, which is where the lightness sawtooth resets and
   // where a line is therefore least visible. Width is screen-space-constant via fwidth, so zooming
   // does not thin them into aliasing.
+  //
+  // 'uIsoStrength' is a STRENGTH in [0,1] ('ui/stage/mode.ts'), not a count. It was fed a count of
+  // 8, and 'mix' extrapolates: at t = 8 the line reads rgb*(1 - 3.2*iso), negative past iso = 0.3125
+  // and clamped to black — 5,183 pure-black pixels of a 256x256 frame, measured.
+  //
+  // The 'wIso' guard is the phase-isoline branch's, which this one did not have: where fwidth(t) is
+  // large — any pole neighbourhood, and any deep zoom out — 'dIso' never clears the ramp and the
+  // whole region inks. Most of those 5,183 pixels were that, not the extrapolation.
   if (uIsoStrength > 0.0) {
     float dIso = abs(fract(t) - 0.5);
     float wIso = max(fwidth(t), 1e-6);
-    float iso = 1.0 - smoothstep(0.0, wIso * 1.5, dIso);
+    float iso = (1.0 - smoothstep(0.0, wIso * 1.5, dIso)) * (1.0 - smoothstep(0.5, 1.5, wIso));
     rgb = mix(rgb, rgb * 0.6, iso * uIsoStrength);
   }
 
