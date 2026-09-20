@@ -32,6 +32,27 @@
 //   node scripts/a11y-audit.mjs --update-baseline   # re-record the baseline from the current build
 //   node scripts/a11y-audit.mjs riemann-map faber-transform   # audit only the named page(s)
 //
+// THE TREE WALK IS A SECOND INSTRUMENT, NOT A SECOND RULESET (M8 step 5.2)
+// ------------------------------------------------------------------------
+// axe answers *does this page break a WCAG rule?*; the tree walk answers *is every control a
+// screen reader can reach one it can NAME?* — which axe's rules only cover for the element types
+// they know about. **Measured, and it is why this is here at all:** a `<div tabindex="0">` with no
+// role and no text is a tab stop announced as nothing, and axe reports the page CLEAN; the tree
+// walk catches it (`generic`, 1 of 58). It runs in the same visit as axe, against the same roster,
+// the same hashes and the same `expect` guard, so it audits exactly the states axe audits.
+//
+// It has **no baseline of its own and no flag**, both deliberately. No baseline, because there is
+// no acceptable non-zero number: recording tolerated unnamed controls would be recording that some
+// of this suite cannot be operated without sight. No flag, because measured over the whole roster
+// it costs **2.4%** (52.66 s → 53.93 s across 20 pages) and the suite is already at zero — 845
+// interactive nodes, none unnamed — so it starts from a clean sheet and a knob nobody turns would
+// only be a way to stop looking.
+//
+// **The tree is the instrument, and a DOM walk is not.** M6.4 established this and M8 steps 5.1
+// and 5.2 each re-established it: a walk reading `aria-label ?? textContent` reported twelve
+// unnamed controls on a page whose tree has none, because a wrapping `<label>` names an input that
+// carries no `aria-label` of its own.
+//
 // Requires the apps to be built first (`pnpm build`) — it serves the real `apps/*/dist` output, the
 // exact same bytes deploy-pages.yml publishes. Chromium comes from Playwright (already a devDep and
 // installed in the `browser` CI job); software WebGL2 (SwiftShader) is forced so the rendered DOM
@@ -271,6 +292,9 @@ if (flags.has("--help")) {
       "  (no flags)          report mode: audit + diff vs baseline, always exit 0",
       "  --strict            exit 1 when there are regressions (local hard check)",
       "  --update-baseline   re-record scripts/a11y-baseline.json from the current build",
+      "",
+      "  Every run also walks the accessibility TREE and reports each page's interactive",
+      "  node count and its unnamed count, which must be zero (--strict makes it fail).",
       "  pageId...           audit only the named page(s); default is all of:",
       "                      " + PAGES.map((p) => p.id).join(", "),
     ].join("\n"),
@@ -348,6 +372,53 @@ async function listen() {
 }
 
 // ── Audit one page ───────────────────────────────────────────────────────────
+// The roles a screen-reader user OPERATES. Not a closed list of what matters — it is unioned with
+// everything the tree marks `focusable`, because a role list alone misses controls that have no
+// widget role at all. Measured on this suite: the union adds eleven `DisclosureTriangle`s (the
+// `<summary>` of every derivation stage) on the contour app's landing page, so the app's most
+// numerous control is exactly the one a role-keyed walk cannot see.
+const WIDGET_ROLES = new Set([
+  "button", "link", "textbox", "combobox", "checkbox", "radio", "slider", "application",
+  "tab", "switch", "spinbutton", "menuitem", "menuitemcheckbox", "menuitemradio",
+  "option", "searchbox", "treeitem",
+]);
+
+/**
+ * Walk the page's ACCESSIBILITY TREE over CDP and count what a screen reader can operate.
+ *
+ * `ignored` nodes are excluded — they are in the tree but not exposed — and a node counts as named
+ * when its computed name is non-empty after trimming, which is the same question a screen reader
+ * asks when it announces a control.
+ *
+ * **Both of those guards are currently unobservable on this suite, measured.** No ignored node on
+ * the audited pages is focusable or widget-roled, so dropping `!ignored` changes no count; and
+ * Chromium computes `aria-label=" "` to an EMPTY name already, so dropping `.trim()` changes no
+ * count either. They stay because each states what the question IS — an ignored node is one a
+ * screen reader cannot reach, and a name of spaces is not a name — rather than because a number
+ * moves today.
+ */
+async function walkTree(context, tab) {
+  const cdp = await context.newCDPSession(tab);
+  try {
+    await cdp.send("Accessibility.enable");
+    const { nodes } = await cdp.send("Accessibility.getFullAXTree");
+    const focusable = (n) => n.properties?.some((q) => q.name === "focusable" && q.value?.value === true);
+    const live = nodes.filter(
+      (n) => !n.ignored && ((n.role && WIDGET_ROLES.has(n.role.value)) || focusable(n)),
+    );
+    const unnamed = live.filter((n) => !(n.name?.value && n.name.value.trim()));
+    return {
+      interactive: live.length,
+      unnamed: unnamed.length,
+      // Enough to FIND it: the role plus whatever the DOM node was, since by definition there is no
+      // name to quote back.
+      detail: unnamed.slice(0, 10).map((n) => n.role?.value ?? "(no role)"),
+    };
+  } finally {
+    await cdp.detach();
+  }
+}
+
 async function auditPage(context, baseUrl, page) {
   const url = `${baseUrl}/${page.mount}/${page.file}${page.hash ?? ""}`;
   const tab = await context.newPage();
@@ -375,13 +446,18 @@ async function auditPage(context, baseUrl, page) {
         );
       }
     }
+    // Before axe rather than after. **Measured, axe's injection does not move the numbers** (57
+    // interactive / 0 unnamed on the contour app's landing page either side of an `analyze()`), so
+    // this is an ordering preference and not a fix: the tree is asked about the page as the app
+    // rendered it, with nothing else's script in the DOM.
+    const tree = await walkTree(context, tab);
     const results = await new AxeBuilder({ page: tab }).withTags(AXE_TAGS).analyze();
     // Collapse to a per-rule fingerprint: rule id → { impact, count of violating nodes, help }.
     const rules = {};
     for (const v of results.violations) {
       rules[v.id] = { impact: v.impact ?? "n/a", count: v.nodes.length, help: v.help };
     }
-    return { rules, pageErrors: consoleErrors };
+    return { rules, pageErrors: consoleErrors, tree };
   } finally {
     await tab.close();
   }
@@ -448,7 +524,7 @@ function summaryLine(current) {
   return { rules, nodes };
 }
 
-function writeStepSummary(current, regressions, improvements) {
+function writeStepSummary(current, regressions, improvements, trees) {
   const out = process.env.GITHUB_STEP_SUMMARY;
   if (!out) return;
   const { rules, nodes } = summaryLine(current);
@@ -495,6 +571,25 @@ function writeStepSummary(current, regressions, improvements) {
       );
     }
   }
+  // The tree walk's own row — apart from the baseline table because it is a different instrument
+  // (see the header): axe asks whether a rule is broken, this asks whether every control a screen
+  // reader can reach has a name.
+  const unnamed = Object.entries(trees).filter(([, t]) => t.unnamed > 0);
+  const total = Object.values(trees).reduce((a, t) => a + t.interactive, 0);
+  lines.push("");
+  lines.push("### Accessibility tree");
+  lines.push("");
+  if (unnamed.length === 0) {
+    lines.push(`✅ **${total}** interactive node(s), **0** unnamed.`);
+  } else {
+    lines.push(`⚠️ **${total}** interactive node(s); **unnamed** on ${unnamed.length} page(s):`);
+    lines.push("");
+    lines.push("| Page | Unnamed | Of | Roles |");
+    lines.push("| --- | --- | --- | --- |");
+    for (const [pageId, t] of unnamed) {
+      lines.push(`| ${pageId} | ${t.unnamed} | ${t.interactive} | ${t.detail.join(", ")} |`);
+    }
+  }
   lines.push("");
   writeFileSync(out, lines.join("\n") + "\n", { flag: "a" });
 }
@@ -529,18 +624,22 @@ async function main() {
   const context = await browser.newContext({ viewport: VIEWPORT });
 
   const current = {};
+  const trees = {};
   try {
     for (const page of selected) {
       process.stdout.write(`  auditing ${page.id} … `);
-      const { rules, pageErrors } = await auditPage(context, baseUrl, page);
+      const { rules, pageErrors, tree } = await auditPage(context, baseUrl, page);
       current[page.id] = rules;
+      trees[page.id] = tree;
       const nRules = Object.keys(rules).length;
       const nNodes = Object.values(rules).reduce((a, r) => a + r.count, 0);
       console.log(
-        nRules
+        (nRules
           ? `${nRules} rule(s), ${nNodes} node(s)` +
               (pageErrors.length ? `  [${pageErrors.length} page error(s)]` : "")
-          : "clean",
+          : "clean") +
+          `  ·  tree: ${tree.interactive} interactive, ${tree.unnamed} unnamed` +
+          (tree.unnamed ? ` (${tree.detail.join(", ")})` : ""),
       );
     }
   } finally {
@@ -600,11 +699,32 @@ async function main() {
     }
   }
 
-  writeStepSummary(current, regressions, improvements);
+  // ── the tree walk's own verdict (M8 step 5.2) ───────────────────────────────────────────────
+  // Reported apart from the baseline diff, and deliberately WITHOUT a baseline of its own: there is
+  // no acceptable non-zero number here. An unnamed control is one a screen reader announces as its
+  // role alone — "button", "slider" — so recording a count of them as tolerated would be recording
+  // that some of this suite cannot be operated without sight.
+  const unnamedPages = Object.entries(trees).filter(([, t]) => t.unnamed > 0);
+  const totalInteractive = Object.values(trees).reduce((a, t) => a + t.interactive, 0);
+  if (unnamedPages.length === 0) {
+    console.log(
+      `✓ Accessibility tree: ${totalInteractive} interactive node(s) across ${Object.keys(trees).length} page(s), 0 unnamed.`,
+    );
+  } else {
+    console.log(`\n✗ ${unnamedPages.length} page(s) with UNNAMED interactive nodes:`);
+    for (const [pageId, t] of unnamedPages) {
+      console.log(`    ${pageId}: ${t.unnamed} of ${t.interactive} — ${t.detail.join(", ")}`);
+      console.log(
+        `::warning title=unnamed interactive node (${pageId})::${t.unnamed} of ${t.interactive} interactive nodes have no accessible name (${t.detail.join(", ")})`,
+      );
+    }
+  }
+
+  writeStepSummary(current, regressions, improvements, trees);
 
   // Report mode (CI default) always exits 0 — the audit is non-blocking. --strict makes it a hard
   // check for local use or opt-in gating.
-  return STRICT && regressions.length ? 1 : 0;
+  return STRICT && (regressions.length || unnamedPages.length) ? 1 : 0;
 }
 
 main().then(

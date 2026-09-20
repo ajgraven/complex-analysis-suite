@@ -177,6 +177,13 @@ jobs:
   # rule can never wedge master; regressions surface as `::warning::` annotations and a step summary,
   # not a blocked merge. `--strict` (local / opt-in) turns it into a hard check. Publishing is NOT
   # gated on it (that stays lint/typecheck/test in deploy-pages.yml). PR-only, like `build`.
+  #
+  # **Every run also walks each page's ACCESSIBILITY TREE over CDP** (M8 step 5.2) and reports its
+  # interactive-node count and its unnamed count. That is a second INSTRUMENT rather than a second
+  # ruleset: a `<div tabindex="0">` with no role and no text is a tab stop a screen reader announces
+  # as nothing, and axe reports the page clean. It carries no baseline — there is no acceptable
+  # non-zero number — and no flag, because it costs 2.4% of the run and the suite is at zero: 845
+  # interactive nodes across 20 pages, none unnamed.
   a11y:
     if: github.event_name != 'push'
     runs-on: ubuntu-latest
@@ -215,5 +222,5 @@ jobs:
         run: pnpm build
 
       # Report mode: writes a step summary + `::warning::` annotations on regressions, exits 0.
-      - name: Accessibility audit (axe-core, non-blocking)
+      - name: Accessibility audit (axe-core + accessibility tree, non-blocking)
         run: node scripts/a11y-audit.mjs
