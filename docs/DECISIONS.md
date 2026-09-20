@@ -3880,6 +3880,20 @@ students, as an exploration instrument first with a pedagogical mode.
 
 ### Action items
 
-1. Phase 0 through Phase 5 per the plan; STATUS.md is the record.
-2. After the final merge: CLAUDE.md status paragraph, README, PLAN §5 and §7 updated; the M8 plan's
-   findings folded into `docs/refactor/LOG.md`.
+1. ~~Phase 0 through Phase 5 per the plan; STATUS.md is the record.~~ **DONE.** Phase 0 merged to
+   `master` alone ([#340](https://github.com/ajgraven/complex-analysis-suite/pull/340)); Phases 1–5
+   in one merge. Forty-odd steps, each gated and mutation-swept, recorded in
+   [`contour-integration/M8/STATUS.md`](contour-integration/M8/STATUS.md).
+2. ~~After the final merge: CLAUDE.md status paragraph, README, PLAN §5 and §7 updated; the M8 plan's
+   findings folded into `docs/refactor/LOG.md`.~~ **DONE at step 5.3** — CLAUDE.md's *In progress*
+   paragraph is now *Done — M8* (and its test census and its jsdom paragraph were corrected on the
+   way, the latter having named three specs the M8 cutover deleted); the root README's census, the
+   app README's status and four new phase paragraphs, PLAN §5's superseding note and §7's M8 gate
+   block, and one `docs/refactor/LOG.md` entry.
+3. **Two things this ADR did not anticipate, recorded for the next rebuild.** The milestone's own
+   GATES were its weakest artefact twice over (M6.1's fixed-point clause survived 11 of 20 mutants;
+   step 3.6's clause named a permalink that could not exist), so a gate needs sweeping like any other
+   test. And the plan's serialisation carrier for an edited contour was FALSIFIED by measuring it —
+   a pen wire changes the ledger for four of the ten templates — so the recipe carries the reader's
+   operations instead. Neither was a failure of the decision; both were failures to measure a
+   sentence before building on it.

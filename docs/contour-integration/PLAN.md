@@ -383,6 +383,13 @@ disagreement beyond the estimator's bound is a bug signal worth logging.
 > so there is nothing to start paused — measured at M6.4 on the old stylesheet and re-measured at
 > M8 step 2.5 on `theme.css` + `shell.css`; and §5.3's CET-C6 is now the real Kovesi map rather than
 > the documented approximation (M8 step 1.9).
+>
+> **Completed at M8 step 5.3, with the rest of the milestone:** the table's *Derivation* row is now
+> a **stepper** (the argument in a lecturer's order, one step at a time, the stage reading the step),
+> its *Contour* row is **editable** (seven actions on the rows plus a Shift-drag division, over pure
+> operations), and its *Figure & share* row ships three plates rather than element toggles. The four
+> stage modes (quiet / full / isolines / a textbook plate with no portrait) were not in the table at
+> all. §7's M8 entry carries the gate.
 
 Full-bleed **Stage**, two collapsible rails, one bottom strip. Rails named by **job, not technique**
 — the correction QD's own sidebar review had to make.
@@ -967,7 +974,27 @@ four stage modes on the real CET-C6, and the corpus's four-line descriptions as 
 engine is unchanged apart from the hooks the plan names. Phases: 0 invisible foundations (merged
 to `master` alone), 1 the shell, 2 presentation and prose, 3 the teaching layer, 4 the editor,
 5 the close. **Gate:** each phase's own gate, then the full gate, the browser suite, `pnpm a11y`
-and screenshots. Plan: [`M8-plan.md`](M8-plan.md); live state: [`M8/STATUS.md`](M8/STATUS.md).
+and screenshots. Plan: [`M8-plan.md`](M8-plan.md); the step-by-step record is
+[`M8/STATUS.md`](M8/STATUS.md).
+
+> **✅ GATE MET.** All five phases landed — Phase 0 merged to `master` alone
+> ([#340](https://github.com/ajgraven/complex-analysis-suite/pull/340)), Phases 1–5 in one merge.
+> `src/shell/` is the rebuilt shell and the old one is deleted; what survived and what deliberately
+> did not is [`M8/parity.md`](M8/parity.md), row by row. The full gate is green at **586 files /
+> 6,475 tests** with lint, typecheck and build silent; the app's browser suite is 20 files / 220
+> tests; the a11y roster is **zero rules and zero nodes** on all four audited contour states with
+> `{}` baselines, and `scripts/a11y-audit.mjs` now walks each page's accessibility TREE beside axe
+> (**0 unnamed** of 845 interactive nodes across the suite). The browser pass is
+> [`M8/browser-pass.md`](M8/browser-pass.md), recorded per item.
+>
+> **Three things the milestone established that outlive it.** (1) **The gates were the weakest part
+> of the work, twice** — M6.1's *"`applyState(currentState())` is a fixed point"* survived 11 of 20
+> mutants because a consistently LOSSY round trip is still a fixed point, and step 3.6's own clause
+> named a permalink that could not exist. A gate has to be swept like anything else. (2) **The
+> plan's carriers had to be measured, not adopted** — serialising an edited template as a pen wire
+> changes the LEDGER for four of the ten templates, so the recipe carries the reader's six
+> operations instead. (3) **The accessibility tree is the instrument and a DOM walk is not**, which
+> this app has now had to learn at M6.4, 5.1 and 5.2.
 
 ### Deferred (explicitly out of v1)
 **Pólya work/flux toggle** — scoped into M3 (round 3), never built, dropped on the record in

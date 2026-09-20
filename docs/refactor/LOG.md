@@ -2616,3 +2616,78 @@
   green (the classic↔.mjs parity check confirms byte-identity). **P1 complete — `@cas/core/poly` + `format`
   exist, QD delegates to them bit-identically, and `@cas/schwarz` rides them. P2–P3 (peel `@cas/expr/rational`
   + the CD / correspondences float consumers) stay need-driven per ADR-0015.**
+
+## 2026-09-20 · branch claude/inspiring-keller-5sizwl — Contour Integration M8: the shell rebuild (ADR-0043)
+
+The M8 findings, folded in per [ADR-0043](../DECISIONS.md) action item 2. The step-by-step record —
+every step, every sweep, every finding with its measurement — is
+[`../contour-integration/M8/STATUS.md`](../contour-integration/M8/STATUS.md); this entry is what a
+reader of the LOG needs to know without opening it.
+
+- **What it was.** A review of `apps/contour-integration` at M7 found the **engine sound and the
+  presentation layer the liability**: no mathematics typeset (targets printed as
+  `∫ (−∞ → ∞) cos(a*x)/(x^2 + b^2) dx`); one right-hand rail carrying seven concerns, scrolling seven
+  screens, and **torn down on every recompute** — one architectural fact behind a dozen visible
+  defects (disclosures closing, sliders dying on their own input event, focus lost); a `<select>` of
+  slugs for a front door; and the ledger's house ids (`COVER / KILL / CATCH / LEGALITY`) shown to
+  readers. ADR-0043 decided to **rebuild the shell rather than patch it**, on the UNCHANGED engine and
+  its `ShellState → resolveState` contract. Five phases: 0 invisible foundations (merged to `master`
+  alone as [#340](https://github.com/ajgraven/complex-analysis-suite/pull/340)), 1 the shell, 2
+  presentation and prose, 3 the teaching layer, 4 the editor, 5 the close. Phases 1–5 in one merge.
+- **What shipped.** A keyed DOM builder (`shell/dom.ts` — `h` + `patch`, no dependency, one
+  reconciler path); **two rails** named by job — *what is being integrated* (target · integrand ·
+  parameters · contour · cuts · singularities) and *what it proves* (result · derivation · share);
+  **KaTeX throughout**; textbook vocabulary decided in one place (`engine/vocabulary.ts`) with a
+  **two-part denylist** keeping a house id from reaching a reader — one half reading every string
+  literal in `src/shell/` and `src/engine/` out of the TypeScript AST, the other mounting the app
+  across 43 states and reading what is on screen; a **front door** of eight classics over an
+  eight-group taxonomy; **four stage modes** on Kovesi's real CET-C6 (quiet / full / isolines /
+  a textbook plate with no portrait at all); a hover readout with one identifier linking the piece
+  list, the contour and the accumulator's trail; undo/redo; a **stepper** giving the argument in a
+  lecturer's order with the stage reading the step; scrubbable limits with a checkpoint table; the
+  amplitwist detail; the contrast ladder as a strip rather than a modal; the faded drill rehoused as
+  a card, asking its prediction before offering its menu; an **editable piece list** (seven actions
+  plus a Shift-drag division, over pure operations in `engine/contour/edit.ts`); and three figure
+  plates. At step 1.12 the old shell was **deleted** — `src/shell2/` became `src/shell/`.
+- **Finding 1 — the milestone's own GATES were its weakest artefact, twice.** M6.1's clause
+  *"`applyState(currentState())` is a fixed point"* survived **11 of 20 mutants**, and the ten were
+  one defect: **a consistently LOSSY round trip is still a fixed point**, so a `currentState` that
+  forgets a field and an `applyState` that never reads it agree perfectly — the sentence is satisfied
+  by `currentState = () => ({})`. The property a permalink needs is to restore a state the app is
+  NOT in and land on the state applied (20/20). And step 3.6's gate clause named *a Worked-example
+  permalink at step 5* for a link that **could not exist**: the reader's place in an argument is
+  session state and the codec did not carry it, so the stepper's bodies were a surface the audit
+  roster could never reach. **A gate needs sweeping like any other test.**
+- **Finding 2 — the plan's own carriers had to be measured, not adopted.** §4.4 asked for an edited
+  template contour to ride the permalink as a pen wire (vertices and bulges). Run over the ten
+  templates, that conversion **changes the LEDGER for four of them**: a full turn has a zero-length
+  chord no bulge can express, and a rebuilt arc's centre lands 2.2e-16 off an origin `arcRadius`
+  demands exactly. So an edited contour is carried as **what was done to it** — six replayable
+  operations onto the recipe — and the parameters, the symbolic geometry and the exactly-centred arcs
+  survive because nothing re-describes the curve.
+- **Finding 3 — a test that pins the OUTCOME without the REASON lets a defect ship green**, caught by
+  the sweeps at 4.2, 4.3, 4.4b, 5.1 and 5.2. Sharpest instance: a test asserting *"the repair is
+  shown"* with `toContain` passed **with the line deleted**, because the failed hypothesis row
+  carries the same sentence further down the card. It is asserted by POSITION now.
+- **Finding 4 — the accessibility TREE is the instrument and a DOM walk is not**, established at M6.4
+  and re-established at 5.1 and 5.2: a walk reading `aria-label ?? textContent` reported **12 unnamed**
+  interactive controls on a page whose tree has **none** (a wrapping `<label>` names an input that
+  carries no `aria-label`). `scripts/a11y-audit.mjs` now walks each page's tree over CDP beside axe,
+  always on and with no baseline — **845 interactive nodes across 20 pages, 0 unnamed** — because a
+  `<div tabindex="0">` with no role and no text is a tab stop a screen reader announces as nothing and
+  **axe reports that page clean** (measured). Cost: 2.4% of the run.
+- **Finding 5 — a sentence the engine composed correctly can still reach a reader wrong.** The browser
+  pass found the Result card saying *There is no integrand* about a REFUSED DECLARATION with
+  `1/(1+z)` still in the box (three other cards showed the engine's exact reason), and printing a
+  refused claim **raw** — `the $R \to \infty$ circle crosses the cut $\Gamma$` — directly above a
+  typeset copy of itself. Both fixed at step 5.1.
+- **Finding 6 — three CLAUDE.md/README claims were stale or never true**, found by the step-5.3 sweep:
+  the test census (554 files / 5,738 tests, and 6,073/571 in the root README), and the jsdom paragraph,
+  which named three specs the M8 cutover had deleted and had been wrong about Quadrature-Domains' 34
+  jsdom specs since before it was written.
+- **Green.** Full gate **586 files / 6,475 tests**, lint/typecheck/build silent; the app's browser
+  suite 20 files / 220 tests; the a11y roster zero rules and zero nodes on all four audited contour
+  states with `{}` baselines. The owner's click-through checklist, with the executor's results
+  recorded per item, is [`../contour-integration/M8/browser-pass.md`](../contour-integration/M8/browser-pass.md);
+  what survived the rebuild and what deliberately did not is
+  [`../contour-integration/M8/parity.md`](../contour-integration/M8/parity.md), row by row.

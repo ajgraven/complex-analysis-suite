@@ -10,13 +10,15 @@ whether the whole thing closes.
 
 ## Status
 
-**Through Milestone 7 and published. THE GALLERY IS COMPLETE — all 28 records load, and every one
+**Through Milestone 8 and published. THE GALLERY IS COMPLETE — all 28 records load, and every one
 of them is executed against the engine in the test suite.** **M8 — the shell rebuild
-([ADR-0043](../../docs/DECISIONS.md)) — is in progress on a branch:** Phase 0 is merged, Phase 1 is
-cut over, and Phase 2 (presentation and prose) is under way. What is on screen below Milestone 7 is
-therefore described twice — once as the engine built it, and once as the M8 shell shows it; the M8
-paragraph near the end of this file is the current word, and
-[`M8/STATUS.md`](../../docs/contour-integration/M8/STATUS.md) is the live state. M5.0 (tier D's quadrature cross-check),
+([ADR-0043](../../docs/DECISIONS.md)) — is COMPLETE:** all five phases landed (Phase 0 merged alone,
+Phases 1–5 in one merge), so `src/shell/` is the rebuilt shell and the old one is deleted. Anything
+below that describes the SCREEN before M8 describes a shell that no longer exists — the four M8
+paragraphs near the end of this file are the current word, what survived the rebuild and what
+deliberately did not is [`M8/parity.md`](../../docs/contour-integration/M8/parity.md) row by row, and
+[`M8/STATUS.md`](../../docs/contour-integration/M8/STATUS.md) is the step-by-step record. The
+MATHEMATICS is unchanged by M8. M5.0 (tier D's quadrature cross-check),
 M5.1 (the sandbox declares a branch factor), M5.2 (one predicate for L3 and L6, and the corrected
 L6), M5.3 (tier E's E1 and E2), M5.4 (tier F's F1, on the wedge), M5.5 (tier G's machinery — the
 square, the summation kernels and the corrected bound), M5.6 (tier G's solve, and G2), M5.7 (the
@@ -819,6 +821,46 @@ goes through: the parser's sentences, the codec's refusals on both sides, the ac
 the empty states. The codec's forty-odd refusal reasons collapse to eight sentences and one
 fallback, because all but a handful differ only in which wire field was wrong — a fact about the
 program rather than anything a reader can act on.
+
+**M8 Phase 3 — the teaching layer.** The Derivation card becomes a **stepper**: the argument in the
+order a lecturer gives it (the problem, the hypotheses, the residues, the boundary terms, the limit,
+the solution, the conclusion), one step at a time or all at once, with the stage reading the step and
+emphasising the piece it is about. A limit is a **swept ladder** rather than a sentence — the
+`R → ∞` step plays, and its checkpoint table shows the bound shrinking at each radius — and the
+**amplitwist** detail draws `f(z)dz` as the product it is, an arrow scaled and turned. The contrast
+ladder stops being a modal and becomes a strip above the stage, five cases each naming in words the
+check that moved and what it did; measured, the modal cost the stage 335 px of panel against a 328 px
+stage. The faded drill is rehoused as a right-rail card, and rung iii **asks before it offers** — the
+prediction comes first, then the menu. The step rides in the permalink (`Wire.st`), which is what
+made the stepper's bodies auditable at all: the roster audits a page in the state a link opens it in,
+so a surface no link could reach was a surface nothing checked.
+
+**M8 Phase 4 — the editor.** The contour is an object you can restructure: seven actions on the
+Contour card's rows (role, status, rename in place, delete, insert, reverse, reorder) over pure
+operations in `engine/contour/edit.ts`, plus an eighth reached by **Shift-dragging the curve**, which
+inserts a vertex and drags it in one gesture and one undo entry. A division is carried as a
+**fraction** so that it replays onto a contour whose slider has since moved, a segment's join point is
+symbolic, and an arc is divided **on its own circle** because `arcRadius` refuses any centre that is
+not exactly the origin. A drawn contour is a first-class argument — a `PenNode` carries a role and a
+lemma — and the ledger **stops guessing** which vanishing lemma kills a piece: all 28 records have
+declared one since M3, all 28 agree with the old shape-driven guess, and a declared lemma now routes
+to its own reader and refuses by name. The permalink carries an edited template as **what was done to
+it** (six replayable operations on the recipe) rather than as its piece list, which keeps the
+parameters, the symbolic geometry and the exactly-centred arcs; the plan's own carrier was measured
+and would have changed the ledger for four of the ten templates.
+
+**M8 Phase 5 — the close.** A browser pass under software WebGL2, recorded per item as the owner's
+click-through checklist ([`M8/browser-pass.md`](../../docs/contour-integration/M8/browser-pass.md)):
+four stage modes on four records with no page errors, a drag across a pole, the pen, the keyhole's
+cut drag refusing by name, the three figure plates opened, the front door by keyboard alone, the
+drill end to end, a worked example stepped and played. It found the Result card saying *There is no
+integrand* about a REFUSED DECLARATION with the integrand still in the box, and printing a refused
+claim raw above a typeset copy of itself — both fixed. The accessibility baseline is **zero axe rules
+and zero nodes** on all four audited states, and `scripts/a11y-audit.mjs` now walks each page's
+accessibility TREE beside axe: **57 / 71 / 50 / 54 interactive nodes on the four states and 0
+unnamed**, 845 across the whole suite. That walk earns its place by measurement — a
+`<div tabindex="0">` with no role and no text is a tab stop a screen reader announces as nothing, and
+axe reports the page clean.
 
 ## Documentation
 
