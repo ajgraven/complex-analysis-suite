@@ -11,7 +11,9 @@ import {
   argCut,
   cutCorrection,
   cutSegments,
+  cutSegmentsDropped,
   jumpWeights,
+  MAX_CUT_SEGMENTS,
   logCut,
   powCut,
   signedCross,
@@ -286,5 +288,62 @@ describe("the reference system is declared, not assumed", () => {
     expect(ray.b[0]).toBeLessThan(-RADIUS / 2);
     expect(Math.abs(ray.b[1])).toBeLessThan(1e-9);
     expect(ray.jump).toBeCloseTo(-0.5, 15);
+  });
+});
+
+// **THE TRUNCATION HAS TO BE SAYABLE.** `MAX_CUT_SEGMENTS`'s own comment promised that a cut system
+// too long for the uniform block would be "truncated and SAID to be"; nothing said it, and nothing
+// could — neither `cutCorrection` nor the shader reports that it stopped reading. A picture drawn
+// from 64 of 80 segments is a picture in a DIFFERENT determination, which is the one failure this
+// module exists to prevent.
+describe("an over-long cut system reports its truncation", () => {
+  /** `n` branch points on a circle, each with one ray to infinity — two segments apiece. */
+  const many = (n: number): BranchChoice => ({
+    ...NO_BRANCH,
+    convention: "zeroToTwoPi",
+    points: Array.from({ length: n }, (_, k) => ({
+      id: `b${k}`,
+      at: [Math.cos((2 * Math.PI * k) / n) * 3, Math.sin((2 * Math.PI * k) / n) * 3] as Cx,
+      order: { kind: "power" as const, alpha: q(1n, 2n) },
+      label: `b${k}`,
+    })),
+    cuts: Array.from({ length: n }, (_, k) => ({
+      id: `Γ${k}`,
+      from: `b${k}`,
+      to: INFINITY,
+      via: [[Math.cos((2 * Math.PI * k) / n) * 9, Math.sin((2 * Math.PI * k) / n) * 9] as Cx],
+    })),
+  });
+
+  it("40 branch points make 80 segments, of which 64 are read", () => {
+    const segments = cutSegments(many(40), RADIUS);
+    expect(segments).toHaveLength(80);
+    expect(cutSegmentsDropped(segments)).toBe(80 - MAX_CUT_SEGMENTS);
+  });
+
+  it("says nothing when they all fit, at the limit and below it", () => {
+    // 32 points is exactly 64 segments — the boundary, where an off-by-one would report a drop.
+    const atLimit = cutSegments(many(32), RADIUS);
+    expect(atLimit).toHaveLength(MAX_CUT_SEGMENTS);
+    expect(cutSegmentsDropped(atLimit)).toBe(0);
+    expect(cutSegmentsDropped(cutSegments(keyhole(), RADIUS))).toBe(0);
+    expect(cutSegmentsDropped([])).toBe(0);
+  });
+
+  it("and the correction really does stop there, which is what makes it worth saying", () => {
+    // The drop is not hypothetical: past the 64th segment nothing enters the count, so a point on
+    // the far side of a dropped cut is corrected as though that cut were not there.
+    const segments = cutSegments(many(40), RADIUS);
+    // A short chord at radius 20 spanning 317°→331°, which crosses exactly one ray — the 37th
+    // point's, at 324°, whose two segments sit past the 64th and are therefore never read.
+    const at = (deg: number): Cx => [20 * Math.cos((deg * Math.PI) / 180), 20 * Math.sin((deg * Math.PI) / 180)];
+    const base = at(317);
+    const z = at(331);
+    expect(cutCorrection(z, base, segments)).toBe(
+      cutCorrection(z, base, segments.slice(0, MAX_CUT_SEGMENTS)),
+    );
+    // ...and a reader with no such limit says something different about the same point.
+    const full = segments.reduce((m, seg) => m - signedCross(base, z, seg.a, seg.b) * seg.jump, 0);
+    expect(full).not.toBe(cutCorrection(z, base, segments));
   });
 });

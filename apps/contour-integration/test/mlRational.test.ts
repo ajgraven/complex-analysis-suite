@@ -161,9 +161,13 @@ describe("mlArcBound", () => {
 });
 
 describe("jordanArcBound — where the sign of a is a hard branch", () => {
+  /** The upper half-turn, in units of π — the arc Jordan's bound is stated on. */
+  const UPPER = { from: Frac.ZERO, to: Frac.ONE };
+  const LOWER = { from: Frac.ONE.neg(), to: Frac.ZERO };
+
   it("certifies the UPPER semicircle for a > 0", () => {
     const { num, den } = exact("1/(1+z^2)");
-    const b = jordanArcBound(num, den, q(1), "upper", q(50));
+    const b = jordanArcBound(num, den, q(1), "upper", q(50), "R", UPPER);
     expect(b.asymptotics).toBe("vanishes");
     expect(b.certificate.level).toBe("≤");
     // (π/1)·max|g| ≈ π/2499 — and independent of R apart from max|g|.
@@ -174,7 +178,7 @@ describe("jordanArcBound — where the sign of a is a hard branch", () => {
     // ∫cos x/(1+x²) dx closed downward: |e^{iz}| = e^{−Im z} grows like e^{R} there. The app shows
     // the bound diverging and names the failing constraint instead of quietly producing a number.
     const { num, den } = exact("1/(1+z^2)");
-    const b = jordanArcBound(num, den, q(1), "lower", q(50));
+    const b = jordanArcBound(num, den, q(1), "lower", q(50), "R", LOWER);
     expect(b.asymptotics).toBe("diverges");
     expect(b.value).toBeUndefined();
     expect(b.certificate.level).toBe("⚠");
@@ -184,8 +188,8 @@ describe("jordanArcBound — where the sign of a is a hard branch", () => {
 
   it("mirrors for a < 0: the LOWER semicircle is the one that closes", () => {
     const { num, den } = exact("1/(1+z^2)");
-    expect(jordanArcBound(num, den, q(-1), "lower", q(50)).asymptotics).toBe("vanishes");
-    expect(jordanArcBound(num, den, q(-1), "upper", q(50)).asymptotics).toBe("diverges");
+    expect(jordanArcBound(num, den, q(-1), "lower", q(50), "R", LOWER).asymptotics).toBe("vanishes");
+    expect(jordanArcBound(num, den, q(-1), "upper", q(50), "R", UPPER).asymptotics).toBe("diverges");
   });
 
   it("reaches where plain ML cannot: g = z/(1+z²) has degree gap 1", () => {
@@ -193,14 +197,149 @@ describe("jordanArcBound — where the sign of a is a hard branch", () => {
     // trades the factor R for the constant \\pi/|a| and vanishes.
     const { num, den } = exact("z/(1+z^2)");
     expect(mlArcBound(num, den, q(100), q(1)).asymptotics).toBe("bounded");
-    expect(jordanArcBound(num, den, q(1), "upper", q(100)).asymptotics).toBe("vanishes");
+    expect(jordanArcBound(num, den, q(1), "upper", q(100), "R", UPPER).asymptotics).toBe("vanishes");
   });
 
   it("declines at a = 0, where the lemma does not apply", () => {
     const { num, den } = exact("1/(1+z^2)");
-    const b = jordanArcBound(num, den, Frac.ZERO, "upper", q(50));
+    const b = jordanArcBound(num, den, Frac.ZERO, "upper", q(50), "R", UPPER);
     expect(b.certificate.level).toBe("⚠");
     expect(b.certificate.method).toMatch(/non-zero frequency/);
+  });
+
+  // **THE ARC'S EXTENT IS PART OF THE HYPOTHESIS.** Until it was read, the bound assumed a
+  // semicircle: on a FULL CIRCLE at R = 4 it certified `≤ 2.094e-1`, at level `≤` and status
+  // satisfied, for an arc whose `∫|f||dz|` is 1.841e+1 — 88× the claimed bound, because `|e^{iz}|`
+  // grows like `e^R` over the half of it the bound says nothing about.
+  describe("the arc's extent, which the bound used to assume", () => {
+    /** `∫|f||dz|` over the arc, by a dense midpoint rule — the quantity a bound must dominate. */
+    const absIntegral = (f: (z: [number, number]) => [number, number], R: number, from: number, to: number, n = 200000): number => {
+      let total = 0;
+      const dt = (to - from) / n;
+      for (let k = 0; k < n; k++) {
+        const th = from + (k + 0.5) * dt;
+        const v = f([R * Math.cos(th), R * Math.sin(th)]);
+        total += Math.hypot(v[0], v[1]) * R * Math.abs(dt);
+      }
+      return total;
+    };
+    /** `e^{iz}/(1+z²)`, the integrand the reproduction uses. */
+    const eiz = (z: [number, number]): [number, number] => {
+      const m = Math.exp(-z[1]);
+      const er: [number, number] = [m * Math.cos(z[0]), m * Math.sin(z[0])];
+      const d: [number, number] = [1 + z[0] * z[0] - z[1] * z[1], 2 * z[0] * z[1]];
+      const s = d[0] * d[0] + d[1] * d[1];
+      return [(er[0] * d[0] + er[1] * d[1]) / s, (er[1] * d[0] - er[0] * d[1]) / s];
+    };
+    const g = exact("1/(1+z^2)");
+
+    it("REFUSES a full circle by name, where it used to certify a bound 88× too small", () => {
+      const b = jordanArcBound(g.num, g.den, q(1), "upper", q(4), "R", { from: Frac.ZERO, to: q(2) });
+      expect(b.certificate.level).toBe("⚠");
+      expect(b.value).toBeUndefined();
+      expect(b.asymptotics).toBe("unestablished");
+      expect(b.certificate.claim).toMatch(/arc from \$0\$ to \$2\\pi\$/);
+      expect(b.certificate.method).toMatch(/contained in the upper half-plane/);
+      // And the number it used to print is measurably not a bound on that arc.
+      expect(absIntegral(eiz, 4, 0, 2 * Math.PI)).toBeGreaterThan(18);
+    });
+
+    it("REFUSES [0, 3π/2] too — leaving the half-plane at all is enough", () => {
+      const b = jordanArcBound(g.num, g.den, q(1), "upper", q(4), "R", { from: Frac.ZERO, to: q(3, 2) });
+      expect(b.certificate.level).toBe("⚠");
+      expect(b.asymptotics).toBe("unestablished");
+      expect(b.certificate.method).toMatch(/contained in the upper half-plane/);
+    });
+
+    it("REFUSES when no extent is supplied at all, rather than assuming a semicircle", () => {
+      // The signature tolerates the pre-extent call so that nothing fails to compile; what it may
+      // not do is answer. An absent extent is an unknown arc, and there is no bound on one.
+      const b = jordanArcBound(g.num, g.den, q(1), "upper", q(4));
+      expect(b.certificate.level).toBe("⚠");
+      expect(b.value).toBeUndefined();
+      expect(b.asymptotics).toBe("unestablished");
+      expect(b.certificate.method).toMatch(/angular extent was not supplied/);
+    });
+
+    it("CERTIFIES the half-turn and every sub-arc of it, and dominates the integral on each", () => {
+      // A sub-arc stays sound: `∫_sub ≤ ∫_{[0,π]}`, so the same constant bounds it. The cases are
+      // the three the reproduction measured (`[0,π] → 1.284e-1`) plus two proper sub-arcs.
+      for (const [from, to] of [
+        [Frac.ZERO, Frac.ONE],
+        [Frac.ZERO, q(1, 2)],
+        [q(1, 4), q(3, 4)],
+        [q(1, 2), Frac.ONE],
+      ] as const) {
+        const b = jordanArcBound(g.num, g.den, q(1), "upper", q(4), "R", { from, to });
+        expect(b.certificate.level, `[${from.n}/${from.d}, ${to.n}/${to.d}]`).toBe("≤");
+        const measured = absIntegral(eiz, 4, from.toNumber() * Math.PI, to.toNumber() * Math.PI);
+        expect(b.value?.toNumber(), `[${from.n}/${from.d}, ${to.n}/${to.d}]`).toBeGreaterThanOrEqual(measured);
+      }
+    });
+
+    it("REFUSES an arc that dips below the axis, not only one that overshoots", () => {
+      // Containment is TWO comparisons. `[−π/2, π/2]` overshoots nothing at the top and is still
+      // half in the lower half-plane, where `|e^{iz}|` grows — a bound checking only the upper end
+      // certifies it, and `[0, 3π/2]` above would not have caught that.
+      const b = jordanArcBound(g.num, g.den, q(1), "upper", q(4), "R", { from: q(-1, 2), to: q(1, 2) });
+      expect(b.certificate.level).toBe("⚠");
+      expect(b.asymptotics).toBe("unestablished");
+      expect(b.certificate.method).toMatch(/contained in the upper half-plane/);
+      // Measured: over that arc `∫|f||dz|` is well past the π/|a|·max|g| the bound would print.
+      expect(absIntegral(eiz, 4, -Math.PI / 2, Math.PI / 2)).toBeGreaterThan(1);
+    });
+
+    it("reads the lower half-plane in BOTH of its windows, and rejects the other one", () => {
+      const at = (from: Frac, to: Frac) =>
+        jordanArcBound(g.num, g.den, q(-1), "lower", q(4), "R", { from, to }).certificate.level;
+      expect(at(Frac.ONE.neg(), Frac.ZERO)).toBe("≤");
+      expect(at(Frac.ONE, q(2))).toBe("≤");
+      // The same sweep read as "upper" is the arc leaving its half-plane, and refuses.
+      expect(
+        jordanArcBound(g.num, g.den, q(1), "upper", q(4), "R", { from: Frac.ONE, to: q(2) }).certificate.level,
+      ).toBe("⚠");
+    });
+
+    it("is orientation-blind: a clockwise arc sweeps the same set", () => {
+      const cw = jordanArcBound(g.num, g.den, q(1), "upper", q(4), "R", { from: Frac.ONE, to: Frac.ZERO });
+      expect(cw.certificate.level).toBe("≤");
+      expect(cw.certificate.claim).toMatch(/the upper semicircle/);
+      // **And blind in the direction that MATTERS**, which the clockwise semicircle above cannot
+      // show: with the endpoints taken in the order given rather than ordered, `from = 2π, to = 0`
+      // passes both comparisons of `[0, π]` separately and certifies a FULL CIRCLE drawn clockwise
+      // — the very arc the counter-clockwise case refuses. A sweep found this: the ordering is the
+      // whole content of reading a window off two endpoints.
+      const cwFull = jordanArcBound(g.num, g.den, q(1), "upper", q(4), "R", { from: q(2), to: Frac.ZERO });
+      expect(cwFull.certificate.level).toBe("⚠");
+      expect(cwFull.asymptotics).toBe("unestablished");
+      expect(cwFull.certificate.method).toMatch(/contained in the upper half-plane/);
+    });
+
+    it("stops calling a sub-arc a semicircle", () => {
+      // The sentence said "the upper semicircle" whatever the arc was, which is how the full-circle
+      // certificate read plausibly.
+      const b = jordanArcBound(g.num, g.den, q(1), "upper", q(4), "R", { from: Frac.ZERO, to: q(1, 2) });
+      expect(b.certificate.claim).toMatch(/the upper arc:/);
+      expect(b.certificate.claim).not.toMatch(/semicircle/);
+    });
+  });
+
+  it("refuses without CLAIMING anything about the limit — a refused bound has no asymptotics", () => {
+    // The field the disposal row's status is read from. Carrying the degree gap's verdict here is
+    // what marked a `⚠` row *satisfied*: `1/(1+z²)` at R = 0.5 reported "vanishes" from a refusal.
+    const { num, den } = exact("1/(1+z^2)");
+    expect(mlArcBound(num, den, q(1, 2), q(1)).certificate.level).toBe("⚠");
+    expect(mlArcBound(num, den, q(1, 2), q(1)).asymptotics).toBe("unestablished");
+    expect(mlArcBound(num, den, q(0), q(1)).asymptotics).toBe("unestablished");
+    // Jordan's two: below the Cauchy root bound, and at a zero frequency.
+    expect(jordanArcBound(num, den, q(1), "upper", q(1, 2), "R", UPPER).asymptotics).toBe("unestablished");
+    expect(jordanArcBound(num, den, Frac.ZERO, "upper", q(50), "R", UPPER).asymptotics).toBe("unestablished");
+    // And the one refusal that IS a claim about the limit keeps it: the wrong half-plane is growth.
+    expect(jordanArcBound(num, den, q(1), "lower", q(50), "R", LOWER).asymptotics).toBe("diverges");
+    // As does a bound that was established and merely does not discharge.
+    const flat = exact("z/(1+z^2)");
+    expect(mlArcBound(flat.num, flat.den, q(100), q(1)).asymptotics).toBe("bounded");
+    expect(mlArcBound(flat.num, flat.den, q(100), q(1)).certificate.level).toBe("⚠");
   });
 
   // **M5.2 rewired this bound through `dampedArcIntegral`, and rewiring it had to change nothing.**
@@ -213,7 +352,7 @@ describe("jordanArcBound — where the sign of a is a hard branch", () => {
       [3, 7],
       [2, 1000],
     ] as const) {
-      const b = jordanArcBound(num, den, q(a), "upper", q(R));
+      const b = jordanArcBound(num, den, q(a), "upper", q(R), "R", UPPER);
       const expected = piUpper().mul(maxModulusBound(num, den, q(R)) as Frac).div(q(a));
       expect((b.value as Frac).equals(expected)).toBe(true);
     }
@@ -221,7 +360,7 @@ describe("jordanArcBound — where the sign of a is a hard branch", () => {
 
   it("quotes the shared predicate in its provenance, so the inequality has one home", () => {
     const { num, den } = exact("1/(1+z^2)");
-    const b = jordanArcBound(num, den, q(1), "upper", q(50));
+    const b = jordanArcBound(num, den, q(1), "upper", q(50), "R", UPPER);
     const texts = b.certificate.provenance.map((s) => s.text).join(" | ");
     expect(texts).toMatch(/\\int_0\^\{\\pi\} e\^\{-\\kappa\\sin\\psi\}\\,d\\psi \\le \\pi\/\\kappa/);
     expect(texts).toMatch(/\\sin\\psi = \\sin\(\\pi - \\psi\)/);

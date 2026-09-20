@@ -35,6 +35,47 @@ describe("signedSweepOverPi — the sign IS the physics", () => {
     expect(signedSweepOverPi(arc(1, 0, 1))).toBeNull();
     expect(signedSweepOverPi({ kind: "segment", from: [0, 0], to: [1, 0] })).toBeNull();
   });
+
+  // **A CAP, NOT A LIST.** This reader held eight fractions, which is the whitelist M5.4 replaced in
+  // the disposal pass for the same reason: a sweep the engine cannot MEASURE is reported as an
+  // integrand no lemma applies to, and at `n = 5` that is false. Each of these read `null`.
+  it("reads every sweep with denominator ≤ 12, which the eight-entry list could not", () => {
+    const at = (n: number, d: number) => signedSweepOverPi(arc(1, 0, (n * Math.PI) / d));
+    for (const [n, d] of [
+      [2, 5],
+      [1, 5],
+      [5, 6],
+      [1, 12],
+      [1, 8],
+      [3, 2],
+      [4, 3],
+      [7, 12],
+      [5, 12],
+    ] as const) {
+      const got = at(n, d);
+      expect(got?.n, `${n}π/${d}`).toBe(BigInt(n));
+      expect(got?.d, `${n}π/${d}`).toBe(BigInt(d));
+      // And the sign, which is this reader's whole difference from the disposal pass's twin.
+      expect(signedSweepOverPi(arc(1, 0, (-n * Math.PI) / d))?.n, `−${n}π/${d}`).toBe(BigInt(-n));
+    }
+  });
+
+  it("still refuses past the cap, so a dragged float is not fitted", () => {
+    // Denominator 13 is one past the bound, and `1/144` is the closest two admissible rationals can
+    // come — so the `1e-12` window is a decision rather than a fit.
+    expect(signedSweepOverPi(arc(1, 0, Math.PI / 13))).toBeNull();
+    expect(signedSweepOverPi(arc(1, 0, Math.PI * 0.3183098861837907))).toBeNull();
+    // And past four half-turns, which is the widest sweep it reads at all.
+    expect(signedSweepOverPi(arc(1, 0, 5 * Math.PI))).toBeNull();
+    expect(signedSweepOverPi(arc(1, 0, 4 * Math.PI))?.toNumber()).toBe(4);
+  });
+
+  it("answers null rather than 0 for a degenerate arc", () => {
+    // Unlike the disposal pass's twin, which has to be able to say "the arc begins at 0". Here the
+    // only consumers are two lemmas whose contribution would be a vacuous `i·0·Res`.
+    expect(signedSweepOverPi(arc(1, 1, 1))).toBeNull();
+    expect(signedSweepOverPi(arc(1, 0, Number.NaN))).toBeNull();
+  });
 });
 
 describe("L4 — the one lemma whose piece does not vanish", () => {
