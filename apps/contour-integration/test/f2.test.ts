@@ -172,7 +172,10 @@ describe("the import", () => {
     // polar coordinates and the substitution `u = tⁿ`. The engine reaches one atom for both.
     const f2 = solved(2).imported.imports[0].value.atom;
     const e3 = solveFamily(E3, E3.golden[0]);
-    expect(e3.ok).toBe(true);
+    // **The ROUTE is asserted, not assumed.** It used to be an early return beside an asserted
+    // `ok`, so an E3 that stopped importing would have made the comparison below pass by never
+    // happening — which is the one thing this test exists to do.
+    expect(`${e3.ok}/${e3.ok ? e3.route : "-"}`).toBe("true/imported");
     if (!e3.ok || e3.route !== "imported") return;
     expect(f2.id).toBe(e3.imported.imports[0].value.atom.id);
     expect(f2.text).toBe("√π");

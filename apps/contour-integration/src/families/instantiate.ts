@@ -7,8 +7,18 @@
 import { evaluate, parse, substitute, type Node } from "@cas/expr";
 import type { Contour, Param, Params, Piece } from "../engine/contour/model.js";
 import { toContourIntegrand } from "../engine/substitution.js";
+import { narrowRange } from "./constraints.js";
 import type { Family } from "./schema.js";
 import type { Bindings } from "./system.js";
+
+/**
+ * The stops a parameter's control puts on its track — `cards/parameters.ts` and `scrub.ts` both.
+ *
+ * Repeated here rather than imported because `families/` may not reach into `shell/`; what it is
+ * used for is the MARGIN on an open bound, and a margin finer than the control's granularity is one
+ * the control cannot land on.
+ */
+const SLIDER_STOPS = 1000;
 
 /**
  * Where a limit parameter starts.
@@ -53,9 +63,11 @@ const LIMIT_RANGE = {
  * answer at given an hour. 256 is where the worst of the three records is still under 200 ms, which
  * is a slow commit and not a hang; 320 is already a third of a second and 384 three quarters.
  *
- * Keyed on `admits` because that is the field that says the parameter counts something the cost is
- * measured in; today that is exactly the kernel-band case and nothing else in the corpus sets it,
- * so a second constrained parameter of another kind is where this needs a second look.
+ * `limitRange` keys on `through` rather than on `admits`, and the distinction now matters: since
+ * the 2026-09-20 review seven records' `domain: "integer"` parameters also carry `admits`, and none
+ * of them counts anything this cost is measured in. What binds here is the KERNEL BAND, which is
+ * exactly what `through: "halfIntegers"` names — so a second limit parameter whose cost grows with
+ * the lattice is where this needs a second look, not a second integer parameter.
  */
 const MAX_SERIES_N = 256;
 
@@ -89,7 +101,35 @@ function buildParams(family: Family, values: Readonly<Record<string, number>>): 
     // fixture sat exactly on the old fixed [−10, 10] edge, and a fixture beyond it would have been
     // outside its own slider.
     const span = Math.max(10, Math.abs(value) * 2);
-    params[p.name] = { name: p.name, value, range: [-span, span], scale: "linear" };
+    // **AND IT IS NARROWED BY WHAT THE RECORD DECLARES.** `parameters[].constraints` was write-only
+    // prose until the 2026-09-20 review priced it: D1 declares `alpha > 0, alpha < 1` and this span
+    // offered −10 … 10, so one drag put the app on `∫₀^∞ x^{1/2}/(1+x) dx` — divergent — with the
+    // ledger correctly refusing beside a printed value. Outside its declared range a record has
+    // nothing to say, so the control stops going there. `constraints.ts` is the reader, and it is
+    // TOTAL: a form it does not know is refused by name rather than passed over.
+    const admits = p.domain === "integer" ? ("integers" as const) : undefined;
+    const narrowed = narrowRange(p.name, p.constraints, values, [-span, span], value, (lo, hi) =>
+      // One step of the control that reads this. `cards/parameters.ts` and `scrub.ts` each put
+      // SLIDER_STOPS stops on the track; an integer parameter steps by one, so that is its margin.
+      admits === undefined ? (hi - lo) / SLIDER_STOPS : 1,
+    );
+    if (narrowed.unreadable.length > 0) {
+      throw new Error(
+        `instantiating '${family.id}': parameter '${p.name}' declares a constraint this reader cannot ` +
+          `read, so its range would silently be the unconstrained one — ${narrowed.unreadable.join("; ")}`,
+      );
+    }
+    params[p.name] = {
+      name: p.name,
+      value,
+      range: narrowed.range,
+      scale: "linear",
+      // `domain: "integer"` is the record's word and `admits` is the engine's, the same translation
+      // `through: "halfIntegers"` gets below. Seven records declare it, and before M8's controls it
+      // cost nothing; the sweep's ladder and the scrub's arrow both interpolate, so A3's `n` was
+      // reachable at 2.31 — where the app refuses honestly, at the integrand, rather than answering.
+      ...(admits === undefined ? {} : { admits }),
+    };
   }
 
   // Derived geometry values, computed from the parameters just bound. B1's arc flips half-plane
@@ -121,15 +161,17 @@ function buildParams(family: Family, values: Readonly<Record<string, number>>): 
       range: limitRange(l),
       scale: "log",
       limit: { to: l.to },
-      // **The one place the record's vocabulary meets the engine's.** `through: "halfIntegers"` is
-      // a statement about tier G's CONTOUR — `Γ_N` has half-width `N + ½` — and `admits` is about
-      // the number a control moves, which is `N`. Translating here rather than carrying the
-      // record's word through is what keeps `squareTemplate`'s half out of every downstream reader.
+      // **The record's vocabulary meets the engine's here, and in two fields.** `through:
+      // "halfIntegers"` is a statement about tier G's CONTOUR — `Γ_N` has half-width `N + ½` — while
+      // `domain: "integer"` above is about a family parameter; `admits` is about the number a
+      // control moves, which is what both come down to. Translating in this one file rather than
+      // carrying either word through is what keeps `squareTemplate`'s half, and the schema's
+      // `domain`, out of every downstream reader.
       //
-      // It was declared and DROPPED here until M8 step 3.2, which is when it started to matter:
+      // This one was declared and dropped until M8 step 3.2, which is when it started to matter:
       // measured over all three tier-G records, the sweep's first rung as interpolated (9.19) and
       // the scrub's first arrow press (4.03) both leave the lattice, and `kernel/bounds/squareSide.ts` refuses
-      // every one of the four sides at such a width.
+      // every one of the four sides at such a width. It is read here and at `limitRange` above.
       ...(l.through === "halfIntegers" ? { admits: "integers" as const } : {}),
     };
   }
