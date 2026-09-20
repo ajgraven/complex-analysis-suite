@@ -170,6 +170,6 @@ export function accumulateForIntegral(
   sides?: readonly (CutSide | undefined)[],
 ): Accumulation | null {
   if (integral.value === undefined) return null;
-  if (valueRefusal(integral, ledger) !== null) return null;
+  if (valueRefusal(integral, ledger, "contour") !== null) return null;
   return accumulate(f, pieces, steps, sides);
 }

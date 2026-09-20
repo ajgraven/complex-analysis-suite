@@ -20,7 +20,7 @@
 // needs a real 2-D context and is covered by the browser suite. That is the same split
 // `ui/accumulator.ts` already uses — its frame fit is a node test, its ink a Chromium one.
 import { assembleVerdict } from "@cas/rigor";
-import { integralRefusal, ledgerHeadline, type LedgerResult } from "../engine/ledger.js";
+import { ledgerHeadline, valueRefusal, type LedgerResult } from "../engine/ledger.js";
 import type { ContourIntegral } from "../engine/contour/integrate.js";
 import type { ResidueTheoremResult } from "../engine/residueTheorem.js";
 import type { SolvedValue } from "../families/solveTarget.js";
@@ -80,7 +80,7 @@ export function figureLayout(
 /**
  * What the plate says, in three lines.
  *
- * Derived from the SAME data the result card reads, and through the same `integralRefusal` gate, so
+ * Derived from the SAME data the result card reads, and through the same `valueRefusal` gate (ADR-0045), so
  * the caption cannot claim a number the app withholds. That gate was inline in the card until this
  * module existed; it is one function now precisely because this is its second reader.
  */
@@ -106,7 +106,7 @@ export function figureCaption(input: {
   if (integral === null) {
     return { title: input.title, value: "no integrand", verdict: "Nothing was computed.", level: "?" };
   }
-  const refused = integralRefusal(integral, ledger);
+  const refused = valueRefusal(integral, ledger, "contour");
   if (refused !== null) {
     return {
       title: input.title,

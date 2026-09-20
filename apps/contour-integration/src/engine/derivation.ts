@@ -339,7 +339,7 @@ export function buildDerivation(input: DerivationInput): Derivation {
   // down ℝ₋ and no side declared, where the ledger withholds its own `value` and this line printed
   // one anyway. The refusal takes the line's place rather than leaving a silence, because a reader
   // who saw a number here yesterday needs to be told why there is none today.
-  const withheld = valueRefusal(integral, ledger);
+  const withheld = valueRefusal(integral, ledger, "contour");
   if (withheld !== null) {
     say("solve", {
       label: "no value",

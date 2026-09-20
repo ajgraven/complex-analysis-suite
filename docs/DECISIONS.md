@@ -4248,15 +4248,25 @@ over 28 records × 94 fixtures disagree exactly once — B3, `=` above and `?` b
 
 ### Decision
 
-1. **One predicate, `valueRefusal(integral, ledger)` in `engine/ledger.ts`**, beside
+1. **One predicate, `valueRefusal(integral, ledger, of)` in `engine/ledger.ts`**, beside
    `integralRefusal` (which it subsumes and does not replace: the narrower question still has
    callers). It returns a named refusal, with the repair and the failing constraint, when any of:
-   everything `integralRefusal` refuses on; **an undecided winding number**; **any failed row, of any
-   constraint**; **`ledger.closes === false`**. The last is not a new rule — it is the one this file
-   already applies to its own `value`, handed out as `closes ? value : undefined`.
-2. **Every surface that shows a value asks it**: the derivation's `∮` line and its quadrature
-   cross-check statement, the Stepper (which inherits, computing nothing), the accumulator
-   (`accumulateForIntegral` takes the ledger), and Pass 5's gate in `families/runFamily.ts`.
+   everything `integralRefusal` refuses on; **an undecided winding number**; and — **for the TARGET
+   only** — **any failed row, of any constraint**, or a constraint that failed with no row to say
+   which. **The caller names what it is showing** (`of: "contour" | "target"`), because the two
+   are earned by different rows: `∮ f dz` by LEGALITY and CATCH alone (the contour is legal, every
+   winding and residue decided), the integral the contour DETERMINES by all four. *Measured at
+   integration, and it corrected the first draft:* `z/(1+z²)` on the upper semicircle has `∮ = πi`
+   exactly, a failing KILL row (the arc is `O(1)`) and no target — asking the target's clause of the
+   `∮` line, the accumulator and the result card withheld the one number the sandbox exists to show,
+   M3.5's *"drag it across a pole and the value jumps by exactly `2πi·Res`"*. `closes === false` on
+   its own is NOT a clause of either tier: `closes` also requires an exact `∮`, which `sin z` on a
+   circle and every estimate-only integrand fail with nothing wrong.
+2. **Every surface that shows a value asks it**, naming its tier: the derivation's `∮` line and its
+   quadrature cross-check statement, the Stepper (which inherits, computing nothing), the
+   accumulator (`accumulateForIntegral` takes the ledger), the strip, the Result card's `∮` and the
+   figure caption ask `"contour"`; Pass 5's gate in `families/runFamily.ts` asks `"target"`, and a
+   target it refuses reaches the card as `solved === null` with the reason in `resolution.note`.
 3. **The answer's badge comes from one function too** — `levelOfSolved`, lifted out of
    `shell/cards/result.ts` into `engine/derivation.ts` and read by both.
 4. **Two missing sibling guards close with it**: `applyBranchTheorem` and `applyLogTheorem` gain the
@@ -4285,9 +4295,8 @@ over 28 records × 94 fixtures disagree exactly once — B3, `=` above and `?` b
    `runFamily.ts`'s `solveWithin` all routed through it; `levelOfSolved` lifted into the engine.
 2. [x] `integral.closed` in `applyBranchTheorem` / `applyLogTheorem`; `windingOf` refuses an unasked
    pole.
-3. [ ] **The Result card and the figure caption still ask `integralRefusal`**, which is the narrower
-   half. They are correct today only because `solved` is withheld upstream; moving them onto
-   `valueRefusal` is belt-and-braces and belongs to whoever next owns `shell/cards/result.ts` and
-   `shell/figure.ts`.
-4. [ ] `test/ledger.test.ts:551`'s heading — *"the one gate on printing a value at all"* — describes
-   this predicate now, not `legalityRefusal`. Reword when that file is next touched.
+3. [x] The Result card and the figure caption ask `valueRefusal(…, "contour")`, and the card takes
+   `levelOfSolved` from the engine rather than keeping its own copy *(done at integration,
+   2026-09-20)*.
+4. [x] `test/ledger.test.ts:551`'s heading reworded: `legalityRefusal` is the first clause of this
+   predicate *(done at integration)*.

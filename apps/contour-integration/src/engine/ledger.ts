@@ -2001,6 +2001,20 @@ export function integralRefusal(
  * rule: `closes` also requires an exact `∮`, which `sin z` on a circle and every estimate-only
  * integrand fail with nothing wrong. Clause 4's body says what that cost when the gate was wider.
  *
+ * **AND THE CALLER SAYS WHAT IT IS SHOWING**, because clauses 3–4 are about the TARGET and not
+ * about `∮`. The residue theorem's `∮ f dz` is earned by LEGALITY and CATCH alone — the contour is
+ * legal and every winding and residue is decided — and a KILL row that fails says only that the
+ * `R → ∞` argument does not carry it to the real integral. Measured at integration: `z/(1+z²)` on
+ * the upper semicircle has `∮ = πi` exactly, a failing KILL row (the arc is `O(1)`), and no target;
+ * asking clause 3 of the `∮` line, the accumulator and the result card withheld the one number the
+ * sandbox exists to show, and the M3.5 gate ("drag it across a pole and the value jumps by exactly
+ * `2πi·Res`") with it. So:
+ *
+ *   - `of: "contour"` — clauses 1–2: may `∮ f dz` be shown? (the derivation's `∮` line and its
+ *     cross-check, the accumulator, the strip, the result card's `∮`, the figure caption);
+ *   - `of: "target"` — clauses 1–4: may the integral the contour DETERMINES be shown? (Pass 5,
+ *     through `runFamily.ts`'s `solveWithin`, and so the solved block and the conclusion).
+ *
  * `constraint` rides along for a caller that wants to NAME the group — through
  * `vocabulary.ts`'s `constraintLabel`, never as the house id.
  */
@@ -2011,6 +2025,7 @@ export function valueRefusal(
     readonly windings?: readonly { readonly decided: boolean }[];
   },
   ledger: LedgerResult | null,
+  of: "contour" | "target",
 ): { readonly claim: string; readonly repair?: string; readonly constraint?: ConstraintId } | null {
   const refused = integralRefusal(integral, ledger);
   if (refused !== null) {
@@ -2024,6 +2039,7 @@ export function valueRefusal(
       constraint: "CATCH",
     };
   }
+  if (of === "contour") return null;
   if (ledger === null || ledger.closes) return null;
   const failed = ledger.rows.find((r) => r.status === "failed");
   if (failed !== undefined) {

@@ -15,7 +15,8 @@
 //  - and in both, an explicit click WINS and survives every recompute, which is what `session.open`
 //    is for: `undefined` means "never touched", not "closed".
 import { fmtCx } from "../../kernel/decimal.js";
-import { integralRefusal, ledgerHeadline, type LedgerResult } from "../../engine/ledger.js";
+import { levelOfSolved } from "../../engine/derivation.js";
+import { ledgerHeadline, valueRefusal, type LedgerResult } from "../../engine/ledger.js";
 import { RESIDUE_THEOREM_IDENTITY } from "../../engine/residueTheorem.js";
 import type { ContourIntegral } from "../../engine/contour/integrate.js";
 import type { ResidueTheoremResult } from "../../engine/residueTheorem.js";
@@ -121,7 +122,9 @@ export const resultCard: Card = (ctx) => {
   }
 
   const failed = ledger.rows.some((r) => r.status === "failed");
-  const refused = integralRefusal(integral, ledger);
+  // ADR-0045: the ONE gate on showing a value, asked for `∮` — the target's tier is Pass 5's, and
+  // a target it refuses arrives here as `solved === null` with the reason in `resolution.note`.
+  const refused = valueRefusal(integral, ledger, "contour");
   // **Whether Pass 5's answer can be SHOWN, asked once.** Three places used to ask it and two of
   // them asked a different question: the solved block wanted a `text` or a `latex`, the note beneath
   // wanted a `solved` at all, and `jordan-quartic` is the record where the two part company — Pass 5
@@ -172,7 +175,11 @@ export const resultCard: Card = (ctx) => {
         h(
           "div",
           { key: "solved", class: "resultValue" },
-          badge(ctx.resolution.kind === "gallery" ? levelOfSolved(ctx) : "≈"),
+          badge(
+            ctx.resolution.kind === "gallery" && ctx.resolution.run !== null
+              ? levelOfSolved(ctx.resolution.run.theorem, ctx.resolution.run.integral)
+              : "≈",
+          ),
           solved.latex === undefined
             ? h("span", { key: "t", class: "num" }, solved.text ?? "")
             : math(solved.latex, { key: "m", display: true, label: solved.text ?? "" }),
@@ -365,16 +372,6 @@ export const resultCard: Card = (ctx) => {
 
   return card("result", ...head, hypotheses, numerics, note);
 };
-
-/** The badge Pass 5's own certificates carry — never a literal, never the ledger's meet. */
-function levelOfSolved(ctx: CardContext): string {
-  const r = ctx.resolution;
-  if (r.kind !== "gallery" || r.run === null) return "≈";
-  // The record's own verdict about the SOLVED value is the theorem's where there is one: the
-  // ledger's meet carries the arc bound's `≤`, which is a true statement about the weakest step and
-  // a false one about the answer (DESIGN §4 Pass 3).
-  return r.run.theorem.exactValue !== undefined ? r.run.theorem.verdict.level : r.run.integral.verdict.level;
-}
 
 /** The worst per-piece convergence estimate — what limits how many digits the total may show. */
 function worstError(integral: ContourIntegral): number {

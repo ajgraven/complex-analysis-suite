@@ -187,7 +187,7 @@ function inputsOf(state: ShellState, resolution: StateResolution): AccInputs {
 const withheldBecause = (integral: ContourIntegral, ledger: LedgerResult): string =>
   integral.refusal ??
   integral.quadratureSkipped ??
-  valueRefusal(integral, ledger)?.claim ??
+  valueRefusal(integral, ledger, "contour")?.claim ??
   "the integral has no value to accumulate";
 
 /**
@@ -430,7 +430,7 @@ export function createStripView(host: HTMLElement, input: StripInput): StripView
       // **PERMISSION is the ledger's, not the quadrature's** — ADR-0045. Keying this on
       // `integral.value` alone made a LEGALITY refusal invisible to the cache, so a state that had
       // just lost its permission kept the previous draw's trail.
-      valueRefusal(got.integral, got.ledger) === null ? "ok" : "withheld",
+      valueRefusal(got.integral, got.ledger, "contour") === null ? "ok" : "withheld",
     ].join("|");
   }
 

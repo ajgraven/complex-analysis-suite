@@ -548,7 +548,7 @@ describe("LEGALITY, steps 2 and 3 — the cut system", () => {
   });
 });
 
-describe("legalityRefusal — the one gate on printing a value at all", () => {
+describe("legalityRefusal — the first clause of ADR-0045's one gate on printing a value (`valueRefusal`)", () => {
   const origin: BranchPoint = {
     id: "0",
     at: [0, 0],

@@ -87,14 +87,16 @@ describe("valueRefusal — the predicate itself", () => {
     // refused would pass all of them.
     const r = run("1/(1+z^2)", semicircleTemplate(200));
     expect(r.ledger.closes).toBe(true);
-    expect(valueRefusal(r.integral, r.ledger)).toBeNull();
+    expect(valueRefusal(r.integral, r.ledger, "target")).toBeNull();
+    expect(valueRefusal(r.integral, r.ledger, "contour")).toBeNull();
   });
 
   it("carries the LEGALITY row's own claim and repair, not a sentence of its own", () => {
     const r = crossedCut();
     const row = legalityRefusal(r.ledger);
-    const withheld = valueRefusal(r.integral, r.ledger);
+    const withheld = valueRefusal(r.integral, r.ledger, "contour");
     expect(withheld?.claim).toBe(row?.claim);
+    expect(valueRefusal(r.integral, r.ledger, "target")?.claim).toBe(row?.claim);
     expect(withheld?.repair).toBe(row?.repair);
     expect(withheld?.constraint).toBe("LEGALITY");
   });
@@ -106,7 +108,22 @@ describe("valueRefusal — the predicate itself", () => {
     const r = run("sin(z)/(1+z^2)", semicircleTemplate(50));
     expect(legalityRefusal(r.ledger)).toBeUndefined();
     expect(r.ledger.closes).toBe(false);
-    expect(valueRefusal(r.integral, r.ledger)?.constraint).toBe("KILL");
+    expect(valueRefusal(r.integral, r.ledger, "target")?.constraint).toBe("KILL");
+  });
+
+  it("but only for the TARGET — `∮` itself is earned by LEGALITY and CATCH, and a failing bound does not touch it", () => {
+    // Measured at integration: `z/(1+z²)` on the upper semicircle has `∮ = πi` EXACTLY, a KILL row
+    // that fails (the arc is `O(1)`) and no target at all. Asking the target's clause of the `∮`
+    // line withheld the one number the sandbox exists to show — M3.5's "drag it across a pole and
+    // the value jumps by exactly 2πi·Res" — so the caller names what it is showing.
+    const r = run("z/(1+z^2)", semicircleTemplate(3));
+    expect(r.theorem.exactValue?.text).toBe("πi");
+    expect(r.ledger.rows.some((row) => row.constraint === "KILL" && row.status === "failed")).toBe(true);
+    expect(valueRefusal(r.integral, r.ledger, "target")?.constraint).toBe("KILL");
+    expect(valueRefusal(r.integral, r.ledger, "contour")).toBeNull();
+    // and the three `∮` surfaces show it: the derivation's line, the accumulator's trail.
+    expect(allLines(derivationOf(r)).some((t) => t.includes("\\oint") && t.includes("\\pi i"))).toBe(true);
+    expect(accumulateForIntegral(r.f, r.pieces, r.integral, r.ledger)).not.toBeNull();
   });
 });
 

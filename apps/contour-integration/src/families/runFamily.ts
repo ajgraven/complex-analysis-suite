@@ -403,7 +403,7 @@ function solveWithin(
   // badge was `=`.
   const out = solveDispatch(family, golden, options, chain);
   if (!out.ok || out.run === undefined) return out;
-  const withheld = valueRefusal(out.run.integral, out.run.ledger);
+  const withheld = valueRefusal(out.run.integral, out.run.ledger, "target");
   if (withheld === null) return out;
   return {
     ok: false,
