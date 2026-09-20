@@ -114,6 +114,39 @@ describe("the accumulation is cached by VALUE", () => {
     expect(calls.n).toBeGreaterThan(after);
   });
 
+  it("and when PERMISSION is withdrawn, with nothing else moving at all", () => {
+    // **The key's last component, and it is the only one a ledger can move** — ADR-0045. Every
+    // other component (the expression, the declaration, the cut system, the resolved pieces, the
+    // sides) is identical between these two draws; what differs is that the second one's argument
+    // does not close. A cache keyed on the rest alone hands back the first draw's trail, which is
+    // the number the refusal exists to withhold, drawn.
+    //
+    // The ledger is edited rather than provoked, because provoking it MOVES something else: a cut
+    // that crosses, a contour dragged onto a pole, a parameter — each of which the key already
+    // sees. This is the case the component is for.
+    const { view } = mount();
+    const state = defaultState(circleTemplate([0, 0], 1.5));
+    const ok = resolveState(state, compile(state.expr));
+    if (ok.kind !== "plain") throw new Error(`expected a plain resolution, got ${ok.kind}`);
+    expect(view.accumulation({ state, resolution: ok, session: defaultSession() })).not.toBeNull();
+
+    const rows = ok.analysis.ledger.rows;
+    expect(rows.length, "the fixture must have a row to fail").toBeGreaterThan(0);
+    const refusing = {
+      ...ok,
+      analysis: {
+        ...ok.analysis,
+        ledger: {
+          ...ok.analysis.ledger,
+          closes: false,
+          failedAt: rows[0].constraint,
+          rows: [{ ...rows[0], status: "failed" as const }, ...rows.slice(1)],
+        },
+      },
+    };
+    expect(view.accumulation({ state, resolution: refusing, session: defaultSession() })).toBeNull();
+  });
+
   it("and when the CONTOUR moves, with the expression untouched", () => {
     // The geometry half of the key. A drag changes nothing the expression can see, and the walk is
     // a different walk; keying on the expression alone would freeze the trail under the hand.
@@ -342,20 +375,28 @@ describe("the compare toggles", () => {
     }
   });
 
-  it("NEVER claims Σ Δz closes to 0 on a contour that is not closed", () => {
+  it("NEVER claims Σ Δz closes to 0 on a contour that is not closed — and now draws nothing at all", () => {
     // The honest-labelling guardrail, in the one sentence most likely to be written as a constant.
     // `Σ Δz` closing to the origin is the cheapest striking thing in the app and it is FALSE on an
     // open path, where the same sum is the displacement from the start to the end.
+    //
+    // **ADR-0045 made the whole PICTURE go, not just the sentence**, and that is a deliberate loss:
+    // *the contour is not closed* is a failing LEGALITY row, so the accumulator is refused along
+    // with every other value. What the app said here before — the trail with `Σ Δz` explained as a
+    // displacement — is not reachable any more. The claim the test protects survives and is
+    // stronger: the app makes NO claim, and names the reason rather than going quietly blank.
     const semicircle = semicircleTemplate(3, "upper");
     const open: Contour = { ...semicircle, pieces: [semicircle.pieces[0]] };
     const { host, view } = mount();
     const d = drawOf({ contour: open, sandboxContour: open, contourSource: null, expr: "1/(z - 10)", contrast: "sumDz" });
     view.drawNow(d);
-    const why = text(host, "[data-testid=acc-why]");
-    expect(why).toContain("not closed");
-    expect(why).not.toContain("closes to");
+    expect(host.querySelectorAll("[data-testid=acc-why]")).toHaveLength(0);
+    // The REASON, not merely the absence: the closure row's own claim, which is what tells a reader
+    // that joining the path back up is the repair.
+    expect(text(host, "[data-testid=acc-none]")).toContain("the contour is not closed");
+    expect(text(host, "[data-testid=acc-none]")).not.toContain("closes to");
 
-    // …and still does on a closed one, so the branch is not simply dead.
+    // …and the explanation still appears on a closed one, so the branch is not simply dead.
     const { host: h2, view: v2 } = mount();
     v2.drawNow(drawOf({ contrast: "sumDz" }));
     expect(text(h2, "[data-testid=acc-why]")).toContain("closes to");

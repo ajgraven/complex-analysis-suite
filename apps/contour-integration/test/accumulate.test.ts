@@ -65,7 +65,7 @@ describe("accumulateForIntegral", () => {
     const pieces = circle(1.5);
     const f = oneOverZMinus([0, 0]);
     const integral = integrateContour(f, pieces, [{ at: [0, 0] }]);
-    expect(accumulateForIntegral(f, pieces, integral)).not.toBeNull();
+    expect(accumulateForIntegral(f, pieces, integral, null)).not.toBeNull();
   });
 
   it("produces NOTHING when the integral was refused", () => {
@@ -78,6 +78,6 @@ describe("accumulateForIntegral", () => {
     const f = oneOverZMinus(pole);
     const integral = integrateContour(f, pieces, [{ at: pole }]);
     expect(integral.value).toBeUndefined();
-    expect(accumulateForIntegral(f, pieces, integral)).toBeNull();
+    expect(accumulateForIntegral(f, pieces, integral, null)).toBeNull();
   });
 });

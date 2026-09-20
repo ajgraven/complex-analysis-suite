@@ -1811,6 +1811,78 @@ export function integralRefusal(
   };
 }
 
+/**
+ * **THE ONE PREDICATE ON SHOWING A VALUE AT ALL** — ADR-0045.
+ *
+ * {@link integralRefusal} asks three questions, and for a while that was taken to be the whole rule:
+ * `test/ledger.test.ts` still heads its block *"the one gate on printing a value at all"*. It was
+ * not. FIVE surfaces decided this independently — the result card and the figure caption through
+ * `integralRefusal`, the derivation and the stepper through nothing at all, the accumulator through
+ * `integral.value === undefined`, and Pass 5 through `legalityRefusal` alone — and the 2026-09-20
+ * review found each of the last three printing a number the first two were withholding.
+ *
+ * So this is the union, and every clause is a reason a reader is given by name:
+ *
+ *   1. everything {@link integralRefusal} refuses on (the quadrature, the integral's verdict, a
+ *      failing LEGALITY row);
+ *   2. **an undecided winding number**, because `2πi Σ n·Res` has no coefficient for that residue —
+ *      `residueTheorem.ts` refuses on it and the four routes beside it do too, so a value that got
+ *      past them came from somewhere else;
+ *   3. **any failed row, of any constraint**, which is the clause `legalityRefusal` deliberately
+ *      does NOT carry (its own doc says so: `sin z/(1+z²)` on a big semicircle fails KILL and its
+ *      closed-contour value is still a perfectly reportable number);
+ *   4. **a constraint that failed with no row to say which** — `failedAt`'s `killFailed` arm.
+ *
+ * It is NOT the whole of `closes === false`, and that is the one place measuring corrected the
+ * rule: `closes` also requires an exact `∮`, which `sin z` on a circle and every estimate-only
+ * integrand fail with nothing wrong. Clause 4's body says what that cost when the gate was wider.
+ *
+ * `constraint` rides along for a caller that wants to NAME the group — through
+ * `vocabulary.ts`'s `constraintLabel`, never as the house id.
+ */
+export function valueRefusal(
+  integral: {
+    readonly refusal?: string;
+    readonly verdict: Verdict;
+    readonly windings?: readonly { readonly decided: boolean }[];
+  },
+  ledger: LedgerResult | null,
+): { readonly claim: string; readonly repair?: string; readonly constraint?: ConstraintId } | null {
+  const refused = integralRefusal(integral, ledger);
+  if (refused !== null) {
+    const illegal = ledger === null ? undefined : legalityRefusal(ledger);
+    return illegal === undefined ? refused : { ...refused, constraint: "LEGALITY" };
+  }
+  if (integral.windings?.some((w) => !w.decided) === true) {
+    return {
+      claim: "a winding number could not be decided, so the residues have no coefficients",
+      repair: "Move the contour clear of the singularity it passes through.",
+      constraint: "CATCH",
+    };
+  }
+  if (ledger === null || ledger.closes) return null;
+  const failed = ledger.rows.find((r) => r.status === "failed");
+  if (failed !== undefined) {
+    return {
+      claim: failed.claim,
+      ...(failed.repair === undefined ? {} : { repair: failed.repair }),
+      constraint: failed.constraint,
+    };
+  }
+  // A constraint failed with no row saying which — `failedAt`'s `killFailed` arm. It has a headline
+  // and no claim, so the headline is what there is.
+  if (ledger.failedAt !== null) {
+    return { claim: headlineFails(ledger.failedAt), constraint: ledger.failedAt };
+  }
+  // **AND THE REST OF `!closes` IS NOT A REFUSAL**, which measuring found rather than reading.
+  // `closes` also requires an exact `∮`, so `sin z` on a circle, an entire integrand, a record
+  // whose poles outrun one quadratic extension — all of them fail it with nothing wrong. There is
+  // no value to withhold there: the derivation prints no `∮` line because there is none, Pass 5
+  // has its own and far more specific sentence a few lines below its gate, and the accumulator's
+  // trail is the ONLY thing the reader gets. Refusing here blanked all three.
+  return null;
+}
+
 export function ledgerHeadline(result: LedgerResult): string {
   if (result.closes) {
     // In sandbox mode there is no real integral being solved for, so "the argument closes" would
