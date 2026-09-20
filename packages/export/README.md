@@ -72,10 +72,11 @@ ancillary chunks).
 - **Contour Integration** — `src/shell/figure.ts` stamps the plate with `Software`, the `cas:state`
   permalink and the argument's **verdict**, which is what made `iTXt` necessary.
 
-**A note on keys.** This README specifies `Software` + `cas:state`, and exactly two consumers follow
-it (Riemann Map, Contour Integration). The other four each minted their own prefix before this
-package existed — `ap:url`, `2de:url`, `2dh:url`, `cdjs:state` — so a reader wanting to open any
-figure in the suite has four special cases. Unifying them is a suite-wide change, deliberately not
+**A note on keys.** This README specifies `Software` + `cas:state`, and **three** consumers follow it
+(Riemann Map, Contour Integration, and Complex Dynamics since the 2026-09-16 review — which also
+keeps `cdjs:state` as a deprecated alias for one release, so anything already reading its PNGs still
+works). The remaining three each minted their own prefix before this package existed — `ap:url`,
+`2de:url`, `2dh:url` — so a reader wanting to open any figure in the suite has three special cases. Unifying them is a suite-wide change, deliberately not
 made from inside one app; it is recorded here so the discrepancy is visible rather than assumed away.
 
 ## Tests

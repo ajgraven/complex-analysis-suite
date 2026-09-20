@@ -434,6 +434,18 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
     return null;
   }
 
+  // WebGL contexts are lost on a GPU reset, a driver update, or too many live contexts on the page.
+  let contextLost = false;
+  canvas.addEventListener("webglcontextlost", (e) => {
+    e.preventDefault(); // without this the context can never be restored at all
+    contextLost = true;
+  });
+  canvas.addEventListener("webglcontextrestored", () => {
+    // The flag stays SET: every object built above is gone, and reporting "ready" with an empty
+    // program would draw a blank pane that looks like a maths failure.
+    console.warn("schwarzGL: context restored, but this renderer's objects did not survive it");
+  });
+
   const vbo = ctx.createBuffer();
   ctx.bindBuffer(ctx.ARRAY_BUFFER, vbo);
   ctx.bufferData(ctx.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), ctx.STATIC_DRAW);
@@ -520,6 +532,12 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
   }
 
   function render(view: SchwarzView, size: number, opts: SchwarzGLRenderOptions = {}): boolean {
+    // A lost context draws nothing and reads back transparent; the caller's `drawImage` would then
+    // paint an empty σ pane with no error anywhere. Say so instead and let it degrade to the CPU
+    // field, which is what it already does for a GPU render that throws. (WP9/R8, review
+    // 2026-09-16.) There is no restore path: the program, the mask and the colormap all died with
+    // the context, and rebuilding them is `createSchwarzGLRenderer`'s job, not a render's.
+    if (contextLost || ctx.isContextLost()) return false;
     if (!packed || !maskTex) return false;
     if (canvas.width !== size || canvas.height !== size) {
       canvas.width = size;

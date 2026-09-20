@@ -1,0 +1,1231 @@
+<title>Complex Dynamics Sidebar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  rel="stylesheet"
+  href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=IBM+Plex+Mono:wght@400;600&display=swap"
+/>
+<style>
+  :root {
+    --ground: #eef1f6;
+    --surface: #ffffff;
+    --sunken: #f7f9fc;
+    --line: #d7dfea;
+    --line-soft: #e6ecf4;
+    --ink: #161b23;
+    --ink-2: #3d4757;
+    --muted: #68738a;
+    --accent: #1f5fa8;
+    --accent-soft: #e4eefa;
+    --warn: #9a5b06;
+    --warn-soft: #fbf0dd;
+    --good: #14683d;
+    --good-soft: #e0f1e7;
+    --shadow: 0 1px 2px rgba(22, 27, 35, 0.06), 0 8px 24px -12px rgba(22, 27, 35, 0.18);
+    --ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --serif: "Source Serif 4", Georgia, serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0e1218;
+      --surface: #161b23;
+      --sunken: #11161d;
+      --line: #29323f;
+      --line-soft: #202833;
+      --ink: #e7ecf4;
+      --ink-2: #b9c3d2;
+      --muted: #8592a6;
+      --accent: #6aa5e8;
+      --accent-soft: #17273a;
+      --warn: #e0a862;
+      --warn-soft: #2e2415;
+      --good: #6cc294;
+      --good-soft: #16291f;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -12px rgba(0, 0, 0, 0.7);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0e1218;
+    --surface: #161b23;
+    --sunken: #11161d;
+    --line: #29323f;
+    --line-soft: #202833;
+    --ink: #e7ecf4;
+    --ink-2: #b9c3d2;
+    --muted: #8592a6;
+    --accent: #6aa5e8;
+    --accent-soft: #17273a;
+    --warn: #e0a862;
+    --warn-soft: #2e2415;
+    --good: #6cc294;
+    --good-soft: #16291f;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -12px rgba(0, 0, 0, 0.7);
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 16px;
+    line-height: 1.55;
+    margin: 0;
+  }
+  .wrap {
+    padding: 0 16px;
+  }
+  .wrap > * {
+    max-width: 78ch;
+    margin-inline: auto;
+  }
+  .wrap > .full {
+    max-width: none;
+  }
+
+  header.page {
+    padding-block: 40px 20px;
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 10px;
+  }
+  h1 {
+    font-size: clamp(28px, 4.4vw, 40px);
+    line-height: 1.12;
+    margin: 0 0 12px;
+    text-wrap: balance;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+  }
+  .standfirst {
+    font-size: 18px;
+    color: var(--ink-2);
+    margin: 0 0 22px;
+    text-wrap: pretty;
+  }
+  h2 {
+    font-size: 24px;
+    margin: 40px 0 10px;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+  h3 {
+    font-size: 17px;
+    margin: 26px 0 8px;
+  }
+  p {
+    margin: 0 0 14px;
+  }
+  a {
+    color: var(--accent);
+  }
+  code,
+  .mono {
+    font-family: var(--mono);
+    font-size: 0.88em;
+  }
+
+  .baseline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    padding-block: 14px;
+    margin-bottom: 8px;
+  }
+  .stat {
+    flex: 1 1 140px;
+  }
+  .stat .n {
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: 600;
+    display: block;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat .k {
+    font-family: var(--ui);
+    font-size: 11.5px;
+    color: var(--muted);
+    letter-spacing: 0.03em;
+  }
+  .stat.bad .n {
+    color: var(--warn);
+  }
+
+  /* ── the option rail ───────────────────────────────────────────── */
+  .rail-note {
+    font-family: var(--ui);
+    font-size: 13px;
+    color: var(--muted);
+    margin: 0 0 12px;
+  }
+  .rail {
+    display: flex;
+    gap: 18px;
+    overflow-x: auto;
+    padding: 4px 16px 20px;
+    scroll-snap-type: x proximity;
+  }
+  .rail::-webkit-scrollbar {
+    height: 10px;
+  }
+  .rail::-webkit-scrollbar-thumb {
+    background: var(--line);
+    border-radius: 6px;
+  }
+
+  .opt {
+    flex: 0 0 auto;
+    width: 346px;
+    scroll-snap-align: start;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .opt-head {
+    font-family: var(--ui);
+    padding: 0 2px 8px;
+  }
+  .opt-head .tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .opt-head .tag.rec {
+    color: var(--good);
+  }
+  .opt-head h4 {
+    font-family: var(--serif);
+    font-size: 19px;
+    margin: 2px 0 4px;
+    font-weight: 600;
+  }
+  .opt-head .sub {
+    font-size: 12.5px;
+    color: var(--muted);
+    line-height: 1.45;
+    min-height: 3.2em;
+  }
+
+  /* the replica frame: real width, a viewport-sized window */
+  .frame {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .frame-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--muted);
+    padding: 6px 9px;
+    border-bottom: 1px solid var(--line-soft);
+    background: var(--sunken);
+  }
+  .frame-bar b {
+    font-weight: 600;
+    color: var(--ink-2);
+    font-variant-numeric: tabular-nums;
+  }
+  .scroller {
+    height: 520px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: var(--surface);
+  }
+  .scroller::-webkit-scrollbar {
+    width: 9px;
+  }
+  .scroller::-webkit-scrollbar-thumb {
+    background: var(--line);
+    border-radius: 5px;
+  }
+
+  /* ── the replica's own (app-like) UI ───────────────────────────── */
+  .pane {
+    font-family: var(--ui);
+    font-size: 12px;
+    color: var(--ink);
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+  .pane[hidden],
+  [hidden] {
+    display: none !important;
+  }
+  .card {
+    border: 1px solid var(--line-soft);
+    border-radius: 6px;
+    padding: 8px;
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .card.inspector {
+    border-left: 3px solid var(--accent);
+  }
+  .lbl {
+    font-size: 10.5px;
+    color: var(--muted);
+  }
+  .fake-input,
+  .fake-select,
+  .fake-area {
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: var(--sunken);
+    padding: 4px 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-2);
+  }
+  .fake-area {
+    min-height: 26px;
+  }
+  .fake-select::after {
+    content: "⌄";
+    float: right;
+    color: var(--muted);
+  }
+  .btn {
+    display: inline-block;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: var(--surface);
+    padding: 3px 8px;
+    font-size: 11px;
+    color: var(--ink-2);
+    white-space: nowrap;
+  }
+  .btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .btn.ghost {
+    border-style: dashed;
+    color: var(--muted);
+  }
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    align-items: center;
+  }
+  .chk {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11.5px;
+    color: var(--ink-2);
+  }
+  .chk i {
+    width: 11px;
+    height: 11px;
+    border: 1px solid var(--muted);
+    border-radius: 2px;
+    display: inline-block;
+    flex: 0 0 auto;
+  }
+  .chk.on i {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .chk.off-f {
+    color: var(--muted);
+    opacity: 0.55;
+  }
+
+  /* collapsible group, as the app draws it */
+  .grp {
+    border: 1px solid var(--line-soft);
+    border-radius: 6px;
+    background: var(--surface);
+  }
+  .grp > .gsum {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    padding: 7px 9px;
+    font-size: 12px;
+    color: var(--ink-2);
+    user-select: none;
+  }
+  .grp > .gsum::before {
+    content: "▸";
+    color: var(--muted);
+    font-size: 9px;
+    transition: transform 0.12s;
+  }
+  .grp.open > .gsum::before {
+    transform: rotate(90deg);
+  }
+  .grp > .gbody {
+    padding: 0 9px 9px;
+    display: none;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .grp.open > .gbody {
+    display: flex;
+  }
+  .gsum .gate {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 9.5px;
+    color: var(--muted);
+  }
+
+  /* section header (option B) */
+  .shdr {
+    font-family: var(--ui);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 10px 2px 2px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 1px;
+  }
+  .shdr:first-child {
+    padding-top: 2px;
+  }
+  .shdr .count {
+    float: right;
+    font-family: var(--mono);
+    font-weight: 400;
+    letter-spacing: 0;
+  }
+
+  /* tabs (option A) */
+  .tabs {
+    display: flex;
+    gap: 2px;
+    border-bottom: 1px solid var(--line);
+    padding: 0 2px;
+    position: sticky;
+    top: 0;
+    background: var(--surface);
+    z-index: 2;
+  }
+  .tab {
+    appearance: none;
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 5px 5px 0 0;
+    background: transparent;
+    color: var(--muted);
+    padding: 6px 7px;
+    margin-bottom: -1px;
+  }
+  .tab[aria-selected="true"] {
+    background: var(--surface);
+    border-color: var(--line);
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .tab:focus-visible,
+  .gsum:focus-visible,
+  .filter:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  .pinned {
+    position: sticky;
+    bottom: 0;
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+    padding: 7px 8px;
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+    z-index: 2;
+  }
+
+  /* the hidden-state banner — the crux of the tabs argument */
+  .statebar {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    font-size: 11px;
+    line-height: 1.4;
+    background: var(--warn-soft);
+    color: var(--warn);
+    border: 1px solid currentColor;
+    border-radius: 5px;
+    padding: 6px 8px;
+  }
+  .statebar.hidden-demo {
+    background: var(--sunken);
+    color: var(--muted);
+    border-style: dashed;
+  }
+  .filter {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    background: var(--sunken);
+    padding: 5px 7px;
+    font: inherit;
+    font-size: 11.5px;
+    color: var(--ink);
+  }
+  .verdict {
+    font-family: var(--ui);
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--ink-2);
+    padding: 12px 2px 0;
+  }
+  .verdict .pro {
+    color: var(--good);
+    font-weight: 600;
+  }
+  .verdict .con {
+    color: var(--warn);
+    font-weight: 600;
+  }
+  .cost {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--ui);
+    font-size: 13.5px;
+    margin: 8px 0 4px;
+  }
+  th,
+  td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--line-soft);
+    vertical-align: top;
+  }
+  th {
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+  }
+  td.num {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+  }
+  .tbl-scroll {
+    overflow-x: auto;
+  }
+  tr.rec-row td {
+    background: var(--good-soft);
+  }
+
+  .callout {
+    border-left: 3px solid var(--accent);
+    background: var(--accent-soft);
+    padding: 12px 14px;
+    border-radius: 0 6px 6px 0;
+    margin: 18px 0;
+    font-size: 15px;
+    color: var(--ink-2);
+  }
+  .callout p:last-child {
+    margin-bottom: 0;
+  }
+  .callout strong {
+    color: var(--ink);
+  }
+  footer.page {
+    border-top: 1px solid var(--line);
+    margin-top: 44px;
+    padding-block: 18px 40px;
+    font-family: var(--ui);
+    font-size: 12.5px;
+    color: var(--muted);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      transition: none !important;
+    }
+  }
+</style>
+
+<div class="wrap">
+  <header class="page">
+    <p class="eyebrow">Complex Dynamics · review of 2026-09-16 · WP10 question 2</p>
+    <h1>What shape should the sidebar be?</h1>
+    <p class="standfirst">
+      Four options, each a working replica at the app's real sidebar width of 346&nbsp;px,
+      carrying the app's real groups and control labels. Open the groups, switch the tabs,
+      type in the filter. Each frame measures its own content live and reports it as a
+      share of today's, so the four are compared on one measurement taken four ways.
+    </p>
+    <p class="rail-note">
+      The replica's controls are a little tighter than the app's, so its absolute pixels
+      run below the app's own 2,091&nbsp;px. The <em>ratio</em> is what transfers — which
+      is why the frames report a share of today rather than a raw height.
+    </p>
+  </header>
+
+  <div class="baseline">
+    <div class="stat bad">
+      <span class="n" id="b1">2,091</span
+      ><span class="k">px tall in the app today, at 1440 × 900</span>
+    </div>
+    <div class="stat bad">
+      <span class="n">2.3</span><span class="k">screens of scroll</span>
+    </div>
+    <div class="stat">
+      <span class="n">15</span><span class="k">collapsible groups, 1 open</span>
+    </div>
+    <div class="stat">
+      <span class="n">132</span><span class="k">controls in the pane</span>
+    </div>
+  </div>
+  <p class="rail-note">
+    Measured in the built app under headless Chromium. At 1280 × 720 it is 2,127&nbsp;px —
+    3.0 screens.
+  </p>
+</div>
+
+<div class="full">
+  <div class="rail" id="rail"></div>
+</div>
+
+<div class="wrap">
+  <h2>Side by side</h2>
+  <div class="tbl-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Option</th>
+          <th>Height at rest</th>
+          <th>Can a setting hide?</th>
+          <th>Build cost</th>
+          <th>Touches</th>
+        </tr>
+      </thead>
+      <tbody id="cmp"></tbody>
+    </table>
+  </div>
+
+  <h2>What the measurement changed</h2>
+  <p>
+    I expected the grouped accordion to take a third off the column. It takes
+    <strong>6 %</strong>. All fifteen groups are still in the scroll, so reordering them
+    and moving the citation to the footer changes where things are, not how much there is.
+    <strong>Only hiding shortens the column</strong>, and tabs are the only option that
+    hides: they cut it to roughly a third.
+  </p>
+  <p>
+    So height is not the argument for B, and pretending otherwise would pick the wrong
+    option. The real question is narrower and worth stating plainly:
+    <em
+      >is the column long because it is badly ordered, or because there is simply a lot in
+      it?</em
+    >
+    The measurement says the second. B answers the first problem and C answers it
+    differently; A is the only one that answers the second — at the price below.
+  </p>
+
+  <h2>The price A pays</h2>
+  <p>
+    Anti-aliasing, refine-while-idle, perturbation, relief lighting, auto-iterations and
+    the colouring mode all silently change what the renderer draws. Perturbation is the
+    sharpest case: with it on, the kernel renders <em>every</em> colouring mode as
+    discrete escape time, so a reader who picked “Orbit trap” gets something else and the
+    menu still says orbit trap.
+  </p>
+  <p>
+    Switch option&nbsp;A to its <strong>Instruments</strong> tab and watch the warning
+    leave the pane. Nothing on screen then says the picture is degraded. In B, C and D
+    that warning is in the same scroll as everything else — it can be scrolled past, but
+    it is never in another mode. This is report finding&nbsp;S4, and tabs are the one
+    option that makes it worse.
+  </p>
+  <div class="callout">
+    <p>
+      <strong>A can be rescued</strong> — tick “active-settings strip” in option A's frame
+      and the warning returns as a pinned bar. That is the real shape of A: five tabs
+      <em>plus</em> a persistent strip listing every non-default setting. It is more
+      surface to build and more surface to maintain, and it exists to undo a problem the
+      other three options never create.
+    </p>
+  </div>
+
+  <h2>Recommendation</h2>
+  <p>
+    <strong>B, with D as its first commit</strong> — but on narrower grounds than I first
+    gave. D is a strict subset of B (the inspector's action inputs move into the report
+    they act on; the citation moves to the footer), so it ships on its own in about two
+    hours and nothing is wasted if you then want the full grouping.
+  </p>
+  <p>
+    I recommend B because a 2,000&nbsp;px scroll that is <em>ordered</em> is a different
+    object from one that is not, and because every setting stays where a glance can find
+    it. I am no longer recommending it on height: it does not deliver height, and this
+    page says so above rather than quietly dropping the claim.
+  </p>
+  <p>
+    B's five sections are exactly where A's tab boundaries would fall, so B is the step
+    before A rather than a detour — the grouping is already done and the only remaining
+    change is whether the sections hide.
+    <strong
+      >Choose A instead if the 2.3-screen scroll is the thing that actually bothers you in
+      daily use</strong
+    >: it is the only option that fixes that, it is a defensible call, and the conditions
+    are that S4's visible-reason work (WP8) ships first and that A carries the
+    active-settings strip.
+  </p>
+  <p class="cost">
+    Costs: D ≈ 2 h · C ≈ half a day · B ≈ 1 day · A ≈ 2 days plus the strip.
+  </p>
+
+  <footer class="page">
+    Replica contents are the app's real sidebar: every group name, control label and
+    default disclosure state is taken from
+    <span class="mono">apps/complex-dynamics/index.html</span>. The frames are styled to
+    read like the app, not pixel-matched to it.
+  </footer>
+</div>
+
+<script>
+  // ── The app's real sidebar, as data. One source of truth for all four replicas. ──
+  // f = flagged as z²+c-only in the app; r = rational-only.
+  const TOP = [
+    { k: "area", lbl: "f(z,c)", v: "z^2+c" },
+    { k: "btns", items: ["Import map…", "Schwarz reflection σ…"] },
+    { k: "sel", lbl: "Presets", v: "Mandelbrot set" },
+    { k: "btn1", v: "apply", primary: true },
+    { k: "sel", lbl: "coloring", v: "Smooth (continuous)" },
+    { k: "sel", lbl: "palette", v: "Classic" },
+    { k: "sel", lbl: "trap shape", v: "Cross (axes)" },
+  ];
+  const G = (name, sec, ctrls, opts = {}) => ({ name, sec, ctrls, ...opts });
+  const GROUPS = [
+    G("Appearance", "Appearance", [
+      "rotation",
+      "relief lighting",
+      "az",
+      "el",
+      "depth",
+      "post-processing",
+      "vignette",
+      "gamma",
+      "boundary outline",
+      "width",
+    ]),
+    G(
+      "Overlays",
+      "Appearance",
+      [
+        "critical orbit ᶠ",
+        "Farey bulb labels ᶠ",
+        "external ray ᶠ",
+        "angle",
+        "bulb ray pairs ᶠ",
+        "inverse-iteration Julia ᶠ",
+        "Siegel invariant curves ᶠ",
+        "equipotential",
+        "density",
+      ],
+      { open: true },
+    ),
+    G("Iteration & precision", "Precision", [
+      "Newton's method",
+      "auto iterations",
+      "strength",
+      "perturbation (deep zoom)",
+      "fast deep zoom (BLA)",
+      "anti-aliasing",
+      "refine while idle",
+      "suggestions",
+      "orbit preview",
+      "colour legend",
+    ]),
+    G("Julia set properties", "Instruments", ["Copy properties"]),
+    G("Exterior map (uniformization)", "Instruments", [
+      "Coefficients",
+      "Order",
+      "Radius r",
+      "Copy",
+      "CSV",
+      "Riemann Map ↗",
+    ]),
+    G("Go to external angle", "Instruments", ["Angle θ (p/q)", "Go to angle"], {
+      gate: "z²+c",
+    }),
+    G("Angles of a point", "Instruments", ["Find angles of the clicked point"], {
+      gate: "z²+c",
+    }),
+    G("Component data", "Instruments", ["Period n"], { gate: "z²+c" }),
+    G(
+      "Yoccoz puzzle",
+      "Instruments",
+      ["show puzzle (Julia set)", "show parapuzzle", "depth = 2"],
+      { gate: "z²+c" },
+    ),
+    G("Lamination", "Instruments", ["show lamination", "show QML", "detail = 6"], {
+      gate: "z²+c",
+    }),
+    G(
+      "Symbolic console",
+      "Instruments",
+      [
+        "Internal address",
+        "Strip & draw rays",
+        "Go to component",
+        "External angle θ",
+        "Address of angle",
+      ],
+      { gate: "z²+c" },
+    ),
+    G(
+      "Mating check",
+      "Instruments",
+      [
+        "Bulb A (p/q)",
+        "Bulb B (p/q)",
+        "Check mateability",
+        "Render on the sphere",
+        "Render p/q ⊔ basilica",
+      ],
+      { gate: "z²+c" },
+    ),
+    G("Herman ring", "Instruments", ["Detect Herman ring"], { gate: "rational" }),
+    G("Projection & Riemann sphere", "Studio", [
+      "sphere: parameter plane",
+      "sphere: dynamical plane",
+      "3D lighting",
+      "Reset sphere view",
+    ]),
+    G("Save & animate", "Studio", [
+      "Export image",
+      "size",
+      "overlays",
+      "scale bar",
+      "Save",
+      "Copy",
+      "Record Julia morph",
+      "Record zoom-in",
+      "Morph GIF",
+      "Add keyframe",
+      "Record path",
+    ]),
+  ];
+  const SECTIONS = ["Function", "Appearance", "Precision", "Instruments", "Studio"];
+  const ACTIONS = ["apply changes", "reset", "↶ undo", "↷ redo"];
+
+  // ── tiny DOM helper ──
+  const el = (t, c, txt) => {
+    const n = document.createElement(t);
+    if (c) n.className = c;
+    if (txt != null) n.textContent = txt;
+    return n;
+  };
+
+  function topBlock(withInspector) {
+    const frag = document.createDocumentFragment();
+    if (withInspector) {
+      const insp = el("div", "card inspector");
+      insp.append(el("div", "lbl", "Point inspector"));
+      insp.append(el("div", "fake-input", "Siegel c for θ =  0.618 / 1/5 / golden"));
+      const r = el("div", "row");
+      r.append(el("span", "fake-input", "Misiurewicz  2 / 2"), el("span", "btn", "Find"));
+      insp.append(r);
+      const r2 = el("div", "row");
+      r2.append(
+        el("span", "fake-input", "note label"),
+        el("span", "btn", "Pin note"),
+        el("span", "btn", "Clear"),
+      );
+      insp.append(r2);
+      insp.append(el("div", "lbl", "Click any point on a plot to inspect its orbit."));
+      frag.append(insp);
+    }
+    const c = el("div", "card");
+    for (const t of TOP) {
+      if (t.k === "area") {
+        c.append(el("div", "lbl", t.lbl));
+        c.append(el("div", "fake-area", t.v));
+      } else if (t.k === "btns") {
+        const r = el("div", "row");
+        t.items.forEach((i) => r.append(el("span", "btn", i)));
+        c.append(r);
+      } else if (t.k === "sel") {
+        c.append(el("div", "lbl", t.lbl));
+        c.append(el("div", "fake-select", t.v));
+      } else if (t.k === "btn1") {
+        const r = el("div", "row");
+        r.append(el("span", "btn primary", t.v));
+        c.append(r);
+      }
+    }
+    frag.append(c);
+    return frag;
+  }
+
+  function groupEl(g, { forceOpen = false, showGate = false } = {}) {
+    const d = el("div", "grp" + (g.open || forceOpen ? " open" : ""));
+    const s = el("div", "gsum");
+    s.tabIndex = 0;
+    s.setAttribute("role", "button");
+    s.append(
+      document.createTextNode(g.name + (g.gate && !showGate ? " (" + g.gate + ")" : "")),
+    );
+    if (g.gate && showGate) s.append(el("span", "gate", g.gate));
+    s.setAttribute("aria-expanded", String(!!(g.open || forceOpen)));
+    const toggle = () => {
+      d.classList.toggle("open");
+      s.setAttribute("aria-expanded", String(d.classList.contains("open")));
+      measureAll();
+    };
+    s.addEventListener("click", toggle);
+    s.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        toggle();
+      }
+    });
+    const b = el("div", "gbody");
+    for (const ctl of g.ctrls) {
+      const flagged = ctl.endsWith("ᶠ");
+      const name = flagged ? ctl.slice(0, -1) : ctl;
+      const row = el("div", "chk" + (flagged ? " off-f" : ""));
+      row.append(el("i"), document.createTextNode(name));
+      b.append(row);
+    }
+    d.append(s, b);
+    return d;
+  }
+
+  function actionRow(pinned) {
+    const r = el("div", pinned ? "pinned" : "row");
+    ACTIONS.forEach((a, i) =>
+      r.append(el("span", "btn" + (i === 0 ? " primary" : ""), a)),
+    );
+    return r;
+  }
+
+  function stateBar(text, dim) {
+    const b = el("div", "statebar" + (dim ? " hidden-demo" : ""));
+    b.append(el("span", null, "⚠"), el("span", null, text));
+    return b;
+  }
+
+  function citation() {
+    const c = el("div", "card");
+    c.append(
+      el("div", "lbl", "Questions, suggestions, or feature requests: andrew@graven.com"),
+    );
+    c.append(
+      el(
+        "div",
+        "lbl",
+        "How to cite — Graven, A. (2026). Complex Dynamics Visualization Tool.",
+      ),
+    );
+    c.append(el("div", "fake-area", "@software{graven2026complexdynamics, …}"));
+    const rr = el("div", "row");
+    rr.append(el("span", "btn", "Copy BibTeX"));
+    c.append(rr);
+    return c;
+  }
+
+  const WARN =
+    "perturbation is on — every colouring mode renders as discrete escape time";
+
+  // ── the four builders ──
+  const BUILD = {
+    current(pane) {
+      pane.append(topBlock(true));
+      pane.append(stateBar(WARN));
+      GROUPS.forEach((g) => pane.append(groupEl(g)));
+      pane.append(citation());
+    },
+    A(pane, frame) {
+      const strip = el("div");
+      const tabs = el("div", "tabs");
+      tabs.setAttribute("role", "tablist");
+      const panels = {};
+      SECTIONS.forEach((sec, i) => {
+        const t = el("button", "tab", sec);
+        t.type = "button";
+        t.setAttribute("role", "tab");
+        t.setAttribute("aria-selected", String(i === 0));
+        t.addEventListener("click", () => {
+          SECTIONS.forEach((s2) => {
+            panels[s2].hidden = s2 !== sec;
+          });
+          [...tabs.children].forEach((c) =>
+            c.setAttribute("aria-selected", String(c === t)),
+          );
+          measureAll();
+        });
+        tabs.append(t);
+        const p = el("div", "pane");
+        p.style.padding = "8px 0 0";
+        p.hidden = i !== 0;
+        if (sec === "Function") p.append(topBlock(false));
+        GROUPS.filter((g) => g.sec === sec).forEach((g) =>
+          p.append(groupEl(g, { showGate: true })),
+        );
+        if (sec === "Studio") p.append(citation());
+        if (sec === "Instruments")
+          p.insertBefore(
+            el("div", "lbl", "Needs f = z²+c — current f is z²+c ✓"),
+            p.firstChild,
+          );
+        panels[sec] = p;
+      });
+      pane.append(tabs);
+      SECTIONS.forEach((s) => pane.append(panels[s]));
+      // opt-in mitigation
+      const mit = el("label", "chk");
+      mit.style.cssText = "padding:6px 2px 0;cursor:pointer";
+      const cb = el("input");
+      cb.type = "checkbox";
+      cb.id = "mitA";
+      cb.addEventListener("change", () => {
+        strip.replaceChildren();
+        if (cb.checked) strip.append(stateBar(WARN));
+        measureAll();
+      });
+      mit.append(
+        cb,
+        document.createTextNode("active-settings strip (the mitigation A needs)"),
+      );
+      pane.insertBefore(mit, pane.firstChild);
+      pane.insertBefore(strip, pane.firstChild);
+      pane.append(actionRow(true));
+    },
+    B(pane) {
+      pane.append(topBlock(false));
+      pane.append(stateBar(WARN));
+      SECTIONS.forEach((sec) => {
+        const gs = GROUPS.filter((g) => g.sec === sec);
+        if (!gs.length && sec !== "Function") return;
+        const h = el("div", "shdr", sec);
+        if (sec !== "Function") h.append(el("span", "count", gs.length + " groups"));
+        pane.append(h);
+        if (sec === "Function")
+          pane.append(el("div", "lbl", "↑ formula, presets and hand-off, above"));
+        gs.forEach((g) => pane.append(groupEl(g, { showGate: true })));
+      });
+      pane.append(actionRow(false));
+    },
+    C(pane) {
+      pane.append(topBlock(false));
+      pane.append(stateBar(WARN));
+      const f = el("input", "filter");
+      f.type = "search";
+      f.placeholder = "filter controls…";
+      f.id = "filterC";
+      const only = el("label", "chk");
+      only.style.cursor = "pointer";
+      const ob = el("input");
+      ob.type = "checkbox";
+      ob.checked = true;
+      ob.id = "onlyC";
+      only.append(ob, document.createTextNode("only what applies to f = z²+c"));
+      pane.append(f, only);
+      const holder = el("div");
+      holder.style.cssText = "display:flex;flex-direction:column;gap:6px";
+      pane.append(holder);
+      const draw = () => {
+        const q = f.value.trim().toLowerCase();
+        holder.replaceChildren();
+        GROUPS.filter((g) => {
+          if (!ob.checked && g.gate === "rational") return false;
+          if (!q) return true;
+          return (g.name + " " + g.ctrls.join(" ")).toLowerCase().includes(q);
+        }).forEach((g) => holder.append(groupEl(g, { forceOpen: !!q, showGate: true })));
+        measureAll();
+      };
+      f.addEventListener("input", draw);
+      ob.addEventListener("change", draw);
+      draw();
+      pane.append(actionRow(false));
+    },
+    D(pane) {
+      const note = el("div", "card inspector");
+      note.append(el("div", "lbl", "Point inspector"));
+      note.append(
+        el(
+          "div",
+          "lbl",
+          "Click any point on a plot to inspect its orbit. — its Siegel, Misiurewicz and Pin-note controls now live inside the report they act on.",
+        ),
+      );
+      pane.append(note);
+      pane.append(topBlock(false));
+      pane.append(stateBar(WARN));
+      GROUPS.forEach((g) => pane.append(groupEl(g)));
+      pane.append(el("div", "lbl", "↓ citation and BibTeX moved to the page footer"));
+    },
+  };
+
+  const OPTS = [
+    {
+      id: "current",
+      tag: "Today",
+      rec: false,
+      h4: "Current",
+      sub: "One flat column, 15 groups in build order, the inspector's action inputs on top and the citation at the bottom.",
+      verdict:
+        '<span class="con">2.3 screens</span>, no hierarchy — the baseline everything else is measured against.',
+      cost: "—",
+      hides: "no — everything is in one scroll",
+    },
+    {
+      id: "A",
+      tag: "Option A",
+      rec: false,
+      h4: "Five tabs",
+      sub: "Function · Appearance · Precision · Instruments · Studio. Global actions pinned below the panel.",
+      verdict:
+        '<span class="pro">The only option that actually collapses the column</span> — and the <span class="con">only one where a setting can hide in another mode</span>. Needs an active-settings strip to be safe.',
+      cost: "L · ~2 days",
+      hides: "yes — a tab is a mode",
+    },
+    {
+      id: "B",
+      tag: "Option B · recommended",
+      rec: true,
+      h4: "Grouped accordion",
+      sub: "The same five groups, as section headers in one scroll. Nothing hides; the z²+c instruments sit together under one gate.",
+      verdict:
+        '<span class="pro">Everything stays visible</span> and hierarchy arrives — but measure it: the column barely shortens, because all 15 groups are still in the scroll. Buys structure, not height.',
+      cost: "M · ~1 day",
+      hides: "no",
+    },
+    {
+      id: "C",
+      tag: "Option C",
+      rec: false,
+      h4: "Filter box",
+      sub: "The flat list, plus a search field and an “applies to this f” toggle. Type to narrow; matching groups open themselves.",
+      verdict:
+        'Cheapest real help at the moment of hunting. <span class="con">Browsing does not improve</span> — a search box over 15 groups treats an ordering problem as a lookup problem.',
+      cost: "S · ~½ day",
+      hides: "no",
+    },
+    {
+      id: "D",
+      tag: "Option D",
+      rec: false,
+      h4: "Placement only",
+      sub: "No restructuring. The inspector's action inputs move into the report; the citation moves to the footer.",
+      verdict:
+        '<span class="pro">Closes the sharpest defect for almost nothing</span>, and is a strict subset of B — not wasted work.',
+      cost: "S · ~2 h",
+      hides: "no",
+    },
+  ];
+
+  const rail = document.getElementById("rail");
+  const frames = [];
+  for (const o of OPTS) {
+    const wrapEl = el("div", "opt");
+    const head = el("div", "opt-head");
+    head.append(el("div", "tag" + (o.rec ? " rec" : ""), o.tag));
+    head.append(el("h4", null, o.h4));
+    head.append(el("div", "sub", o.sub));
+    const frame = el("div", "frame");
+    const bar = el("div", "frame-bar");
+    bar.append(el("span", null, "346 px sidebar"));
+    const read = el("b", null, "—");
+    bar.append(read);
+    const scroller = el("div", "scroller");
+    const pane = el("div", "pane");
+    scroller.append(pane);
+    frame.append(bar, scroller);
+    const verdict = el("div", "verdict");
+    verdict.innerHTML = o.verdict + ' <span class="cost">' + o.cost + "</span>";
+    wrapEl.append(head, frame, verdict);
+    rail.append(wrapEl);
+    BUILD[o.id](pane, frame);
+    frames.push({ o, pane, read });
+  }
+
+  function measureAll() {
+    const base = Math.round(frames[0].pane.scrollHeight) || 1;
+    for (const f of frames) {
+      const h = Math.round(f.pane.scrollHeight);
+      f.read.textContent =
+        f.o.id === "current"
+          ? h.toLocaleString() + " px · today"
+          : h.toLocaleString() + " px · " + Math.round((100 * h) / base) + "% of today";
+      f.pct = Math.round((100 * h) / base);
+    }
+    fillTable();
+  }
+
+  function fillTable() {
+    const tb = document.getElementById("cmp");
+    tb.replaceChildren();
+    for (const f of frames) {
+      const tr = el("tr", f.o.rec ? "rec-row" : "");
+      const h = Math.round(f.pane.scrollHeight);
+      tr.append(el("td", null, f.o.h4));
+      tr.append(
+        el(
+          "td",
+          "num",
+          f.o.id === "current"
+            ? h.toLocaleString() + " px (today)"
+            : f.pct + "% of today",
+        ),
+      );
+      tr.append(el("td", null, f.o.hides));
+      tr.append(el("td", "num", f.o.cost));
+      tr.append(
+        el(
+          "td",
+          null,
+          f.o.id === "A"
+            ? "markup, CSS, ARIA tabs, keyboard, ShellState, mobile sheet, shell test"
+            : f.o.id === "B"
+              ? "markup + CSS"
+              : f.o.id === "C"
+                ? "markup + CSS + one filter function"
+                : f.o.id === "D"
+                  ? "two moves in index.html"
+                  : "—",
+        ),
+      );
+      tb.append(tr);
+    }
+  }
+
+  measureAll();
+  document.getElementById("b1").textContent = "2,091";
+</script>

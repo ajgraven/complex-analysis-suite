@@ -5,8 +5,8 @@ function, or working on the renderer. It assumes you've read the [README](README
 (especially the **Architecture** section) and have the dev server running:
 
 ```bash
-npm install
-npm run dev
+pnpm install       # from the repository root — this is a pnpm workspace
+pnpm dev
 ```
 
 ## Before you open a PR
@@ -14,11 +14,14 @@ npm run dev
 All of these must pass:
 
 ```bash
-npm test          # Vitest unit suite
-npm run lint      # ESLint
-npm run typecheck # tsc --noEmit
-npm run build     # production build succeeds
-npm run format    # Prettier (run it; commit the result)
+pnpm test         # Vitest unit suite
+pnpm lint         # ESLint (includes the dependency-cruiser check)
+pnpm typecheck    # tsc --noEmit
+pnpm build        # production build succeeds
+pnpm format       # Prettier (run it; commit the result)
+
+# …and, when a change touches the stage or the shaders:
+pnpm --filter complex-dynamics test:browser   # the real-WebGL2 suite
 ```
 
 CI (the workspace [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)) runs the same
@@ -27,26 +30,30 @@ checks on every push and PR, plus a `browser` job for the real-WebGL2 GLSL harne
 Pure logic — the expression compiler (lexer/parser/evaluator), the df64
 primitives, transforms, presets — is unit-tested, and the shared GLSL is now checked in CI
 (the `@cas/gpu` dual-backend `browser` job runs the actual WebGL2 shaders against the JS
-backend). The app-level *composited* render still has no automated test, so **verify it by
-hand** in `pnpm dev`: both plots draw, dragging the `c` point updates the dynamical plane,
-panning/zoom/presets work, a deep zoom stays sharp, and export works.
+backend). The app-level *composited* render is now covered too — [`test/shell.test.ts`](test/shell.test.ts)
+drives the real `init()` under jsdom, and this app's own `pnpm test:browser` suite
+([`postAndCollar`](test/postAndCollar.browser.test.ts),
+[`renderRobustness`](test/renderRobustness.browser.test.ts)) drives a real `GLPlot` against a real
+WebGL2 context and reads pixels back. Neither replaces a look, so still **verify by hand** in
+`pnpm dev`: both plots draw, dragging the `c` point updates the dynamical plane, panning/zoom/presets
+work, a deep zoom stays sharp, and export works.
 
 ## How the renderer fits together
 
-`f` and `escape` are arbitrary expressions. The compiler in [`src/expr/`](src/expr/)
+`f` and `escape` are arbitrary expressions. The compiler in [`@cas/expr`](../../packages/expr)
 parses each into one AST and emits **two backends**:
 
-- **GLSL** ([`glsl.ts`](src/expr/glsl.ts)) — used to build the fragment shader
+- **GLSL** ([`glsl.ts`](../../packages/expr/src/glsl.ts)) — used to build the fragment shader
   ([`render/shaderBuilder.ts`](src/render/shaderBuilder.ts)) that does the
   per-pixel iteration on the GPU.
-- **A JS evaluator** ([`evaluate.ts`](src/expr/evaluate.ts) + [`complexJs.ts`](src/expr/complexJs.ts))
+- **A JS evaluator** ([`evaluate.ts`](../../packages/expr/src/evaluate.ts) + [`complexJs.ts`](../../packages/expr/src/complexJs.ts))
   — used to compute the orbit polyline and as the reference in unit tests.
 
 Both are written in terms of abstract complex ops (`cmul`, `cexp`, …). The GLSL
 stdlib supplies those ops in **two precisions** behind the same names — single
-([`complexSingle.glsl.ts`](src/glsl/complexSingle.glsl.ts)) and df64
-([`df64.glsl.ts`](src/glsl/df64.glsl.ts) + [`complexDf64.glsl.ts`](src/glsl/complexDf64.glsl.ts)) —
-plus a precision-agnostic derived layer ([`complexDerived.glsl.ts`](src/glsl/complexDerived.glsl.ts)).
+([`complexSingle.glsl.ts`](../../packages/gpu/src/glsl/complexSingle.glsl.ts)) and df64
+([`df64.glsl.ts`](../../packages/gpu/src/glsl/df64.glsl.ts) + [`complexDf64.glsl.ts`](../../packages/gpu/src/glsl/complexDf64.glsl.ts)) —
+plus a precision-agnostic derived layer ([`complexDerived.glsl.ts`](../../packages/gpu/src/glsl/complexDerived.glsl.ts)).
 [`GLPlot`](src/render/glPlot.ts) compiles the single-precision program eagerly and
 the df64 one lazily and **asynchronously** (it can be huge), switching to df64 past
 a zoom threshold once it's ready — so the first deep zoom shows single precision and
@@ -60,12 +67,12 @@ stable and never flips mid-interaction; see the `render` / `applyRenderSize` /
 ## Three gotchas
 
 1. **Keep the GLSL and JS backends in agreement.** If you change how a function
-   is computed, change it in both `src/expr/glsl.ts` (or the GLSL stdlib) **and**
-   `src/expr/complexJs.ts`, or the orbit will disagree with the shader. The
+   is computed, change it in both `packages/expr/src/glsl.ts` (or `@cas/gpu`’s stdlib) **and**
+   `packages/expr/src/complexJs.ts`, or the orbit will disagree with the shader. The
    `evaluate.ts` tests are the safety net.
 
-2. **df64 has a JS reference.** The df64 GLSL ([`df64.glsl.ts`](src/glsl/df64.glsl.ts))
-   is a line-for-line transliteration of [`df64Ref.ts`](src/glsl/df64Ref.ts),
+2. **df64 has a JS reference.** The df64 GLSL ([`df64.glsl.ts`](../../packages/gpu/src/glsl/df64.glsl.ts))
+   is a line-for-line transliteration of [`df64Ref.ts`](../../packages/gpu/src/glsl/df64Ref.ts),
    which is unit-tested. Edit the reference first, get the test passing, then port.
    Note the `* uOne` optimization barriers on the error-free transforms — without
    them the shader compiler reassociates the math and df64 silently collapses to
@@ -102,11 +109,11 @@ checks the `f`/`escape` strings parse.
 
 ### Add a function to the expression language
 
-1. Add it to the AST function sets in [`src/expr/ast.ts`](src/expr/ast.ts) and
-   parse it in [`src/expr/parser.ts`](src/expr/parser.ts) if it isn't a plain call.
-2. Implement it for the JS backend in [`src/expr/complexJs.ts`](src/expr/complexJs.ts)
-   and dispatch it in [`evaluate.ts`](src/expr/evaluate.ts); add a parity test.
-3. Implement it for GLSL: map the name in [`src/expr/glsl.ts`](src/expr/glsl.ts)
+1. Add it to the AST function sets in [`ast.ts`](../../packages/expr/src/ast.ts) and
+   parse it in [`parser.ts`](../../packages/expr/src/parser.ts) if it isn't a plain call.
+2. Implement it for the JS backend in [`complexJs.ts`](../../packages/expr/src/complexJs.ts)
+   and dispatch it in [`evaluate.ts`](../../packages/expr/src/evaluate.ts); add a parity test.
+3. Implement it for GLSL: map the name in [`glsl.ts`](../../packages/expr/src/glsl.ts)
    and add the `c…` op to **both** precision stdlibs (single + df64), or to the
    derived layer if it's expressible in terms of existing ops.
 
@@ -114,8 +121,8 @@ checks the `f`/`escape` strings parse.
 
 Colouring is driven by shader uniforms set in
 [`src/render/shaderBuilder.ts`](src/render/shaderBuilder.ts): `uMode` (escape / smooth /
-histogram / distance (screen-space) / distance-analytic / orbit-trap / stripe / triangle /
-decomposition / period / multiplier / domain), `uPalette` (classic / viridis / magma /
+histogram / distance (screen-space) / distance-analytic / **distance-interior** / orbit-trap /
+stripe / triangle / decomposition / period / multiplier / **Marty** / **Newton-basins** / domain), `uPalette` (classic / viridis / magma /
 grayscale / cividis / custom), `uAA` (supersampling), and the gradient-rotation / lighting /
 post / outline uniforms. The per-pixel logic lives in `colorAt` (and `distanceColor` for the
 screen-space edge mode); `palette(t)` maps a scalar to RGB. To add a simple **mode**, add a
@@ -145,9 +152,9 @@ The richer instruments are **pure, unit-tested modules** consumed by `overlay.ts
 distance, plus `findNucleus`), [`farey.ts`](src/render/farey.ts) (bulb labels),
 [`rays.ts`](src/render/rays.ts) (external rays + `bulbRayAngles`),
 [`orbitPreview.ts`](src/render/orbitPreview.ts) (the hover preview),
-[`uniformize.ts`](src/render/uniformize.ts) (exterior-map Laurent coefficients of the filled
+[`uniformize.ts`](../../packages/dynamics/src/uniformize.ts) (exterior-map Laurent coefficients of the filled
 Julia set — any polynomial or rational map — and the multibrot, by exact recurrences, plus
-`reconstructBoundary`; with [`expr/rational.ts`](src/expr/rational.ts) splitting f over ℂ(z)), and
+`reconstructBoundary`; with [`rational.ts`](../../packages/expr/src/rational.ts) splitting f over ℂ(z)), and
 [`src/state/places.ts`](src/state/places.ts) (curated locations). User-facing **jargon is
 defined once** in [`src/ui/glossary.ts`](src/ui/glossary.ts) (the Glossary modal + inline
 `?` links) — add an entry there when you introduce a new term. Many of these (rays, Farey,
@@ -158,7 +165,7 @@ parameter-plane multibrot side is `z^d+c`-only (via `GLPlot.monicDegree`), but i
 recurrence in `uniformize.exteriorFromLaurent`.
 
 **Newton's method** (`GLPlot.setNewton`) swaps the iterated AST for the Newton map
-`z - f/f'` built by [`src/expr/derivative.ts`](src/expr/derivative.ts)
+`z - f/f'` built by [`derivative.ts`](../../packages/expr/src/derivative.ts)
 (`differentiate` / `newtonIteration`) — a build-time AST substitution, so the shader
 loops are unchanged. `differentiate` covers the holomorphic subset and throws for
 non-holomorphic builtins; if you add a new differentiable function, add its chain-rule
@@ -172,14 +179,17 @@ rendered scene texture (`GLPlot.drawPost`, driven by `setPost`).
 
 **Performance & deep zoom** are documented in [`PERFORMANCE_REVIEW.md`](PERFORMANCE_REVIEW.md). In
 brief: the compiled `f`/`escape` closures are memoised per `(ast, a)` (`getComplexFn`/`getEscapeFn`
-in [`evaluate.ts`](src/expr/evaluate.ts)); the heavy Julia-properties image metrics run in a **Web
+in [`evaluate.ts`](../../packages/expr/src/evaluate.ts)); the heavy Julia-properties image metrics run in a **Web
 Worker** ([`juliaMetrics.worker.ts`](src/render/juliaMetrics.worker.ts) via
 [`juliaMetricsClient.ts`](src/render/juliaMetricsClient.ts)) wrapping the pure
 `juliaProperties.computeJuliaImageMetrics`, with a synchronous fallback when workers are unavailable;
 and deep zoom past df64 uses the **perturbation** kernel (`PERTURBATION_FRAGMENT_SHADER`) with a
 double-double reference orbit ([`perturbation.ts`](src/render/perturbation.ts)) and **rebasing** for
-glitch-free renders (a per-pixel BLA table, [`bla.ts`](src/render/bla.ts), is staged for future
-iteration-skipping but not yet wired to the kernel).
+glitch-free renders, accelerated by the per-pixel **BLA** skip-table: [`bla.ts`](src/render/bla.ts)
+builds and packs the binary tree, `glPlot.ensureBLA` uploads it as a float texture, and the shader's
+`fetchBLA`/`lookupBLA` traverse it per fragment (`traverseBLA` + [`bla.test.ts`](test/bla.test.ts)
+are the CPU mirror). The kernel also takes any additive-c polynomial `P(z) + B·c`, not only z²+c
+([`perturbationPoly.ts`](src/render/perturbationPoly.ts)).
 
 ### Add a control input
 

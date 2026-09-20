@@ -1,7 +1,19 @@
 # Design — Faithful σ (Schwarz-reflection) hand-off, QD → CD
 
-> **Status: APPROVED (2026-08-07) — executing.** Maintainer-approved; the approved decisions and the
-> refined PR sequence are in the "Approved implementation plan" section at the end. Not an ADR yet.
+> **Status: DONE (shipped).** Implemented as QD-HANDOFF-2 + S5 — the σ peer view (#246), the σ
+> multi-view explorer (#255) and interchange 1.3.0, covering both the unbounded-Laurent and the
+> bounded families. QD emits a `form:"schwarz"` recipe and CD reconstructs it through `@cas/schwarz`
+> (`src/interchange/importMap.ts`; `renderSchwarzView` in `main.ts`).
+>
+> **§§0–2 describe the PRE-implementation state and are kept for the record**, so two of their
+> sentences are now false as written: "Today 'Export map → copy link' hands off φ … not σ" (it hands
+> off σ), and "CD installs that φ as its iterated map with no special-casing" at a `main.ts` line
+> reference that no longer exists (the import path special-cases `spec.form === "schwarz"` first).
+> The header said "APPROVED — executing" for a month after it shipped; corrected in the 2026-09-16
+> review follow-up rather than left for the next reader to discover.
+>
+> The approved decisions and the refined PR sequence are in the "Approved implementation plan"
+> section at the end. Not an ADR yet.
 > Supersedes the "plumbing-first" φ-only hand-off documented at
 > `apps/quadrature-domains/app/schwarz/schwarz-export.mjs:4-8`. Grounded in a three-part code audit
 > (QD σ machinery, `@cas/interchange`, CD + `@cas/expr`); file:line anchors throughout are the

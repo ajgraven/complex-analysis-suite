@@ -76,3 +76,19 @@ describe("yoccozPuzzle (parameter → puzzle, gated on a repelling α)", () => {
     expect(yoccozPuzzle([0.25, 0], 0)).toBeNull();
   });
 });
+
+// ── WP4 / I3 (review 2026-09-16) ──────────────────────────────────────────────────────────────
+describe("yoccozPuzzle — no puzzle outside the Mandelbrot set", () => {
+  // The puzzle is a graph of rays landing at α on a CONNECTED Julia set. Outside M there is none,
+  // but `dynamicalAnglesOfPoint` still found rays near the computed α: c = −2.1 (a Cantor set)
+  // returned a valence-2 puzzle with 8 rays at depth 2, and c = 0.3 + 0.6i a valence-4 one.
+  it("returns null for a Cantor parameter", () => {
+    expect(yoccozPuzzle([-2.1, 0], 2)).toBeNull();
+    expect(yoccozPuzzle([0.3, 0.6], 2)).toBeNull();
+  });
+
+  it("still returns the basilica and rabbit puzzles", () => {
+    expect(yoccozPuzzle([-1, 0], 2)?.valence).toBe(2);
+    expect(yoccozPuzzle([-0.122561, 0.744862], 2)?.valence).toBe(3);
+  });
+});

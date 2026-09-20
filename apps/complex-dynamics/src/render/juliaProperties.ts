@@ -71,6 +71,9 @@ export interface JuliaProperties {
 const AREA_COEFFS = 64; // exterior Laurent coefficients used for the area upper bound
 const LYAP_ITERS = 400; // critical-orbit length for the Lyapunov accumulation (chaotic case)
 
+/** Largest |c| at which the Ruelle small-|c| dimension asymptotic is offered (see its use below). */
+const SMALL_C_MAX = 0.1;
+
 /** Bounding-disk radius for z^d + c: the real root > 1 of R^d − R − |c| = 0 (escape radius). */
 export function boundingRadius(d: number, c: Complex): number {
   const ac = cabs(c);
@@ -222,8 +225,17 @@ export function computeJuliaProperties(opts: {
     // It is established for the QUADRATIC family z²+c and is exact only at c = 0; restricted to d = 2
     // because the 1/(4 ln d) generalization to higher degree is not a citable result. Every other
     // map (incl. d ≥ 3) leaves this null and shows the box-counting estimate instead.
+    //
+    // **And it is a SMALL-|c| asymptotic, so it is gated on small |c|** (WP5, review 2026-09-16).
+    // The gate used to be "anywhere in the principal cardioid", which reaches |c| = 3/4 at the cusp —
+    // where the dropped O(|c|³) term is the same order as the |c|² one the formula keeps, and the row
+    // was printed as an exact value beside the box-counting estimate. At |c| ≤ 0.1 the remainder is
+    // ≲ 1e-3, below the precision the row is shown to. Outside it the box count stands alone, which
+    // is honest: there is no closed form to offer there.
     smallCDimension:
-      degree === 2 && inPrincipalCardioid ? 1 + (cabs(c) * cabs(c)) / (4 * Math.LN2) : null,
+      degree === 2 && inPrincipalCardioid && cabs(c) <= SMALL_C_MAX
+        ? 1 + (cabs(c) * cabs(c)) / (4 * Math.LN2)
+        : null,
     capacity: monic ? 1 : polynomialCapacity(fAst, a, c),
   };
 }
@@ -708,14 +720,17 @@ export function computeJuliaImageMetrics(opts: {
   rigorousConnectivity: boolean;
   size: number;
 }): JuliaImageMetrics {
-  const { fAst, escAst, a, c, centerX, centerY, zoom, boundingRadius, escapes, size } = opts;
+  // `boundingRadius:` is aliased because the module also EXPORTS a `boundingRadius` function; the
+  // destructured number was shadowing it inside this whole body. (WP3 / no-shadow.)
+  const { fAst, escAst, a, c, centerX, centerY, zoom, escapes, size } = opts;
+  const { boundingRadius: boundingR } = opts;
 
-  if (boundingRadius !== null) {
+  if (boundingR !== null) {
     // Monic z^d + c: the bounding disk encloses the whole set exactly; the symmetry / connectivity /
     // bounding rows stay analytic (omitted here so the caller leaves them untouched).
-    const mask = interiorMask(fAst, escAst, c, a, 0, 0, boundingRadius, size, 150);
+    const mask = interiorMask(fAst, escAst, c, a, 0, 0, boundingR, size, 150);
     const interior = countInterior(mask);
-    const cell = (2 * boundingRadius) / size;
+    const cell = (2 * boundingR) / size;
     const bd = boxCountDimension(mask, size);
     const boundaryCells = countInterior(boundaryMask(mask, size));
     return {

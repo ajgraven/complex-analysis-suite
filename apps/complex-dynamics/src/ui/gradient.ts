@@ -136,7 +136,7 @@ export function setupGradientEditor(
     onChange(stops.map((s) => ({ t: s.t, color: [...s.color] })));
   }
 
-  function render(): void {
+  function render(refocus = false): void {
     selected = Math.min(selected, stops.length - 1);
     bar.style.background = cssGradient(stops);
     handles.replaceChildren();
@@ -147,9 +147,24 @@ export function setupGradientEditor(
       h.style.left = `${s.t * 100}%`;
       h.style.background = toHex(s.color);
       h.dataset.i = String(i);
-      h.setAttribute("aria-label", `Colour stop at ${Math.round(s.t * 100)}%`);
+      // A slider in all but name: the value is the position, so it is exposed as one. Before this
+      // the handles were focusable buttons with no keyboard behaviour at all and no value — the
+      // custom gradient could only be built with a pointer. (WP11/U10, review 2026-09-16.)
+      h.setAttribute("role", "slider");
+      h.setAttribute("aria-valuemin", "0");
+      h.setAttribute("aria-valuemax", "100");
+      h.setAttribute("aria-valuenow", String(Math.round(s.t * 100)));
+      h.setAttribute("aria-label", `Colour stop ${i + 1} of ${stops.length}`);
+      h.setAttribute("aria-valuetext", `${Math.round(s.t * 100)}%`);
       handles.appendChild(h);
     });
+    // `replaceChildren` above destroyed the focused handle, so every arrow press dropped focus to
+    // the body and the NEXT press went nowhere — the keyboard path would have been unusable without
+    // this. (The same defect contour-integration's pen found in M7.2.)
+    if (refocus) {
+      const h = handles.children[selected];
+      if (h instanceof HTMLElement) h.focus();
+    }
     colorInput.value = toHex(stops[selected].color);
     removeBtn.disabled = stops.length <= 2;
     jsonArea.value = JSON.stringify(
@@ -187,6 +202,76 @@ export function setupGradientEditor(
   };
   handles.addEventListener("pointerup", endDrag);
   handles.addEventListener("pointercancel", endDrag);
+
+  /**
+   * Keyboard editing, mirroring the pointer gestures a stop already has: arrows move it (1 % a
+   * press, 10 % with Shift), Home/End send it to an end, `Insert` / `+` adds a stop next to the
+   * focused one, `Delete` / `Backspace` removes it. The two-stop floor is the same one the Remove
+   * button enforces — a gradient with one stop is not a gradient.
+   */
+  handles.addEventListener("keydown", (e) => {
+    const target = (e.target as HTMLElement | null)?.closest(".gradient-handle");
+    if (!(target instanceof HTMLElement)) return;
+    const i = Number(target.dataset.i);
+    if (!Number.isFinite(i) || !stops[i]) return;
+    selected = i;
+    const stop = stops[i];
+    const step = e.shiftKey ? 0.1 : 0.01;
+    let handled = true;
+    let inserted = false;
+    switch (e.key) {
+      case "ArrowLeft":
+      case "ArrowDown":
+        stop.t = clamp01(stop.t - step);
+        break;
+      case "ArrowRight":
+      case "ArrowUp":
+        stop.t = clamp01(stop.t + step);
+        break;
+      case "Home":
+        stop.t = 0;
+        break;
+      case "End":
+        stop.t = 1;
+        break;
+      case "Insert":
+      case "+":
+      case "=": {
+        // Halfway to the next stop, or halfway to the end when this is the last one.
+        const next = stops[i + 1];
+        const t = clamp01(next ? (stop.t + next.t) / 2 : (stop.t + 1) / 2);
+        const added: GradientStop = { t, color: interpColor(stops, t) };
+        stops.push(added);
+        stops.sort((a, b) => a.t - b.t);
+        selected = stops.indexOf(added);
+        inserted = true;
+        break;
+      }
+      case "Delete":
+      case "Backspace":
+        if (stops.length <= 2) {
+          handled = false;
+          break;
+        }
+        stops.splice(i, 1);
+        selected = Math.max(0, i - 1);
+        break;
+      default:
+        handled = false;
+    }
+    if (!handled) return;
+    e.preventDefault();
+    stops.sort((a, b) => a.t - b.t);
+    // Re-find the stop the key MOVED, so focus follows it across the sort — but not on the Insert
+    // path, which deliberately selected the stop it just ADDED. `stop` (the focused handle) is still
+    // in the array there, so this used to overwrite that choice: a reader pressed Insert, a new stop
+    // appeared at 25 %, and the colour picker went on editing the old one — so changing the colour
+    // moved the wrong stop. (Delete is unaffected: `stop` is genuinely gone, so the guard is false.)
+    // (Review follow-up.)
+    if (!inserted && stops.includes(stop)) selected = stops.indexOf(stop);
+    render(true);
+    emit();
+  });
 
   // Click an empty part of the bar to add a stop there.
   bar.addEventListener("pointerdown", (e) => {

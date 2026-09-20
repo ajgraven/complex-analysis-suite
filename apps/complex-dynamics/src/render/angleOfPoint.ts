@@ -39,6 +39,29 @@ export interface AnglesOfPoint {
   valence: number;
   /** true when ≥ 2 rays land — the point is biaccessible. */
   biaccessible: boolean;
+  /**
+   * Was every ray near this point RESOLVED? When false, `valence` is a lower bound and
+   * `biaccessible` may be a false negative — report it as `≥ n (≈)` rather than as a count.
+   *
+   * An unrefined landing is the ray's last traced point rather than a landing: Newton did not
+   * converge, so its error is the tracing step, not machine precision. At the old 5e-3 tolerance
+   * such a point paired with anything nearby and the finder OVER-counted; at 1e-9 it can pair with
+   * nothing, so a genuine co-landing is split and the finder UNDER-counts — silently, and with a
+   * bare number beside it. Measured: the period-6 root at c ≈ −1.28418 − 0.42710i has rays 13/21
+   * and 40/63 landing 1.2e-4 apart, BOTH unrefined, and read "Not biaccessible (valence 1)".
+   * Over-counting is obviously wrong (valence 21 at β); under-counting is plausible and wrong,
+   * which is worse. 188 of 1,884 parameter landings are unrefined at detail 8.
+   *
+   * The rule is **the point snapped to is itself unresolved**, not a distance: measured, a genuine
+   * co-landing gap (1.2e-4 at that root) and a genuinely DISTINCT neighbour (2.26e-4 at the tip
+   * c = −2) are the same size, so no radius separates them — but in every failing case the nearest
+   * landing was itself unrefined, which is a statement about what the point IS rather than a
+   * tolerance. What this therefore does NOT catch: a point whose snap resolves while one of its
+   * co-landing partners does not, which would still under-count by one. No case of it was found in
+   * the enumerated set, and it is recorded here rather than papered over with a radius that
+   * measurement says cannot work. (Review follow-up.)
+   */
+  exact: boolean;
 }
 
 /** Search bounds for the angle enumeration. Defaults suit an interactive click. */
@@ -64,7 +87,21 @@ export interface NearestAngles extends AnglesOfPoint {
 
 const DEFAULT_MAX_PERIOD = 8;
 const DEFAULT_MAX_PREPERIOD = 2;
-const DEFAULT_TOL = 5e-3;
+/**
+ * How close a ray's REFINED landing must come to the target to count as landing there.
+ *
+ * It was 5e-3, which is a screen distance rather than a landing error, so the finder reported every
+ * ray that landed anywhere nearby. Measured: the basilica's β fixed point, where exactly one ray
+ * (θ = 0) lands, was reported with **valence 21**; ∂M's tip c = −2, where only θ = 1/2 lands, with
+ * **valence 33**; and a point near the tip with 28. Every one of those was then printed as
+ * "biaccessible", which is the opposite of what β and the tip are.
+ *
+ * Tightening costs nothing, which is the point: the genuine multi-ray points are found identically
+ * at 5e-3, 1e-6, 1e-9 and 1e-12 (the basilica's α keeps valence 2, the rabbit's α keeps 3), because
+ * a real co-landing agrees to ~1e-16 while the nearest DISTINCT landing is ~1e-4 away. Same constant
+ * and same reasoning as the lamination's clustering tolerance.
+ */
+const DEFAULT_TOL = 1e-9;
 const DEFAULT_SNAP_RADIUS = 0.06;
 
 function gcd(a: number, b: number): number {
@@ -98,27 +135,28 @@ export function enumerateLandingAngles(maxPeriod: number, maxPreperiod: number):
 }
 
 /** Assemble the result from the matched angles: sort ascending, count, flag biaccessibility. */
-function collect(angles: Angle[]): AnglesOfPoint {
+function collect(angles: Angle[], exact = true): AnglesOfPoint {
   angles.sort((a, b) => a.p / a.q - b.p / b.q);
-  return { angles, valence: angles.length, biaccessible: angles.length >= 2 };
+  return { angles, valence: angles.length, biaccessible: angles.length >= 2, exact };
 }
 
-/** An enumerated angle together with where its ray lands. */
+/** An enumerated angle together with where its ray lands, and whether Newton resolved it. */
 interface Landed {
   angle: Angle;
   point: Vec2;
+  refined: boolean;
 }
 
 /** Land every enumerated angle through `land` (dropping the ones that fail to trace). */
 function landAll(
-  land: (p: number, q: number) => Vec2 | null,
+  land: (p: number, q: number) => { point: Vec2; refined: boolean } | null,
   maxPeriod: number,
   maxPreperiod: number,
 ): Landed[] {
   const out: Landed[] = [];
   for (const angle of enumerateLandingAngles(maxPeriod, maxPreperiod)) {
-    const point = land(angle.p, angle.q);
-    if (point) out.push({ angle, point });
+    const l = land(angle.p, angle.q);
+    if (l) out.push({ angle, point: l.point, refined: l.refined });
   }
   return out;
 }
@@ -168,19 +206,27 @@ function nearestCluster(
 ): NearestAngles {
   let best: Vec2 | null = null;
   let bestD = Infinity;
-  for (const { point } of all) {
+  let bestRefined = true;
+  for (const { point, refined } of all) {
     const d = Math.hypot(point[0] - query[0], point[1] - query[1]);
     if (d < bestD) {
       bestD = d;
       best = point;
+      bestRefined = refined;
     }
   }
-  if (!best || bestD > snapRadius) return { angles: [], valence: 0, biaccessible: false, point: null };
+  if (!best || bestD > snapRadius) {
+    return { angles: [], valence: 0, biaccessible: false, exact: true, point: null };
+  }
   const snap = best;
+  // Only a RESOLVED landing may be counted at `clusterTol` — an unrefined point carries the tracing
+  // step as its error, orders above it. And when the point we snapped TO is itself unresolved, its
+  // position is the ray's last traced point rather than a landing, so there is no resolved point
+  // here to count rays at: the answer is a lower bound, not a valence.
   const hits = all
-    .filter((l) => Math.hypot(l.point[0] - snap[0], l.point[1] - snap[1]) < clusterTol)
+    .filter((l) => l.refined && Math.hypot(l.point[0] - snap[0], l.point[1] - snap[1]) < clusterTol)
     .map((l) => l.angle);
-  return { ...collect(hits), point: snap };
+  return { ...collect(hits, bestRefined), point: snap };
 }
 
 /**
@@ -197,13 +243,20 @@ export function dynamicalAnglesOfPoint(
   const maxPreperiod = opts.maxPreperiod ?? DEFAULT_MAX_PREPERIOD;
   const tol = opts.tol ?? DEFAULT_TOL;
   const hits: Angle[] = [];
+  let nearestD = Infinity;
+  let nearestRefined = true;
   for (const { p, q } of enumerateLandingAngles(maxPeriod, maxPreperiod)) {
     const land = dynamicalLanding(p, q, c);
-    if (land && Math.hypot(land.point[0] - target[0], land.point[1] - target[1]) < tol) {
-      hits.push({ p, q });
+    if (!land) continue;
+    const d = Math.hypot(land.point[0] - target[0], land.point[1] - target[1]);
+    if (d < nearestD) {
+      nearestD = d;
+      nearestRefined = land.refined;
     }
+    // See {@link AnglesOfPoint.exact}: only a RESOLVED landing may be counted at `tol`.
+    if (land.refined && d < tol) hits.push({ p, q });
   }
-  return collect(hits);
+  return collect(hits, nearestRefined);
 }
 
 /**
@@ -216,13 +269,20 @@ export function parameterAnglesOfPoint(target: Vec2, opts: AngleSearchOpts = {})
   const maxPreperiod = opts.maxPreperiod ?? DEFAULT_MAX_PREPERIOD;
   const tol = opts.tol ?? DEFAULT_TOL;
   const hits: Angle[] = [];
+  let nearestD = Infinity;
+  let nearestRefined = true;
   for (const { p, q } of enumerateLandingAngles(maxPeriod, maxPreperiod)) {
     const land = parameterLanding(p, q);
-    if (land && Math.hypot(land.point[0] - target[0], land.point[1] - target[1]) < tol) {
-      hits.push({ p, q });
+    if (!land) continue;
+    const d = Math.hypot(land.point[0] - target[0], land.point[1] - target[1]);
+    if (d < nearestD) {
+      nearestD = d;
+      nearestRefined = land.refined;
     }
+    // See {@link AnglesOfPoint.exact}: only a RESOLVED landing may be counted at `tol`.
+    if (land.refined && d < tol) hits.push({ p, q });
   }
-  return collect(hits);
+  return collect(hits, nearestRefined);
 }
 
 /**
@@ -236,7 +296,7 @@ export function nearestDynamicalAngles(query: Vec2, c: Vec2, opts: NearestOpts =
     landAll(
       (p, q) => {
         const l = dynamicalLanding(p, q, c);
-        return l ? [l.point[0], l.point[1]] : null;
+        return l ? { point: [l.point[0], l.point[1]] as Vec2, refined: l.refined } : null;
       },
       maxPeriod,
       maxPreperiod,
@@ -258,7 +318,7 @@ export function nearestParameterAngles(query: Vec2, opts: NearestOpts = {}): Nea
     landAll(
       (p, q) => {
         const l = parameterLanding(p, q);
-        return l ? [l.point[0], l.point[1]] : null;
+        return l ? { point: [l.point[0], l.point[1]] as Vec2, refined: l.refined } : null;
       },
       maxPeriod,
       maxPreperiod,

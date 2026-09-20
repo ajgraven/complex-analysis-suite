@@ -176,8 +176,10 @@ export function encodeSigmaState(s: SigmaViewState): string {
 }
 
 /**
- * A human-readable one-line summary of a σ view, for a PNG's `cdjs:sigma` tEXt chunk. ASCII-safe — PNG
- * tEXt is Latin-1, so no σ / ≈ / Unicode minus (matching buildStampMetadata's ASCII-only rule).
+ * A human-readable one-line summary of a σ view, for a PNG's `cdjs:sigma` text chunk. ASCII only —
+ * not because the format forces it (`@cas/export` writes an `iTXt` UTF-8 chunk for anything Latin-1
+ * cannot hold), but because this is a PARAMETER string a reader pastes back into the app's own
+ * fields, which parse `-` rather than U+2212. Matches buildStampMetadata. (WP12.)
  */
 export function schwarzStampParams(s: SigmaViewState): string {
   const r = (x: number): string => Number.parseFloat(x.toPrecision(6)).toString();

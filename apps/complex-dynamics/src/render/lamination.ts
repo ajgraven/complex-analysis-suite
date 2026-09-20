@@ -31,6 +31,7 @@ import type { Vec2 } from "../arrays";
 import { sqrt } from "@cas/expr/complexJs";
 import { dynamicalLanding, parameterLanding } from "./angleParameter";
 import { enumerateLandingAngles } from "./angleOfPoint";
+import { quadraticCriticalBounded } from "./critical";
 // `Leaf` lives in ./laminationTypes (a dependency-free leaf module) so that render/overlay.ts can
 // import the type without an edge back into this file — breaking the type-only import cycle (CD-4).
 // Re-exported here so existing `import { Leaf } from "./lamination"` sites (main.ts, plotView.ts) work.
@@ -60,7 +61,37 @@ export const MAX_LAMINATION_DETAIL = 8;
 
 const DEFAULT_MAX_PERIOD = 6;
 const DEFAULT_MAX_PREPERIOD = 1;
-const DEFAULT_TOL = 4e-3;
+/**
+ * Two rays co-land only if their NEWTON-REFINED landing points agree to this.
+ *
+ * It was 4e-3, which is not a landing error — it is a distance at which genuinely distinct pinch
+ * points of ∂K_c and distinct component roots of ∂M sit, so most of what was drawn was an artefact
+ * of the clustering rather than a measured identification. Measured over the enumerated angles, the
+ * separation is stark and leaves a wide choice:
+ *
+ * | case               | genuine co-landings | nearest DISTINCT pair | refined landings |
+ * | ------------------ | ------------------- | --------------------- | ---------------- |
+ * | basilica, detail 6 | ≤ 1.1e-16           | 4.6e-4                | 105              |
+ * | basilica, detail 8 | ≤ 1.1e-16           | 4.2e-6                | 471              |
+ * | rabbit, detail 8   | ≤ 2.5e-16           | 5.8e-6                | 471              |
+ * | QML, detail 8      | ≤ 2.2e-11           | 1.2e-5                | 754              |
+ *
+ * 1e-9 sits inside every one of those gaps — above every genuine co-landing and more than three
+ * orders below the nearest distinct pair. On the dynamical side it gives bit-identical results to
+ * 1e-12; on the QML it recovers five genuine pairs at detail 6 (39 → 44) whose refinement landed a
+ * little over 1e-12 apart, while admitting none of the artefacts. The check that it is right is
+ * structural rather than numeric — **every QML gap comes out size 2**, which is what a hyperbolic
+ * component root must be, where 4e-3 produced gaps of size 17, 10 and 9 at detail 8.
+ *
+ * ⚠ This table was re-measured in review follow-up C and three of its numbers were wrong, the QML
+ * row consequentially so: it read `≤ 8.9e-14` genuine against a `1.2e-12` nearest distinct pair,
+ * which says 1e-9 sits ABOVE the nearest distinct pair — i.e. that the shipped tolerance merges
+ * distinct component roots, the exact opposite of the conclusion drawn from it. The conclusion was
+ * right and the evidence offered for it was not. The old "gaps at 4e-3" column is replaced by the
+ * landing count: a gap count depends on how gaps are counted, three independent measurements of it
+ * disagreed, and it was never what the tolerance argument rests on.
+ */
+const DEFAULT_TOL = 1e-9;
 
 interface Cluster {
   center: Vec2;
@@ -118,15 +149,19 @@ function gapLeaves(sorted: number[]): Leaf[] {
  * ∂M) — they differ only in which landing map they pass.
  */
 function laminationFrom(
-  land: (p: number, q: number) => Vec2 | null,
+  land: (p: number, q: number) => { point: Vec2; refined: boolean } | null,
   maxPeriod: number,
   maxPreperiod: number,
   tol: number,
 ): Lamination {
   const landed: { angle: number; point: Vec2 }[] = [];
   for (const { p, q } of enumerateLandingAngles(maxPeriod, maxPreperiod)) {
-    const pt = land(p, q);
-    if (pt) landed.push({ angle: p / q, point: pt });
+    const l = land(p, q);
+    // An UNREFINED landing is the ray's last traced point, not a landing: Newton did not converge,
+    // so the error is the ray-tracing step rather than machine precision and it cannot be paired at
+    // this tolerance. 188 of 942 parameter landings are unrefined at detail 8; including them adds
+    // three spurious QML gaps even at 1e-6.
+    if (l && l.refined) landed.push({ angle: p / q, point: l.point });
   }
   const gaps = clusterByLanding(landed, tol);
   const seen = new Set<string>();
@@ -147,13 +182,17 @@ export function dynamicalLamination(c: Vec2, opts: LaminationOpts = {}): Laminat
   // i.e. c outside the closed main cardioid. Inside it the Julia set is a Jordan curve — no rays are
   // identified, so the lamination is empty — and the landing machinery clusters spuriously near the
   // attracting fixed point, so we gate up front (matching the Yoccoz-puzzle repelling-α requirement).
+  // The pinched disk is a model of a CONNECTED Julia set. Outside M, K is a Cantor set and there is
+  // no lamination at all — but the ray tracer still returns points, and the clustering still pairs
+  // them: at c = −2.1 this drew **104 leaves**. (WP4 / I3, review 2026-09-16.)
+  if (!quadraticCriticalBounded(c)) return { leaves: [], gaps: [] };
   const disc = sqrt([1 - 4 * c[0], -4 * c[1]]);
   const alpha: Vec2 = [(1 - disc[0]) / 2, -disc[1] / 2];
   if (2 * Math.hypot(alpha[0], alpha[1]) <= 1 + 1e-9) return { leaves: [], gaps: [] };
   return laminationFrom(
     (p, q) => {
       const l = dynamicalLanding(p, q, c);
-      return l ? [l.point[0], l.point[1]] : null;
+      return l ? { point: [l.point[0], l.point[1]], refined: l.refined } : null;
     },
     opts.maxPeriod ?? DEFAULT_MAX_PERIOD,
     opts.maxPreperiod ?? DEFAULT_MAX_PREPERIOD,
@@ -174,7 +213,7 @@ export function parameterLamination(opts: LaminationOpts = {}): Lamination {
   return laminationFrom(
     (p, q) => {
       const l = parameterLanding(p, q);
-      return l ? [l.point[0], l.point[1]] : null;
+      return l ? { point: [l.point[0], l.point[1]], refined: l.refined } : null;
     },
     opts.maxPeriod ?? DEFAULT_MAX_PERIOD,
     opts.maxPreperiod ?? DEFAULT_MAX_PREPERIOD,

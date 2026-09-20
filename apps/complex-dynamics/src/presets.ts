@@ -64,7 +64,14 @@ export type PresetName =
 export const paramPresets: Record<PresetName, Preset> = {
   mandelbrot: {
     f: "z^2+c",
-    c: "-.7-.4*i",
+    // The DOUADY RABBIT, not the old `-.7-.4*i`. That parameter's critical orbit ESCAPES, so the
+    // dynamical pane — half the app — opened on a Cantor dust: measured, 0.00 % of the default
+    // window is inside the set, against 13.75 % for the rabbit, and the Julia-properties panel
+    // opened saying "totally disconnected". The first thing a reader saw was the degenerate case.
+    // The rabbit is the period-3 superattracting centre, so the critical orbit is a 3-cycle and the
+    // inspector, the overlay and the properties panel all have something to say about it.
+    // (WP10/U3, review 2026-09-16.)
+    c: "-.122561+.744862*i",
     n: "100",
     nplot: "7",
     escape: "abs(z)>2",
@@ -216,7 +223,17 @@ export const paramPresets: Record<PresetName, Preset> = {
     nplot: "6",
     escape: "abs(z)>1000",
     mode: "period",
-    zoom: 1.1,
+    // Framed on EXACTLY ONE PERIOD, τ ∈ [0, 1]. `c` enters only through `e^{2πi·c}`, so the parameter
+    // plane is 1-periodic in Re c and one unit interval is a fundamental domain — which is where the
+    // rotation-number tongues live. `plotRange` is `centre ± 1/zoom`, so this is x ∈ [0, 1] and the
+    // preset's own τ = 0.6152 sits 62 % across.
+    //
+    // ⚠ The comment here previously read "widened to 2 units across about the origin", which was
+    // wrong in direction, magnitude AND centre: zoom 2 NARROWS the frame from the old 1.818 units to
+    // 1.0, and the old centre [0.25, 0] gave τ ∈ [−0.25, 0.75] — still one period, but offset, so a
+    // quarter of the frame duplicated the right-hand quarter by periodicity and τ sat at 86 %, near
+    // the edge. The framing is corrected to the one the sentence describes. (Review follow-up C.)
+    zoom: 2,
     center: [0.5, 0],
     criticalPoint: [0.5470656, 0],
   },
@@ -225,8 +242,12 @@ export const paramPresets: Record<PresetName, Preset> = {
 export const dynPresets: Record<PresetName, Preset> = {
   mandelbrot: {
     f: "z^2+c",
-    c: ".2541-.0333*i",
-    z0: ".2541-.0333*i",
+    // `c` is overwritten by `syncDynamicalC` from the parameter plane's white point; it is kept in
+    // step here so the preset reads as one view rather than two. `z0` is the CRITICAL POINT, which
+    // is the orbit worth opening on: for the rabbit it is the superattracting 3-cycle, so the drawn
+    // orbit closes on itself and the inspector reports "period 3". (WP10/U3.)
+    c: "-.122561+.744862*i",
+    z0: "0",
     n: "100",
     nplot: "7",
     escape: "abs(z)>2",

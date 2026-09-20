@@ -1,38 +1,33 @@
 /**
  * Plain-text / CSV serialisers for the researcher data-access features (copy the inspector
  * report, export the inspected orbit). Pure (no DOM), so unit-tested; `main.ts` does the
- * clipboard write / file download. Full precision throughout — no rounding — so exported
- * values are exact.
+ * clipboard write / file download. Full precision throughout — no rounding — so an exported number
+ * is the number the engine computed. That is not the same as the number being EXACT, which is why
+ * the inspector report carries each row's rigor level beside it (see `inspectorRows.ts`).
  */
 
 import type { Complex } from "../complex";
-import { argDegrees, formatComplex } from "../complex";
+import { formatComplex } from "../complex";
 import type { InspectResult } from "../render/inspect";
-import type { OrbitFate } from "../render/overlay";
+import { buildInspectorRows } from "./inspectorRows";
 
-const FATE_LABEL: Record<OrbitFate, string> = {
-  escaped: "escapes to infinity",
-  converged: "settles to a fixed point",
-  periodic: "settles into a cycle",
-  undetermined: "no escape or cycle within the iteration limit",
-};
-
-/** The inspected orbit's report as clipboard-friendly plain text (full precision). */
+/**
+ * The inspected orbit's report as clipboard-friendly plain text (full precision).
+ *
+ * The rows come from the same builder the panel uses, so the copied text cannot drift from what is
+ * on screen — before WP6 it did, printing the Koebe distance ESTIMATE as a bare number where the
+ * panel labelled it `≈`. Each line carries its rigor level for the same reason: a number that
+ * leaves the app in someone's clipboard has left its caveat behind unless it takes it along.
+ */
 export function inspectToText(info: InspectResult, point: Complex, plane: "param" | "dyn"): string {
   const lines: string[] = [
     plane === "param"
       ? `Parameter c = ${formatComplex(point)}`
       : `Orbit of z0 = ${formatComplex(point)}`,
-    `Fate: ${FATE_LABEL[info.fate]}`,
   ];
-  if (info.fate === "escaped") lines.push(`Escape time: ${info.escapeIter} iterations`);
-  if (info.period > 0) lines.push(`Period: ${info.period}`);
-  if (info.multiplier && info.multiplierMag !== null) {
-    const deg = argDegrees(info.multiplier);
-    lines.push(`Multiplier: |lambda| = ${info.multiplierMag}, arg = ${deg.toFixed(2)} deg`);
+  for (const { key, value, verdict } of buildInspectorRows(info, plane, "full")) {
+    lines.push(`${key}: ${verdict.level} ${value}`);
   }
-  if (info.rotation) lines.push(`Internal angle: ${info.rotation.p}/${info.rotation.q}`);
-  if (info.distance !== null) lines.push(`Distance to set: ${info.distance}`);
   return lines.join("\n");
 }
 

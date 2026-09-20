@@ -2617,6 +2617,53 @@
   exist, QD delegates to them bit-identically, and `@cas/schwarz` rides them. P2–P3 (peel `@cas/expr/rational`
   + the CD / correspondences float consumers) stay need-driven per ADR-0015.**
 
+---
+
+## 2026-09-16/17 — Complex Dynamics: a full-app review, its twelve work packages, and three follow-ups
+
+A review of `apps/complex-dynamics` ([`docs/review/2026-09-16-complex-dynamics-review/`](../review/2026-09-16-complex-dynamics-review/)),
+remediated as WP1–WP12 (#341) and then reviewed again post-merge, producing follow-ups **A** (#342),
+**B** (#343) and **C**. The per-WP detail lives in that folder's `REMEDIATION-PLAN.md`, where each
+work package carries a DONE block; this entry records the arc and what it changed about method.
+
+**Shape.** WP1–WP12 closed every finding in the report except two carried with a measured reason
+(**I4** satellite-vs-primitive, whose proposed winding criterion does not separate the cases; **I6** a
+custom polynomial's critical point defaulting to 0). Follow-ups A–C then closed twelve defects the
+post-merge review found in that work, plus four false statements the WP docs had asserted.
+
+**What the arc is actually about: a test that asserts the outcome without the mechanism is not a
+guard.** Six of the review's confirmed defects had shipped through a green gate, and in five of them
+the reason was the same:
+
+- a **source grep**, and an *existential* one — "the file contains the fixed expression", satisfied
+  by one fixed site while a second diverged 130 lines away (the df64 `LOG_DEGREE`);
+- a comment **claiming** a coupling the file did not implement (`legend.test.ts` said it was keyed to
+  the shader; nothing read the shader);
+- a test that pinned the **periods** of a mating and not its values, so the regression it named left
+  the file green — and pinning the values was *still* not enough, because the pair it used returns
+  the same answer under both code paths;
+- a fixture that already satisfied the assertion before the key was pressed (three separate gradient
+  tests);
+- a test that read **static markup** instead of driving the engine whose behaviour it described.
+
+The repairs are in kind, not in degree: exhaustive rather than existential, drive the engine rather
+than read its output's markup, and choose the case that *can* fail (found by sweeping nine mating
+pairs under both code paths — exactly one diverges).
+
+**And measurement repeatedly inverted the fix, not just the finding.** The valence rule cannot be a
+distance, because a genuine co-landing gap (1.2e-4) and a genuinely distinct neighbour (2.26e-4) are
+the same size; the discriminator is whether the nearest landing is itself unresolved. The fixed-point
+acceptance band could not be `NEUTRAL_TOL`, a *display* tolerance used as an *acceptance* one, which
+admitted repelling fixed points and made the app print "c ∈ Mandelbrot set" for a parameter outside
+it. Four numbers the WP docs offered as evidence were wrong, one of them inverting the conclusion it
+supported — each re-measured and corrected in place with the correction recorded.
+
+**Not done, on the record:** the ADR-0044 nav-header removal (N1–N6); the graded high-resolution
+export (the vignette is a function of position in the whole frame, so a strip needs its offset as a
+new uniform and the check is pixel parity — the app says the export is ungraded meanwhile).
+
+---
+
 ## 2026-09-20 · branch claude/inspiring-keller-5sizwl — Contour Integration M8: the shell rebuild (ADR-0043)
 
 The M8 findings, folded in per [ADR-0043](../DECISIONS.md) action item 2. The step-by-step record —

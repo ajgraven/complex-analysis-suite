@@ -194,6 +194,49 @@ describe("generalMate — the general second parent (Boyd–Henriksen F_{u,v})",
     expect(near(ba.v, cinv(ab.u), 2e-3)).toBe(true);
   });
 
+  // WP6 (review 2026-09-16). The narrow seed sweep carried the claim "broad enough … for periods up
+  // to ~7". Measured, it reaches every non-diagonal mating to period 6 and NONE at period 7 — 1/7 ⊔ 2/7,
+  // 1/7 ⊔ 1/3 and 1/3 ⊔ 1/7 all failed in both argument orders, while the diagonal 1/7 ⊔ 1/7 succeeded
+  // because it is gated by the cheaper self-swap u·v = 1 instead. The wide fallback reaches them, and
+  // it cannot manufacture a wrong map: swap-consistency and the period validation are the same gates,
+  // so extra seeds only supply more candidates for them to reject.
+  it("period 7 mates — the wide seed fallback, which the narrow sweep alone does not reach", () => {
+    const m = must(mateBulbs(1, 7, 2, 7));
+    expect(m.periodA).toBe(7);
+    expect(m.periodB).toBe(7);
+    // Non-diagonal, so the map had to be confirmed from BOTH argument orders. Check the invariant
+    // that confirmation asserts, rather than trusting that it ran.
+    const ba = must(generalMate(bulbCenter(2, 7), bulbCenter(1, 7)));
+    expect(near(ba.u, cinv(m.v), 4e-3)).toBe(true);
+    expect(near(ba.v, cinv(m.u), 4e-3)).toBe(true);
+  });
+
+  it("widening the sweep did not move an answer the narrow one already had", () => {
+    // 1/3 ⊔ 1/4 is reached by the narrow sweep, so the fallback never runs for it.
+    //
+    // ⚠ This claimed to be "pinned at the values measured before the fallback landed", and pinned
+    // no values: it asserted the two PERIODS and the swap invariant, both of which hold whichever
+    // sweep answered. Reversing the loop to run GEN_SEED_SCALES_WIDE first — exactly the regression
+    // the sentence names — left the file 30/30 green, so the commit's central safety claim ("every
+    // mating the narrow sweep already produced comes back bit-identical") had no guard at all.
+    //
+    // Adding the u/v values was not enough either, and measuring is what showed it: for 1/3 ⊔ 1/4
+    // BOTH sweep orders return the same answer to nine decimals, so that pair is incapable of
+    // detecting the swap whatever is asserted about it. Sweeping nine pairs under both orders found
+    // exactly one where they diverge — **1/2 ⊔ 1/5**, and not subtly: u goes from −0.436−0.287i to
+    // 1.707−0.024i. A regression test needs a case that can fail. (Review follow-up C.)
+    const m = must(mateBulbs(1, 2, 1, 5));
+    expect(m.periodA).toBe(2);
+    expect(m.periodB).toBe(5);
+    expect(m.u[0]).toBeCloseTo(-0.436003112, 8);
+    expect(m.u[1]).toBeCloseTo(-0.286769762, 8);
+    expect(m.v[0]).toBeCloseTo(0.91916242, 8);
+    expect(m.v[1]).toBeCloseTo(1.081781224, 8);
+    const ba = must(mateBulbs(1, 5, 1, 2));
+    expect(near(ba.u, cinv(m.v), 2e-3)).toBe(true);
+    expect(near(ba.v, cinv(m.u), 2e-3)).toBe(true);
+  });
+
   it("hyperbolic scope: refuses a Misiurewicz or non-PCF parent", () => {
     expect(generalMate([0, 1], BASILICA)).toBeNull(); // z²+i is Misiurewicz (preperiod > 0)
     expect(generalMate([2, 0], BASILICA)).toBeNull(); // 0 escapes — not PCF

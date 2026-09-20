@@ -69,7 +69,7 @@ export const GLOSSARY: GlossaryEntry[] = [
   {
     id: "profiles",
     term: "Profiles",
-    defn: "Use-case bundles of display / quality / instrument settings, applied in one click from the app bar and remembered across sessions. Explore is a balanced default; Artist maxes out visual quality (lighting, post-processing, anti-aliasing); Researcher raises accuracy and opens the metrics panel; Educator turns on the structure-revealing overlays; Performance strips everything back for slow devices or fast panning; Deep zoom turns on perturbation and auto-iterations for z²+c. A profile re-skins the current view — it never changes your formula, parameter, or zoom — and editing any setting afterwards shows the picker as 'Custom'.",
+    defn: "Use-case bundles of display / quality / instrument settings, applied in one click from the app bar and remembered across sessions. Explore is a balanced default; Artist goes for the still image — lighting, post-processing and a large canvas, anti-aliased by idle refine (the temporal accumulator, which converges to high quality without the per-frame cost of supersampling) rather than by spatial AA, which stays at 1×; Researcher raises accuracy and opens the metrics panel; Educator turns on the structure-revealing overlays; Performance strips everything back for slow devices or fast panning; Deep zoom turns on perturbation and auto-iterations for z²+c. A profile re-skins the current view — it never changes your formula, parameter, or zoom — and editing any setting afterwards shows the picker as 'Custom'.",
   },
   {
     id: "period",
@@ -126,7 +126,7 @@ export const GLOSSARY: GlossaryEntry[] = [
   {
     id: "distance-estimate",
     term: "Distance estimate",
-    defn: "An estimate of the distance from a point to the set, from the orbit and its running derivative — used to draw crisp, resolution-independent boundary filaments.",
+    defn: "An estimate of the distance from a point to the set, from the orbit and its running derivative — used to draw crisp, resolution-independent boundary filaments, and reported for an inspected escaping point. It is an estimate within a factor of a few and is always labelled ≈: the Koebe ¼ theorem places the true distance between d/4 and 4d. Measured on cases with an exact answer it runs from about 0.46× the truth just outside the cardioid cusp to about 2× at the real tip c = −2, and is exact on the unit disk (c = 0).",
     latex: "d \\approx \\frac{|z|\\,\\log|z|}{|z'|}",
   },
   {

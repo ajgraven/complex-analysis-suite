@@ -178,3 +178,90 @@ describe("createComputeClient (worker path)", () => {
     expect(c.client.busy()).toBe(false);
   });
 });
+
+// ── A worker FAILURE must reach the caller (CD review 2026-09-16, WP6) ────────────────────────
+// `fromMessage` may return `{ reqId, error }` with no result. That response used to be dropped:
+// `inFlight` cleared but no callback fired, so a caller showing "computing…" showed it for ever.
+// Complex Dynamics' metrics worker already posted exactly that shape on a throw, and its
+// Julia-properties rows sat at "measuring…" indefinitely with nothing on screen explaining why.
+describe("createComputeClient — worker errors", () => {
+  // jsdom has no Worker, so the client would silently take the SYNC path and these tests would pass
+  // vacuously on the wrong branch. Install a global the way the worker-path suite above does.
+  let savedWorker: unknown;
+  beforeEach(() => {
+    savedWorker = (globalThis as { Worker?: unknown }).Worker;
+    (globalThis as { Worker?: unknown }).Worker = class {} as unknown;
+  });
+  afterEach(() => {
+    (globalThis as { Worker?: unknown }).Worker = savedWorker;
+  });
+
+  /** A worker stub whose next response is a failure. */
+  class FailingWorker {
+    onmessage: ((e: MessageEvent) => void) | null = null;
+    onerror: ((e: unknown) => void) | null = null;
+    postMessage(msg: { reqId: number }): void {
+      queueMicrotask(() => this.onmessage?.({ data: { reqId: msg.reqId, error: "boom" } } as MessageEvent));
+    }
+    terminate(): void {}
+  }
+
+  const make = (onError?: (m: string) => void) =>
+    createComputeClient<number, number>({
+      compute: (n) => n * 2,
+      worker: () => new FailingWorker() as unknown as Worker,
+      toMessage: (n, reqId) => ({ reqId, n }),
+      fromMessage: (d) => d as { reqId: number; result?: number; error?: string },
+      onError,
+      deferSync: false,
+    });
+
+  it("calls onError, and does not call the result callback", async () => {
+    const errors: string[] = [];
+    const results: number[] = [];
+    make((m) => errors.push(m)).request(21, (r) => results.push(r));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(errors).toEqual(["boom"]);
+    expect(results).toEqual([]);
+  });
+
+  it("is unchanged for a caller that passes no handler", async () => {
+    // The anti-regression clause: `onError` is optional, so a caller that omits it still gets the
+    // pre-WP6 behaviour — the failure is dropped, exactly as before.
+    //
+    // ⚠ This used to say "`createComputeClient` has three consumers and only this app's passes
+    // `onError`", and the title said "the other two consumers". Grepped: there is exactly ONE
+    // consumer, Complex Dynamics' `juliaMetricsClient`. The contract is still worth pinning for the
+    // next one; the count was invented. (Review follow-up C.)
+    const results: number[] = [];
+    expect(() => make().request(21, (r) => results.push(r))).not.toThrow();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(results).toEqual([]);
+  });
+
+  it("still delivers a normal result when the worker succeeds", async () => {
+    class OkWorker {
+      onmessage: ((e: MessageEvent) => void) | null = null;
+      onerror: ((e: unknown) => void) | null = null;
+      postMessage(msg: { reqId: number; n: number }): void {
+        queueMicrotask(() =>
+          this.onmessage?.({ data: { reqId: msg.reqId, result: msg.n * 2 } } as MessageEvent),
+        );
+      }
+      terminate(): void {}
+    }
+    const results: number[] = [];
+    const errors: string[] = [];
+    createComputeClient<number, number>({
+      compute: (n) => n * 2,
+      worker: () => new OkWorker() as unknown as Worker,
+      toMessage: (n, reqId) => ({ reqId, n }),
+      fromMessage: (d) => d as { reqId: number; result?: number; error?: string },
+      onError: (m) => errors.push(m),
+      deferSync: false,
+    }).request(21, (r) => results.push(r));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(results).toEqual([42]);
+    expect(errors).toEqual([]);
+  });
+});

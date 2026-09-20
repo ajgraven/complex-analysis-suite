@@ -56,6 +56,10 @@ describe("SHARE_IDS DOM coverage", () => {
         // Persisted UI preferences — deliberately per-device, not per-view. Sharing them would let a
         // link re-open someone else's sidebar and badge settings.
         [["suggestions", "legend-toggle", "bla-toggle", "orbit-preview-toggle"], "persisted pref"],
+        // A transient paste area: the map it carries is applied on Load, and what is applied IS in
+        // the shared state. Carrying the raw text as well would put a second, stale copy of the map
+        // in every link. (WP10's import dialog, which replaced a `window.prompt`.)
+        [["import-dialog-text"], "transient input"],
         // Export settings: properties of the file you are about to write, not of the view.
         [
           [
@@ -76,8 +80,6 @@ describe("SHARE_IDS DOM coverage", () => {
           ],
           "export setting",
         ],
-        // Riemann-sphere view: documented MVP exclusion (the 3D camera is not serialized).
-        [["sphere-param", "sphere-dyn", "sphere-light"], "sphere MVP exclusion"],
         // Inputs to a one-shot tool: they parameterise a button press, and the RESULT is what the
         // view carries. Re-running the tool on load would be a side effect, not a restored view.
         [
@@ -187,5 +189,17 @@ describe("SHARE_IDS DOM coverage", () => {
     // NEW control reusing that id slip past the guard above.
     const stale = Object.keys(NOT_SHARED).filter((id) => !indexHtml.includes(`id="${id}"`));
     expect(stale).toEqual([]);
+  });
+
+  it("nothing is in BOTH lists — an exemption for a shared control is a lie that also blinds", () => {
+    // The guard above is `!shared.has(id) && !(id in NOT_SHARED)`, so an id in BOTH passes in
+    // silence. WP7 added `sphere-param`/`sphere-dyn`/`sphere-light` to SHARE_IDS and left them in
+    // the opt-out list under the comment "the 3D camera is not serialized" — which WP7 itself made
+    // false. Measured at the time: deleting all three from SHARE_IDS, a full revert of WP7/S3's
+    // codec half, left this file 7/7 green. Neither existing test can see it — the forward one
+    // because the exemption excuses it, the stale-entry one because it only asks whether the id is
+    // still in the markup. (Review follow-up C.)
+    const both = SHARE_IDS.filter((id) => id in NOT_SHARED);
+    expect(both, "these ids are both shared and exempted from being shared").toEqual([]);
   });
 });

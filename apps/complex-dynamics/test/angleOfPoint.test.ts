@@ -177,3 +177,73 @@ describe("landing memo (cd-render-08)", () => {
     expect(wide.angles.length).toBeGreaterThanOrEqual(narrow.angles.length);
   });
 });
+
+// ── WP4 / I3 (review 2026-09-16): valence is a decision, not a proximity count ────────────────
+// Co-landing was decided at 5e-3 — a screen distance, not a landing error — so the finder counted
+// every ray that landed anywhere nearby and then printed the point as "biaccessible".
+describe("angles of a point — a ray counts only if it lands THERE", () => {
+  it("β is univalent: exactly one ray lands at the basilica's β fixed point", () => {
+    // β = the repelling fixed point on the real axis; only θ = 0 lands there. At 5e-3 this
+    // reported valence 21, every one of them spurious, and called β biaccessible.
+    const r = nearestDynamicalAngles([1.618034, 0], [-1, 0]);
+    expect(r.valence).toBe(1);
+    expect(r.biaccessible).toBe(false);
+    expect(r.angles[0].p / r.angles[0].q).toBeCloseTo(0, 12);
+  });
+
+  it("the tip of ∂M is univalent: only θ = 1/2 lands at c = −2", () => {
+    // Reported valence 33 at 5e-3.
+    const r = nearestParameterAngles([-2, 0]);
+    expect(r.valence).toBe(1);
+    expect(r.angles[0].p / r.angles[0].q).toBeCloseTo(0.5, 12);
+  });
+
+  it("still finds the genuine co-landings it always found", () => {
+    // The anti-vacuity clause: tightening must remove the false rays and no others. Both of these
+    // are identical at 5e-3, 1e-6, 1e-9 and 1e-12 — a real co-landing agrees to ~1e-16.
+    expect(nearestDynamicalAngles([-0.618034, 0], [-1, 0]).valence).toBe(2); // basilica α
+    expect(nearestDynamicalAngles([-0.276, 0.4797], [-0.122561, 0.744862]).valence).toBe(3); // rabbit α
+    expect(nearestParameterAngles([-0.75, 0]).valence).toBe(2); // the period-2 root
+  });
+
+  // The OTHER direction of the same tightening, missed when it landed. `lamination.ts` drops an
+  // unrefined landing ("Newton did not converge, so the error is the ray-tracing step rather than
+  // machine precision"); this module kept them but, at 1e-9, they can pair with nothing — so a
+  // genuine co-landing was silently SPLIT and the finder under-counted, printing a bare number.
+  // Over-counting became under-counting, which is worse: valence 21 at β is obviously wrong, while
+  // "Not biaccessible (valence 1)" at a component root is plausible and false. (Review follow-up.)
+  describe("an unresolved ray makes the valence a lower bound, not a smaller number", () => {
+    // A primitive period-n component root's two rays differ by exactly 1/(2ⁿ−1) — exact
+    // combinatorics, no numerics needed to know they co-land.
+    const UNRESOLVED: [string, [number, number]][] = [
+      ["period-6 root, rays 13/21 and 40/63", [-1.28418, -0.4271]],
+      ["period-6 root, rays 5/21 and 16/63", [-0.21745, 1.1145]],
+      ["real period-5 root, rays 15/31 and 16/31", [-1.98537, 0]],
+    ];
+    for (const [name, c] of UNRESOLVED) {
+      it(`refuses to state a valence at the ${name}`, () => {
+        const r = nearestParameterAngles(c);
+        expect(r.exact, "an unresolved landing sits here").toBe(false);
+        // What must NOT happen: a confident count. Before this, all three read valence 1 and
+        // "Not biaccessible" — the co-landing split by a tolerance the rays could not meet.
+        expect(r.biaccessible, "so biaccessibility is not asserted either way").toBe(false);
+        expect(r.valence, "and the count carried is a floor, not an answer").toBeLessThan(2);
+      });
+    }
+
+    it("leaves every resolved point exactly as it was", () => {
+      // The clause that stops the fix being 'mark everything uncertain': these all resolve, so they
+      // must still report `exact` and their real valence.
+      for (const [name, c, v] of [
+        ["cardioid cusp", [0.25, 0], 1],
+        ["period-2 root", [-0.75, 0], 2],
+        ["1/3 bulb root", [-0.125, 0.649519], 2],
+        ["the tip", [-2, 0], 1],
+      ] as [string, [number, number], number][]) {
+        const r = nearestParameterAngles(c);
+        expect(r.exact, name).toBe(true);
+        expect(r.valence, name).toBe(v);
+      }
+    });
+  });
+});

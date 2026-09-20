@@ -481,21 +481,21 @@ describe("packBLATable (GPU texture layout)", () => {
 
 // --- BLA for general polynomials f = P(z) + B·c (Stage 3c) ---------------------------------------
 /** Reference orbit Z_0…Z_M for f = P(z) + B·c (Z_0 = 0). */
-function referenceOrbitPolyGen(coeffs: Complex[], B: Complex, c0: Complex, M: number): Complex[] {
+function referenceOrbitPolyGen(coeffs: Complex[], B: Complex, cRef: Complex, steps: number): Complex[] {
   const d = coeffs.length - 1;
-  const ref: Complex[] = [[0, 0]];
+  const orbit: Complex[] = [[0, 0]];
   let z: Complex = [0, 0];
-  for (let k = 0; k < M; k++) {
+  for (let k = 0; k < steps; k++) {
     let r: Complex = [coeffs[d][0], coeffs[d][1]];
     for (let j = d - 1; j >= 0; j--) r = cadd(cmul(r, z), coeffs[j]); // P(z) via Horner
-    z = [r[0] + B[0] * c0[0] - B[1] * c0[1], r[1] + B[0] * c0[1] + B[1] * c0[0]];
-    ref.push(z);
+    z = [r[0] + B[0] * cRef[0] - B[1] * cRef[1], r[1] + B[0] * cRef[1] + B[1] * cRef[0]];
+    orbit.push(z);
     if (z[0] * z[0] + z[1] * z[1] > 4) break; // truncate at the bailout, as production does
   }
-  return ref;
+  return orbit;
 }
 function truePerturbPolyStep(
-  ref: Complex[],
+  refOrbit: Complex[],
   m: number,
   dz0: Complex,
   dc: Complex,
@@ -504,14 +504,14 @@ function truePerturbPolyStep(
   B: Complex,
 ): Complex {
   let dz = dz0;
-  for (let k = 0; k < l; k++) dz = polyStep(ref[m + k], dz, coeffs, B, dc);
+  for (let k = 0; k < l; k++) dz = polyStep(refOrbit[m + k], dz, coeffs, B, dc);
   return dz;
 }
 
 describe("BLA table (general polynomial f = P(z) + B·c)", () => {
   const gMaxC = 1e-15;
   const B: Complex = [1, 0];
-  const c0: Complex = [-0.05, 0.03]; // small |c| ⇒ a bounded reference for all these polynomials
+  const cRef: Complex = [-0.05, 0.03]; // small |c| ⇒ a bounded reference for all these polynomials
   const M2 = 200;
   const cases: { name: string; coeffs: Complex[] }[] = [
     { name: "z^3-z", coeffs: [[0, 0], [-1, 0], [0, 0], [1, 0]] },
@@ -520,9 +520,9 @@ describe("BLA table (general polynomial f = P(z) + B·c)", () => {
     { name: "z^3+0.3i·z", coeffs: [[0, 0], [0, 0.3], [0, 0], [1, 0]] },
   ];
   for (const { name, coeffs } of cases) {
-    const ref = referenceOrbitPolyGen(coeffs, B, c0, M2);
+    const refOrbit = referenceOrbitPolyGen(coeffs, B, cRef, M2);
     it(`${name}: a skip reproduces the true polynomial step WITHIN its radius`, () => {
-      const levels = buildBLATablePoly(ref, gMaxC, coeffs, B);
+      const levels = buildBLATablePoly(refOrbit, gMaxC, coeffs, B);
       let checked = 0;
       for (let k = 0; k < levels.length; k++) {
         for (let i = 0; i < levels[k].length; i += Math.max(1, (levels[k].length / 8) | 0)) {
@@ -536,7 +536,8 @@ describe("BLA table (general polynomial f = P(z) + B·c)", () => {
               for (const ac of angles) {
                 const dc: Complex = [mag * Math.cos(ac), mag * Math.sin(ac)];
                 const approx = applyBLA(bla, dz, dc);
-                const truth = truePerturbPolyStep(ref, m, dz, dc, bla.l, coeffs, B);
+                const truth = truePerturbPolyStep(
+            refOrbit, m, dz, dc, bla.l, coeffs, B);
                 const err = cabs([approx[0] - truth[0], approx[1] - truth[1]]);
                 expect(err).toBeLessThan(1e-5 * cabs(truth) + 1e-9);
                 checked++;
@@ -553,9 +554,9 @@ describe("BLA table (general polynomial f = P(z) + B·c)", () => {
     for (const degree of [2, 3, 4]) {
       const coeffs: Complex[] = Array.from({ length: degree + 1 }, () => [0, 0] as Complex);
       coeffs[degree] = [1, 0]; // z^d
-      const ref = referenceOrbitPolyGen(coeffs, B, [-0.1, 0], M2);
-      const poly = buildBLATablePoly(ref, gMaxC, coeffs, B);
-      const mono = buildBLATable(ref, gMaxC, degree);
+      const refOrbit = referenceOrbitPolyGen(coeffs, B, [-0.1, 0], M2);
+      const poly = buildBLATablePoly(refOrbit, gMaxC, coeffs, B);
+      const mono = buildBLATable(refOrbit, gMaxC, degree);
       for (let m = 3; m < 10; m++) {
         const da = cabs([poly[0][m].a[0] - mono[0][m].a[0], poly[0][m].a[1] - mono[0][m].a[1]]);
         expect(da).toBeLessThan(1e-12);

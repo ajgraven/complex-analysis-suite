@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { parse } from "@cas/expr/parser";
 import { makeComplexFn } from "@cas/expr/evaluate";
-import { inspect, rotationNumber, findNucleus } from "../src/render/inspect";
+import { inspect, rotationNumber, findNucleus, fatouComponentType } from "../src/render/inspect";
 import type { Complex } from "../src/complex";
 
 const F = parse("z^2+c"); // Mandelbrot / Julia map
@@ -171,5 +171,183 @@ describe("findNucleus", () => {
   it("returns null for a non-holomorphic map (no analytic derivative)", () => {
     const bar = parse("conjugate(z)^2+c");
     expect(findNucleus(bar, O, 2, [-0.9, 0.1])).toBeNull();
+  });
+});
+
+// ── WP2 / I1 (review 2026-09-16): the exterior distance estimate ──────────────────────────────
+// It used to stop iterating the moment `escape(z, c)` fired — which is exactly where |z| is
+// smallest and ln|z| is closest to zero, so the quotient was noise. At the default `abs(z) > 2`
+// the estimate at c = −2.01 came back 70× too large. It now carries the orbit on to DE_RADIUS,
+// and the leading ½ is gone (it was a systematic 2× under-read and contradicted the README).
+//
+// Truths: the unit disk is analytic (K for c = 0 is |z| ≤ 1); the real tip of M is exactly −2;
+// the cardioid distances were computed by minimising |c − (e^{iθ}/2 − e^{2iθ}/4)| over θ to
+// machine precision — note these are NOT the naive "0.26 − 0.25" values, because the cusp wraps
+// to the RIGHT of ¼, so c = 0.26 is 1.96e-3 from M rather than 1e-2.
+describe("inspect — the exterior distance estimate is honest", () => {
+  const ratio = (got: number | null, truth: number): number => (got ?? NaN) / truth;
+
+  it("is exact on the one case that has an exact answer (K = the unit disk, c = 0)", () => {
+    // Nothing else pins the CONSTANT: the disk is where d ≈ |z|ln|z|/|z'| is an equality in the
+    // limit, so a stray factor shows up here and nowhere else. The old ½ read 0.502.
+    expect(ratio(inspect(F, ESC, "dyn", [1.01, 0], [0, 0]).distance, 0.01)).toBeCloseTo(1, 1);
+    expect(ratio(inspect(F, ESC, "dyn", [1.0001, 0], [0, 0]).distance, 1e-4)).toBeCloseTo(1, 1);
+  });
+
+  it("stays inside the Koebe factor-of-4 band on the parameter plane", () => {
+    // d/4 ≤ true ≤ 4d is a THEOREM, not slack in the implementation — no constant makes this
+    // sharp, which is why the row is labelled ≈.
+    const cases: Array<[string, [number, number], number]> = [
+      ["real tip c = −2.01", [-2.01, 0], 1.0e-2],
+      ["cusp c = 0.26", [0.26, 0], 1.9612e-3],
+      ["cusp c = 0.2501", [0.2501, 0], 1.9996e-6],
+      ["c = 0.3", [0.3, 0], 2.0412e-2],
+    ];
+    for (const [name, c, truth] of cases) {
+      const r = ratio(inspect(F, ESC, "param", O, c).distance, truth);
+      expect(r, `${name}: estimate/truth = ${r}`).toBeGreaterThan(0.25);
+      expect(r, `${name}: estimate/truth = ${r}`).toBeLessThan(4);
+    }
+  });
+
+  it("no longer reads 70× high at the real tip (the defect this closes)", () => {
+    // The specific number from the review. Stopping at the predicate gave 0.70 for a true 0.01.
+    const d = inspect(F, ESC, "param", O, [-2.01, 0]).distance ?? NaN;
+    expect(d).toBeLessThan(0.1); // 10× the truth; the old code returned ~0.70
+  });
+
+  it("reports nothing when the predicate fires on something other than divergence", () => {
+    // The magnet family escapes on CONVERGENCE to its fixed point z = 1, so |z| stays bounded and
+    // an EXTERIOR distance estimate is meaningless there. Silence beats a confident wrong number.
+    const magnetF = parse("((z^2+c-1)/(2*z+c-2))^2");
+    const magnetEsc = parse("if(abs(z)>3,true,abs(z-1)<0.001)");
+    const r = inspect(magnetF, magnetEsc, "dyn", [1.0001, 0], [1.5, 0.5]);
+    expect(r.distance).toBeNull();
+  });
+});
+
+// ── WP4 / I7 (review 2026-09-16): a Newton solve must land where it was sent ──────────────────
+describe("findNucleus — refuses a centre of the wrong period", () => {
+  // Every period-2 centre is also a root of g(c) = f⁴(0) − 0, so Newton had no reason to prefer the
+  // period-4 one. The advice to "seed it inside the component" was never enforced, and the result
+  // was snapped to and reported as the nucleus the user asked for.
+  it("does not return the period-2 centre when asked for period 4", () => {
+    // From inside the 1/2 bulb this returned c = −1 — a genuine nucleus, of the wrong period.
+    expect(findNucleus(F, O, 4, [-0.9, 0.05])).toBeNull();
+  });
+
+  it("does not return the cardioid centre when asked for period 3 from far away", () => {
+    // This returned c = 0, the period-1 centre, 0.85 away from the seed.
+    expect(findNucleus(F, O, 3, [0.6, 0.6])).toBeNull();
+  });
+
+  it("still finds every nucleus it was finding before", () => {
+    // The anti-vacuity clause: the guard must reject only the wrong-period answers.
+    const half = findNucleus(F, O, 2, [-0.9, 0.05]);
+    expect(half?.[0]).toBeCloseTo(-1, 9);
+    const rabbit = findNucleus(F, O, 3, [-0.12, 0.75]);
+    expect(rabbit?.[0]).toBeCloseTo(-0.122561, 5);
+    expect(rabbit?.[1]).toBeCloseTo(0.744862, 5);
+    const p4 = findNucleus(F, O, 4, [-1.31, 0.01]);
+    expect(p4?.[0]).toBeCloseTo(-1.310703, 5);
+  });
+});
+
+// ── WP5 / I5 (review 2026-09-16): the indifferent verdicts are reachable at last ──────────────
+// `classifyOrbit` decides a cycle by waiting for the orbit to return within 1e-6 in ≤ 512
+// iterations. That is a convergence-SPEED test, and it fails exactly where the interesting
+// parameters are. Measured before the fallback existed: the golden-mean Siegel point, the parabolic
+// c = −3/4, the cusp c = 1/4, the 1/3 root — and an ATTRACTING c at |λ| = 0.99 — every one reported
+// `fate: "undetermined"`, period 0 and no multiplier. So the Siegel / Cremer / parabolic verdicts
+// the README documents could not be reached from a click at all.
+describe("inspect — indifferent and slow parameters are classified exactly", () => {
+  /** c on the cardioid at internal angle θ: c = μ/2 − μ²/4 with μ = e^{2πiθ}. */
+  const cardioid = (t: number): Complex => {
+    const m: Complex = [Math.cos(2 * Math.PI * t), Math.sin(2 * Math.PI * t)];
+    const m2: Complex = [m[0] * m[0] - m[1] * m[1], 2 * m[0] * m[1]];
+    return [m[0] / 2 - m2[0] / 4, m[1] / 2 - m2[1] / 4];
+  };
+  const classify = (c: Complex): string | null => {
+    const r = inspect(F, ESC, "param", O, c);
+    return fatouComponentType(r.multiplier, r.multiplierMag)?.type ?? null;
+  };
+
+  it("classifies the parabolic points on the cardioid", () => {
+    expect(classify(cardioid(0.5))).toBe("parabolic"); // c = −3/4, the period-2 root
+    expect(classify(cardioid(1 / 3))).toBe("parabolic"); // the 1/3 root
+    // The CUSP, c = 1/4. Here f(z) − z has a DOUBLE root, Durand–Kerner gets only √ε, and the
+    // spurious imaginary part put θ at ~1e-8 instead of 0 — so the app reported a Siegel disc at the
+    // one point on the cardioid where everyone can see there is none.
+    expect(classify(cardioid(0))).toBe("parabolic");
+  });
+
+  it("classifies the golden-mean Siegel point", () => {
+    expect(classify(cardioid((Math.sqrt(5) - 1) / 2))).toBe("siegel");
+  });
+
+  it("classifies a slowly-attracting parameter the orbit test could not settle", () => {
+    // |λ| = 0.99 needs ≈ 1,375 iterations to return within 1e-6; the budget is 512.
+    const lam = 0.99;
+    const mu: Complex = [lam * Math.cos(1), lam * Math.sin(1)];
+    const mu2: Complex = [mu[0] * mu[0] - mu[1] * mu[1], 2 * mu[0] * mu[1]];
+    const c: Complex = [mu[0] / 2 - mu2[0] / 4, mu[1] / 2 - mu2[1] / 4];
+    const r = inspect(F, ESC, "param", O, c);
+    expect(r.period).toBe(1);
+    expect(r.multiplierMag ?? 0).toBeCloseTo(0.99, 6);
+    expect(fatouComponentType(r.multiplier, r.multiplierMag)?.type).toBe("attracting");
+  });
+
+  it("declines where the attractor is a genuine higher-period cycle", () => {
+    // In the 1/2 bulb α is REPELLING, so the fixed-point fallback must not answer — the settled-cycle
+    // path does, with period 2. NOTE this is not the fallback's anti-vacuity clause, though it was
+    // labelled as one: `classifyOrbit` settles c = −1 inside the budget, so `fate` is "periodic" and
+    // the fallback is never REACHED. Replacing its whole branch with `false` leaves this green. The
+    // cases that do reach it are below — they need an orbit the budget cannot decide.
+    const r = inspect(F, ESC, "param", O, [-1, 0]);
+    expect(r.period).toBe(2);
+  });
+
+  // --- The fallback's real decline rule (review follow-up, finding 1) ------------------------
+  //
+  // The band was NEUTRAL_TOL = 1e-3, a *display* tolerance used as an *acceptance* one, so a fixed
+  // point with |λ| up to 1.001 — repelling — was accepted, and `fate` was overwritten to
+  // "converged". Both parameters below reach the fallback (their orbits are genuinely undecided at
+  // the budget) and both have a repelling α, so both must be refused.
+
+  it("refuses a REPELLING α, and the orbit's fate stays unknown", () => {
+    // c = 0.25001 is OUTSIDE M — the critical orbit escapes, at iteration 990, well past the budget.
+    // |λ_α| = 1.00002: inside the old 1e-3 band, seven orders outside the new one.
+    const r = inspect(F, ESC, "param", O, [0.25001, 0]);
+    expect(r.fate, "the orbit neither escaped nor closed within the budget").toBe("undetermined");
+    expect(r.period, "no cycle is claimed").toBe(0);
+    expect(r.multiplier, "and no multiplier to classify a component from").toBeNull();
+    expect(fatouComponentType(r.multiplier, r.multiplierMag)).toBeNull();
+  });
+
+  it("refuses a repelling α inside M too — the refusal is about λ, not about membership", () => {
+    // c = −0.7501 IS in M (the 1/2 bulb, attracting 2-cycle at |λ₂| = 0.9996, which needs ≈ 3,500
+    // iterations). α is repelling at |λ| = 1.0001, so the fallback must decline here as well —
+    // before this fix it reported period 1 at the REPELLING α and a Lyapunov exponent of the wrong
+    // SIGN (+1e-4 against a true −2.0e-4).
+    const r = inspect(F, ESC, "param", O, [-0.7501, 0]);
+    expect(r.fate).toBe("undetermined");
+    expect(r.period).toBe(0);
+  });
+
+  it("but still answers every genuinely indifferent α — the band did not over-tighten", () => {
+    // The other direction, and the reason the band is 1e-12 rather than 0: these are the parameters
+    // the fallback exists for, and each lands within 2.3e-16 of |λ| = 1 through this code path.
+    // The cusp is the special one — a DOUBLE root, whose |λ| carries √ε ≈ 1e-8 of error — so it is
+    // decided by the collision before the band is consulted at all.
+    for (const [name, t] of [
+      ["golden-mean Siegel", (Math.sqrt(5) - 1) / 2],
+      ["parabolic 1/2", 0.5],
+      ["parabolic 1/3", 1 / 3],
+      ["the cusp (double root)", 0],
+    ] as [string, number][]) {
+      const r = inspect(F, ESC, "param", O, cardioid(t));
+      expect(r.period, name).toBe(1);
+      expect(fatouComponentType(r.multiplier, r.multiplierMag), name).not.toBeNull();
+    }
   });
 });
