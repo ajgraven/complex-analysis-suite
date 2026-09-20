@@ -179,7 +179,7 @@ export function buildDeclaration(d: Declaration): BuiltDeclaration {
       ok: false,
       reason:
         `the branch point is declared at z = ${d.at}, and the single-factor residue reader is about ` +
-        "the ORIGIN: it computes Res(z^α·R, z₀) = z₀^α·Res(R, z₀), so a factor at b ≠ 0 would need " +
+        "the origin: it computes Res(z^α·R, z₀) = z₀^α·Res(R, z₀), so a factor at b ≠ 0 would need " +
         "(z₀ − b)^α and there is nowhere in a PowerFactor to put b. A branch point away from the " +
         "origin needs the multi-point engine, which carries its positions exactly",
     };

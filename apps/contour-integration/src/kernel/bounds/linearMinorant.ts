@@ -128,7 +128,7 @@ export function dampedArcIntegral(upper: Frac, face: MinorantFace): DampedArcInt
       withinMinorant: false,
       certificate: refuse(
         `∫₀^{${asPi(upper)}} e^{−κ cos ψ} dψ`,
-        `the range runs past π/2, where cos ψ < 0 and e^{−κ cos ψ} GROWS — at ψ = π it is e^{+κ}. ` +
+        `the range runs past π/2, where cos ψ < 0 and e^{−κ cos ψ} grows rather than decays — at ψ = π it is e^{+κ}. ` +
           "There is no bound of this shape at any constant, and $\\cos \\varphi \\ge 1 - 2\\varphi/\\pi$ " +
           "reverses there: both sides agree at $\\pi/2$ and at $\\pi$, with $\\cos$ below the chord between. " +
           "Stated on this range the majorant measures $2.7\\times10^{15}$ at $n = 2$, $R = 6$ and " +

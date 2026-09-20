@@ -26,10 +26,13 @@
 //
 // **FINDING D-2.** Research 03 §8 states this bound as `(M/N^k)·coth(π/2)·4(2N+1)`, which drops the
 // `π` from `π cot(πz)`. That is not a slack bound — it is not a bound: against the measured
-// `|∮ π cot(πz)/z² dz|` it reads 3.392 vs 3.567 at `N = 3` and 0.356 vs 0.493 at `N = 25`, failing by
-// 30–40% at every `N` tested. Both figures are recomputed in this app's own suite, so the wrong
-// statement is refuted by a test rather than only by a paragraph. The corrected bound holds with
-// slack ~2.2× on the same fixtures.
+// `|∮ π cot(πz)/z² dz|` it reads 3.392 vs 3.567 at `N = 3` and 0.356 vs 0.493 at `N = 25`. Both
+// figures are recomputed in this app's own suite, so the wrong statement is refuted by a test rather
+// than only by a paragraph. **The SHORTFALL GROWS with `N` rather than sitting at one figure** —
+// measured, 4.9 % at `N = 3` and 27.8 % at `N = 25` — because the ratio between the two bounds is
+// exactly `π·(N/(N+½))^k`, whose limit is `π`: about 30 % short is the asymptote, not the typical
+// case. (An earlier version of this paragraph read "30–40 % at every `N` tested", which its own two
+// pairs of numbers refute.) The corrected bound holds with slack ~2.2× on the same fixtures.
 import { Frac, QiPoly } from "@cas/exact";
 import { piLower, piUpper } from "@cas/exact";
 import { bound, refuse } from "@cas/rigor";
@@ -119,7 +122,7 @@ export function squareSideBound(
   const n = asHalfInteger(halfWidth);
   if (n === null) {
     const reason =
-      `the square's half-width is ${halfWidth.n}/${halfWidth.d}, which is not N + ½: at an INTEGER ` +
+      `the square's half-width is ${halfWidth.n}/${halfWidth.d}, which is not N + ½: at an integer ` +
       "half-width the vertical sides run through the kernel's poles and sup|K| is infinite, and at " +
       "any other width sup|K| is finite for this one contour but not uniformly bounded as the width " +
       "approaches an integer — so there is no limit argument to make";

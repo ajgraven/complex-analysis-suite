@@ -35,27 +35,49 @@ export type SmallArcResult =
   | { readonly ok: false; readonly certificate: Certificate };
 
 /**
+ * How large a denominator a swept angle may have before it is not a nameable multiple of π, and the
+ * widest sweep that is read at all.
+ *
+ * **A CAP, NOT A LIST — the twin of `ledger.ts`'s `MAX_PI_DENOMINATOR`/`MAX_PI_MULTIPLE`.** This
+ * reader held eight fractions until the cap was measured here: `2/5, 1/5, 5/6, 1/12, 1/8, 3/2, 4/3`
+ * all read `null`, and the large-arc lemma on a `2π/5` arc of `1/(1+z⁵)` refused *"the swept angle is
+ * not a recognised rational multiple of π"* about an arc that is one. M5.4 replaced the list in the
+ * ledger for exactly that reason and the repair landed in one of the two readers, so the two had
+ * different domains. The uniqueness argument is the ledger's, unchanged: two distinct rationals with
+ * denominators at most 12 differ by at least `1/144 = 7e-3`, so the `1e-12` window below admits one
+ * candidate or none and the reading is a decision rather than a fit. Not imported from `ledger.ts`,
+ * which imports this module — the rule is copied, and this copy names its twin.
+ */
+const MAX_PI_DENOMINATOR = 12n;
+const MAX_PI_MULTIPLE = 4;
+
+/**
  * The signed sweep `(θ₁ − θ₀)/π` as an exact rational, for the rational multiples templates produce.
  *
  * Signed, unlike the large-arc extent: the SIGN is the whole difference between indenting above and
  * indenting below, and it is what ties `±iπ·Res` to the `∓iε` prescription rather than to a picture.
+ *
+ * A ZERO sweep answers `null` rather than `0`, which is the one place this parts from the ledger's
+ * `asPiMultiple`: there, zero has to be expressible so that `wedgeArcBound` can refuse an arc that
+ * does not start on the real axis, and `arcExtent` drops it a line later. Here the only consumers are
+ * two lemmas whose contribution would be a vacuous `i·0·Res`, so a degenerate arc is refused at the
+ * reader.
  */
 export function signedSweepOverPi(g: Resolved): Frac | null {
   if (g.kind !== "arc") return null;
   const sweep = (g.theta1 - g.theta0) / Math.PI;
-  for (const [n, d] of [
-    [1n, 1n],
-    [1n, 2n],
-    [1n, 3n],
-    [2n, 3n],
-    [1n, 4n],
-    [3n, 4n],
-    [1n, 6n],
-    [2n, 1n],
-  ] as const) {
-    const q = Number(n) / Number(d);
-    if (Math.abs(sweep - q) < 1e-12) return Frac.of(n, d);
-    if (Math.abs(sweep + q) < 1e-12) return Frac.of(-n, d);
+  if (!Number.isFinite(sweep)) return null; // `BigInt(Math.round(NaN))` throws, so this one bites
+  // A sweep records this clause as EQUIVALENT rather than as a gap, and keeps it: below `1e-12`,
+  // `Math.round(sweep·d)` is `0` for every `d ≤ 12` — the smallest sweep that rounds to a non-zero
+  // numerator is `1/24` — so the loop's own `n === 0n` already answers null. It states the intent
+  // (a degenerate arc is refused HERE rather than by an accident of the arithmetic below) and it is
+  // where this reader parts from the disposal pass's twin, which must be able to answer `0`.
+  if (Math.abs(sweep) < 1e-12) return null;
+  if (Math.abs(sweep) > MAX_PI_MULTIPLE) return null;
+  for (let d = 1n; d <= MAX_PI_DENOMINATOR; d++) {
+    const n = BigInt(Math.round(sweep * Number(d)));
+    if (n === 0n) continue;
+    if (Math.abs(sweep - Number(n) / Number(d)) < 1e-12) return Frac.of(n, d);
   }
   return null;
 }
@@ -110,7 +132,9 @@ export function smallArcLimit(
     return {
       ok: false,
       certificate: refuse(
-        "L4",
+        // Not the lemma's house number: this claim is printed, and a reader has no table to look
+        // `L4` up in. The name is the one the app's own vocabulary uses for it.
+        "the indentation lemma",
         `the indented pole has order ${at.order}, and the indentation lemma is false for order $\\ge 2$ — ` +
           "the integral over the $\\rho$-arc grows like $\\rho^{1-m}$, so the limit does not exist and no principal value does either",
       ),

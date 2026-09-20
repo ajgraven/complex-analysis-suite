@@ -217,7 +217,8 @@ describe("a single factor lives at the ORIGIN, and saying so closes a silent wro
     // has nowhere to put `b`, so an off-origin factor would need `(z₀ − b)^α` and would silently get
     // `z₀^α` instead. The cut would be drawn in exactly the right place while the residue was read
     // about the wrong point.
-    expect(r.reason).toMatch(/ORIGIN/);
+    // Lower case: this sentence is a reader's, and `kernelWords.test.ts` now sweeps it.
+    expect(r.reason).toMatch(/about the origin/);
     expect(r.reason).toMatch(/z₀\^α/);
     expect(r.reason).toMatch(/multi-point/);
   });

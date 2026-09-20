@@ -136,4 +136,87 @@ describe("honesty about what is exact here", () => {
   it("refuses a non-positive radius", () => {
     expect(outer(q(3, 10), q(0)).certificate.level).toBe("⚠");
   });
+
+  it("claims NOTHING about the limit when it refuses", () => {
+    // The field the disposal row's status is read from, and the reason it was wrong: carrying the
+    // exponent's verdict through a refusal marks a `⚠` row satisfied. A refused bound establishes no
+    // limit, and says so; a bound that WAS established and merely does not discharge keeps its own.
+    expect(outer(q(3, 10), q(1)).asymptotics).toBe("unestablished");
+    expect(outer(q(3, 10), q(0)).asymptotics).toBe("unestablished");
+    expect(inner(q(3, 10), q(1)).asymptotics).toBe("unestablished");
+    expect(outer(q(1), q(1000)).asymptotics).toBe("bounded");
+    expect(outer(q(3, 2), q(1000)).asymptotics).toBe("diverges");
+  });
+});
+
+// **IS IT A BOUND?** `dogboneArc.test.ts` asks this of the cap and nothing asked it of the two
+// circles — which are precisely the two whose value is a FLOAT (`Math.pow`, `piUpper().toNumber()`),
+// i.e. the least defended by construction. Measured here against `∫|f||dz|` on the same circle.
+describe("the keyhole's circles ARE bounds: each dominates its own ∫|f||dz|", () => {
+  /** `|z^{α−1}/(1+z)|` integrated over the full circle of radius ρ, by a dense midpoint rule. */
+  function circleIntegral(alpha: number, rho: number, n = 200000): number {
+    let total = 0;
+    const dt = (2 * Math.PI) / n;
+    for (let k = 0; k < n; k++) {
+      const th = (k + 0.5) * dt;
+      // |z^{α−1}| = ρ^{α−1}·e^{−(0)·θ} for a real exponent, so only the modulus enters.
+      const x = rho * Math.cos(th);
+      const y = rho * Math.sin(th);
+      total += (Math.pow(rho, alpha - 1) / Math.hypot(1 + x, y)) * rho * dt;
+    }
+    return total;
+  }
+  const claimed = (claim: string): number => Number(/\\le ([0-9.e+-]+)/.exec(claim)?.[1] ?? "NaN");
+
+  it("the outer circle, over D1/D3's α range and two radii", () => {
+    for (const a of [q(3, 10), q(1, 2), q(7, 10), q(9, 10)]) {
+      for (const R of [q(40), q(1000)]) {
+        const b = outer(a, R);
+        const got = claimed(b.certificate.claim);
+        const actual = circleIntegral(a.toNumber(), R.toNumber());
+        expect({ a: a.toNumber(), R: R.toNumber(), holds: actual <= got }).toEqual({
+          a: a.toNumber(),
+          R: R.toNumber(),
+          holds: true,
+        });
+      }
+    }
+  });
+
+  it("the inner circle, down to ρ = 1e-2 where its own limit is slowest", () => {
+    for (const a of [q(3, 10), q(1, 2), q(9, 10)]) {
+      for (const eps of [q(1, 100), q(1, 1000)]) {
+        const b = inner(a, eps);
+        const got = claimed(b.certificate.claim);
+        const actual = circleIntegral(a.toNumber(), eps.toNumber());
+        expect({ a: a.toNumber(), eps: eps.toNumber(), holds: actual <= got }).toEqual({
+          a: a.toNumber(),
+          eps: eps.toNumber(),
+          holds: true,
+        });
+      }
+    }
+  });
+
+  it("and D2's off-unit-circle poles, where the denominator is not 1 + z", () => {
+    // `√x/(x²+6x+8)`: the arc sees α = 1/2 and the cofactor has poles at −2 and −4.
+    const den = QiPoly.fromCoeffs([Gauss.int(8), Gauss.int(6), Gauss.ONE]);
+    for (const R of [q(40), q(1000)]) {
+      const b = branchArcBound(q(1, 2), ONE, den, R, { limit: "inf", piMultiple: FULL });
+      const got = claimed(b.certificate.claim);
+      let actual = 0;
+      const n = 200000;
+      const dt = (2 * Math.PI) / n;
+      const rho = R.toNumber();
+      for (let k = 0; k < n; k++) {
+        const th = (k + 0.5) * dt;
+        const x = rho * Math.cos(th);
+        const y = rho * Math.sin(th);
+        const dr = x * x - y * y + 6 * x + 8;
+        const di = 2 * x * y + 6 * y;
+        actual += (Math.pow(rho, 0.5) / Math.hypot(dr, di)) * rho * dt;
+      }
+      expect({ R: rho, holds: actual <= got }).toEqual({ R: rho, holds: true });
+    }
+  });
 });

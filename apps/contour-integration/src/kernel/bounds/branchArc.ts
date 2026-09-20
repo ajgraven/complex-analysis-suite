@@ -29,8 +29,8 @@
 // certificates therefore say different things, and the asymptotic verdict — which is what actually
 // discharges the lemma — is the one that stays rigorous: it rests on the SIGN of an exact rational
 // exponent, not on any evaluated power.
-import { Frac, QiPoly } from "@cas/exact";
-import { bound, estimate, refuse, type Certificate } from "@cas/rigor";
+import { Frac, piUpper, QiPoly } from "@cas/exact";
+import { bound, refuse } from "@cas/rigor";
 import {
   coefficientUpperBound,
   denominatorLowerBound,
@@ -87,7 +87,7 @@ export function branchArcBound(
   if (rho.n <= 0n) {
     return {
       R: rho,
-      asymptotics: "diverges",
+      asymptotics: "unestablished",
       exponent,
       degreeGap,
       certificate: refuse("the arc bound", "the radius must be positive"),
@@ -99,7 +99,9 @@ export function branchArcBound(
   if (denLow.n <= 0n) {
     return {
       R: rho,
-      asymptotics,
+      // NOT `asymptotics`, which is the exponent's verdict: nothing was bounded here, so this call
+      // knows nothing about the limit. The field the row's status is read from must say so.
+      asymptotics: "unestablished",
       exponent,
       degreeGap,
       certificate: refuse(
@@ -110,11 +112,17 @@ export function branchArcBound(
   }
 
   // `2π·ρ^{1+α}·max|R|`. The rational factors stay exact; `ρ^α` is where a float enters, and the
-  // certificate below says so rather than letting the number pass for one of its neighbours'.
+  // certificate below says so rather than letting the number pass for one of its neighbours'. The π
+  // is `piUpper()` rather than `Math.PI` for PROVENANCE and not for the number: measured, at the
+  // precision `piUpper()` returns, `piUpper().toNumber() === Math.PI` exactly — the same finding
+  // M5.5 met when a bracket on `coth(π/2)` turned out to test float64's rounding. `Math.PI` is
+  // nonetheless below π, so it is the wrong direction for a `≤` on any wider type, and this
+  // directory's whole claim is that π enters only through the certified upper bracket. A sweep
+  // records the substitution as EQUIVALENT, with that measurement as the reason.
   const maxModulus = coefficientUpperBound(num, rho).div(denLow);
   const value =
     2 *
-    Math.PI *
+    piUpper().toNumber() *
     Math.pow(rho.toNumber(), 1 + alpha.toNumber()) *
     maxModulus.toNumber() *
     (opts.piMultiple.toNumber() / 2);
@@ -161,15 +169,6 @@ export function branchArcBound(
           ],
         }),
   };
-}
-
-/** The bound's numeric value, for a caller that wants to watch it shrink. `≈` by construction. */
-export function branchArcEstimate(alpha: Frac, rho: Frac, maxModulus: Frac): Certificate {
-  const value = 2 * Math.PI * Math.pow(rho.toNumber(), 1 + alpha.toNumber()) * maxModulus.toNumber();
-  return estimate(
-    `the bound is ${value.toExponential(3)} at ρ = ${rho.toNumber().toExponential(3)}`,
-    "2πρ^{1+α}·max|R|, with ρ^α evaluated",
-  );
 }
 
 /**
@@ -236,7 +235,7 @@ export function dogboneArcBound(input: DogboneArcInput): ArcBound {
   if (eta.n <= 0n) {
     return {
       ...base,
-      asymptotics: "diverges" as const,
+      asymptotics: "unestablished" as const,
       certificate: refuse("the arc bound", "the radius must be positive"),
     };
   }
@@ -246,6 +245,7 @@ export function dogboneArcBound(input: DogboneArcInput): ArcBound {
     if (etaSquared.sub(other.distanceSquared).n >= 0n) {
       return {
         ...base,
+        asymptotics: "unestablished" as const,
         certificate: refuse(
           `the arc bound at η = ${eta.toNumber()}`,
           `the cap reaches the other branch point ${other.label}: η² = ${etaSquared.toNumber()} is not less than |b − bⱼ|² = ${other.distanceSquared.toNumber()}, so the factor it carries is not bounded on this circle and there is no bound of this form — shrink η`,
@@ -258,6 +258,7 @@ export function dogboneArcBound(input: DogboneArcInput): ArcBound {
   if (denLow.n <= 0n) {
     return {
       ...base,
+      asymptotics: "unestablished" as const,
       certificate: refuse(
         `the arc bound at η = ${eta.toNumber()}`,
         "the reverse triangle inequality gives no positive lower bound on |R|'s denominator there, so a pole of the cofactor may lie on the cap",
@@ -279,7 +280,7 @@ export function dogboneArcBound(input: DogboneArcInput): ArcBound {
   }
   const value =
     2 *
-    Math.PI *
+    piUpper().toNumber() *
     (piMultiple.toNumber() / 2) *
     Math.pow(etaValue, 1 + alpha.toNumber()) *
     maxModulus.toNumber() *
