@@ -583,6 +583,35 @@ pass where the stage changed. Sizes: *S* / *M* / *L*.
   > hand-over clause has an exact form, as PR-2's did — every root the reference walk finds lands in a
   > texel the limit-set shader calls in-set, **0 of 50+ outside**, an inclusion rather than a
   > pixel-difference percentage.
+  >
+  > **Sweep: 38 mutants, 35 killed, 3 recorded equivalents.** Two of the four first-pass survivors were
+  > real and both hid behind a test that pinned an outcome without pinning a reason.
+  > **Removing `couldReach` puts PHANTOM ROOTS in the picture**, which is not the performance-only
+  > change it reads as: with the deflation loop free to run its full eight passes, Newton on an
+  > over-deflated polynomial converges back into a basin already visited and the re-polish on the
+  > ORIGINAL lands on a root already in the list — measured at 1e-12, **414 rows for 399 roots, 15 of
+  > them exact repeats** (same polynomial, same offset to ten digits), with **no root missed in either
+  > direction**, at 31× the cost (150 ms → 4,689 ms; 3.4 s → 374.5 s at 1e-30). The deep picture's
+  > density IS the multiplicity, so a duplicate is a dot that does not exist. And **the 1e-30 gate's
+  > `residual < 1e-30` was fifteen orders looser than what it was testing**: the double-double's own
+  > eps at `|α| ≈ 0.64` is `2⁻¹⁰⁶ = 1.2e-32` and the measured worst is 1.549e-32, so the bound is
+  > `1e-31` now — eight eps, against float64's 1.8e-16 on the same view.
+  >
+  > The three equivalents, each with its measurement. **`DOUBLE_DOUBLE.bits 106 → 53`**: the Newton
+  > break is checked AFTER the update and the iteration is quadratic, so stopping when the step falls
+  > below `|z|·2⁻⁵¹` still leaves ~106 correct bits. Measured at the floor it moves the worst backward
+  > error **within the arithmetic's own noise and in either direction** — 1.549e-32 → 1.417e-32 at the
+  > gate's depth of 158 (2,223 roots both), 1.784e-32 → 2.179e-32 one level deeper (4,431 against
+  > 4,447). A bound tight enough to catch the second reading passes the first, which is a test pinned
+  > to a depth rather than to a claim, so the field keeps its honest `106` and the mutant is recorded.
+  > **`SPLITTER 2²⁷+1 → 2²⁷`**: with the `+1` the rounding of `c = fl(a·(2²⁷+1))` and of `fl(c − a)`
+  > cancel; without it `a·2²⁷` is exact and `fl(c − a)` rounds off the same 27 bits — either way
+  > `hi = c − fl(c − a)` is `a` rounded to the grid of `ulp(2²⁷·a)`. Measured over 300,002 operands
+  > spanning exponents −200…200 plus subnormals: **identical `hi`/`lo` in every case**, and `twoProd`
+  > exact in 150,001 of 150,002 with the SAME single underflow exception both ways. Dekker's published
+  > constant is kept. **`level >= 1 → level >= 0`** is unobservable by construction: at level 0 the
+  > polynomial is the constant `a₀`, so `original.length` is 1 and `solve`'s loop condition
+  > `working.length > 1` is false before anything is computed.
 
 - **PR-4 — the dragons · *M*.** Hover inset from the un-pruned tree; theorem mode on a probed root
   with the `n`-scrubber and the Hausdorff-distance readout; the honest label when `|P′(α)|` is

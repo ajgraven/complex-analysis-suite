@@ -203,14 +203,46 @@ describe("precision", () => {
         precision: "dd",
       }),
     );
-    // Measured: 2,207 roots of degree 26–158 from 15,871 nodes, worst residual 1.6e-32.
+    // Measured: 2,223 roots of degree 26–158 from 15,871 nodes, worst backward error 1.549e-32.
     expect(run.exhausted).toBe(false);
     expect(run.roots.length).toBeGreaterThan(1000);
     expect(Math.max(...run.roots.map((x) => x.degree))).toBeGreaterThan(140);
-    expect(Math.max(...run.roots.map((x) => x.residual))).toBeLessThan(1e-30);
+    // **The polish reaches the ARITHMETIC's own floor**, and the bound says so rather than merely being
+    // satisfied: at `|α| ≈ 0.64` the double-double's eps is `2⁻¹⁰⁶ = 1.2e-32`, so 1.549e-32 is 1.3 of
+    // them and `1e-31` is eight. Float64 on the same view is 1.8e-16 — fifteen orders away, which is
+    // what this decade of tightening over the original `1e-30` is testing for.
+    expect(Math.max(...run.roots.map((x) => x.residual))).toBeLessThan(1e-31);
     // The picture is roots, not a blur: the nearest is at the centre and the rest spread across the view.
     expect(Math.hypot(run.roots[0].dx, run.roots[0].dy)).toBeLessThan(1e-32);
     expect(Math.max(...run.roots.map((x) => Math.hypot(x.dx, x.dy)))).toBeGreaterThan(halfHeight / 2);
+  });
+});
+
+describe("the deflation loop", () => {
+  it("reports each root ONCE — deflation may not hand back one it has already found", () => {
+    // `couldReach` stops the deflation loop when what is LEFT provably has no root in the view. Without
+    // it the loop runs its full eight passes, Newton on an over-deflated polynomial converges back into
+    // a basin already visited, and the re-polish on the ORIGINAL lands on a root already in the list.
+    // Measured at 1e-12: **414 rows for 399 roots, 15 of them exact repeats**, at 31× the cost (150 ms
+    // → 4,689 ms; 3.4 s → 374.5 s at 1e-30). No root is MISSED either way, so the value is the same
+    // number reported twice — and that is not cosmetic, because the deep picture's density IS the
+    // multiplicity: a duplicate is a dot that does not exist.
+    const halfHeight = 1e-12;
+    const r = Math.hypot(Number(STORY_CX), Number(STORY_CY));
+    const run = ok(
+      runReference({
+        alphabet: LITTLEWOOD,
+        cx: STORY_CX,
+        cy: STORY_CY,
+        halfHeight,
+        aspect: 1.55,
+        depth: Math.ceil(Math.log(halfHeight * 1.85) / Math.log(r)) + 4,
+        precision: "dd",
+      }),
+    );
+    const keys = run.roots.map((x) => `${x.digits.join("")}@${x.dx.toExponential(10)},${x.dy.toExponential(10)}`);
+    expect(keys.length).toBeGreaterThan(300);
+    expect(new Set(keys).size).toBe(keys.length);
   });
 });
 

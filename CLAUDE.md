@@ -99,8 +99,8 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **618 test files / 7034 tests**
-*(615 / 6997 before ADR-0046's PR-3 — deep zoom by reference — added 3 files / 37 tests; 610 / 6949 before its PR-2 — the limit-set engine — added 5 files / 48 tests; 599 / 6818 before
+Green is **618 test files / 7035 tests**
+*(615 / 6997 before ADR-0046's PR-3 — deep zoom by reference — added 3 files / 38 tests; 610 / 6949 before its PR-2 — the limit-set engine — added 5 files / 48 tests; 599 / 6818 before
 Polynomial Roots itself added 10 files / 122 tests and its `@cas/gpu` extraction 1 / 9; 592 / 6643 before the 2026-09-20 remediation)* with lint and typecheck
 silent. `pnpm lint` includes `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the
 `packages/*` dists first, so a clean clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as
@@ -1595,6 +1595,22 @@ past 1e-12, and to 1e-30, **at a root near it**: an exact root of one degree-26 
 which is what Michelen–Yakir's theorem is about in the first place. The hand-over clause has an exact form,
 as PR-2's did — every root the reference walk finds lands in a texel the limit-set shader calls in-set, **0
 of 50+ outside**, an inclusion rather than a pixel-difference percentage.
+
+**Sweep: 38 mutants, 35 killed, 3 recorded equivalents.** Two of the four first-pass survivors were real,
+and both hid behind a test that pinned an outcome without pinning a reason. **Removing `couldReach` puts
+PHANTOM ROOTS in the picture** rather than merely costing time: with the deflation loop free to run its
+full eight passes, Newton on an over-deflated polynomial converges back into a basin already visited and
+the re-polish on the ORIGINAL lands on a root already in the list — measured at 1e-12, **414 rows for 399
+roots, 15 exact repeats**, with no root missed either way, at 31× the cost (150 ms → 4,689 ms; 3.4 s →
+374.5 s at 1e-30). The deep picture's density IS the multiplicity, so a duplicate is a dot that does not
+exist. And **the 1e-30 gate's `residual < 1e-30` was fifteen orders looser than what it was testing** —
+the double-double's eps at `|α| ≈ 0.64` is `2⁻¹⁰⁶ = 1.2e-32` and the measured worst is 1.549e-32, so it is
+`1e-31` now. Of the three equivalents, `DOUBLE_DOUBLE.bits 106 → 53` is the one worth keeping: the Newton
+break is checked AFTER the update and the iteration is quadratic, so a 53-bit break still leaves ~106
+correct bits, and the worst backward error moves **within the arithmetic's own noise and in either
+direction** with depth (1.549e-32 → 1.417e-32 at the gate's depth, 1.784e-32 → 2.179e-32 one level
+deeper) — so a bound tight enough to catch the second reading passes the first, which is a test pinned to
+a depth rather than to a claim.
 
 Work in small, reviewable commits. Pause at each phase/milestone gate for review before proceeding.
 When a command or path in the docs is marked `⚠ verify`, check it against the actual repo
