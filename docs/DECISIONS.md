@@ -54,6 +54,7 @@ Format follows Michael Nygard's ADR convention.
 | [0043](#adr-0043)                                                                                              | Contour Integration rebuilds its shell — two rails, a keyed renderer, KaTeX, textbook vocabulary              | Accepted |
 | [0044](#adr-0044-withdraw-the-in-app-suite-navigation-header-the-launcher-is-the-unified-menu)                | Withdraw the in-app suite navigation header (the launcher is the unified menu)                                 | Accepted |
 | [0045](#adr-0045)                                                                                              | One predicate decides whether a value may be shown                                                            | Accepted |
+| [0046](#adr-0046)                                                                                              | Polynomial Root Analysis: the thirteenth app, `@cas/exact` widened, `@cas/monodromy` extracted, certified tracking earns `=` | Proposed |
 
 > **Status legend:** Proposed → Accepted (once you sign off) → Superseded/Deprecated.
 > All thirty-six are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
@@ -4303,3 +4304,91 @@ over 28 records × 94 fixtures disagree exactly once — B3, `=` above and `?` b
    2026-09-20)*.
 4. [x] `test/ledger.test.ts:551`'s heading reworded: `legalityRefusal` is the first clause of this
    predicate *(done at integration)*.
+
+## ADR-0046: Polynomial Root Analysis — the thirteenth app, `@cas/exact` widened, `@cas/monodromy` extracted, certified tracking earns `=`
+
+**Status:** Proposed (2026-09-22). Becomes Accepted with the plan it records:
+[`docs/polynomial-root-analysis/PLAN.md`](polynomial-root-analysis/PLAN.md) and its
+[`DESIGN.md`](polynomial-root-analysis/DESIGN.md), grounded in five research tracks under
+[`docs/polynomial-root-analysis/research/`](polynomial-root-analysis/research/). Narrows
+[`RISKS.md`](RISKS.md) §3 (below, decision 4) without overruling it; adds one package on the
+[ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) second-consumer rule; applies
+[ADR-0040](#adr-0040-casrigor-extraction-by-reimplementation) and [ADR-0045](#adr-0045) verbatim.
+**Deciders:** Andrew (two rounds of questions, 2026-09-22).
+
+### Context
+
+The owner asked for an app that (1) plots and analyses the roots of a polynomial with the roots and the
+coefficients both draggable, (2) computes the Galois group of a typed polynomial and animates its
+permutations on the plotted roots, and (3) illustrates Abel–Ruffini by Arnold's topological proof, with
+commutators of loops. Research found (a) the Galois group over ℚ is honestly computable in a browser in
+three tiers — `=` for Sₙ/Aₙ at any degree by Dedekind cycle types + the discriminant square test +
+Conrad's theorems, `=` to degree 7 by resolvents with certified rounding and exact verification, `≈`
+for degrees 8–15 by cycle-type statistics against a transitive-group table (first indistinguishable
+pair 8T10/8T11); (b) no existing browser demo tracks roots along a loop drawn in coefficient space,
+draws the discriminant locus, shows a nested commutator as an object, or labels a number; (c) the repo
+already holds a monodromy tracker and permutation-group code (the plotter's `riemann/`), an exact
+AST → ℚ(i) extractor and exact linear algebra (Contour Integration), a Newton polish (twice), and a full
+Berlekamp–Zassenhaus factoriser in Quadrature Domains' untyped `sym-core.mjs` that no TypeScript app can
+import.
+
+### Decision
+
+1. **A thirteenth app, `apps/polynomial-root-analysis`** ("Polynomial Root Analysis", namespace
+   `pra`, port 5184), three modes in one page — sandbox, family, ladder — built to the M8 shell idiom
+   (ADR-0043). Published at PRA-5's gate (the Galois card live); *Coming soon* until then.
+2. **`@cas/exact` is widened**, not duplicated: `𝔽ₚ[x]` arithmetic and factorisation
+   (distinct-degree + Cantor–Zassenhaus), Hensel lifting and Zassenhaus recombination (`factorOverZ`),
+   Smith/Weierstrass inclusion discs in exact `Gauss` arithmetic (`smithDiscs`), dyadic BigInt root
+   refinement, and the lifts of `toExactRational`/`simplestRational` and `Field<T>`/`linear` from
+   Contour Integration (second consumer). Quadrature Domains keeps its own factoriser
+   (ADR-0008's standing exception), cross-checked by a golden on random inputs.
+3. **One new package, `@cas/monodromy`**, extracted from the plotter's `riemann/` (`monodromy.ts`,
+   `permGroup.ts`, `generatorLoop.ts`, `permDiagram.ts`) with the plotter as the first consumer and this
+   app the second, plus the new certified tracker, commutators, derived series and Sₙ/Aₙ recognisers.
+   Rejected alternative: a second app-local copy — the north star is fewer primitives per app.
+4. **Certified continuation earns `=` by a theorem, not by success.** RISKS §3 says analytic
+   continuation is never certified; that stands for the plotter's nearest-match tracker, which remains
+   `≈`. This app's tracker makes a *different* claim: on each segment, Smith's discs about the previous
+   roots with radius bounded over the whole segment (exact, since the Weierstrass correction is linear
+   in the parameter on a coefficient segment) are pairwise disjoint, hence no root can change disc;
+   the certificate is that disjointness, computed in exact arithmetic on the dyadic floats the picture
+   already holds. A segment that cannot be certified is bisected to a floor and then **refused by
+   name**; no permutation is ever guessed.
+5. **Every number on screen is a dyadic rational, so certification is exact arithmetic, not error
+   analysis.** Root discs, branch-point discs, the tracking certificate and the resolvent rounding all
+   evaluate the polynomial exactly in ℚ(i) at float points. This is the app's one engine decision and
+   is why it needs no interval library.
+6. **Two groups, two cards.** A loop's permutation belongs to the monodromy group of a family, never
+   to the Galois group of the typed polynomial (`x² − 4` has trivial Galois group and a loop around
+   `a₀ = 0` still swaps its roots); the bridge (monodromy = Galois over ℂ(t) ⊴ the arithmetic group ⊇
+   every specialisation's group, equal outside a thin set) is displayed as a certificate in family mode
+   only, and the vocabulary denylist keeps "Galois" off the monodromy card.
+7. **Tables are fetched, not typed.** Transitive-group metadata and cycle-type distributions for
+   degrees ≤ 15 come from the LMFDB API by a checked-in script with a recorded date and CC BY-SA 4.0
+   attribution; lattices, maximal-subgroup embeddings and invariant monomials for degrees ≤ 7 are
+   computed by the script with the same permutation code the app runs, so a table entry and a runtime
+   check cannot disagree.
+8. **Sandbox first; the narrative layer later but essential.** The ladder ships as four rung states a
+   later stepper addresses by permalink (PRA-10 owns the exposition, the drill and the prompts).
+
+### Consequences
+
+- **Positive:** the suite gains its first arithmetic engine (Galois groups) and its first certified
+  continuation; `@cas/exact` gains factorisation, which the plotter's exact branch locus and Contour
+  Integration's pole finder can use next; the plotter sheds 600 lines into a package.
+- **Migration is staged, each an independently-green gate:** PRA-0 (scaffold) → PRA-1 (panes) →
+  PRA-2 (overlays) → PRA-3 (`@cas/monodromy`, loops) → PRA-4 (exact engine, Tier 0) → PRA-5 (Tier 1,
+  labelled group, Tier 2, **publish**) → PRA-6 (correspondence) → PRA-7 (families) → PRA-8 (ladder) →
+  PRA-9 (overlays wave 2 and the surfaced ideas, owner-ordered) → PRA-10 (exposition and the long
+  tail).
+- **Wiring:** PLAN §6.1 (the ADR-0037 list, verified against the tree in research 04).
+- **Trade-off accepted:** degree 8–11 certification and Dummit's radical solution are deferred;
+  Tier 2 is honest about being statistics; the exact discs cost BigInt time per frame and the plan
+  budgets and measures it rather than assuming it.
+
+### Action items
+
+1. [ ] Owner accepts this ADR and the plan (PLAN §12).
+2. [ ] Confirm the publish gate (PRA-5) and the `@cas/ui` lifts of the keyed builder and `animate.ts`.
+3. [ ] PRA-0 lands with `STATUS.md` opened.
