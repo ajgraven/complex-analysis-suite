@@ -132,6 +132,19 @@ body {
 input[type="range"].control { padding: 0; }
 input[type="checkbox"].control { width: auto; justify-self: start; }
 
+.coefficients {
+  margin: 8px 0 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-all;
+  color: var(--ink);
+  background: #14171f;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 6px 8px;
+}
+
 .note { margin: 6px 0 0; color: var(--muted); font-size: 12px; }
 .note.warn { color: #ffb3a7; }
 

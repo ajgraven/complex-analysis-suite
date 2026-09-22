@@ -99,8 +99,8 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **615 test files / 6997 tests**
-*(610 / 6949 before ADR-0046's PR-2 — the limit-set engine — added 5 files / 48 tests; 599 / 6818 before
+Green is **618 test files / 7034 tests**
+*(615 / 6997 before ADR-0046's PR-3 — deep zoom by reference — added 3 files / 37 tests; 610 / 6949 before its PR-2 — the limit-set engine — added 5 files / 48 tests; 599 / 6818 before
 Polynomial Roots itself added 10 files / 122 tests and its `@cas/gpu` extraction 1 / 9; 592 / 6643 before the 2026-09-20 remediation)* with lint and typecheck
 silent. `pnpm lint` includes `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the
 `packages/*` dists first, so a clean clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as
@@ -1524,6 +1524,77 @@ was the grid taking the larger side of a non-square texel (1,600 of 1,600 cells 
 `toPrecision(9)`'s own decimal point, which it writes for everything the app normally carries and drops at
 nine integer digits — `vec2(123456789, 0.0)` is a GLSL compile error no node test could see, and the custom
 alphabet lets a reader type it.
+
+**Done — PR-3 of ADR-0046: deep zoom by reference, and the probe.** The overview is the root engine, the
+zoom the limit-set engine, and below a float32 texel the third rung: `src/engine/deep/`
+(`dd.ts`, `num.ts`, `reference.ts`, `reference.worker.ts`) + `src/stage/deepPass.ts`. One CPU walk per
+frame at the view's own centre — every pixel shares `z₀` to within the view, so the pruning bounds are
+`O(1)` and the survivors are the same for all of them — and each survivor's root is a float32 OFFSET the
+GPU splats, so no number the shader touches is ever `O(1)`. Two new places, a probe panel naming the
+polynomial under the cursor with its residual, a fourth a11y roster entry; +34 node tests across three
+new files and +4 browser tests.
+
+**`@cas/gpu/df64` IS A FLOAT32 PAIR, so on the CPU it is a downgrade** — and ADR-0046 decision 3 said to
+reuse it. Every operation in `df64Ref.ts` runs through `Math.fround`, because its job is to be the
+executable spec for the GLSL, where float32 IS the native type; a df64 carries ~47 bits where a plain JS
+number already has 53, so the decision's ladder stepped DOWN at exactly the point it meant to step up.
+What it was asking for is the same ALGORITHMS at one higher radix, which is `dd.ts`: Dekker's split and
+Knuth's two-sum over float64 pairs, the split factor `2^27 + 1`, `Math.fround` removed. Every operation
+is pinned against exact BigInt rationals rather than against another float computation.
+
+**The floor is reached rather than assumed.** At a half-height of `1e-30` the walk returns 2,223
+polynomials from 15,871 nodes in 2.2 s, worst residual **1.6e-32**; float64's on the same view is
+1.8e-16 — 53 bits and 106 bits made visible. The two agree on the root SET **exactly** from 1e-10 to
+1e-13, part company at 1e-14, and by 1e-24 float64 finds nothing at all, so the handover sits at 1e-11.
+
+**A CENTRE IS NEVER INHERITED, and that is what makes a deep view reachable at all.** A `ReferenceRoot`
+carries a float64 offset, so a centre built by adding one to the old centre is good to about 1e-17; at
+`1e-24` the walk then finds NOTHING there — including the very polynomial the centre was taken from. The
+same trap one level up cost the first measurement its whole ladder: the root engine's points are a
+`Float32Array`, because they are GPU vertex data, so a centre read off one is good to seven digits and
+`|P|` at the supposed root measured 6.4e-8. `centreOnRoot` re-derives the root at the view's own
+precision, and it is the probe's "Centre on this root".
+
+**The permalink's centre is a decimal STRING, and the codec had to become exact.** A JSON number is a
+double and cannot hold the 32 significant figures a `1e-30` view needs. The first printer and parser both
+accumulated in double-double and the round trip was not stable — `π` printed, parsed and printed again
+differed in its last three digits, so the same view shared twice would have been two URLs. Both go through
+BigInt now: exact digits out of the value's own bits, correctly-rounded limbs back in. A link carrying its
+centre as a NUMBER still opens, because every link minted before this milestone does.
+
+**`@cas/flow` is dropped from this app, which now consumes five packages.** `panView`/`zoomView` return an
+absolute float64 `{cx, cy}`, and recovering how far a view moved from one at `1e-30` means subtracting two
+numbers thirty orders apart — the exact cancellation the reference point exists to avoid. The camera is
+`centre + a small increment` in double-double, which is three lines, and one camera is safer than two that
+must be kept in step.
+
+**The walk reaches each polynomial ONCE, but a polynomial can have two roots in the view.** Measured
+against the root engine at `0.6 + 0.45i`: three of the sweep's 147 roots were second roots of polynomials
+already found, with `z₀` in the basin of a root just outside the rect. Each root is deflated out and
+Newton runs again, stopped by a NECESSARY condition on what is left — `|Q(z₀)| ≤ r·max|Q′|`, one Horner
+pass against a Newton's dozen. That is also the engine's performance: the suite went 64 s → **7.5 s**, and
+the 1e-30 case 16.6 s → **2.2 s**. **And the root engine's own list has duplicates**, which the first draft
+of that comparison read as roots the walk had missed: the sweep mirrors each orbit representative over the
+whole group, so a polynomial fixed by a group element yields the same root twice, while the walk enumerates
+up to UNITS. 150 points, 147 distinct.
+
+**At depth the same root comes from MANY polynomials.** If `P` is Littlewood with a root at `α`, so is
+`P·(1 + z^(d+1))`, and `P·(1 + z^(d+1) + z^(2(d+1)))`, for ever. Measured at 1e-30: **2,223 polynomials on
+140 distinct points**, their degrees running 26, 53, 80, 107, 134 — steps of `deg P + 1`. So the deep
+picture's density is a MULTIPLICITY: "how many roots are here" and "how many dots are here" are different
+questions, and the panel reports both.
+
+**Two strides for one vertex layout.** `DeepPass` read four floats per root where `packFrame` writes six,
+so the pass took each position out of the middle of the previous record — and the picture still looked like
+a scatter of dots. One imported constant now, rather than two agreed by inspection.
+
+**The gate, restated with its reason.** The slide deck's own centre `0.42065 + 0.48354i` is not a limit
+point below about 1e-4 — measured, the nearest root of degree ≤ 20 is 2.19e-4 away and the walk dies at 45
+nodes at any half-height below 1e-6, so there is nothing there to continue INTO. The zoom story continues
+past 1e-12, and to 1e-30, **at a root near it**: an exact root of one degree-26 Littlewood polynomial,
+which is what Michelen–Yakir's theorem is about in the first place. The hand-over clause has an exact form,
+as PR-2's did — every root the reference walk finds lands in a texel the limit-set shader calls in-set, **0
+of 50+ outside**, an inclusion rather than a pixel-difference percentage.
 
 Work in small, reviewable commits. Pause at each phase/milestone gate for review before proceeding.
 When a command or path in the docs is marked `⚠ verify`, check it against the actual repo

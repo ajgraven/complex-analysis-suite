@@ -4451,9 +4451,28 @@ DF64 reused where it buys depth and not paid for where it does not.
    unchanged. Decisions 1–8 stand. Both gate clauses are met, the second more strongly than asked —
    the plan wanted a pixel-wise correlation between the engines and an exact INCLUSION was available
    (every root pixel is lit by the walk, 100.00% at every degree from 2 to 20).
-4. [ ] PR-3 through PR-5 as staged above, each with its gate, sweep and browser pass.
-5. [ ] At M6, extract `CET_C6` to `@cas/gpu` and rewire Contour Integration.
-6. [x] `eslint.config.js`'s `APP_NAMES` brought current: it was stale by four apps
+4. [x] **PR-3 done, and it corrected decision 3 in one place and the consequences in another.**
+   `@cas/gpu/df64` is a pair of **float32s** — every operation in `df64Ref.ts` runs through
+   `Math.fround`, because its job is to be the executable spec for the GLSL — so it carries ~47 bits
+   where a plain JS number already has 53, and the decision's ladder *"float64, then the JS
+   double-float reference `@cas/gpu/df64`"* stepped DOWN at exactly the point it meant to step up.
+   What the decision was asking for is the same algorithms at one higher radix, which is
+   `src/engine/deep/dd.ts`: Dekker's split and Knuth's two-sum over float64 pairs (~106 bits), the
+   split factor `2^27 + 1`, no `Math.fround`, every operation pinned against exact BigInt rationals
+   rather than against another float computation. `@cas/gpu/df64` stays what it is — the GPU's tool.
+   Everything else in decision 3 stands and was measured: one CPU walk per frame at `z₀`, float32
+   offsets splatted with full relative precision, the floor reached rather than assumed (at a
+   half-height of `1e-30`, 2,223 polynomials on 140 distinct points, worst residual **1.6e-32**
+   against float64's 1.8e-16 on the same view), and the handover at `1e-11`, where the two arithmetics
+   still agree on the root set EXACTLY. **And the app now consumes FIVE packages, not six**:
+   `@cas/flow`'s `panView`/`zoomView` return an absolute float64 `{cx, cy}`, and recovering how far a
+   view moved from one at `1e-30` means subtracting two numbers thirty orders apart — the exact
+   cancellation the reference point exists to avoid — so the camera is `centre + a small increment` in
+   double-double and the dependency is pruned. The consequences' package list above reads six; it is
+   `@cas/ui`, `@cas/gpu`, `@cas/core`, `@cas/interchange` and `@cas/export`.
+5. [ ] PR-4 and PR-5 as staged above, each with its gate, sweep and browser pass.
+6. [ ] At M6, extract `CET_C6` to `@cas/gpu` and rewire Contour Integration.
+7. [x] `eslint.config.js`'s `APP_NAMES` brought current: it was stale by four apps
    (`2d-electrostatics`, `2d-hydrodynamics`, `hele-shaw-flow`, `potential-theory`), so the
    no-cross-app-imports lint rule had silently stopped covering a third of the suite. The graph-level
    rule in `.dependency-cruiser.cjs` is generic and did cover them, which is why nothing broke.

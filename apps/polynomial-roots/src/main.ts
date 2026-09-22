@@ -4,10 +4,8 @@
 // missing WebGL2 (or a missing float extension) reaches the reader as a sentence instead of a blank
 // page, and `attachCanvasA11y` for the stage, whose alternative text is GENERATED from the state and
 // the counts on every recompute rather than written once and left to drift.
-import { attachCanvasA11y, runWithFatalBoundary } from "@cas/ui";
+import { attachCanvasA11y, createComputeClient, runWithFatalBoundary } from "@cas/ui";
 import type { CanvasKeyAction } from "@cas/ui";
-import { panView, zoomView } from "@cas/flow";
-import type { View, Viewport } from "@cas/flow";
 import { compileAlphabet, formatCx } from "./engine/alphabet.js";
 import type { Alphabet, AlphabetSpec } from "./engine/alphabet.js";
 import { orbitSpace } from "./engine/orbits.js";
@@ -18,14 +16,37 @@ import { chooseEngine } from "./engine/limit/handover.js";
 import type { EngineMode, Handover } from "./engine/limit/handover.js";
 import { epsFor, MAX_DEPTH as WALK_MAX_DEPTH, MIN_DEPTH as WALK_MIN_DEPTH, NODE_BUDGET } from "./engine/limit/walk.js";
 import { clampDepth } from "./engine/limit/walkGlsl.js";
+import { DeepPass } from "./stage/deepPass.js";
+import { centreOnRoot, coefficientString, emptyFrame, nearestRoot, packFrame, rootAt, runReference } from "./engine/deep/reference.js";
+import type { ReferenceFrame, ReferenceRequest } from "./engine/deep/reference.js";
 import { buildToneMap } from "./stage/tone.js";
 import { RAMPS } from "./stage/ramps.js";
-import { clampState, DEFAULT_STATE, LIVE_DEGREE_CAP, MAX_DEGREE } from "./state.js";
+import {
+  centreNumbers,
+  clampState,
+  DEFAULT_STATE,
+  LIVE_DEGREE_CAP,
+  MAX_DEGREE,
+  MIN_HALF_HEIGHT,
+  offsetAtPixel,
+  shiftCentre,
+  zoomAbout,
+} from "./state.js";
 import type { AppState } from "./state.js";
 import { decodeState, encodeState } from "./viewState.js";
 import { PLACES } from "./places.js";
-import { addStats, describeLimit, describeTotals, emptyTotals, limitLines, measureLimit, statLines } from "./stats.js";
-import type { LimitShares, LimitSummary } from "./stats.js";
+import {
+  addStats,
+  deepLines,
+  describeDeep,
+  describeLimit,
+  describeTotals,
+  emptyTotals,
+  limitLines,
+  measureLimit,
+  statLines,
+} from "./stats.js";
+import type { DeepSummary, LimitShares, LimitSummary } from "./stats.js";
 import type { Totals } from "./stats.js";
 import { captionFor, savePng } from "./pngExport.js";
 import "./styles/app.css";
@@ -43,6 +64,15 @@ function el<K extends keyof HTMLElementTagNameMap>(
   for (const c of children) node.append(c);
   return node;
 }
+
+/**
+ * Diameter of a deep-engine splat, in texels.
+ *
+ * The root engine draws millions of points and one texel is the right primitive; the deep engine finds
+ * thousands, and a one-texel dot in a million texels is a picture of nothing. Measured at the zoom
+ * story's root at a half-height of 1e-18: 1,255 roots in a 1024² frame is 0.1% of it.
+ */
+const DEEP_POINT_SIZE = 4;
 
 function main(): void {
   const root = document.querySelector("#app");
@@ -74,8 +104,10 @@ function main(): void {
 
   const controls = el("section", { class: "panel controls" });
   const statsPanel = el("section", { class: "panel stats" });
+  const probePanel = el("section", { class: "panel probe" });
+  probePanel.hidden = true;
   const placesPanel = el("section", { class: "panel places" });
-  const rail = el("aside", { class: "rail" }, controls, statsPanel, placesPanel);
+  const rail = el("aside", { class: "rail" }, controls, statsPanel, probePanel, placesPanel);
 
   const errorBox = el("div", { class: "error", role: "alert" });
   errorBox.hidden = true;
@@ -102,6 +134,27 @@ function main(): void {
 
   const pool = new RootPool(defaultPoolSize(navigator.hardwareConcurrency));
   const limit = new LimitPass(stage.gl);
+  const deep = new DeepPass(stage.gl);
+  let deepFrame: ReferenceFrame = emptyFrame();
+  let probeIndex = -1;
+  let deepKey = "";
+  const deepClient = createComputeClient<ReferenceRequest, ReferenceFrame>({
+    compute: (req) => packFrame(runReference(req)),
+    worker: () => new Worker(new URL("./engine/deep/reference.worker.ts", import.meta.url), { type: "module" }),
+    toMessage: (request, reqId) => ({ reqId, request }),
+    fromMessage: (data) => {
+      const d = data as { reqId: number; frame?: ReferenceFrame; error?: string };
+      return {
+        reqId: d.reqId,
+        ...(d.frame === undefined ? {} : { result: d.frame }),
+        ...(d.error === undefined ? {} : { error: d.error }),
+      };
+    },
+    onBusy: (busy) => {
+      progress.textContent = busy ? "walking the reference point…" : "";
+    },
+    onError: (message) => showError(message),
+  });
   // The reader has taken the depth into their own hands, so the zoom stops moving it. Set by a link or
   // a place that carries a depth of its own, and by the slider.
   let depthPinned = state.depth !== DEFAULT_STATE.depth;
@@ -140,6 +193,7 @@ function main(): void {
     ["auto", "Automatic"],
     ["roots", "Root cloud"],
     ["limit", "Limit set"],
+    ["deep", "Deep zoom"],
   ] as const) {
     engineSelect.append(el("option", { value, textContent: label }));
   }
@@ -217,20 +271,70 @@ function main(): void {
   let frame = 0;
   let toneDirty = true;
 
-  function viewport(): Viewport {
-    return { width: Math.max(1, gl.width), height: Math.max(1, gl.height), dpr: window.devicePixelRatio || 1 };
+  /**
+   * The world offset of a client point from the view centre.
+   *
+   * The camera works entirely in OFFSETS — `@cas/flow`'s `panView`/`zoomView` are not used, and the
+   * app no longer consumes that package. They return an absolute `{cx, cy}` as float64, and recovering
+   * "how far did the view move" from one at a half-height of 1e-30 means subtracting two numbers thirty
+   * orders apart, which is exactly the cancellation the reference point exists to avoid. One camera,
+   * in double-double, is safer than two that must be kept in step.
+   */
+  function offsetOf(clientX: number, clientY: number): { dx: number; dy: number } {
+    const rect = gl.getBoundingClientRect();
+    return offsetAtPixel(
+      ((clientX - rect.left) / Math.max(1, rect.width)) * gl.width,
+      ((clientY - rect.top) / Math.max(1, rect.height)) * gl.height,
+      gl.width,
+      gl.height,
+      state.halfHeight,
+    );
   }
 
-  function currentView(): View {
-    return { cx: state.cx, cy: state.cy, halfSpan: state.halfHeight };
+  /** Ask the worker for this view's roots. Coalesced by `createComputeClient`: only the latest paints. */
+  function requestDeep(): void {
+    const chosen = handover();
+    const key = [
+      JSON.stringify(state.alphabet),
+      state.cx,
+      state.cy,
+      state.halfHeight,
+      chosen.deepDepth,
+      chosen.precision,
+      gl.width,
+      gl.height,
+    ].join("|");
+    if (key === deepKey) return;
+    deepKey = key;
+    deepClient.request(
+      {
+        alphabet: state.alphabet,
+        cx: state.cx,
+        cy: state.cy,
+        halfHeight: state.halfHeight,
+        aspect: gl.width / Math.max(1, gl.height),
+        depth: chosen.deepDepth,
+        precision: chosen.precision,
+      },
+      (frame) => {
+        deepFrame = frame;
+        probeIndex = -1;
+        toneDirty = true;
+        if (frame.error !== undefined) showError(frame.error);
+        draw();
+        syncStats();
+        syncProbe();
+      },
+    );
   }
 
   /** Which engine owns the view as it stands. Read in three places, so it is computed in one. */
   function handover(): Handover {
+    const c = centreNumbers(state);
     return chooseEngine({
       mode: state.engine,
-      cx: state.cx,
-      cy: state.cy,
+      cx: c.cx,
+      cy: c.cy,
       halfHeight: state.halfHeight,
       maxDegree: state.maxDegree,
       annulus: state.annulus,
@@ -250,7 +354,8 @@ function main(): void {
     const size = stage.resolution > 0 ? stage.resolution : 1024;
     const aspect = gl.width / Math.max(1, gl.height);
     const pixelRadius = limitPixelRadius(state.halfHeight, aspect, size);
-    const absz = Math.hypot(state.cx, state.cy);
+    const c = centreNumbers(state);
+    const absz = Math.hypot(c.cx, c.cy);
     let maxAbs = 1;
     if (alphabet !== null) {
       maxAbs = 0;
@@ -293,10 +398,22 @@ function main(): void {
     const a = alphabet;
     if (a === null) return;
     const aspect = gl.width / Math.max(1, gl.height);
-    const view = { cx: state.cx, cy: state.cy, halfHeight: state.halfHeight };
+    const centre = centreNumbers(state);
+    const view = { cx: centre.cx, cy: centre.cy, halfHeight: state.halfHeight };
     const engine = handover().engine;
     let any: boolean;
-    if (engine === "limit") {
+    if (engine === "deep") {
+      // The walk's roots, as OFFSETS. Nothing on the GPU ever sees the centre — which is the whole of
+      // ADR-0046 decision 3, and the reason a 1e-30 view is a picture rather than a lattice.
+      const target = stage.compositeTarget();
+      deep.render(target.framebuffer, target.size, {
+        points: deepFrame.points,
+        halfHeight: state.halfHeight,
+        aspect,
+        pointSize: DEEP_POINT_SIZE,
+      });
+      any = deepFrame.count > 0;
+    } else if (engine === "limit") {
       // The walk writes straight into the composite, so everything below this line — the equalisation
       // read-back, the ramp, the present pass, the export — is the same code the root cloud runs.
       const target = stage.compositeTarget();
@@ -337,8 +454,11 @@ function main(): void {
       exposure: state.exposure,
       // Under the limit engine the one quantity is the escape depth, so the colour choice picks the
       // RAMP rather than a second channel; `G` carries nothing and the mean reader stays off.
-      byDegree: engine === "roots" && state.colour === "degree",
-      degreeRange: [state.minDegree, state.maxDegree],
+      byDegree: engine !== "limit" && state.colour === "degree",
+      degreeRange:
+        engine === "deep"
+          ? [deepFrame.degreeMin, Math.max(deepFrame.degreeMin + 1, deepFrame.degreeMax)]
+          : [state.minDegree, state.maxDegree],
     });
     // The counts can only be read once the frame exists, and `syncStats` has already run by then on a
     // recompute. Refreshing here is safe: `syncStats` draws nothing, so it cannot come back round.
@@ -365,6 +485,14 @@ function main(): void {
     toneDirty = true;
     lastMaxDensity = 0;
 
+    if (handover().engine === "deep") {
+      progress.textContent = "";
+      requestDeep();
+      syncControls();
+      syncStats();
+      draw();
+      return;
+    }
     if (handover().engine === "limit") {
       // Nothing to enumerate: the walk is per pixel and the layers have just been dropped. Sweeping
       // millions of polynomials to fill textures nothing composites would cost the reader's cores for a
@@ -424,6 +552,7 @@ function main(): void {
     );
     syncControls();
     syncStats();
+    syncProbe();
   }
 
   function showError(message: string | null): void {
@@ -434,6 +563,89 @@ function main(): void {
     }
     errorBox.hidden = false;
     errorBox.textContent = message;
+  }
+
+  function deepSummary(): DeepSummary {
+    return {
+      alphabet: alphabet?.label ?? "the alphabet",
+      count: deepFrame.count,
+      distinct: deepFrame.distinct,
+      degreeMin: deepFrame.degreeMin,
+      degreeMax: deepFrame.degreeMax,
+      depth: deepFrame.depth,
+      nodes: deepFrame.nodes,
+      exhausted: deepFrame.exhausted,
+      precision: deepFrame.precision,
+      residual: deepFrame.residual,
+      halfHeight: state.halfHeight,
+      reason: handover().reason,
+      ...(deepFrame.error === undefined ? {} : { error: deepFrame.error }),
+    };
+  }
+
+  // --- the probe --------------------------------------------------------------------------------
+  /**
+   * What the picture is MADE of, under the cursor.
+   *
+   * It needs no second walk: the frame already holds every polynomial with a root in the view, each
+   * with the coefficients it was built from and the residual it was checked to. The probe is that list,
+   * read at the cursor — which is also why it can offer to re-centre on a root, the one action that
+   * makes a deeper view reachable at all (`centreOnRoot`).
+   */
+  function syncProbe(): void {
+    const chosen = handover();
+    probePanel.hidden = chosen.engine !== "deep";
+    if (probePanel.hidden) return;
+    probePanel.replaceChildren(el("h2", {}, "Under the cursor"));
+    if (deepFrame.count === 0) {
+      probePanel.append(
+        el("p", { class: "note" }, deepFrame.error ?? "No polynomial over this alphabet has a root in this view."),
+      );
+      return;
+    }
+    const root = rootAt(deepFrame, probeIndex >= 0 ? probeIndex : 0);
+    const a = alphabet;
+    if (root === null || a === null) return;
+    const dl = el("dl", { class: "stat-list" });
+    const line = (label: string, value: string, detail: string): void => {
+      dl.append(el("dt", { textContent: label }));
+      dl.append(
+        el("dd", {}, el("span", { class: "stat-value", textContent: value }), el("span", { class: "stat-detail", textContent: detail })),
+      );
+    };
+    line("Degree", String(root.degree), `${deepFrame.count} polynomials have a root in this view`);
+    line(
+      "Offset",
+      Math.hypot(root.dx, root.dy).toExponential(3),
+      `from the view centre — ${(Math.hypot(root.dx, root.dy) / Math.max(1e-300, state.halfHeight)).toPrecision(3)} of a half-height`,
+    );
+    line("|P′(α)|", root.derivative.toPrecision(4), "Michelen–Yakir's κ: how isolated this root is");
+    line(
+      "Residual",
+      root.residual.toExponential(2),
+      `|P(α)| / Σ|a_k||α|^k, in ${deepFrame.precision === "dd" ? "double-double" : "float64"}`,
+    );
+    probePanel.append(dl);
+    probePanel.append(el("p", { class: "coefficients", textContent: coefficientString(a, root.digits) }));
+    const centreButton = el("button", { class: "button", type: "button", textContent: "Centre on this root" });
+    centreButton.addEventListener("click", () => {
+      const moved = centreOnRoot(state.alphabet, root.digits, state.cx, state.cy, chosen.precision);
+      if ("error" in moved) {
+        showError(moved.error);
+        return;
+      }
+      // The centre is RE-DERIVED at this precision rather than shifted by the float32 offset the GPU
+      // drew: an offset is good to seven digits and a deep centre needs thirty.
+      apply({ ...state, cx: moved.cx, cy: moved.cy });
+    });
+    probePanel.append(el("div", { class: "buttons" }, centreButton));
+    probePanel.append(
+      el(
+        "p",
+        { class: "note" },
+        "≈ Every root here is Newton-polished from one walk at the view centre and carries the residual it reached. The coefficients are exact; the root is not.",
+      ),
+    );
   }
 
   // --- sync -------------------------------------------------------------------------------------
@@ -479,14 +691,17 @@ function main(): void {
     controls.dataset.engine = chosen.engine;
     depthRow.hidden = chosen.engine !== "limit";
     annulusRow.hidden = chosen.engine !== "limit";
+    const atFloor = state.halfHeight <= MIN_HALF_HEIGHT * 1.0001;
     const shallow =
       chosen.engine === "limit" && state.depth < chosen.suggestedDepth
         ? ` ⚠ At depth ${state.depth} the walk cannot separate points closer than about one texel, so this view will look filled in; depth ${chosen.suggestedDepth} resolves it.`
         : "";
     engineNote.textContent =
-      chosen.engine === "limit"
-        ? `Limit set — ${chosen.reason} Depth ${state.depth}, node budget ${NODE_BUDGET.toLocaleString("en-US")} per pixel. Cool grey: not walked. Warm grey: the budget ran out.${shallow}`
-        : `Root cloud — ${chosen.reason}`;
+      chosen.engine === "deep"
+        ? `Deep zoom — ${chosen.reason} Walking to degree ${chosen.deepDepth} in ${chosen.precision === "dd" ? "double-double" : "float64"}.${atFloor ? " ⚠ This is the tightest view the arithmetic can place; zooming further would draw noise." : ""}`
+        : chosen.engine === "limit"
+          ? `Limit set — ${chosen.reason} Depth ${state.depth}, node budget ${NODE_BUDGET.toLocaleString("en-US")} per pixel. Cool grey: not walked. Warm grey: the budget ran out.${shallow}`
+          : `Root cloud — ${chosen.reason}`;
 
     const above = state.maxDegree > LIVE_DEGREE_CAP;
     computeButton.hidden = !above;
@@ -504,7 +719,9 @@ function main(): void {
     statsPanel.replaceChildren(el("h2", {}, "What is in the picture"));
     const dl = el("dl", { class: "stat-list" });
     const lines =
-      chosen.engine === "limit"
+      chosen.engine === "deep"
+        ? deepLines(deepSummary())
+        : chosen.engine === "limit"
         ? limitLines(limitSummary())
         : statLines(totals, {
             minDegree: state.minDegree,
@@ -521,18 +738,25 @@ function main(): void {
       el(
         "p",
         { class: "note" },
-        chosen.engine === "limit"
-          ? "≈ A finite depth and a finite fudge: this is a SUPERSET of the limit set that shrinks onto it as the depth rises. Cited theorems in the places below are exact statements; nothing about this image is."
-          : "≈ Every figure is from a finite degree, solved numerically. Cited theorems in the places below are exact statements; nothing about this image is.",
+        chosen.engine === "deep"
+          ? "≈ Every root here is Newton-polished and carries its residual; the LIST is complete only to the walk's depth, so a deeper degree would add more. Cited theorems in the places below are exact statements; nothing about this image is."
+          : chosen.engine === "limit"
+            ? "≈ A finite depth and a finite fudge: this is a SUPERSET of the limit set that shrinks onto it as the depth rises. Cited theorems in the places below are exact statements; nothing about this image is."
+            : "≈ Every figure is from a finite degree, solved numerically. Cited theorems in the places below are exact statements; nothing about this image is.",
       ),
     );
     // The stage's alternative text is generated, not written: a hand-written one drifts the first time
     // the state changes (the Contour Integration M6.4 finding).
-    const summary = chosen.engine === "limit" ? describeLimit(limitSummary()) : describeTotals(totals, state);
+    const summary =
+      chosen.engine === "deep"
+        ? describeDeep(deepSummary())
+        : chosen.engine === "limit"
+          ? describeLimit(limitSummary())
+          : describeTotals(totals, state);
     a11y.announce(summary);
     gl.setAttribute(
       "aria-label",
-      `${chosen.engine === "limit" ? "Limit set" : "Root cloud"}, ${alphabet?.label ?? "an alphabet"}, centred at ${state.cx.toFixed(4)} ${state.cy < 0 ? "−" : "+"} ${Math.abs(state.cy).toFixed(4)}i, half-height ${state.halfHeight.toPrecision(3)}. ${summary}`,
+      `${chosen.engine === "limit" ? "Limit set" : chosen.engine === "deep" ? "Deep zoom" : "Root cloud"}, ${alphabet?.label ?? "an alphabet"}, centred at ${state.cx} ${state.cy.startsWith("-") ? "−" : "+"} ${state.cy.replace(/^-/, "")}i, half-height ${state.halfHeight.toPrecision(3)}. ${summary}`,
     );
   }
 
@@ -590,7 +814,9 @@ function main(): void {
       toneDirty = true;
       syncControls();
       syncStats();
+      syncProbe();
     }
+    if (handover().engine === "deep") requestDeep();
     draw();
     syncHash();
   }
@@ -598,7 +824,7 @@ function main(): void {
   function onKey(action: CanvasKeyAction): void {
     const step = state.halfHeight * 0.12;
     if (action.kind === "pan") {
-      apply({ ...state, cx: state.cx + action.dx * step, cy: state.cy - action.dy * step });
+      apply(shiftCentre(state, action.dx * step, -action.dy * step));
       return;
     }
     if (action.kind === "zoom") {
@@ -616,10 +842,23 @@ function main(): void {
     gl.setPointerCapture(e.pointerId);
   });
   gl.addEventListener("pointermove", (e) => {
-    if (dragging === null) return;
-    const moved = panView(currentView(), viewport(), e.clientX - dragging.x, e.clientY - dragging.y);
+    if (dragging === null) {
+      if (handover().engine === "deep" && deepFrame.count > 0) {
+        const at = offsetOf(e.clientX, e.clientY);
+        const i = nearestRoot(deepFrame, at.dx, at.dy);
+        if (i !== probeIndex) {
+          probeIndex = i;
+          syncProbe();
+        }
+      }
+      return;
+    }
+    const aspect = gl.width / Math.max(1, gl.height);
+    const rect = gl.getBoundingClientRect();
+    const perPx = (2 * state.halfHeight) / Math.max(1, rect.height);
+    // Dragging moves the WORLD under the cursor, so the centre moves the other way.
+    apply(shiftCentre(state, -(e.clientX - dragging.x) * perPx * (aspect / aspect), (e.clientY - dragging.y) * perPx));
     dragging = { x: e.clientX, y: e.clientY };
-    apply({ ...state, cx: moved.cx, cy: moved.cy, halfHeight: moved.halfSpan });
   });
   const endDrag = (e: PointerEvent): void => {
     dragging = null;
@@ -631,15 +870,8 @@ function main(): void {
     "wheel",
     (e) => {
       e.preventDefault();
-      const rect = gl.getBoundingClientRect();
-      const zoomed = zoomView(
-        currentView(),
-        viewport(),
-        e.clientX - rect.left,
-        e.clientY - rect.top,
-        Math.exp(-e.deltaY * 0.0016),
-      );
-      apply({ ...state, cx: zoomed.cx, cy: zoomed.cy, halfHeight: zoomed.halfSpan });
+      const at = offsetOf(e.clientX, e.clientY);
+      apply(zoomAbout(state, at.dx, at.dy, Math.exp(-e.deltaY * 0.0016)));
     },
     { passive: false },
   );

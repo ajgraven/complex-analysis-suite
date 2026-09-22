@@ -6,6 +6,8 @@ import { orbitSpace } from "../src/engine/orbits";
 import { sweepChunk } from "../src/engine/sweep";
 import { walkGrid, walkSpec } from "../src/engine/limit/walk";
 import { chooseEngine } from "../src/engine/limit/handover";
+import { centreNumbers } from "../src/state";
+import { runReference } from "../src/engine/deep/reference";
 
 describe("the named places", () => {
   it("have distinct ids and are all reachable by id", () => {
@@ -30,7 +32,7 @@ describe("the named places", () => {
     // A place pointing at an empty window would be a caption with nothing under it. Checked by sweeping
     // its top degree and asking whether any root lands inside its view.
     for (const place of PLACES) {
-      if (place.state.engine === "limit") continue; // covered by the contrast check below
+      if (place.state.engine !== "roots" && place.state.engine !== "auto") continue; // the other engines are checked below
       const compiled = compileAlphabet(place.state.alphabet);
       if (!("alphabet" in compiled)) throw new Error(place.id);
       const a = compiled.alphabet;
@@ -58,7 +60,8 @@ describe("the named places", () => {
           const zy = g.rev ? -y / (x * x + y * y) : g.conj ? -y : y;
           const fx = g.neg ? -zx : zx;
           const fy = g.neg ? -zy : zy;
-          if (Math.abs(fx - place.state.cx) < halfW && Math.abs(fy - place.state.cy) < place.state.halfHeight * 1.6) {
+          const centre = centreNumbers(place.state);
+          if (Math.abs(fx - centre.cx) < halfW && Math.abs(fy - centre.cy) < place.state.halfHeight * 1.6) {
             inside++;
           }
         }
@@ -96,8 +99,7 @@ describe("the named places", () => {
       const g = walkGrid(
         walkSpec(compiled.alphabet),
         {
-          cx: place.state.cx,
-          cy: place.state.cy,
+          ...centreNumbers(place.state),
           halfWidth: place.state.halfHeight * 1.6,
           halfHeight: place.state.halfHeight,
         },
@@ -120,6 +122,38 @@ describe("the named places", () => {
     }
   });
 
+  it("every deep place has roots to draw, at the precision it names", () => {
+    // The root sweep above cannot reach these: a deep place opens at a half-height of 1e-16 or below,
+    // where no degree this suite can enumerate has a root. What must hold is that the DEEP walk finds
+    // some — a deep place aimed at an empty neighbourhood would be the hexahole defect at thirty orders
+    // of magnitude — and that its residual is the one its arithmetic promises.
+    for (const place of PLACES) {
+      if (place.state.engine !== "deep") continue;
+      const chosen = chooseEngine({
+        mode: place.state.engine,
+        ...centreNumbers(place.state),
+        halfHeight: place.state.halfHeight,
+        maxDegree: place.state.maxDegree,
+        annulus: place.state.annulus,
+        pixels: 1024,
+      });
+      const run = runReference({
+        alphabet: place.state.alphabet,
+        cx: place.state.cx,
+        cy: place.state.cy,
+        halfHeight: place.state.halfHeight,
+        aspect: 1.55,
+        depth: chosen.deepDepth,
+        precision: chosen.precision,
+      });
+      if ("error" in run) throw new Error(`${place.id}: ${run.error}`);
+      expect(run.roots.length, `${place.id} has no roots in its own window`).toBeGreaterThan(20);
+      expect(run.exhausted, `${place.id} ran out of budget`).toBe(false);
+      const worst = Math.max(...run.roots.map((r) => r.residual));
+      expect(worst, `${place.id} residual`).toBeLessThan(run.precision === "dd" ? 1e-30 : 1e-14);
+    }
+  });
+
   it("every place lands on the engine its caption describes", () => {
     // A place that says "the limit-set engine" and opens under the root engine would be a caption about
     // a picture the reader is not being shown. `auto` is allowed to agree with the place; what is not
@@ -127,8 +161,7 @@ describe("the named places", () => {
     for (const place of PLACES) {
       const chosen = chooseEngine({
         mode: place.state.engine,
-        cx: place.state.cx,
-        cy: place.state.cy,
+        ...centreNumbers(place.state),
         halfHeight: place.state.halfHeight,
         maxDegree: place.state.maxDegree,
         annulus: place.state.annulus,

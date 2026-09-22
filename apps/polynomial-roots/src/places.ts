@@ -20,10 +20,10 @@ export interface Place {
   readonly state: AppState;
 }
 
-const at = (cx: number, cy: number, halfHeight: number, over: Partial<AppState> = {}): AppState => ({
+const at = (cx: number | string, cy: number | string, halfHeight: number, over: Partial<AppState> = {}): AppState => ({
   ...DEFAULT_STATE,
-  cx,
-  cy,
+  cx: String(cx),
+  cy: String(cy),
   halfHeight,
   ...over,
 });
@@ -150,6 +150,31 @@ export const PLACES: readonly Place[] = [
     fact: "M is the connectedness locus of the pair x ↦ zx, x ↦ z(x−1)+1; it has infinitely many holes, and its interior is dense away from the real axis.",
     source: "Barnsley & Harrington (1985); Bandt (2002); Calegari, Koch & Walker (2017).",
     state: at(0, 0, 1.0, { alphabet: { preset: "trinary" }, engine: "limit", depth: 24 }),
+  },
+  {
+    id: "deep-zoom-story",
+    title: "Down to 10⁻³⁰, on one root",
+    seen: "The slide deck's descent, carried as far as the arithmetic goes. The centre is an exact root of one degree-26 Littlewood polynomial — the one nearest the deck's own coordinates — and at every scale below it the roots of that polynomial's extensions crowd in, because the deeper the degree the finer they are spaced. The picture is the roots themselves, each solved from a single walk at the centre; the panel names them.",
+    fact: "For a Littlewood series P with a root α in the open disk and |P′(α)| bounded below, the roots of its degree-n extensions, magnified about α by α^(−(n+1)), converge to P′(α)^(−1)·D_α.",
+    source: "Michelen & Yakir, Dragon curves in Littlewood roots (2026), Theorem 1; the coordinates are Baez, Christensen & Derbyshire's slide deck, 0.42065 + 0.48354i.",
+    state: at(
+      "4.206512041286740015298812143756041e-1",
+      "4.8372964222232227103378339664795e-1",
+      1e-18,
+      { engine: "deep" },
+    ),
+  },
+  {
+    id: "deep-float64-floor",
+    title: "Where a double runs out",
+    seen: "The same centre at 10⁻¹⁶, one step past what a 53-bit number can place. In double-double the walk finds its roots; in float64 the same walk finds a different set, because the centre itself is no longer representable. The engine chooses, and the panel says which arithmetic drew the picture.",
+    source: "Measured: the two agree on the root set exactly from 10⁻¹⁰ to 10⁻¹³, part company at 10⁻¹⁴, and by 10⁻²⁴ float64 finds nothing at all.",
+    state: at(
+      "4.206512041286740015298812143756041e-1",
+      "4.8372964222232227103378339664795e-1",
+      1e-16,
+      { engine: "deep" },
+    ),
   },
   {
     id: "cube-roots",

@@ -18,12 +18,58 @@
 // view centred there would hand over to an engine that paints the whole frame neutral. The root engine
 // covers exactly that region well, so `auto` keeps it there and says so.
 import { ANNULUS_INNER, MAX_DEPTH, MIN_DEPTH } from "./walk.js";
+import { MAX_REFERENCE_DEPTH } from "../deep/reference.js";
+import type { Precision } from "../deep/num.js";
 
 /** What the reader asked for. */
-export type EngineMode = "auto" | "roots" | "limit";
+export type EngineMode = "auto" | "roots" | "limit" | "deep";
 
 /** What is actually drawing. */
-export type EngineChoice = "roots" | "limit";
+export type EngineChoice = "roots" | "limit" | "deep";
+
+/**
+ * How many float32 ulps of the view CENTRE a texel must span for the limit-set shader to place its own
+ * grid, below which the deep engine takes over.
+ *
+ * The shader computes `z = centre + halfExtent·(2uv − 1)` in float32, so the whole row is rounded onto
+ * a lattice of spacing `ulp32(centre)` however fine the texels are. Measured at `|z| ≈ 0.42`, counting
+ * distinct float32 `z` values across a 1024-texel row: **1024 of 1024 down to a half-height of 1e-5,
+ * then 329 at 1e-5.5, 105 at 1e-6 and 11 at 1e-7.** One ulp a texel is exactly where it collapses, so
+ * four is the margin at which the picture is still the picture.
+ */
+export const FLOAT32_TEXEL_ULPS = 4;
+
+/**
+ * Levels beyond what the view's own scale demands that the deep walk explores.
+ *
+ * Roots of degree `d` near `α` are spaced about `|α|^(d+1)`, so `log(radius)/log|α|` is the degree that
+ * first reaches the view and every level beyond it roughly doubles the count. Measured at the zoom
+ * story's root, at a half-height of 1e-8: margin 0 gives 35 roots from 303 nodes, margin 4 gives 551
+ * from 2,511, and margin 8 gives 8,679 from 36,187 and takes 1.8 s. Four is the picture; eight is the
+ * same picture at ten times the price.
+ */
+export const DEEP_DEPTH_MARGIN = 4;
+
+/**
+ * Below this half-height the reference walk runs in double-double rather than float64.
+ *
+ * Measured against each other on the zoom story's root, pairing roots by their coefficient vectors:
+ * the two agree on the root SET exactly from 1e-10 to 1e-13, with the offsets differing by 9.1e-7 of a
+ * view height at 1e-10 and 1.0e-3 at 1e-13; at 1e-14 the sets part (6 roots one way, 4 the other); at
+ * 1e-16 the offsets differ by a whole view height; and by 1e-24 float64 finds nothing at all. The
+ * switch sits at 1e-11, where the disagreement is a hundredth of a texel.
+ */
+export const DOUBLE_DOUBLE_BELOW = 1e-11;
+
+/** One float32 ulp at `x`. */
+function ulp32(x: number): number {
+  const a = Math.abs(x);
+  if (!(a > 0)) return Math.pow(2, -149);
+  return Math.pow(2, Math.floor(Math.log2(a)) - 23);
+}
+
+/** The stage's aspect, for the radius the deep walk prunes against. Close enough for a depth. */
+const ASPECT_GUESS = 1.55;
 
 /** The view and the state the choice is made from. */
 export interface HandoverInput {
@@ -50,6 +96,12 @@ export interface Handover {
   readonly spacing: number;
   /** True when the choice was the reader's rather than the rule's. */
   readonly forced: boolean;
+  /** The depth the deep walk would use here. */
+  readonly deepDepth: number;
+  /** The arithmetic the deep walk would use here. */
+  readonly precision: Precision;
+  /** How many float32 ulps of the centre one texel spans — below `FLOAT32_TEXEL_ULPS` the shader blurs. */
+  readonly texelUlps: number;
   /**
    * The depth at which the walk's own resolution matches one texel.
    *
@@ -79,52 +131,70 @@ export function chooseEngine(input: HandoverInput): Handover {
   const r = absz > 1 ? 1 / absz : absz;
   const spacing = r === 0 ? 0 : Math.pow(r, input.maxDegree + 1);
   const banded = r > ANNULUS_INNER && !input.annulus;
+  const radius = Math.hypot(input.halfHeight * ASPECT_GUESS, input.halfHeight);
+  const deepDepth =
+    r <= 0 || r >= 1
+      ? MIN_DEPTH
+      : Math.max(1, Math.min(MAX_REFERENCE_DEPTH, Math.ceil(Math.log(radius) / Math.log(r)) + DEEP_DEPTH_MARGIN));
+  const precision: Precision = input.halfHeight < DOUBLE_DOUBLE_BELOW ? "dd" : "float64";
+  const texelUlps = pixelSize / ulp32(Math.max(Math.abs(input.cx), Math.abs(input.cy), r));
   const suggestedDepth =
     r <= 0 || r >= 1 || !(pixelSize > 0)
       ? MIN_DEPTH
       : Math.max(MIN_DEPTH, Math.min(MAX_DEPTH, Math.ceil(Math.log(pixelSize) / Math.log(r))));
+  const base = { pixelSize, spacing, suggestedDepth, deepDepth, precision, texelUlps };
 
   if (input.mode === "roots") {
-    return { engine: "roots", reason: "you chose the root engine.", pixelSize, spacing, forced: true, suggestedDepth };
+    return { ...base, engine: "roots", reason: "you chose the root engine.", forced: true };
+  }
+  if (input.mode === "deep") {
+    return {
+      ...base,
+      engine: "deep",
+      reason: "you chose the deep engine: one walk at the view's centre, and the roots it finds there.",
+      forced: true,
+    };
   }
   if (input.mode === "limit") {
     return {
+      ...base,
       engine: "limit",
       reason: banded
         ? `you chose the limit-set engine, and this view is inside the band it does not enter — turn the band on, or it will be blank.`
         : "you chose the limit-set engine.",
-      pixelSize,
-      spacing,
       forced: true,
-      suggestedDepth,
     };
   }
   if (banded) {
     return {
+      ...base,
       engine: "roots",
       reason: `this view is in the band around |z| = 1 that the limit-set walk does not enter; the root engine covers it.`,
-      pixelSize,
-      spacing,
       forced: false,
-      suggestedDepth,
+    };
+  }
+  if (texelUlps < FLOAT32_TEXEL_ULPS) {
+    // Deeper than the limit-set shader can place its own texels — see `FLOAT32_TEXEL_ULPS`. Checked
+    // BEFORE the limit test, because it is the strictly deeper of the two conditions.
+    return {
+      ...base,
+      engine: "deep",
+      reason: `a texel here spans ${sig(texelUlps)} float32 ulps of the centre, so the limit-set shader can no longer place its own grid; one walk at the centre, in ${precision === "dd" ? "double-double" : "float64"}, takes over.`,
+      forced: false,
     };
   }
   if (pixelSize < spacing) {
     return {
+      ...base,
       engine: "limit",
       reason: `a pixel here is ${sig(pixelSize)} wide and degree-${input.maxDegree} roots are about ${sig(spacing)} apart, so the root cloud has come apart into dots.`,
-      pixelSize,
-      spacing,
       forced: false,
-      suggestedDepth,
     };
   }
   return {
+    ...base,
     engine: "roots",
     reason: `degree-${input.maxDegree} roots are about ${sig(spacing)} apart here and a pixel is ${sig(pixelSize)} wide, so they still fill the picture.`,
-    pixelSize,
-    spacing,
     forced: false,
-    suggestedDepth,
   };
 }

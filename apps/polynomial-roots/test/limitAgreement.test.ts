@@ -5,6 +5,7 @@ import { walkGrid, walkSpec } from "../src/engine/limit/walk";
 import { orbitSpace } from "../src/engine/orbits";
 import { sweepChunk } from "../src/engine/sweep";
 import { placeById } from "../src/places";
+import { centreNumbers } from "../src/state";
 
 const compile = (spec: Parameters<typeof compileAlphabet>[0]): Alphabet => {
   const r = compileAlphabet(spec);
@@ -124,7 +125,7 @@ describe("the hexaholes", () => {
     const depth = place.state.depth;
     const g = walkGrid(
       walkSpec(alphabet),
-      { cx: place.state.cx, cy: place.state.cy, halfWidth: place.state.halfHeight * 1.6, halfHeight: place.state.halfHeight },
+      { ...centreNumbers(place.state), halfWidth: place.state.halfHeight * 1.6, halfHeight: place.state.halfHeight },
       width,
       height,
       { depth },
@@ -153,8 +154,7 @@ describe("the hexaholes", () => {
     if (place === undefined) throw new Error("the hexahole place is gone");
     const spec = walkSpec(compile(place.state.alphabet));
     const view = {
-      cx: place.state.cx,
-      cy: place.state.cy,
+      ...centreNumbers(place.state),
       halfWidth: place.state.halfHeight * 1.6,
       halfHeight: place.state.halfHeight,
     };

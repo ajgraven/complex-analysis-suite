@@ -6,6 +6,7 @@ import { sweepChunk } from "../src/engine/sweep";
 import { compileAlphabet } from "../src/engine/alphabet";
 import { orbitSpace } from "../src/engine/orbits";
 import { PLACES, placeById } from "../src/places";
+import { centreNumbers } from "../src/state";
 import type { StageTransform } from "../src/stage/glStage";
 
 // **The only place this app's real GLSL is compiled, and the only place the accumulation can be seen at
@@ -226,8 +227,9 @@ describe("a named place renders a picture, not a black screen", () => {
     expect(place).toBeDefined();
     if (place === undefined) return;
     const degrees: [number, number] = [8, 12]; // what this suite can afford; the app loads 8–16
-    const wide = litFraction(place.state.alphabet, degrees, place.state.cx, place.state.cy, place.state.halfHeight);
-    const tight = litFraction(place.state.alphabet, degrees, place.state.cx, place.state.cy, 0.008);
+    const centre = centreNumbers(place.state);
+    const wide = litFraction(place.state.alphabet, degrees, centre.cx, centre.cy, place.state.halfHeight);
+    const tight = litFraction(place.state.alphabet, degrees, centre.cx, centre.cy, 0.008);
     expect(tight).toBeLessThan(0.004);
     expect(wide).toBeGreaterThan(0.004);
     expect(wide).toBeGreaterThan(tight * 8);
@@ -237,14 +239,15 @@ describe("a named place renders a picture, not a black screen", () => {
     // Cheap and structural: no place drawn by the root engine may be tighter than the window measured
     // above to be unviewable at its own alphabet. The rule used to cover the whole gallery, and its own
     // comment said that a place needing a tighter window needs PR-2's limit-set engine — which is now
-    // built, so the exception it predicted is the exception it gets. A place below the floor must
-    // therefore name the other engine, and `limit.browser.test.ts` renders it to show it is not black.
+    // built, and PR-3's reference walk after it, so the exception it predicted is the exception it gets
+    // twice over. A place below the floor must name one of the other two engines, and
+    // `limit.browser.test.ts` / `deep.browser.test.ts` render them to show they are not black.
     for (const p of PLACES) {
-      if (p.state.engine === "limit") continue;
+      if (p.state.engine === "limit" || p.state.engine === "deep") continue;
       expect(p.state.halfHeight, p.id).toBeGreaterThanOrEqual(0.02);
     }
     const tight = PLACES.filter((p) => p.state.halfHeight < 0.02);
     expect(tight.length, "the exception is meant to be used").toBeGreaterThan(0);
-    for (const p of tight) expect(p.state.engine, p.id).toBe("limit");
+    for (const p of tight) expect(["limit", "deep"], p.id).toContain(p.state.engine);
   });
 });

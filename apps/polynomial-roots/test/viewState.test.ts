@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { encodeViewState } from "@cas/interchange";
 import { decodeState, encodeState } from "../src/viewState";
 import { clampState, DEFAULT_STATE, MAX_DEGREE } from "../src/state";
+import { dd, ddFromString, ddSub, ddToNumber, ddToString } from "../src/engine/deep/dd";
 import type { AppState } from "../src/state";
 import { PLACES } from "../src/places";
 
@@ -21,8 +22,8 @@ const A: AppState = clampState({
   colour: "density",
   exposure: 1,
   gamma: 1,
-  cx: 0,
-  cy: 0,
+  cx: "0",
+  cy: "0",
   halfHeight: 1.45,
   circleDelta: 0.02,
   engine: "auto",
@@ -36,8 +37,8 @@ const B: AppState = clampState({
   colour: "degree",
   exposure: 6.25,
   gamma: 0.62,
-  cx: -0.372368,
-  cy: 0.517839,
+  cx: "-0.372368",
+  cy: "0.517839",
   halfHeight: 0.00025,
   circleDelta: 0.004,
   engine: "limit",
@@ -69,25 +70,53 @@ describe("the permalink round trip", () => {
     expect(s.colour).toBe(B.colour);
     expect(s.exposure).toBeCloseTo(B.exposure, 6);
     expect(s.gamma).toBeCloseTo(B.gamma, 6);
-    expect(s.cx).toBeCloseTo(B.cx, 9);
-    expect(s.cy).toBeCloseTo(B.cy, 9);
+    expect(s.cx).toBe(B.cx);
+    expect(s.cy).toBe(B.cy);
     expect(s.halfHeight).toBeCloseTo(B.halfHeight, 12);
     expect(s.circleDelta).toBeCloseTo(B.circleDelta, 9);
   });
 
-  it("carries a deep view without losing it to rounding", () => {
-    const deep = clampState({ ...A, cx: 0.42065, cy: 0.48354, halfHeight: 2.4456e-3 });
+  it("carries a deep centre EXACTLY, to the last digit it was given", () => {
+    // The centre is the one field a permalink may not round. At a half-height of 1e-30 the view spans
+    // thirty orders below the centre's own magnitude, so a coordinate rounded to nine — or to
+    // seventeen — significant figures opens somewhere else entirely, and nothing on the page would say
+    // so. It rides as a decimal STRING and comes back character for character.
+    const deep = clampState({
+      ...A,
+      cx: "4.206512041286740015298812143756041e-1",
+      cy: "4.8372964222232227103378339664795e-1",
+      halfHeight: 1e-30,
+      engine: "deep",
+    });
     const s = settled(deep).state;
-    expect(s.halfHeight).toBeCloseTo(deep.halfHeight, 12);
-    // Nine significant figures: the view's own precision, far beyond a 1024-pixel stage.
-    expect(Math.abs(s.cx - deep.cx)).toBeLessThan(1e-9);
+    expect(s.cx).toBe(deep.cx);
+    expect(s.cy).toBe(deep.cy);
+    expect(s.halfHeight).toBe(deep.halfHeight);
+    expect(s.engine).toBe("deep");
+    // And the number it stands for survives the round trip in double-double, not merely the text.
+    const before = ddFromString(deep.cx);
+    const after = ddFromString(s.cx);
+    expect(after).toEqual(before);
+    // A double could not have carried it: the nearest one differs from the string by more than a view.
+    expect(Math.abs(ddToNumber(before ?? [0, 0]) - Number(deep.cx))).toBeLessThan(1e-16);
+    expect(ddToString(ddSub(before ?? [0, 0], dd(Number(deep.cx))))).not.toBe("0");
+  });
+
+  it("still opens a link that carries its centre as a NUMBER", () => {
+    // Every link minted before PR-3 does, and a double is a perfectly good centre for the views those
+    // links can express. Refusing them would break every shared picture the app has published.
+    const link = encodeViewState("pr", { cx: 0.42065, cy: 0.48354, h: 0.0244 });
+    const r = decodeState(link);
+    if (r === null || "refused" in r) throw new Error("refused a legacy link");
+    expect(Number(r.state.cx)).toBeCloseTo(0.42065, 12);
+    expect(Number(r.state.cy)).toBeCloseTo(0.48354, 12);
   });
 
   it("every named place reopens where it points, and its link is stable", () => {
-    // NOT bit-for-bit: the codec rounds coordinates to nine significant figures, which is deliberate and
-    // far finer than a 1024-pixel stage can show — `½·e^{i/5}` is 0.4900332889206208 and comes back as
-    // 0.490033289. What must hold is that the place reopens within that precision, and that encoding the
-    // decoded state gives the IDENTICAL link, so the same place shared twice is the same URL.
+    // The CENTRE is bit-for-bit, because it rides as a string; the scalars are still rounded to nine
+    // significant figures, which is deliberate and far finer than a 1024-pixel stage can show. What must
+    // hold is that the place reopens where it points, and that encoding the decoded state gives the
+    // IDENTICAL link, so the same place shared twice is the same URL.
     for (const place of PLACES) {
       const reopened = settled(place.state).state;
       const wanted = clampState(place.state);
@@ -95,8 +124,10 @@ describe("the permalink round trip", () => {
       expect(reopened.minDegree, place.id).toBe(wanted.minDegree);
       expect(reopened.maxDegree, place.id).toBe(wanted.maxDegree);
       expect(reopened.colour, place.id).toBe(wanted.colour);
-      for (const key of ["cx", "cy", "halfHeight", "exposure", "gamma", "circleDelta"] as const) {
-        const scale = Math.max(1e-12, Math.abs(wanted[key]));
+      expect(reopened.cx, `${place.id}.cx`).toBe(wanted.cx);
+      expect(reopened.cy, `${place.id}.cy`).toBe(wanted.cy);
+      for (const key of ["halfHeight", "exposure", "gamma", "circleDelta"] as const) {
+        const scale = Math.max(1e-32, Math.abs(wanted[key]));
         expect(Math.abs(reopened[key] - wanted[key]) / scale, `${place.id}.${key}`).toBeLessThan(1e-8);
       }
       expect(encodeState(reopened), place.id).toBe(encodeState(wanted));

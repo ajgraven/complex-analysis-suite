@@ -272,6 +272,23 @@ const PAGES = [
     expect: '.controls[data-engine="limit"]',
   },
   {
+    // THE DEEP ENGINE, through its own permalink. Its panel — the probe, the arithmetic, the residual —
+    // exists only at a zoom the front page cannot reach, and the reader who gets there arrives by a
+    // link. The centre is carried as a decimal STRING, so this entry also proves the codec still
+    // honours one: a link the app stopped reading would audit the landing page under this name.
+    id: "polynomial-roots-deep",
+    mount: "polynomial-roots",
+    dist: "apps/polynomial-roots/dist",
+    file: "index.html",
+    hash: viewState("pr", {
+      engine: "deep",
+      cx: "4.206512041286740015298812143756041e-1",
+      cy: "4.8372964222232227103378339664795e-1",
+      h: 1e-18,
+    }),
+    expect: '.controls[data-engine="deep"]',
+  },
+  {
     id: "correspondences",
     mount: "correspondences",
     dist: "apps/correspondences/dist",

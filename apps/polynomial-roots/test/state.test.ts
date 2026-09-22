@@ -27,8 +27,10 @@ describe("clampState", () => {
   });
 
   it("replaces a non-finite number with its default rather than carrying NaN into the stage", () => {
-    const s = clampState(base({ cx: NaN, cy: Infinity, halfHeight: NaN, exposure: NaN, gamma: -0 }));
-    for (const v of [s.cx, s.cy, s.halfHeight, s.exposure, s.gamma, s.circleDelta]) {
+    const s = clampState(base({ cx: "not a number", cy: "", halfHeight: NaN, exposure: NaN, gamma: -0 }));
+    expect(s.cx).toBe("0");
+    expect(s.cy).toBe("0");
+    for (const v of [s.halfHeight, s.exposure, s.gamma, s.circleDelta]) {
       expect(Number.isFinite(v)).toBe(true);
     }
     expect(s.halfHeight).toBe(DEFAULT_STATE.halfHeight);

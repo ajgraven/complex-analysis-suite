@@ -485,9 +485,6 @@ importers:
       '@cas/export':
         specifier: workspace:*
         version: link:../../packages/export
-      '@cas/flow':
-        specifier: workspace:*
-        version: link:../../packages/flow
       '@cas/gpu':
         specifier: workspace:*
         version: link:../../packages/gpu

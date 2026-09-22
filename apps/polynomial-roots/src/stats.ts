@@ -220,3 +220,76 @@ export function describeLimit(s: LimitSummary): string {
         : ` ${formatShare(s.shares.inSet, walked)} of the walked area is in it.`;
   return `The limit set of ${s.alphabet} to depth ${s.depth}: the points at which a power series over the alphabet can vanish, shaded by how deep the search survived.${held} ${s.reason}`;
 }
+
+/** What the deep engine drew, for the panel and the accessible description. */
+export interface DeepSummary {
+  readonly alphabet: string;
+  /** Polynomials with a root in the view. */
+  readonly count: number;
+  /** Distinct POINTS among them — see `ReferenceFrame.distinct`. */
+  readonly distinct: number;
+  readonly degreeMin: number;
+  readonly degreeMax: number;
+  /** The walk's depth cap. */
+  readonly depth: number;
+  readonly nodes: number;
+  /** The node budget ran out, so the list is partial. */
+  readonly exhausted: boolean;
+  readonly precision: "float64" | "dd";
+  /** The worst residual in the frame — the certificate for the whole picture. */
+  readonly residual: number;
+  readonly halfHeight: number;
+  readonly reason: string;
+  readonly error?: string;
+}
+
+/**
+ * The panel's lines under the deep engine.
+ *
+ * There is no density to report and no set: this engine draws a FINITE LIST of roots, each solved and
+ * each carrying its own residual. So what it owes the reader is how many there are, what degrees they
+ * came from, and — the line that matters — the worst residual, which is the only honest statement about
+ * how well the arithmetic held at this depth.
+ */
+export function deepLines(s: DeepSummary): StatLine[] {
+  const lines: StatLine[] = [
+    {
+      label: "Roots here",
+      value: formatCount(s.count),
+      detail:
+        s.count === 0
+          ? "no polynomial over this alphabet has a root in this view"
+          : `polynomials of degree ${s.degreeMin}–${s.degreeMax}, on ${formatCount(s.distinct)} distinct points — if P is Littlewood with a root here, so is P·(1 + z^(d+1))`,
+    },
+    {
+      label: "Arithmetic",
+      value: s.precision === "dd" ? "double-double" : "float64",
+      detail:
+        s.precision === "dd"
+          ? "a pair of doubles, ~106 bits — what a view below 10⁻¹¹ needs"
+          : "53 bits, which places every view above about 10⁻¹¹",
+    },
+    {
+      label: "Worst residual",
+      value: s.count === 0 ? "—" : s.residual.toExponential(2),
+      detail: "|P(α)| / Σ|a_k||α|^k over every root drawn — the certificate, not the hope",
+    },
+  ];
+  if (s.exhausted) {
+    lines.push({
+      label: "Not finished",
+      value: formatCount(s.nodes),
+      detail: "nodes before the budget ran out; this list is PARTIAL and the picture is missing roots",
+    });
+  }
+  return lines;
+}
+
+/** The one-sentence summary of a deep frame. */
+export function describeDeep(s: DeepSummary): string {
+  if (s.error !== undefined) return `The deep walk could not run: ${s.error}`;
+  if (s.count === 0) {
+    return `No polynomial over ${s.alphabet} has a root within ${s.halfHeight.toExponential(1)} of this centre. ${s.reason}`;
+  }
+  return `${formatCount(s.count)} roots of ${s.alphabet} polynomials of degree ${s.degreeMin} to ${s.degreeMax}, on ${formatCount(s.distinct)} distinct points, each solved from one walk at the view centre in ${s.precision === "dd" ? "double-double" : "float64"} and drawn as an offset from it, to a worst residual of ${s.residual.toExponential(2)}. ${s.reason}`;
+}

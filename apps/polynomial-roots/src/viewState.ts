@@ -18,10 +18,14 @@ import { decodeViewState, encodeViewState } from "@cas/interchange";
 import type { AlphabetSpec } from "./engine/alphabet.js";
 import { compileAlphabet } from "./engine/alphabet.js";
 import { MAX_DEPTH as WALK_MAX_DEPTH, MIN_DEPTH as WALK_MIN_DEPTH } from "./engine/limit/walk.js";
+import { ddFromString } from "./engine/deep/dd.js";
 import { clampState, DEFAULT_STATE, MAX_DEGREE } from "./state.js";
 import type { AppState } from "./state.js";
 
 const APP = "pr";
+
+/** The engines a link may name. `auto` is the default and is never written. */
+const ENGINES: readonly string[] = ["roots", "limit", "deep"];
 
 const isNum = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x);
 const isStr = (x: unknown): x is string => typeof x === "string";
@@ -42,8 +46,11 @@ export function encodeState(state: AppState): string {
   if (s.colour !== d.colour) payload.colour = s.colour;
   if (s.exposure !== d.exposure) payload.exposure = round(s.exposure);
   if (s.gamma !== d.gamma) payload.gamma = round(s.gamma);
-  if (s.cx !== d.cx) payload.cx = round(s.cx);
-  if (s.cy !== d.cy) payload.cy = round(s.cy);
+  // The centre goes on the wire as a STRING. A JSON number is a double and a deep view's centre is not
+  // one; a link that rounded it would open somewhere else entirely, which is the one thing a permalink
+  // must not do.
+  if (s.cx !== d.cx) payload.cx = s.cx;
+  if (s.cy !== d.cy) payload.cy = s.cy;
   if (s.halfHeight !== d.halfHeight) payload.h = round(s.halfHeight);
   if (s.circleDelta !== d.circleDelta) payload.delta = round(s.circleDelta);
   if (s.engine !== d.engine) payload.engine = s.engine;
@@ -93,7 +100,7 @@ export function decodeState(hashOrLink: string): DecodeResult {
   if (s.colour !== undefined && s.colour !== "density" && s.colour !== "degree") {
     return { refused: `this link asks for a colour mode this app does not have ("${String(s.colour)}")` };
   }
-  if (s.engine !== undefined && s.engine !== "auto" && s.engine !== "roots" && s.engine !== "limit") {
+  if (s.engine !== undefined && !["auto", "roots", "limit", "deep"].includes(String(s.engine))) {
     return { refused: `this link asks for an engine this app does not have ("${String(s.engine)}")` };
   }
   if (isNum(s.depth) && (s.depth < WALK_MIN_DEPTH || s.depth > WALK_MAX_DEPTH)) {
@@ -104,7 +111,17 @@ export function decodeState(hashOrLink: string): DecodeResult {
   if (s.annulus !== undefined && typeof s.annulus !== "boolean") {
     return { refused: `this link carries an unreadable value for "annulus"` };
   }
-  for (const key of ["exposure", "gamma", "cx", "cy", "h", "delta", "depth"] as const) {
+  for (const key of ["cx", "cy"] as const) {
+    // Numbers are accepted too: every link minted before the centre became a string carries them, and
+    // a double is a perfectly good centre for the views those links can express.
+    if (s[key] !== undefined && !isStr(s[key]) && !isNum(s[key])) {
+      return { refused: `this link carries an unreadable value for "${key}"` };
+    }
+    if (s[key] !== undefined && ddFromString(String(s[key])) === null) {
+      return { refused: `this link's ${key} coordinate "${String(s[key])}" is not a number this app can read` };
+    }
+  }
+  for (const key of ["exposure", "gamma", "h", "delta", "depth"] as const) {
     if (s[key] !== undefined && !isNum(s[key])) {
       return { refused: `this link carries an unreadable value for "${key}"` };
     }
@@ -118,11 +135,11 @@ export function decodeState(hashOrLink: string): DecodeResult {
       colour: s.colour === "degree" ? "degree" : "density",
       exposure: isNum(s.exposure) ? s.exposure : DEFAULT_STATE.exposure,
       gamma: isNum(s.gamma) ? s.gamma : DEFAULT_STATE.gamma,
-      cx: isNum(s.cx) ? s.cx : DEFAULT_STATE.cx,
-      cy: isNum(s.cy) ? s.cy : DEFAULT_STATE.cy,
+      cx: s.cx === undefined ? DEFAULT_STATE.cx : String(s.cx),
+      cy: s.cy === undefined ? DEFAULT_STATE.cy : String(s.cy),
       halfHeight: isNum(s.h) ? s.h : DEFAULT_STATE.halfHeight,
       circleDelta: isNum(s.delta) ? s.delta : DEFAULT_STATE.circleDelta,
-      engine: s.engine === "roots" || s.engine === "limit" ? s.engine : "auto",
+      engine: ENGINES.includes(String(s.engine)) ? (s.engine as AppState["engine"]) : "auto",
       depth: isNum(s.depth) ? s.depth : DEFAULT_STATE.depth,
       annulus: s.annulus === true,
     }),

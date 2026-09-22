@@ -8,6 +8,7 @@ import type { Alphabet } from "../src/engine/alphabet";
 import { walkAt, walkSpec } from "../src/engine/limit/walk";
 import { STATUS_EXCLUDED, STATUS_EXHAUSTED } from "../src/engine/limit/walkGlsl";
 import { placeById } from "../src/places";
+import { centreNumbers } from "../src/state";
 import "../src/styles/app.css";
 
 // **The only place the generated walk shader is compiled at all.** `walkGlsl.test.ts` checks what the
@@ -240,7 +241,7 @@ describe("the generated walk shader", () => {
     const place = placeById("hexaholes");
     if (place === undefined) throw new Error("the hexahole place is gone");
     const alphabet = compile(place.state.alphabet);
-    const view = { cx: place.state.cx, cy: place.state.cy, halfHeight: place.state.halfHeight };
+    const view = { ...centreNumbers(place.state), halfHeight: place.state.halfHeight };
 
     const darkFraction = (depth: number): number => {
       const reach = renderReach(m, alphabet, view, depth);

@@ -226,10 +226,13 @@ PR-1, `CET_C6` at M6), each rewiring its first consumer and pinning byte-identic
 ### 5.4 The reference walk and the handover (`src/engine/reference.ts`)
 
 - The float64 walk at `z₀` with the pruning radius set by the **view** (`ε = view radius × |P′|`
-  bound), returning survivors as `{ coeffIndex, degree, δ*, P′(z₀), residual }` with `δ*` Newton-
-  polished; below a pixel size of `1e−13`, the same code on `@cas/gpu/df64` numbers (the walk is
-  written against a tiny `Field` interface so the two are one function). Runs in a worker through
+  bound), returning survivors as `{ digits, degree, δ*, |P′(z₀)|, residual }` with `δ*` Newton-
+  polished; below a half-height of `1e−11`, the same code on **double-double** numbers (the walk is
+  written against a tiny `Num<T>` interface so the two are one function). Runs in a worker through
   `createComputeClient`; the GPU splats `δ*` around `z₀` in float32.
+  *(PR-3 corrected this line's `@cas/gpu/df64`: that module is a pair of FLOAT32s, ~47 bits, so on the
+  CPU it is a downgrade from a plain double. The step up is a pair of float64s — the same Dekker/Knuth
+  transforms at one higher radix, `src/engine/deep/dd.ts`. See the roadmap.)*
 - **Handover parity** is the milestone's gate: on a ladder of views straddling the threshold, the
   per-pixel shader and the reference walk paint the same hit set (measured as a per-pixel
   agreement rate `> 99.5 %`, the remainder within one pixel of a root) — the suite's dual-backend
@@ -485,11 +488,102 @@ pass where the stage changed. Sizes: *S* / *M* / *L*.
   > family. And one was `toPrecision(9)`'s own decimal point, which it writes for everything the app
   > normally carries and drops at nine integer digits: `vec2(123456789, 0.0)` is a GLSL compile error no
   > node test could see, and the custom alphabet lets a reader type it.
-- **PR-3 — deep zoom by reference, the probe · *M*.** `reference.ts` over a `Field` (float64, then
-  `@cas/gpu/df64`), the worker through `createComputeClient`, the float32 offset splat, the handover
-  ladder test, decimal-string coordinates in the permalink, and the **probe** (survivors at the
-  cursor with coefficient strings and residuals). Gate: the zoom story at `0.42065 + 0.48354i`
+- **PR-3 — deep zoom by reference, the probe · *M*. DONE.** `reference.ts` over a `Num<T>` (float64,
+  then a double-double), the worker through `createComputeClient`, the float32 offset splat, the
+  handover ladder test, decimal-string coordinates in the permalink, and the **probe** (survivors at
+  the cursor with coefficient strings and residuals). Gate: the zoom story at `0.42065 + 0.48354i`
   continues past height `1e−12` and the picture at the handover differs by `< 0.5 %` of pixels.
+
+  > **DONE.** `src/engine/deep/` (`dd.ts`, `num.ts`, `reference.ts`, `reference.worker.ts`) +
+  > `src/stage/deepPass.ts`; the view centre becomes a decimal string throughout and the camera a
+  > double-double one; two new places, a probe panel, a fourth a11y roster entry. 34 new node tests
+  > across 3 new files (plus additions to four existing ones — 37 net) and 4 new browser tests. Both gate clauses are met — the first needed restating,
+  > and the second, as at PR-2, turned out to have an exact form.
+  >
+  > **`@cas/gpu/df64` IS A FLOAT32 PAIR, so on the CPU it is a downgrade** — and ADR-0046 decision 3
+  > said to reuse it. Measured by reading it: every operation in `df64Ref.ts` runs through
+  > `Math.fround`, because its job is to be the spec for GLSL, where float32 IS the native type. A df64
+  > carries ~47 bits where a plain JS number already has 53, so the plan's ladder — *"float64, then
+  > `@cas/gpu/df64` below a pixel of 1e-13"* — steps DOWN at exactly the point it means to step up.
+  > What the decision was asking for is the same ALGORITHMS at one higher radix, and that is what
+  > `dd.ts` is: Dekker's split and Knuth's two-sum over float64, the split factor moved from `2^12 + 1`
+  > to `2^27 + 1`, `Math.fround` removed. `@cas/gpu/df64` stays what it is — the GPU's tool, and the
+  > shader's. Every operation is pinned against exact BigInt rationals rather than against another
+  > float computation.
+  >
+  > **The floor is reached rather than assumed.** At a half-height of 1e-30 the walk returns 2,223
+  > polynomials from 15,871 nodes in 2.2 s, worst residual **1.6e-32**; float64's on the same view is
+  > 1.8e-16, which is 53 bits and 106 bits made visible. The two agree on the root SET **exactly** from
+  > 1e-10 to 1e-13 (offsets differing by 9.1e-7 of a view height at 1e-10 and 1.0e-3 at 1e-13), part
+  > company at 1e-14, differ by a whole view height at 1e-16, and by 1e-24 float64 finds nothing at
+  > all. The switch sits at 1e-11.
+  >
+  > **A CENTRE IS NEVER INHERITED, and that is what makes a deep view reachable.** A `ReferenceRoot`
+  > carries a float64 OFFSET, so a centre built by adding one to the old centre is good to about 1e-17;
+  > at a half-height of 1e-24 the walk then finds NOTHING there — including the very polynomial the
+  > centre was taken from. The same trap one level up cost the first measurement its whole ladder: the
+  > root engine's points are a `Float32Array`, because they are GPU vertex data, so a centre read off
+  > one is good to seven digits and `|P|` at the supposed root measured 6.4e-8. `centreOnRoot`
+  > re-derives the root at the view's own precision, and it is the probe's "Centre on this root".
+  >
+  > **The permalink's centre is a decimal STRING, and the codec had to become exact.** A JSON number is
+  > a double and cannot hold the 32 significant figures a 1e-30 view needs. The first printer and parser
+  > both accumulated in double-double and the round trip was not stable — `π` printed, parsed and
+  > printed again differed in its last three digits, so the same view shared twice would have been two
+  > URLs. Both go through BigInt now: exact digits out of the value's own bits, correctly-rounded limbs
+  > back in. A link carrying its centre as a NUMBER still opens, because every link minted before this
+  > milestone does.
+  >
+  > **`@cas/flow` is dropped from this app.** `panView`/`zoomView` return an absolute float64
+  > `{cx, cy}`, and recovering "how far did the view move" from one at a half-height of 1e-30 means
+  > subtracting two numbers thirty orders apart — the exact cancellation the reference point exists to
+  > avoid. The camera is `centre + a small increment` in double-double, which is three lines, and one
+  > camera is safer than two that must be kept in step. The app consumes five packages now.
+  >
+  > **The float32 texel wall is measured, not assumed.** Counting distinct float32 `z` across a
+  > 1024-texel row at `|z| ≈ 0.42`: **1024 of 1024 down to a half-height of 1e-5, then 329 at 1e-5.5,
+  > 105 at 1e-6 and 11 at 1e-7.** One ulp a texel is where the limit-set shader's grid collapses, so the
+  > hand-over is at four, and the three engines are a ladder the zoom only ever descends.
+  >
+  > **The walk reaches each polynomial ONCE, but a polynomial can have two roots in the view.** Measured
+  > against the root engine over a window at `0.6 + 0.45i`: three of the sweep's 147 roots were second
+  > roots of polynomials already found, with `z₀` in the basin of a root just outside the rect. Each
+  > root is deflated out and Newton runs again, stopped by a NECESSARY condition on what is left —
+  > `|Q(z₀)| ≤ r·max|Q′|`, one Horner pass against a Newton's dozen. That is also the performance of
+  > the whole engine: the suite went 64 s → **7.5 s**, and the 1e-30 case 16.6 s → **2.2 s**. A second
+  > bound on the search, `ε/|P′(z₀)|`, was written and then REMOVED: the mutant that deleted it changed
+  > no result, and measuring it showed why — the necessary condition already refuses everything it
+  > would have, so it was 0.7 s of a 7.5 s suite spent deciding nothing. PR-1's Aberth seed radius
+  > again.
+  >
+  > **And the root engine's own list has duplicates**, which the first draft of that comparison read as
+  > roots the walk had missed: the sweep mirrors each orbit representative over the whole group, so a
+  > polynomial fixed by a group element yields the same root twice, while the walk enumerates up to
+  > UNITS and lists each polynomial once. 150 points, 147 distinct.
+  >
+  > **At depth the same root comes from MANY polynomials.** If `P` is Littlewood with a root at `α`, so
+  > is `P·(1 + z^(d+1))`, and `P·(1 + z^(d+1) + z^(2(d+1)))`, for ever. Measured at 1e-30: **2,223
+  > polynomials on 140 distinct points**, their degrees running 26, 53, 80, 107, 134 — steps of
+  > `deg P + 1`. So the deep picture's density is a MULTIPLICITY, "how many roots are here" and "how
+  > many dots are here" are different questions, and the panel reports both.
+  >
+  > **Two strides for one vertex layout.** `DeepPass` read four floats per root where `packFrame` writes
+  > six, so the pass took each position out of the middle of the previous record — and the picture still
+  > looked like a scatter of dots. One constant now, imported rather than agreed by inspection.
+  >
+  > **The depth margin is a measurement.** Each level beyond what the view's scale demands roughly
+  > doubles both the root count and the cost. At 1e-30: margin 4 gives 140 points in 2.2 s, margin 5
+  > gives 280 in 4.5 s, margin 6 gives 562 in 8.9 s. Four is the picture.
+  >
+  > **The gate, restated with its reason.** The slide deck's own centre `0.42065 + 0.48354i` is not a
+  > limit point below about 1e-4 — measured, the nearest root of degree ≤ 20 is 2.19e-4 away and the
+  > walk dies at 45 nodes at any half-height below 1e-6, so there is nothing there to continue INTO. The
+  > zoom story continues past 1e-12, and to 1e-30, **at a root near it**: an exact root of one degree-26
+  > Littlewood polynomial, which is what Michelen–Yakir's theorem is about in the first place. And the
+  > hand-over clause has an exact form, as PR-2's did — every root the reference walk finds lands in a
+  > texel the limit-set shader calls in-set, **0 of 50+ outside**, an inclusion rather than a
+  > pixel-difference percentage.
+
 - **PR-4 — the dragons · *M*.** Hover inset from the un-pruned tree; theorem mode on a probed root
   with the `n`-scrubber and the Hausdorff-distance readout; the honest label when `|P′(α)|` is
   small. Gate: at Baez's `0.375453 + 0.544825i` the overlay lands on the roots to within the inset
