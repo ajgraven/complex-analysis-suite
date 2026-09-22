@@ -54,6 +54,7 @@ Format follows Michael Nygard's ADR convention.
 | [0043](#adr-0043)                                                                                              | Contour Integration rebuilds its shell — two rails, a keyed renderer, KaTeX, textbook vocabulary              | Accepted |
 | [0044](#adr-0044-withdraw-the-in-app-suite-navigation-header-the-launcher-is-the-unified-menu)                | Withdraw the in-app suite navigation header (the launcher is the unified menu)                                 | Accepted |
 | [0045](#adr-0045)                                                                                              | One predicate decides whether a value may be shown                                                            | Accepted |
+| [0046](#adr-0046)                                                                                              | Polynomial Roots — the twelfth published app: a root-cloud renderer on one coefficient tree                  | Proposed |
 
 > **Status legend:** Proposed → Accepted (once you sign off) → Superseded/Deprecated.
 > All thirty-six are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
@@ -4303,3 +4304,132 @@ over 28 records × 94 fixtures disagree exactly once — B3, `=` above and `?` b
    2026-09-20)*.
 4. [x] `test/ledger.test.ts:551`'s heading reworded: `legalityRefusal` is the first clause of this
    predicate *(done at integration)*.
+
+---
+
+<a id="adr-0046"></a>
+
+## ADR-0046: Polynomial Roots — the twelfth published app: a root-cloud renderer on one coefficient tree
+
+**Status:** Proposed **Date:** 2026-09-22 **Deciders:** Andrew
+
+A new app, `apps/polynomial-roots`, inspired by Baez–Christensen–Derbyshire's *The Beauty of Roots*
+([math.ucr.edu/home/baez/roots](https://math.ucr.edu/home/baez/roots/)). **No new package**
+([ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) — the app is a new _consumer_ of
+built machinery, and its two extractions are second-consumer ones). Plan:
+[`design/polynomial-roots-plan.md`](design/polynomial-roots-plan.md).
+
+### Context
+
+Plot every root of every polynomial with coefficients in a small alphabet — `{−1, +1}` at degree 24
+is 2²⁴ polynomials and ~400 million roots — and the cloud has holes at the roots of unity, a line
+along the real axis, a dense ring at the unit circle (Bousch: roots are dense in `2^{−1/4} ≤ |z| ≤
+2^{1/4}`), and dragon curves inside the disk: near `q` the cloud resembles the attractor `D_q` of
+`{w ↦ 1 ± qw}`, which Michelen–Yakir (2026) have now made a theorem with an explicit rescaling. The
+suite has no tool for it, and the plan's research found the design question is not _which picture_
+but _which engine_:
+
+- **Root-driven** (Christensen, Derbyshire, Egan, Scheidegger, Vanderbei): enumerate, solve, splat.
+  Per-degree layers, colour by polynomial, honest counts; cost `|A|^{d+1}`. Measured here: an
+  Aberth–Ehrlich solve is 16 µs per degree-20 polynomial in JS, so all of degree 20 with the 8-fold
+  symmetry is 4.3 s single-threaded and under a second on eight workers; degree 24 is 16× that.
+- **Pixel-driven** (Foster to degree 42; Bandt's Algorithm 1; Calegari–Koch–Walker's `schottky`):
+  per pixel, walk the coefficient tree and prune a branch when its partial sum cannot reach zero.
+  Draws the _limit set_ (roots of all power series over the alphabet), zooms without bound, and the
+  values `{P(z)}` at a point _are_ the dragon `D_z`. Measured: 14 µs per pixel at the dragon,
+  4.8 ms per pixel at `0.9 + 0.1i` — 300× slower in the annulus, which is why Egan's applet excludes
+  `0.8 < |z| < 1.25`.
+
+Memory rules out retaining the root cloud (degree 24 is 3 GB), and the float32 GPU walk dissolves
+at a pixel size of about `D·ε₃₂·|z| ≈ 2·10⁻⁶` because the partial sums cancel. The owner wants the
+overview (scrub, colour modes, statistics) _and_ deep zoom _and_ the dragon overlay, with `@cas/gpu`'s
+DF64 reused where it buys depth and not paid for where it does not.
+
+### Decision
+
+1. **A hybrid, on one coefficient tree.** The root engine reads the tree's leaves (one orbit
+   representative per derived symmetry, an app-local Aberth–Ehrlich solver in a worker pool, roots
+   accumulated **per degree into `R32F` textures by additive point splatting and not retained**);
+   the pixel engine prunes the same tree in a float32 fragment shader with an explicit stack; the
+   dragon is the same tree's set of values. The engines hand over by zoom — the root engine owns the
+   overview, the limit-set engine the zoom, the threshold the pixel size at which the loaded degree
+   stops resolving — and both can be forced; the stage always says which is drawing.
+2. **Alphabets are presets plus a free list**, and the symmetry group that cuts the enumeration is
+   **derived from the alphabet** (conjugation, negation, reversal, unit scaling — each checked, never
+   assumed); polynomials are _proper_ (non-zero constant and leading coefficients) so no root is
+   counted twice across degrees.
+3. **Precision by a reference point, not a wider float.** At deep zoom every pixel shares the
+   reference `z₀` to within the view and the pruning bounds are `O(1)`, so the survivors are
+   identical for every pixel: the walk runs **once per frame on the CPU at `z₀`** — float64, then
+   the JS double-float reference `@cas/gpu/df64` below a pixel size of ~`10⁻¹³` — and each
+   survivor's root is a small offset `δ* = −P(z₀)/P′(z₀)`, Newton-polished, that the GPU splats in
+   float32 with full _relative_ precision. Floor ≈ `10⁻³⁰`, zero cost when shallow, one handover
+   parity-tested. `DF64_GLSL` is deliberately **not** used: a two-variant shader (Complex Dynamics'
+   idiom) would buy seven decades at 5× per node where the reference buys twenty-four at no per-pixel
+   cost. The probe is the same walk at the cursor.
+4. **WebGL2 + Web Workers only.** WebGL2 required (`runWithFatalBoundary`'s banner otherwise, as
+   Complex Dynamics); `EXT_color_buffer_float` probed at boot and refused by name; no WebGPU.
+5. **The annulus `0.8 < |z| < 1.25` is excluded from the limit-set engine by default**, painted in a
+   named neutral with the reason in the legend (the root engine covers it, and Bousch proves the
+   roots dense there); a toggle computes it under a per-pixel node budget, and a pixel whose budget
+   ran out is painted as such, never as empty.
+6. **Zero new packages; two second-consumer extractions into `@cas/gpu`**, each rewiring its first
+   consumer and pinning byte-identical output: Complex Dynamics' `buildEqualizedCdf` (the density
+   tone map, at PR-1) and Contour Integration's `CET_C6` table (when the Egan hue mode — cyclic hue
+   from the low-order coefficients — lands, M6; CC-BY 4.0 attribution travels with it). The Aberth
+   solver, the worker pool and the tree walk stay app-local until a second consumer appears;
+   `@cas/core`'s Durand–Kerner pins the solver in the node gate.
+7. **Honest labelling**: the picture is `≈` throughout (finite degree, numerical roots, a
+   limit-set view that names itself); gallery captions may state a **cited theorem as a theorem**;
+   the dragon's theorem mode is labelled an _illustration_ of Michelen–Yakir's result with the
+   `|P′(α)|` it depends on shown, never a certificate; the statistics say the degree they were
+   counted at.
+8. **Name, slug, tag, publish.** *Polynomial Roots*, `apps/polynomial-roots`, permalink app tag
+   `pr`, dev port 5184, launcher badge *Root fractals*; **published at PR-1** on the combined Pages
+   site under `polynomial-roots/`.
+
+### Consequences
+
+- **Positive:** a twelfth published app that consumes six packages (`@cas/ui`, `@cas/gpu`,
+  `@cas/core`, `@cas/flow`, `@cas/interchange`, `@cas/export`) and creates none; two extractions
+  that improve the reuse metric; the suite's first density-accumulation stage and first worker
+  pool, both written once and extractable; and a picture the literature has only ever shown as
+  stills becomes something a reader can scrub, zoom and probe.
+- **Staged, one reviewable PR each; working software at every gate:** **PR-0** this ADR + the plan;
+  **PR-1** scaffold + root engine + density stage + permalink/PNG + places + all wiring +
+  publish; **PR-2** the limit-set engine and the handover (gate: the CKW hexaholes resolve);
+  **PR-3** deep zoom by reference + the probe (gate: the handover ladder agrees to `< 0.5 %` of
+  pixels); **PR-4** the dragons (gate: the overlay lands on the roots, measured); **PR-5** the
+  captioned gallery + statistics. M6 and the deferred items (an exact `@cas/exact` reference below
+  `10⁻³⁰`, Bohemian matrices, hand-offs to the plotter / Argument Principle via the existing
+  `RationalMap` form) are recorded with their reasons in the plan and not committed.
+- **Wiring per new app** (ADR-0037's list, corrected by ADR-0044): `vitest.workspace.ts`, the census
+  `PROJECTS`, a launcher card, the `deploy-pages.yml` `cp`, the a11y roster + baseline, and —
+  because this app spawns workers — **`scripts/check-built-artifacts.mjs`**, whose roster is the
+  only thing that verifies a worker chunk survived the build. `eslint.config.js`'s `APP_NAMES` is
+  stale by four apps and is brought current in the same PR (the dependency-cruiser rule is generic
+  and already covers every app). CLAUDE.md decision 11 and the README/ARCHITECTURE app lists grow to
+  twelve published apps; packages stay thirteen.
+- **Trade-off accepted:** two engines on one stage is more code than either alone, in exchange for
+  the overview's honest counts _and_ unbounded zoom; roots are recomputed on re-projection rather
+  than stored, which the pool makes cheap below degree 20 and the limit-set engine covers above; the
+  annulus is drawn by one engine only, and says so.
+
+### Alternatives considered
+
+- **Root-driven only** — simplest model, but zoom stops where `2^d` does and the dragon overlay is a
+  separate drawing. **Pixel-driven only** — one engine, but no per-degree layers, no attribution, no
+  counts. **Precomputed atlas** (Christensen's deep-zoom tiles) — declined; the limit-set engine
+  covers degree > 24 live. **WebGPU compute** — a first for the repo with a fallback to maintain;
+  the measured JS/WebGL2 numbers make it unnecessary for the plan's ceilings. **DF64 shader
+  variants** — see decision 3. **Retaining roots to a cap** — 80 MB for an instant probe against a
+  recompute that is already sub-second; declined.
+
+### Action items
+
+1. [ ] PR-0: this ADR (Proposed), `design/polynomial-roots-plan.md`, a line in
+   `design/future-app-ideas.md`.
+2. [ ] PR-1 through PR-5 as staged above, each with its gate, sweep and browser pass; this ADR moves
+   to Accepted at PR-1.
+3. [ ] At M6, extract `CET_C6` to `@cas/gpu` and rewire Contour Integration; at PR-1, extract
+   `buildEqualizedCdf` and rewire Complex Dynamics.
