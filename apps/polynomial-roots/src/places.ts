@@ -121,11 +121,11 @@ export const PLACES: readonly Place[] = [
   },
   {
     id: "hexaholes",
-    title: "Where the hexaholes are, near 0.372368 + 0.517839i",
-    seen: "The trinary cloud around the point the exotic holes accumulate at. The holes themselves are about 0.0005 across — thirty times smaller than this window — and a degree-16 family cannot resolve them: at degree 12 the nearest root to that centre is 7×10⁻⁴ away, so a window that tight is empty. This is where to look, not yet what to see.",
+    title: "The neighbourhood of ω, where the exotic holes are",
+    seen: "The trinary cloud around the point the exotic holes accumulate at. The holes themselves are about 0.0005 across, a hundredth of this window, and roots of bounded degree cannot reach them: at degree 12 the nearest root to that centre is 7×10⁻⁴ away, and a window tight enough to frame a hole renders black. This is the region, not the holes.",
     fact: "Infinitely many holes accumulate at ω ≈ 0.371859 + 0.519411i, a root of 1 − 2z + 2z² − 2z⁵ + 2z⁸.",
     source: "Calegari, Koch & Walker (2017), Theorem 9.1.1 and Figure 4; their own pictures come from a semigroup search to depth 60, not from roots of bounded degree.",
-    state: at(0.372368, 0.517839, 0.008, { alphabet: { preset: "trinary" }, minDegree: 8, maxDegree: 16 }),
+    state: at(0.372368, 0.517839, 0.06, { alphabet: { preset: "trinary" }, minDegree: 8, maxDegree: 16 }),
   },
   {
     id: "cube-roots",

@@ -4,6 +4,8 @@ import { RAMPS } from "../src/stage/ramps";
 import { buildToneMap } from "../src/stage/tone";
 import { sweepChunk } from "../src/engine/sweep";
 import { compileAlphabet } from "../src/engine/alphabet";
+import { orbitSpace } from "../src/engine/orbits";
+import { PLACES, placeById } from "../src/places";
 import type { StageTransform } from "../src/stage/glStage";
 
 // **The only place this app's real GLSL is compiled, and the only place the accumulation can be seen at
@@ -180,5 +182,63 @@ describe("the stage compiles and accumulates", () => {
     stage.dropOutside(4, 5);
     expect(stage.loadedDegrees()).toEqual([4, 5]);
     stage.dispose();
+  });
+});
+
+describe("a named place renders a picture, not a black screen", () => {
+  /** Fraction of the canvas carrying any ink, at a given window round a place's centre. */
+  function litFraction(spec: Parameters<typeof compileAlphabet>[0], degrees: [number, number], cx: number, cy: number, halfHeight: number): number {
+    const compiled = compileAlphabet(spec);
+    if ("error" in compiled) throw new Error(compiled.error);
+    const alphabet = compiled.alphabet;
+    const { stage, canvas } = mountStage();
+    for (let degree = degrees[0]; degree <= degrees[1]; degree++) {
+      const space = orbitSpace(alphabet, degree);
+      const swept = sweepChunk({ spec, degree, lo: 0, hi: space.total, circleDelta: 0.02 });
+      if ("error" in swept) throw new Error(swept.error);
+      stage.addPoints(degree, swept.points);
+    }
+    stage.paint({ cx, cy, halfHeight }, canvas.width / canvas.height, alphabet.group);
+    stage.composeDegrees(degrees[0], degrees[1]);
+    const density = stage.readDensity();
+    const tone = buildToneMap(density);
+    stage.setTone(tone.lut, tone.width);
+    stage.present({ maxDensity: tone.maxDensity, exposure: 1, byDegree: false, degreeRange: degrees });
+    const px = readCanvas(canvas);
+    let lit = 0;
+    for (let i = 0; i < px.length; i += 4) if (px[i] + px[i + 1] + px[i + 2] > 24) lit++;
+    stage.dispose();
+    canvas.remove();
+    return lit / (px.length / 4);
+  }
+
+  it("the ω neighbourhood is visible, and the window it used to have is NOT", () => {
+    // **The defect this is the regression test for.** The hexahole place first opened at half-height
+    // 0.008 — CKW's own picture width — where the trinary cloud of bounded degree lands 1,610 roots in
+    // 730,000 pixels: measured in a browser, 0.05% lit and TWO distinct colours, which is a black screen
+    // with a scatter of dots. The node places test passed it, because "are there roots in this window"
+    // and "is there a picture" are different questions and only a rendered frame answers the second.
+    //
+    // The pairing is what makes the floor mean something: the same alphabet, degrees and centre at the
+    // two window sizes, with the wide one above the floor and the tight one below it. A floor that both
+    // cleared would be asserting nothing.
+    const place = placeById("hexaholes");
+    expect(place).toBeDefined();
+    if (place === undefined) return;
+    const degrees: [number, number] = [8, 12]; // what this suite can afford; the app loads 8–16
+    const wide = litFraction(place.state.alphabet, degrees, place.state.cx, place.state.cy, place.state.halfHeight);
+    const tight = litFraction(place.state.alphabet, degrees, place.state.cx, place.state.cy, 0.008);
+    expect(tight).toBeLessThan(0.004);
+    expect(wide).toBeGreaterThan(0.004);
+    expect(wide).toBeGreaterThan(tight * 8);
+  });
+
+  it("every place's window is at least as wide as the one that rendered black", () => {
+    // Cheap and structural: nothing in the gallery may be tighter than the window measured above to be
+    // unviewable at its own alphabet. A place that needs a tighter window needs PR-2's limit-set engine,
+    // which is what that milestone's gate already names.
+    for (const p of PLACES) {
+      expect(p.state.halfHeight, p.id).toBeGreaterThanOrEqual(0.02);
+    }
   });
 });

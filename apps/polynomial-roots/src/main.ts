@@ -267,6 +267,12 @@ function main(): void {
           addStats(totals, stats);
           toneDirty = true;
           draw();
+          // The panel has to keep up with the sweep. Without this it was only refreshed on completion,
+          // so a degree-14 trinary sweep — several million polynomials — showed a filling picture beside
+          // a statistics panel reading zero, and the stage's generated description said "No roots have
+          // been computed yet" for the whole of it. Throttled, because `syncStats` rebuilds the panel and
+          // chunks arrive far faster than a reader can read.
+          scheduleStats();
         },
         onProgress: (done, total) => {
           progress.textContent = total === 0 || done >= total ? "" : `computing ${Math.round((100 * done) / total)}%`;
@@ -276,6 +282,12 @@ function main(): void {
           progress.textContent = "";
           toneDirty = true;
           draw();
+          // Cancel any pending throttled refresh so the final, complete counts are what is left on
+          // screen rather than a stale intermediate one landing after them.
+          if (statsTimer !== 0) {
+            window.clearTimeout(statsTimer);
+            statsTimer = 0;
+          }
           syncStats();
         },
         onError: (message) => {
@@ -369,6 +381,15 @@ function main(): void {
       "aria-label",
       `Root cloud, ${alphabet?.label ?? "an alphabet"}, centred at ${state.cx.toFixed(4)} ${state.cy < 0 ? "−" : "+"} ${Math.abs(state.cy).toFixed(4)}i, half-height ${state.halfHeight.toPrecision(3)}. ${describeTotals(totals, state)}`,
     );
+  }
+
+  let statsTimer = 0;
+  function scheduleStats(): void {
+    if (statsTimer !== 0) return;
+    statsTimer = window.setTimeout(() => {
+      statsTimer = 0;
+      syncStats();
+    }, 250);
   }
 
   let hashTimer = 0;

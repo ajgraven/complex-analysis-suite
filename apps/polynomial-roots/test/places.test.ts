@@ -33,7 +33,7 @@ describe("the named places", () => {
       const a = compiled.alphabet;
       // The WHOLE index space at a degree small enough to sweep here — sampling a prefix of it would
       // make an empty window look like a sampling artefact, which is how the first draft nearly let the
-      // hexahole place through. The app itself goes to higher degrees, so this is the conservative side.
+      // hexahole place through.
       const degree = Math.min(place.state.maxDegree, 12);
       const space = orbitSpace(a, degree);
       const swept = sweepChunk({
@@ -60,9 +60,16 @@ describe("the named places", () => {
           }
         }
       }
-      // Not merely non-empty: a place showing three roots is a place showing nothing. Measured at
-      // degree 12, the tightest place (the hexahole neighbourhood, half-height 0.008) has 82.
-      expect(inside, `${place.id} has too little in its own window`).toBeGreaterThan(20);
+      // Not merely non-empty: a place showing a handful of dots is a place showing nothing. The floor is
+      // set from measurement at degree 12, which is where this test can afford to sweep; every place
+      // loads HIGHER degrees, so the real picture is denser by a large factor. Measured at degree 14 (the
+      // app's own range for the tightest places): zoom-story 345, egan-point 1,077, hexaholes 1,610,
+      // dragon 1,675, and every other place above 3,000 — against 87, 268, 82 and 419 at degree 12. The
+      // floor is 50 because the thinnest place at degree 12 has 87, and the point of this test is that a
+      // place is not aimed at an EMPTY region; how sparse a deliberately deep zoom looks is the browser
+      // suite's question, and `zoom-story` is deliberately sparse (the slides' own point is that the
+      // cloud is discrete at that depth and fills in with the degree).
+      expect(inside, `${place.id} has too little in its own window`).toBeGreaterThan(50);
     }
   });
 });
