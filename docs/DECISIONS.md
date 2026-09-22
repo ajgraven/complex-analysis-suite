@@ -4438,9 +4438,22 @@ DF64 reused where it buys depth and not paid for where it does not.
    texel's range, so the last texel tops out at 254/255 and the highest few bins are in the
    distribution but not addressable by any texel; changing that would alter seven apps' output for
    one part in 255.
-3. [ ] PR-2 through PR-5 as staged above, each with its gate, sweep and browser pass.
-4. [ ] At M6, extract `CET_C6` to `@cas/gpu` and rewire Contour Integration.
-5. [x] `eslint.config.js`'s `APP_NAMES` brought current: it was stale by four apps
+3. [x] **PR-2 done, and it narrowed the plan's §5.3 output.** The pixel engine reports ONE field —
+   the escape depth `reach`, the deepest level any branch survived to — where the plan specified a
+   survivor count and a first-hit depth. Counting survivors is unaffordable: at the CKW hexaholes,
+   2,675 of 2,720 texels spent the whole 40,000-node budget without finishing, while existence exits
+   early and costs 152 nodes a texel there and 23 at the overview. And `reach` is the better quantity
+   rather than a cheaper one — survival to depth `k` is monotone in `k`, so it is the deepest
+   approximation of the limit set a point belongs to (the escape-time function of this set), it is
+   independent of the traversal order where a first-hit depth under an early exit would not have
+   been, and it makes the depth slider a real control. Nothing else moves: the two colour modes become
+   two ramps over the one quantity, so there is no third `ColourMode` and the present pass is
+   unchanged. Decisions 1–8 stand. Both gate clauses are met, the second more strongly than asked —
+   the plan wanted a pixel-wise correlation between the engines and an exact INCLUSION was available
+   (every root pixel is lit by the walk, 100.00% at every degree from 2 to 20).
+4. [ ] PR-3 through PR-5 as staged above, each with its gate, sweep and browser pass.
+5. [ ] At M6, extract `CET_C6` to `@cas/gpu` and rewire Contour Integration.
+6. [x] `eslint.config.js`'s `APP_NAMES` brought current: it was stale by four apps
    (`2d-electrostatics`, `2d-hydrodynamics`, `hele-shaw-flow`, `potential-theory`), so the
    no-cross-app-imports lint rule had silently stopped covering a third of the suite. The graph-level
    rule in `.dependency-cruiser.cjs` is generic and did cover them, which is why nothing broke.

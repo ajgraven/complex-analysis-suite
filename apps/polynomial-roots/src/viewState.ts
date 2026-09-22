@@ -17,6 +17,7 @@
 import { decodeViewState, encodeViewState } from "@cas/interchange";
 import type { AlphabetSpec } from "./engine/alphabet.js";
 import { compileAlphabet } from "./engine/alphabet.js";
+import { MAX_DEPTH as WALK_MAX_DEPTH, MIN_DEPTH as WALK_MIN_DEPTH } from "./engine/limit/walk.js";
 import { clampState, DEFAULT_STATE, MAX_DEGREE } from "./state.js";
 import type { AppState } from "./state.js";
 
@@ -45,6 +46,9 @@ export function encodeState(state: AppState): string {
   if (s.cy !== d.cy) payload.cy = round(s.cy);
   if (s.halfHeight !== d.halfHeight) payload.h = round(s.halfHeight);
   if (s.circleDelta !== d.circleDelta) payload.delta = round(s.circleDelta);
+  if (s.engine !== d.engine) payload.engine = s.engine;
+  if (s.depth !== d.depth) payload.depth = s.depth;
+  if (s.annulus !== d.annulus) payload.annulus = s.annulus;
   return encodeViewState(APP, payload);
 }
 
@@ -89,7 +93,18 @@ export function decodeState(hashOrLink: string): DecodeResult {
   if (s.colour !== undefined && s.colour !== "density" && s.colour !== "degree") {
     return { refused: `this link asks for a colour mode this app does not have ("${String(s.colour)}")` };
   }
-  for (const key of ["exposure", "gamma", "cx", "cy", "h", "delta"] as const) {
+  if (s.engine !== undefined && s.engine !== "auto" && s.engine !== "roots" && s.engine !== "limit") {
+    return { refused: `this link asks for an engine this app does not have ("${String(s.engine)}")` };
+  }
+  if (isNum(s.depth) && (s.depth < WALK_MIN_DEPTH || s.depth > WALK_MAX_DEPTH)) {
+    return {
+      refused: `this link asks for limit-set depth ${s.depth}, outside the range ${WALK_MIN_DEPTH}–${WALK_MAX_DEPTH} this app walks`,
+    };
+  }
+  if (s.annulus !== undefined && typeof s.annulus !== "boolean") {
+    return { refused: `this link carries an unreadable value for "annulus"` };
+  }
+  for (const key of ["exposure", "gamma", "cx", "cy", "h", "delta", "depth"] as const) {
     if (s[key] !== undefined && !isNum(s[key])) {
       return { refused: `this link carries an unreadable value for "${key}"` };
     }
@@ -107,6 +122,9 @@ export function decodeState(hashOrLink: string): DecodeResult {
       cy: isNum(s.cy) ? s.cy : DEFAULT_STATE.cy,
       halfHeight: isNum(s.h) ? s.h : DEFAULT_STATE.halfHeight,
       circleDelta: isNum(s.delta) ? s.delta : DEFAULT_STATE.circleDelta,
+      engine: s.engine === "roots" || s.engine === "limit" ? s.engine : "auto",
+      depth: isNum(s.depth) ? s.depth : DEFAULT_STATE.depth,
+      annulus: s.annulus === true,
     }),
   };
 }

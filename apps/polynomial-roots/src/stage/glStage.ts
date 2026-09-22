@@ -104,13 +104,20 @@ uniform sampler2D uTone;     // width x 1, equalisation in .r
 uniform sampler2D uRamp;     // 256 x 1 colour ramp
 uniform float uMaxDensity;
 uniform float uExposure;
-uniform float uDegreeMode;   // 0 density, 1 by degree
-uniform vec2 uDegreeRange;   // (min, max) for the degree hue
+uniform float uDegreeMode;   // 0 density, 1 by the per-pixel mean of G/R
+uniform vec2 uDegreeRange;   // (min, max) for that hue
+uniform vec3 uExcluded;      // the neutral for a pixel the limit walk did not enter
+uniform vec3 uExhausted;     // the neutral for a pixel whose walk ran out of nodes
 in vec2 vUv;
 out vec4 fragColor;
 void main() {
   vec2 acc = texture(uComposite, vUv).rg;
   float d = acc.r;
+  // A count is never negative, so the limit pass uses negative R as a STATUS. An uncomputed pixel must
+  // not be painted as an empty one — that is the difference between "there is nothing here" and "this
+  // was not looked at", and it is the whole point of the annulus policy.
+  if (d < -1.5) { fragColor = vec4(uExhausted, 1.0); return; }
+  if (d < -0.5) { fragColor = vec4(uExcluded, 1.0); return; }
   if (d <= 0.0 || uMaxDensity <= 0.0) { fragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
   float norm = log(1.0 + uMaxDensity * uExposure);
   float t = norm > 0.0 ? clamp(log(1.0 + d * uExposure) / norm, 0.0, 1.0) : 0.0;
@@ -139,6 +146,18 @@ interface Layer {
   /** True once every chunk of this degree has been splatted into the texture for the current view. */
   painted: boolean;
 }
+
+/**
+ * The two neutrals the limit-set engine paints with, and the reason there are two.
+ *
+ * Cool grey: the excluded band — the walk was not run here, and the root engine is the one that covers
+ * it. Warm grey: the node budget ran out, so the walk WAS run and did not finish. Both differ from
+ * black, which means "run, and nothing found". Three different statements; three different colours.
+ */
+export const NEUTRAL_EXCLUDED: readonly [number, number, number] = [0.16, 0.19, 0.23];
+
+/** The neutral for a pixel whose walk ran out of nodes. */
+export const NEUTRAL_EXHAUSTED: readonly [number, number, number] = [0.26, 0.21, 0.15];
 
 /** The stage refused to start, with the reason a reader can act on. */
 export class StageUnavailable extends Error {}
@@ -351,6 +370,18 @@ export class GlStage {
     gl.bindVertexArray(null);
   }
 
+  /**
+   * The composite render target, created on demand.
+   *
+   * The limit-set pass writes STRAIGHT into it instead of summing per-degree layers, so that everything
+   * downstream — the equalisation read-back, the tone ramp, the present pass, the PNG export — is the
+   * same code for both engines and a difference between their pictures can only come from the walk.
+   */
+  compositeTarget(): { framebuffer: WebGLFramebuffer; size: number } {
+    if (this.composite === null) this.composite = this.target();
+    return { framebuffer: this.composite.framebuffer, size: this.size };
+  }
+
   /** Sum the selected degrees into the composite target. Returns false when nothing is selected. */
   composeDegrees(minDegree: number, maxDegree: number): boolean {
     const gl = this.gl;
@@ -397,6 +428,8 @@ export class GlStage {
     exposure: number;
     byDegree: boolean;
     degreeRange: readonly [number, number];
+    excluded?: readonly [number, number, number];
+    exhausted?: readonly [number, number, number];
   }): void {
     const gl = this.gl;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -423,6 +456,10 @@ export class GlStage {
       options.degreeRange[0],
       options.degreeRange[1],
     );
+    const excluded = options.excluded ?? NEUTRAL_EXCLUDED;
+    const exhausted = options.exhausted ?? NEUTRAL_EXHAUSTED;
+    gl.uniform3f(gl.getUniformLocation(this.presentProgram, "uExcluded"), excluded[0], excluded[1], excluded[2]);
+    gl.uniform3f(gl.getUniformLocation(this.presentProgram, "uExhausted"), exhausted[0], exhausted[1], exhausted[2]);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.bindVertexArray(null);
   }

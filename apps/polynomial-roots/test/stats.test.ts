@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { addStats, describeTotals, emptyTotals, formatShare, statLines } from "../src/stats";
+import { addStats, describeLimit, describeTotals, emptyTotals, formatShare, limitLines, measureLimit, statLines } from "../src/stats";
 import { sweepChunk } from "../src/engine/sweep";
 import type { SweepStats } from "../src/engine/sweep";
 
@@ -132,5 +132,63 @@ describe("how the numbers are said", () => {
     expect(text).toContain("real");
     // A single degree is said in the singular rather than as a range of one.
     expect(describeTotals(totals, { minDegree: 5, maxDegree: 5 })).toContain("degree 5");
+  });
+});
+
+describe("what a limit-set frame holds", () => {
+  it("counts the four outcomes from the stage's own read-back", () => {
+    // The sentinels are the stage's: negative R is a status, never a depth.
+    const depth = 10;
+    // `depth` itself is in the fixture on purpose: `reach = depth` means a branch survived to the
+    // level BELOW the cap and none reached it, so it escaped. Off by one there and the whole outermost
+    // shell of every picture changes sides, which no other test here could see.
+    const frame = new Float32Array([11, 11, 4, 0, 10, -1, -1, -1, -2, 7, 11]);
+    const s = measureLimit(frame, depth);
+    expect(s).toEqual({ total: 11, inSet: 3, escaped: 4, excluded: 3, exhausted: 1 });
+    expect(measureLimit(new Float32Array([10]), depth).inSet).toBe(0);
+    expect(measureLimit(new Float32Array([11]), depth).inSet).toBe(1);
+  });
+
+  it("says plainly when NOTHING in the view is in the set", () => {
+    // The defect this exists for: the tone map equalises the escape depth over the occupied texels, so
+    // a window that misses the limit set entirely comes out as a full, evenly-coloured picture. Measured
+    // at the dragon — `0.372 − 0.542i` at half-height 1e-3 and below is 0% in the set at depth 16, 24,
+    // 34 and 48 alike — and the frame was painted in two bright colours with nothing saying so.
+    const empty = measureLimit(new Float32Array([0, 1, 2, 3, 2, 1]), 20);
+    expect(empty.inSet).toBe(0);
+    const summary = {
+      alphabet: "Littlewood {−1, +1}",
+      depth: 20,
+      eps: 1e-5,
+      annulus: false,
+      reason: "you chose the limit-set engine.",
+      shares: empty,
+    };
+    expect(limitLines(summary)[0].label).toBe("In the set");
+    expect(limitLines(summary)[0].value).toBe("0%");
+    expect(limitLines(summary)[0].detail).toContain("NOTHING in this view survives to depth 20");
+    expect(describeLimit(summary)).toContain("does not reach it");
+
+    // And when there IS something, it says how much rather than repeating the warning.
+    const some = measureLimit(new Float32Array([21, 21, 21, 4, 0, 1, 2, 3]), 20);
+    const shown = { ...summary, shares: some };
+    expect(limitLines(shown)[0].value).toBe("37.5%");
+    expect(limitLines(shown)[0].detail).not.toContain("NOTHING");
+    expect(describeLimit(shown)).toContain("37.5% of the walked area");
+  });
+
+  it("does not claim a share when the whole view is inside the excluded band", () => {
+    const banded = measureLimit(new Float32Array([-1, -1, -1, -1]), 20);
+    const summary = {
+      alphabet: "Littlewood {−1, +1}",
+      depth: 20,
+      eps: 1e-5,
+      annulus: false,
+      reason: "the band.",
+      shares: banded,
+    };
+    expect(limitLines(summary)[0].value).toBe("—");
+    expect(limitLines(summary)[0].detail).toContain("all inside the excluded band");
+    expect(describeLimit(summary)).not.toContain("of the walked area");
   });
 });

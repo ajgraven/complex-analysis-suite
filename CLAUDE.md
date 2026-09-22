@@ -99,9 +99,9 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **610 test files / 6949 tests**
-*(599 / 6818 before Polynomial Roots — ADR-0046 — added 10 files / 122 tests and its `@cas/gpu`
-extraction 1 / 9; 592 / 6643 before the 2026-09-20 remediation)* with lint and typecheck
+Green is **615 test files / 6997 tests**
+*(610 / 6949 before ADR-0046's PR-2 — the limit-set engine — added 5 files / 48 tests; 599 / 6818 before
+Polynomial Roots itself added 10 files / 122 tests and its `@cas/gpu` extraction 1 / 9; 592 / 6643 before the 2026-09-20 remediation)* with lint and typecheck
 silent. `pnpm lint` includes `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the
 `packages/*` dists first, so a clean clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as
 **29 per-file specs under `apps/quadrature-domains/vitest/node/`** (via `vitest/node/_run.ts`), and
@@ -1403,9 +1403,8 @@ ONE second-consumer extraction into `@cas/gpu` — Complex Dynamics' histogram-e
 `equalizedCdfLut` (`@cas/gpu/histogram`), with CD keeping the decode half alone. PR-1 shipped the scaffold,
 the root engine (an app-local Aberth–Ehrlich in a worker pool, pinned against `@cas/core`'s Durand–Kerner),
 the per-degree float-texture density stage, the `#vs=` permalink, PNG export, fourteen named places, and
-the launcher + Pages wiring. PR-2…PR-5 (the limit-set engine, deep zoom by reference, the dragons, the
-gallery) are staged and not started. Plan:
-[`docs/design/polynomial-roots-plan.md`](docs/design/polynomial-roots-plan.md).
+the launcher + Pages wiring. PR-3…PR-5 (deep zoom by reference, the dragons, the gallery) are staged and
+not started. Plan: [`docs/design/polynomial-roots-plan.md`](docs/design/polynomial-roots-plan.md).
 
 Six findings worth carrying. **(1) A SMALL STEP IS NOT CONVERGENCE, and treating it as one shipped a wrong
 answer.** The Aberth solver first settled a root whose STEP had fallen below a floor; when two iterates come
@@ -1456,6 +1455,75 @@ puts 1,610 roots into 730,000 pixels, measured at 0.05% lit and two distinct col
 test passed it, because *are there roots in this window* and *is there a picture* are different questions
 and only a rendered frame answers the second. The place opens wider now and says it shows the region
 rather than the holes, and the browser suite gained the pairing that tells the two apart.
+
+**Done — PR-2 of ADR-0046: the limit-set engine and the handover.** The app's second reader of the one
+coefficient tree. Fix `z`, walk the partial sums `s_k = s_{k−1} + a_k z^k`, and prune every prefix whose
+remaining tail cannot reach zero — `|s_k| > max|a|·|z|^{k+1}/(1−|z|) + ε`; what survives is the LIMIT SET,
+the points at which a power series over the alphabet can vanish, which Bousch proved is the closure of the
+root set inside the disk. `src/engine/limit/` (`walk.ts` float64, `bandt.ts` the independent decision,
+`walkGlsl.ts` the generated shader, `handover.ts` the engine rule) + `src/stage/limitPass.ts`, which writes
+straight into the stage's existing composite so the equalisation, the ramp, the present pass and the PNG
+export are the same code for both engines. Three new places and one split in two; +47 node tests, +5
+browser tests.
+
+**COUNTING SURVIVORS IS UNAFFORDABLE, and the escape depth is the better quantity anyway.** The plan
+specified a survivor count per pixel. Measured at the app's own flagship window — the CKW hexaholes —
+**2,675 of 2,720 texels spent a 40,000-node budget without finishing**, so the picture was one decided hole
+on a field of "undecided". Existence EXITS EARLY: the moment one branch reaches the cap there is nothing
+left to learn, and the same window then costs **152 nodes a texel**, the Littlewood overview 23, and
+nothing exhausts anywhere. The quantity that falls out is the right one: survival to depth `k` is MONOTONE
+in `k`, so `reach` is the deepest approximation of the limit set a point belongs to — the escape-time
+function of this set — and it is order-independent where a first-hit depth under an early exit would not
+have been. One field replaces two, the present pass needs no change, and the two colour modes become two
+RAMPS over one quantity rather than a third `ColourMode`. **The node budget bites ONLY inside the excluded
+band**, which justifies both: over a 120² grid of `[−2.3, 2.3]²` at depth 40 with the band off not one
+texel runs out and the worst spends 5,546 nodes; with the band walked, 14 of 8,100 do.
+
+**The gate asked for a correlation; an exact INCLUSION was available and is strictly stronger.** Every
+pixel holding a root of any degree must be lit by the walk. Measured over a 128² grid of the opening view,
+band excluded, against the depth-28 walk: **at every degree from 2 to 20, 100.00% — not one root pixel
+missed**; and the walk's surplus falls 5,702 → 1,874 → 960 as the degree climbs 2 → 12 → 20, which is the
+root cloud converging onto the limit set. A correlation would have passed with a systematic offset, a wrong
+fold or a wrong aspect. **Shader against float64: 46,532 texels, ZERO disagreements**, so the assertion is
+equality rather than a tolerance — `reach` is discrete and float32 can only move it within ~1e-7 of a tie.
+**Bandt's Algorithm 1 is the same predicate in the other coordinate system**, `v_k = −s_k/z^k` turning a
+shrinking tail bound into a fixed radius derived by summing the future; the two agree on the frontier
+COUNTS over 624 points, 158 in the set and 466 out.
+
+**A browser pass found three, and the third is the honest-labelling guardrail again.** *(1)* The statistics
+panel described the LAST FRAME: `syncStats` runs before `render` on a recompute, so a link opening at depth
+40 announced "to depth 26" while the controls beside it said 40. It is a pure function of the state now,
+with `limitPixelRadius` shared so the legend's `ε` and the shader's cannot drift. *(2)* **The depth has to
+follow the zoom.** The depth-`D` walk cannot separate points closer than about `|z|^D`, so a deep view at a
+shallow depth over-reports: measured at the zoom story at half-height 4e-4, depth 16 calls 50% of the frame
+in-set against 18% at 24 and 16% at 34, where it has converged. Zooming now raises the depth to
+`log(pixel)/log|z|` — visibly, on the slider, and it stops the moment the reader touches it. *(3)* **A frame
+with NOTHING in the set does not look empty.** The tone map equalises the escape depth over the occupied
+texels, so a window that misses the limit set entirely has its one or two escape levels stretched across the
+whole ramp and comes out as a full, evenly-coloured picture. Measured: `0.372 − 0.542i` at half-height 1e-3
+and below is **0% in the set at depths 16, 24, 34 and 48 alike** — the set is thin there — and it was
+painted in two bright colours. The panel now counts the frame (`measureLimit`) and says so in its own line
+and in the generated description.
+
+**And a CSS defect older than this slice, found by the a11y roster.** `[hidden]` is a UA rule and
+`.row { display: grid }` is an author rule, so every row the shell hides was on screen — since PR-1 the `n`
+spinner and the custom-alphabet box under presets that have neither, and now the depth slider and the band
+toggle under the root engine. The three Polynomial-Roots roster entries all reported 44 interactive nodes,
+and the one that opens the limit-set engine should have reported more; with `.row[hidden] { display: none }`
+they read 40 / 40 / **42**, which is the two controls the link opens. The guard is a browser test, because
+jsdom cannot decide a cascade.
+
+**Sweep: 45 mutants, 45 killed, no survivors and no equivalents.** Eight survived the first pass and every
+one bought a test. Three were about a TIE: `z = ½` exactly is in the Littlewood limit set — `tail[k] = 2^{−k}`
+and `s_k = −2^{−k}` at every level, in powers of two, so float64 reproduces Bousch's own boundary bit for
+bit — and a `≥` in either formulation's prune drops it. Two were about CONJUGATION: over a real alphabet
+`1/z` and `1/conj z` agree everywhere, so the fold could have been conjugating in both the walk and Bandt's
+iteration with every picture still right; `{1, ½+½i, −1}` disagrees with its own conjugate at 772 of 2,816
+points. One was `max|a|` in Foster's fudge, which is 1 for every preset but `range` and a custom list. One
+was the grid taking the larger side of a non-square texel (1,600 of 1,600 cells against 1,300). And one was
+`toPrecision(9)`'s own decimal point, which it writes for everything the app normally carries and drops at
+nine integer digits — `vec2(123456789, 0.0)` is a GLSL compile error no node test could see, and the custom
+alphabet lets a reader type it.
 
 Work in small, reviewable commits. Pause at each phase/milestone gate for review before proceeding.
 When a command or path in the docs is marked `⚠ verify`, check it against the actual repo

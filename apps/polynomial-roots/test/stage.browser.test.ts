@@ -222,7 +222,7 @@ describe("a named place renders a picture, not a black screen", () => {
     // The pairing is what makes the floor mean something: the same alphabet, degrees and centre at the
     // two window sizes, with the wide one above the floor and the tight one below it. A floor that both
     // cleared would be asserting nothing.
-    const place = placeById("hexaholes");
+    const place = placeById("hexaholes-region");
     expect(place).toBeDefined();
     if (place === undefined) return;
     const degrees: [number, number] = [8, 12]; // what this suite can afford; the app loads 8–16
@@ -233,12 +233,18 @@ describe("a named place renders a picture, not a black screen", () => {
     expect(wide).toBeGreaterThan(tight * 8);
   });
 
-  it("every place's window is at least as wide as the one that rendered black", () => {
-    // Cheap and structural: nothing in the gallery may be tighter than the window measured above to be
-    // unviewable at its own alphabet. A place that needs a tighter window needs PR-2's limit-set engine,
-    // which is what that milestone's gate already names.
+  it("every ROOT place's window is at least as wide as the one that rendered black", () => {
+    // Cheap and structural: no place drawn by the root engine may be tighter than the window measured
+    // above to be unviewable at its own alphabet. The rule used to cover the whole gallery, and its own
+    // comment said that a place needing a tighter window needs PR-2's limit-set engine — which is now
+    // built, so the exception it predicted is the exception it gets. A place below the floor must
+    // therefore name the other engine, and `limit.browser.test.ts` renders it to show it is not black.
     for (const p of PLACES) {
+      if (p.state.engine === "limit") continue;
       expect(p.state.halfHeight, p.id).toBeGreaterThanOrEqual(0.02);
     }
+    const tight = PLACES.filter((p) => p.state.halfHeight < 0.02);
+    expect(tight.length, "the exception is meant to be used").toBeGreaterThan(0);
+    for (const p of tight) expect(p.state.engine, p.id).toBe("limit");
   });
 });

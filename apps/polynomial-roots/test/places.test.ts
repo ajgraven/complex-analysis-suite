@@ -4,6 +4,8 @@ import { clampState, MAX_DEGREE } from "../src/state";
 import { compileAlphabet } from "../src/engine/alphabet";
 import { orbitSpace } from "../src/engine/orbits";
 import { sweepChunk } from "../src/engine/sweep";
+import { walkGrid, walkSpec } from "../src/engine/limit/walk";
+import { chooseEngine } from "../src/engine/limit/handover";
 
 describe("the named places", () => {
   it("have distinct ids and are all reachable by id", () => {
@@ -28,6 +30,7 @@ describe("the named places", () => {
     // A place pointing at an empty window would be a caption with nothing under it. Checked by sweeping
     // its top degree and asking whether any root lands inside its view.
     for (const place of PLACES) {
+      if (place.state.engine === "limit") continue; // covered by the contrast check below
       const compiled = compileAlphabet(place.state.alphabet);
       if (!("alphabet" in compiled)) throw new Error(place.id);
       const a = compiled.alphabet;
@@ -72,7 +75,106 @@ describe("the named places", () => {
       expect(inside, `${place.id} has too little in its own window`).toBeGreaterThan(50);
     }
   });
+
+  it("every limit-set place shows a HOLE or an edge — a connected escaped region, not scattered noise", () => {
+    // The root places above ask "are there roots here". PR-1's browser pass established that this is a
+    // different question from "is there a picture" — the first hexahole place passed the root test and
+    // rendered black. A limit-set place is checked on the second question, and a share alone would not
+    // do it: 1.4% of a frame escaping could be one hole or it could be speckle along a boundary, and
+    // only the first is what these captions promise. So the escaped cells are flood-filled and the
+    // LARGEST CONNECTED region is what is measured. Its share of the walked frame, measured:
+    // hexaholes 1.4% (the hole itself, 37 of 2,560 cells, about a tenth of the window across),
+    // limit-littlewood 20.0% and limit-bandt 12.7% (the exterior and the real-axis hole, both of which
+    // reach the frame edge). The floor is 1%, under the smallest of the three.
+    for (const place of PLACES) {
+      if (place.state.engine !== "limit") continue;
+      const compiled = compileAlphabet(place.state.alphabet);
+      if (!("alphabet" in compiled)) throw new Error(place.id);
+      const depth = place.state.depth;
+      const width = 64;
+      const height = 40;
+      const g = walkGrid(
+        walkSpec(compiled.alphabet),
+        {
+          cx: place.state.cx,
+          cy: place.state.cy,
+          halfWidth: place.state.halfHeight * 1.6,
+          halfHeight: place.state.halfHeight,
+        },
+        width,
+        height,
+        { depth, computeAnnulus: place.state.annulus },
+      );
+      let inSet = 0;
+      let walked = 0;
+      const escaped = new Uint8Array(width * height);
+      for (let i = 0; i < g.reach.length; i++) {
+        if (g.status[i] !== 0) continue;
+        walked++;
+        if (g.reach[i] === depth + 1) inSet++;
+        else escaped[i] = 1;
+      }
+      expect(walked, `${place.id} walked nothing`).toBeGreaterThan(400);
+      expect(inSet, `${place.id} has nothing in the set`).toBeGreaterThan(0.05 * walked);
+      expect(largestRegion(escaped, width, height) / walked, `${place.id} has no hole or edge`).toBeGreaterThan(0.01);
+    }
+  });
+
+  it("every place lands on the engine its caption describes", () => {
+    // A place that says "the limit-set engine" and opens under the root engine would be a caption about
+    // a picture the reader is not being shown. `auto` is allowed to agree with the place; what is not
+    // allowed is for the state to name one engine and the handover to choose the other.
+    for (const place of PLACES) {
+      const chosen = chooseEngine({
+        mode: place.state.engine,
+        cx: place.state.cx,
+        cy: place.state.cy,
+        halfHeight: place.state.halfHeight,
+        maxDegree: place.state.maxDegree,
+        annulus: place.state.annulus,
+        pixels: 1024,
+      });
+      if (place.state.engine !== "auto") expect(chosen.engine, place.id).toBe(place.state.engine);
+      const mentionsLimit = /limit-set engine|limit set/i.test(place.seen);
+      if (mentionsLimit) expect(chosen.engine, `${place.id} describes the limit set`).toBe("limit");
+    }
+  });
 });
+
+/** The largest 4-connected region of set cells — a flood fill, so speckle cannot pass for a hole. */
+function largestRegion(mask: Uint8Array, width: number, height: number): number {
+  const seen = new Uint8Array(mask.length);
+  let best = 0;
+  for (let start = 0; start < mask.length; start++) {
+    if (mask[start] === 0 || seen[start] === 1) continue;
+    let size = 0;
+    const stack = [start];
+    seen[start] = 1;
+    while (stack.length > 0) {
+      const at = stack.pop() as number;
+      size++;
+      const x = at % width;
+      const y = (at - x) / width;
+      for (const [dx, dy] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ] as const) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+        const nat = ny * width + nx;
+        if (mask[nat] === 1 && seen[nat] === 0) {
+          seen[nat] = 1;
+          stack.push(nat);
+        }
+      }
+    }
+    if (size > best) best = size;
+  }
+  return best;
+}
 
 describe("what a caption may claim", () => {
   it("a cited theorem carries its source; an uncited claim is the app's own ≈ description", () => {

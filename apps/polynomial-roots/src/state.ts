@@ -5,6 +5,8 @@
 // something a permalink must carry; anything derived — the loaded degrees, the statistics, the tone
 // ramp — is computed from it and deliberately absent.
 import type { AlphabetSpec } from "./engine/alphabet.js";
+import type { EngineMode } from "./engine/limit/handover.js";
+import { MAX_DEPTH as WALK_MAX_DEPTH, MIN_DEPTH as WALK_MIN_DEPTH } from "./engine/limit/walk.js";
 
 /** How the density is coloured. */
 export type ColourMode = "density" | "degree";
@@ -25,6 +27,12 @@ export interface AppState {
   readonly halfHeight: number;
   /** Half-width of the band around `|z| = 1` the near-circle statistic counts. */
   readonly circleDelta: number;
+  /** Which engine draws: the root cloud, the limit-set walk, or whichever the zoom calls for. */
+  readonly engine: EngineMode;
+  /** The limit-set walk's depth cap. Nothing to do with the degree scrub — a different object. */
+  readonly depth: number;
+  /** Walk inside the excluded band around `|z| = 1`, under the node budget. */
+  readonly annulus: boolean;
 }
 
 /** Highest degree the app will sweep without being asked twice (ADR-0046: live to 20). */
@@ -50,6 +58,9 @@ export const DEFAULT_STATE: AppState = {
   cy: 0,
   halfHeight: 1.45,
   circleDelta: 0.02,
+  engine: "auto",
+  depth: 28,
+  annulus: false,
 };
 
 /** Clamp a state into what the engine and the stage can actually do. Pure; the codec relies on it. */
@@ -67,6 +78,9 @@ export function clampState(s: AppState): AppState {
     cy: clampNum(s.cy, -1e6, 1e6, 0),
     halfHeight: clampNum(s.halfHeight, 1e-6, 1e4, DEFAULT_STATE.halfHeight),
     circleDelta: clampNum(s.circleDelta, 1e-4, 0.5, DEFAULT_STATE.circleDelta),
+    engine: s.engine === "roots" || s.engine === "limit" ? s.engine : "auto",
+    depth: Math.round(clampNum(s.depth, WALK_MIN_DEPTH, WALK_MAX_DEPTH, DEFAULT_STATE.depth)),
+    annulus: s.annulus === true,
   };
 }
 

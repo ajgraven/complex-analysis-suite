@@ -260,6 +260,18 @@ const PAGES = [
     expect: '.controls[data-alphabet="trinary"]',
   },
   {
+    // THE LIMIT-SET ENGINE, through its own permalink. Its three controls — the engine picker's second
+    // choice, the depth slider and the band toggle — are `hidden` under the root engine, and a hidden
+    // element is not in the accessibility tree, so the landing-state audit above can never reach them.
+    // The M7.1 lesson again: a panel nothing opens is never audited.
+    id: "polynomial-roots-limit",
+    mount: "polynomial-roots",
+    dist: "apps/polynomial-roots/dist",
+    file: "index.html",
+    hash: viewState("pr", { engine: "limit", depth: 26 }),
+    expect: '.controls[data-engine="limit"]',
+  },
+  {
     id: "correspondences",
     mount: "correspondences",
     dist: "apps/correspondences/dist",

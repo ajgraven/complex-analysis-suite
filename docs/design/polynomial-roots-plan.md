@@ -204,8 +204,14 @@ PR-1, `CET_C6` at M6), each rewiring its first consumer and pinning byte-identic
   alphabet as a `uniform vec2[]`, powers `z^k` precomputed in the loop, tail bounds `T_k = (max|a|)
   Σ_{j>k} |z|^j = (max|a|)·|z|^{k+1}(1 − |z|^{D−k})/(1 − |z|)` computed in closed form per pixel.
   Prune when `|s_k| − T_{k+1} > ε`, with `ε` the pixel radius times a `|P′|` estimate (Foster's
-  "fudge"); a leaf within `ε` **hits**. Outputs per pixel: hit count (density), first-hit depth,
-  nodes visited (the budget).
+  "fudge"). Output per pixel: **the escape depth** `reach`, the deepest level any branch survived to.
+  *(PR-2 replaced this line's "hit count (density), first-hit depth": counting survivors spent the whole
+  node budget on 98% of the texels at the app's own flagship window, where existence exits early and
+  costs 152 nodes — and `reach` is monotone in the cap, so it is the deepest approximation of the limit
+  set a point belongs to rather than a number that depends on the traversal order. See the roadmap.)*
+  The tail is the INFINITE one, `Σ_{j>k}`, not the finite `Σ_{j=k+1}^{D}` also written above: the finite
+  one decides "is there a degree-`D` polynomial vanishing here", which is the root engine's object and
+  already has an engine.
 - **`|z| > 1`** is folded onto `1/z` with the reversed alphabet (exact when `rev` is a symmetry;
   otherwise the reversed alphabet is used honestly) — Foster's fold.
 - **The annulus** `0.8 < |z| < 1.25` is **excluded by default**, painted in a distinct neutral with
@@ -364,12 +370,121 @@ pass where the stage changed. Sizes: *S* / *M* / *L*.
   > deep zooms) and says plainly that it shows the region and not the holes; the browser suite gained the
   > pairing that tells the two apart — the same alphabet, degrees and centre at both window sizes, with
   > the wide one above the floor and the tight one below it, so a floor both cleared would assert nothing.
-- **PR-2 — the limit-set engine and the handover · *L*.** The generated walk shader, the annulus
-  policy, first-hit-depth colour, the `auto` engine switch by pixel size with a visible "engine:
+- **PR-2 — the limit-set engine and the handover · *L*. DONE.** The generated walk shader, the annulus
+  policy, the escape-depth colour, the `auto` engine switch by pixel size with a visible "engine:
   roots / limit set" label, the JS walk and its parity corpus (shader vs JS; JS vs Bandt's
   Algorithm 1 on `{−1, 0, 1}`). Gate: the CKW hexaholes resolve at `0.372368 + 0.517839i` with the
   view 0.0005 wide; the limit-set picture of `{±1}` at the overview agrees with the degree-24 root
   picture where the latter is resolved (a pixel-wise correlation, measured and quoted).
+
+  > **DONE.** `src/engine/limit/` (`walk.ts`, `bandt.ts`, `walkGlsl.ts`, `handover.ts`) +
+  > `src/stage/limitPass.ts`; 47 new node tests across 5 files and 4 new browser tests; three new places
+  > and one split in two. Both gate clauses are met, and the second is met more strongly than it was
+  > asked for.
+  >
+  > **COUNTING SURVIVORS IS UNAFFORDABLE, and the escape depth is the better quantity anyway.** The
+  > first design reported the survivor count per pixel, which is what §5.3 specified. Measured at the
+  > app's own flagship window — the CKW hexaholes — **2,675 of 2,720 texels spent a 40,000-node budget
+  > without finishing**, so the picture was one decided hole on a field of "undecided". Existence exits
+  > EARLY: the moment one branch reaches the cap there is nothing left to learn. The same window then
+  > costs **152 nodes a texel**, the Littlewood overview 23, and nothing exhausts anywhere. And the
+  > quantity that falls out is the right one: survival to depth `k` is MONOTONE in `k`, so `reach` — the
+  > deepest level any branch survived to — is the deepest approximation of the limit set the point
+  > belongs to, which is the escape-time function of this set. It is order-independent where a
+  > first-hit depth under an early exit would not have been; points at the cap are exactly the ones the
+  > chosen depth cannot separate, which is what makes the depth slider mean something. One field
+  > replaces two, the present pass needs no change at all, and the two colour modes become two RAMPS
+  > over one quantity rather than a third `ColourMode`.
+  >
+  > **The node budget bites ONLY inside the excluded band, which is the measurement that justifies
+  > both.** Over a 120² grid of `[−2.3, 2.3]²` at depth 40 with the band off, not one texel runs out and
+  > the worst spends 5,546 nodes; with the band walked, 14 of 8,100 texels over `[−1.3, 1.3]²` do. So
+  > the band is not a performance excuse bolted onto a slow engine — it is the only place the engine is
+  > slow. `0.8` is Egan's choice and its reciprocal `1.25` is exact in binary, so the band is its own
+  > image under the `1/z` fold and a texel cannot be inside it on one side and outside on the other.
+  >
+  > **The gate asked for a correlation; an exact INCLUSION was available and is strictly stronger.** The
+  > limit set at depth `D` is a superset of the limit set, which is the closure of the root set
+  > (Bousch), so every pixel holding a root of any degree must be lit by the walk. Measured over a 128²
+  > grid of the opening view with the band excluded: **at every degree from 2 to 20, 100.00% — not one
+  > root pixel missed** (4,460 at degree 14, 4,668 at 16, 4,744 at 20). And the walk's own surplus falls
+  > as the degree climbs — 5,702 pixels at degree 2, 1,874 at 12, 960 at 20 — which is the root cloud
+  > converging onto the limit set, the one thing a correlation could have shown and did not need to. A
+  > correlation would have passed with a systematic offset, a wrong fold or a wrong aspect; this fails
+  > on a single pixel, and the suite asserts that it can, by comparing against a deliberately shifted
+  > window and requiring the misses.
+  >
+  > **Shader against float64: 46,532 texels, ZERO disagreements**, over four views and three alphabets.
+  > So the assertion is equality rather than a tolerance. Worth saying why float32 suffices: `reach` is
+  > DISCRETE, decided by `|s_k| > tail + ε`, and float32 can only move it where that comparison is
+  > within ~1e-7 of a tie. A future disagreement is a finding to reproduce, not a line to widen — and
+  > the anti-vacuity check (the same frame against the walk one level shallower) requires the comparison
+  > to bite.
+  >
+  > **Bandt's Algorithm 1 is the same predicate in the other coordinate system, and that is exactly what
+  > makes it a check.** `v_k = −s_k/z^k` turns the walk's SHRINKING tail bound into a FIXED radius
+  > `R = max|a|·|z|/(1−|z|)`, derived by summing the future rather than by rearranging the walk; it
+  > divides by `z` where the walk multiplies by a precomputed power, and runs breadth-first where the
+  > walk is depth-first. The two agree on the frontier COUNTS — not merely on the booleans — over 468
+  > points decided by both, 88 in the set and 380 out.
+  >
+  > **The hexaholes are a DEPTH phenomenon, not a window one.** At the place's own window, escaped
+  > texels: 0 at depths 8, 12 and 16; 12 at depth 20; 37 at 30, 40 and 48, where it has converged. PR-1
+  > opened that place wide and said honestly that it showed the region and not the holes; it is now two
+  > places — `hexaholes-region` under the root engine and `hexaholes` under the limit engine at
+  > half-height 0.00025 — and the browser suite renders both. `limit-littlewood` and `limit-bandt` join
+  > them: Bousch's set and Barnsley–Harrington's `M`, each as a SET rather than as a sample of one.
+  >
+  > **A browser pass over the built app found three more, and the third is the honest-labelling
+  > guardrail.** **(1) The statistics panel described the LAST FRAME.** `syncStats` runs before `render`
+  > on a recompute, so a link opening at depth 40 announced *"to depth 26"* — the frame before it — while
+  > the controls beside it said 40. It is a pure function of the state now, and `limitPixelRadius` is
+  > shared with the pass so the legend's `ε` and the shader's cannot drift. **(2) The depth has to follow
+  > the zoom.** The depth-`D` walk cannot separate points closer than about `|z|^D`, so a deep view at a
+  > shallow depth over-reports: measured at the zoom story at half-height 4e-4, depth 16 calls 50% of the
+  > frame in-set against 18% at depth 24 and 16% at 34, where it has converged. Zooming now raises the
+  > depth to `log(pixel)/log|z|` — on the slider, so it is visible and reversible — and stops the moment
+  > the reader touches it or a link or place names a depth of its own. **(3) A FRAME WITH NOTHING IN THE
+  > SET DOES NOT LOOK EMPTY.** The tone map equalises the escape depth over the occupied texels, so a
+  > window that misses the limit set entirely has its one or two escape levels stretched across the whole
+  > ramp and comes out as a full, evenly-coloured picture. Measured: `0.372 − 0.542i` at half-height 1e-3
+  > and below is **0% in the set at depths 16, 24, 34 and 48 alike** — the set is genuinely thin there,
+  > and no depth changes that — and the frame was painted in two bright colours with nothing saying so.
+  > `measureLimit` counts the frame from the stage's own read-back, the panel carries an *In the set*
+  > line, and at 0% both it and the generated description say plainly that the limit set does not reach
+  > this view.
+  >
+  > **And a CSS defect older than this slice, found by the a11y roster.** `[hidden]` is a UA rule and
+  > `.row { display: grid }` is an author rule, so every row the shell hides was on screen — since PR-1
+  > the `n` spinner and the custom-alphabet box under presets that have neither, and now the depth slider
+  > and the band toggle under the root engine. All three Polynomial-Roots roster entries reported 44
+  > interactive nodes, and the one that opens the limit-set engine — whose two controls do not exist under
+  > the root engine — should have reported more. With `.row[hidden] { display: none }` they read 40 / 40 /
+  > **42**. The guard is a browser test, because jsdom cannot decide a cascade.
+  >
+  > **Two smaller findings.** A read-back is a COPY and the composite is live state: the first draft
+  > of the neutral-colour test presented a frame it had already overwritten and measured zero neutral
+  > pixels, correctly. The old browser suite's floor — *"every place's window is at least as wide as the
+  > one that rendered black"* — carried a comment predicting this milestone (*"a place that needs a
+  > tighter window needs PR-2's limit-set engine"*), so it now exempts limit places and asserts that the
+  > exception is used. And the a11y roster gained a third entry, because the depth slider and the band
+  > toggle are `hidden` under the root engine and a hidden element is not in the accessibility tree — the
+  > Contour-Integration M7.1 lesson, which this app has now met twice.
+  >
+  > **Sweep: 45 mutants, 45 killed, no survivors and no equivalents.** Eight survived the first pass and
+  > every one bought a test. Three were about a TIE: `z = ½` exactly is in the Littlewood limit set —
+  > `tail[k] = 2^{−k}` and `s_k = −2^{−k}` at every level, in powers of two, so float64 reproduces
+  > Bousch's own boundary bit for bit — and a `≥` in either formulation's prune drops it. Two were about
+  > CONJUGATION: over a real alphabet `1/z` and `1/conj z` agree everywhere, so the fold could have been
+  > conjugating in both the walk and Bandt's iteration with every picture still right; `{1, ½+½i, −1}`
+  > disagrees with its own conjugate at 772 of 2,816 points inside the band. One was `max|a|` in Foster's
+  > fudge, which is 1 for every preset but `range` and a custom list. One was the grid taking the larger
+  > side of a non-square texel (1,600 of 1,600 cells reproduced against 1,300). One was the generated
+  > `LEAD` table built from the wrong array — identical for every preset but `{0, 1}`, where `0` sorts
+  > first, so the mutant emits a shader whose `a_0` is ZERO and which compiles, links and draws the wrong
+  > family. And one was `toPrecision(9)`'s own decimal point, which it writes for everything the app
+  > normally carries and drops at nine integer digits: `vec2(123456789, 0.0)` is a GLSL compile error no
+  > node test could see, and the custom alphabet lets a reader type it.
 - **PR-3 — deep zoom by reference, the probe · *M*.** `reference.ts` over a `Field` (float64, then
   `@cas/gpu/df64`), the worker through `createComputeClient`, the float32 offset splat, the handover
   ladder test, decimal-string coordinates in the permalink, and the **probe** (survivors at the

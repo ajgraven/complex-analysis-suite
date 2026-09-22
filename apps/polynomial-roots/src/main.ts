@@ -13,13 +13,19 @@ import type { Alphabet, AlphabetSpec } from "./engine/alphabet.js";
 import { orbitSpace } from "./engine/orbits.js";
 import { defaultPoolSize, RootPool } from "./engine/pool.js";
 import { GlStage, StageUnavailable } from "./stage/glStage.js";
+import { LimitPass, limitPixelRadius } from "./stage/limitPass.js";
+import { chooseEngine } from "./engine/limit/handover.js";
+import type { EngineMode, Handover } from "./engine/limit/handover.js";
+import { epsFor, MAX_DEPTH as WALK_MAX_DEPTH, MIN_DEPTH as WALK_MIN_DEPTH, NODE_BUDGET } from "./engine/limit/walk.js";
+import { clampDepth } from "./engine/limit/walkGlsl.js";
 import { buildToneMap } from "./stage/tone.js";
 import { RAMPS } from "./stage/ramps.js";
 import { clampState, DEFAULT_STATE, LIVE_DEGREE_CAP, MAX_DEGREE } from "./state.js";
 import type { AppState } from "./state.js";
 import { decodeState, encodeState } from "./viewState.js";
 import { PLACES } from "./places.js";
-import { addStats, describeTotals, emptyTotals, statLines } from "./stats.js";
+import { addStats, describeLimit, describeTotals, emptyTotals, limitLines, measureLimit, statLines } from "./stats.js";
+import type { LimitShares, LimitSummary } from "./stats.js";
 import type { Totals } from "./stats.js";
 import { captionFor, savePng } from "./pngExport.js";
 import "./styles/app.css";
@@ -95,6 +101,13 @@ function main(): void {
   // `@cas/ui`'s key map is in SCREEN units (dy positive is down); the plane's y is up.
 
   const pool = new RootPool(defaultPoolSize(navigator.hardwareConcurrency));
+  const limit = new LimitPass(stage.gl);
+  // The reader has taken the depth into their own hands, so the zoom stops moving it. Set by a link or
+  // a place that carries a depth of its own, and by the slider.
+  let depthPinned = state.depth !== DEFAULT_STATE.depth;
+  // What the last limit-set frame held. A MEASUREMENT of the frame, not a function of the state, and
+  // the one thing in the panel that has to come from the frame — see `measureLimit`.
+  let limitShares: LimitShares | null = null;
 
   // --- controls ---------------------------------------------------------------------------------
   const presetSelect = el("select", { class: "control", id: "pr-alphabet" });
@@ -122,6 +135,27 @@ function main(): void {
   colourSelect.append(el("option", { value: "density", textContent: "Density" }));
   colourSelect.append(el("option", { value: "degree", textContent: "By degree" }));
 
+  const engineSelect = el("select", { class: "control", id: "pr-engine" });
+  for (const [value, label] of [
+    ["auto", "Automatic"],
+    ["roots", "Root cloud"],
+    ["limit", "Limit set"],
+  ] as const) {
+    engineSelect.append(el("option", { value, textContent: label }));
+  }
+  const depthInput = el("input", {
+    class: "control",
+    type: "range",
+    min: String(WALK_MIN_DEPTH),
+    max: String(WALK_MAX_DEPTH),
+    step: "1",
+    id: "pr-depth",
+  });
+  const depthRow = labelled("Depth", depthInput);
+  const annulusInput = el("input", { class: "control", type: "checkbox", id: "pr-annulus" });
+  const annulusRow = labelled("Walk the |z| ≈ 1 band", annulusInput);
+  const engineNote = el("p", { class: "note" });
+
   const exposure = el("input", { class: "control", type: "range", min: "-1.3", max: "1.6", step: "0.01", id: "pr-exposure" });
   const gamma = el("input", { class: "control", type: "range", min: "0.4", max: "2.2", step: "0.01", id: "pr-gamma" });
 
@@ -136,6 +170,11 @@ function main(): void {
     nRow,
     customRow,
     alphabetNote,
+    el("h2", {}, "Engine"),
+    labelled("Draw with", engineSelect),
+    depthRow,
+    annulusRow,
+    engineNote,
     el("h2", {}, "Degrees"),
     labelled("Lowest", minDegree),
     labelled("Highest", maxDegree),
@@ -166,6 +205,8 @@ function main(): void {
       button.append(el("span", { class: "place-source", textContent: place.source }));
     }
     button.addEventListener("click", () => {
+      // A place that names its own depth means it; the zoom must not overrule it.
+      depthPinned = place.state.depth !== DEFAULT_STATE.depth;
       apply(place.state);
     });
     placeList.append(el("li", {}, button));
@@ -182,6 +223,47 @@ function main(): void {
 
   function currentView(): View {
     return { cx: state.cx, cy: state.cy, halfSpan: state.halfHeight };
+  }
+
+  /** Which engine owns the view as it stands. Read in three places, so it is computed in one. */
+  function handover(): Handover {
+    return chooseEngine({
+      mode: state.engine,
+      cx: state.cx,
+      cy: state.cy,
+      halfHeight: state.halfHeight,
+      maxDegree: state.maxDegree,
+      annulus: state.annulus,
+      pixels: stage.resolution > 0 ? stage.resolution : 1024,
+    });
+  }
+
+  /**
+   * What the limit-set engine is about to draw — a pure function of the STATE.
+   *
+   * It used to read the last frame, and the browser pass caught the consequence: `syncStats` runs
+   * before `render` on a recompute, so a link opening at depth 40 announced "to depth 26" (the frame
+   * before it) while the controls beside it said 40. A panel that describes the previous frame is a
+   * panel that is wrong exactly when the reader has just changed something.
+   */
+  function limitSummary(): LimitSummary {
+    const size = stage.resolution > 0 ? stage.resolution : 1024;
+    const aspect = gl.width / Math.max(1, gl.height);
+    const pixelRadius = limitPixelRadius(state.halfHeight, aspect, size);
+    const absz = Math.hypot(state.cx, state.cy);
+    let maxAbs = 1;
+    if (alphabet !== null) {
+      maxAbs = 0;
+      for (const v of alphabet.values) maxAbs = Math.max(maxAbs, Math.hypot(v.re, v.im));
+    }
+    return {
+      alphabet: alphabet?.label ?? "the alphabet",
+      depth: clampDepth(state.depth),
+      eps: epsFor(pixelRadius, absz > 1 ? 1 / absz : absz, maxAbs),
+      annulus: state.annulus,
+      reason: handover().reason,
+      ...(limitShares === null ? {} : { shares: limitShares }),
+    };
   }
 
   function resizeCanvas(): void {
@@ -211,23 +293,56 @@ function main(): void {
     const a = alphabet;
     if (a === null) return;
     const aspect = gl.width / Math.max(1, gl.height);
-    stage.paint({ cx: state.cx, cy: state.cy, halfHeight: state.halfHeight }, aspect, a.group);
-    const any = stage.composeDegrees(state.minDegree, state.maxDegree);
+    const view = { cx: state.cx, cy: state.cy, halfHeight: state.halfHeight };
+    const engine = handover().engine;
+    let any: boolean;
+    if (engine === "limit") {
+      // The walk writes straight into the composite, so everything below this line — the equalisation
+      // read-back, the ramp, the present pass, the export — is the same code the root cloud runs.
+      const target = stage.compositeTarget();
+      limit.render(target.framebuffer, target.size, {
+        view,
+        aspect,
+        alphabet: a,
+        depth: state.depth,
+        annulus: state.annulus,
+      });
+      any = true;
+    } else {
+      stage.paint(view, aspect, a.group);
+      any = stage.composeDegrees(state.minDegree, state.maxDegree);
+    }
     let maxDensity = 0;
+    let measured = false;
     if (any && toneDirty) {
       const density = stage.readDensity();
       const tone = buildToneMap(density, state.exposure, state.gamma);
       stage.setTone(tone.lut, tone.width);
       lastMaxDensity = tone.maxDensity;
       toneDirty = false;
+      if (engine === "limit") {
+        const shares = measureLimit(density, clampDepth(state.depth));
+        if (limitShares === null || shares.inSet !== limitShares.inSet || shares.escaped !== limitShares.escaped) {
+          limitShares = shares;
+          measured = true;
+        }
+      } else if (limitShares !== null) {
+        limitShares = null;
+        measured = true;
+      }
     }
     maxDensity = lastMaxDensity;
     stage.present({
       maxDensity,
       exposure: state.exposure,
-      byDegree: state.colour === "degree",
+      // Under the limit engine the one quantity is the escape depth, so the colour choice picks the
+      // RAMP rather than a second channel; `G` carries nothing and the mean reader stays off.
+      byDegree: engine === "roots" && state.colour === "degree",
       degreeRange: [state.minDegree, state.maxDegree],
     });
+    // The counts can only be read once the frame exists, and `syncStats` has already run by then on a
+    // recompute. Refreshing here is safe: `syncStats` draws nothing, so it cannot come back round.
+    if (measured) syncStats();
   }
   let lastMaxDensity = 0;
 
@@ -243,11 +358,23 @@ function main(): void {
     }
     alphabet = compiled.alphabet;
     alphabetError = null;
+    pool.cancel();
     stage.dropLayers();
     totals = emptyTotals();
     complete = false;
     toneDirty = true;
     lastMaxDensity = 0;
+
+    if (handover().engine === "limit") {
+      // Nothing to enumerate: the walk is per pixel and the layers have just been dropped. Sweeping
+      // millions of polynomials to fill textures nothing composites would cost the reader's cores for a
+      // picture they are not looking at.
+      progress.textContent = "";
+      syncControls();
+      syncStats();
+      draw();
+      return;
+    }
 
     const totalsPerDegree: number[] = [];
     for (let d = state.minDegree; d <= state.maxDegree; d++) {
@@ -325,6 +452,9 @@ function main(): void {
     minDegree.value = String(state.minDegree);
     maxDegree.value = String(state.maxDegree);
     colourSelect.value = state.colour;
+    engineSelect.value = state.engine;
+    depthInput.value = String(state.depth);
+    annulusInput.checked = state.annulus;
     exposure.value = String(Math.log10(state.exposure));
     gamma.value = String(state.gamma);
 
@@ -343,6 +473,21 @@ function main(): void {
       alphabetNote.className = "note";
     }
 
+    const chosen = handover();
+    // The a11y roster keys on this too: the depth slider and the band toggle exist only under the limit
+    // engine, and a page audited only in its landing state would never see either.
+    controls.dataset.engine = chosen.engine;
+    depthRow.hidden = chosen.engine !== "limit";
+    annulusRow.hidden = chosen.engine !== "limit";
+    const shallow =
+      chosen.engine === "limit" && state.depth < chosen.suggestedDepth
+        ? ` ⚠ At depth ${state.depth} the walk cannot separate points closer than about one texel, so this view will look filled in; depth ${chosen.suggestedDepth} resolves it.`
+        : "";
+    engineNote.textContent =
+      chosen.engine === "limit"
+        ? `Limit set — ${chosen.reason} Depth ${state.depth}, node budget ${NODE_BUDGET.toLocaleString("en-US")} per pixel. Cool grey: not walked. Warm grey: the budget ran out.${shallow}`
+        : `Root cloud — ${chosen.reason}`;
+
     const above = state.maxDegree > LIVE_DEGREE_CAP;
     computeButton.hidden = !above;
     degreeNote.textContent = above
@@ -355,14 +500,19 @@ function main(): void {
   }
 
   function syncStats(): void {
+    const chosen = handover();
     statsPanel.replaceChildren(el("h2", {}, "What is in the picture"));
     const dl = el("dl", { class: "stat-list" });
-    for (const line of statLines(totals, {
-      minDegree: state.minDegree,
-      maxDegree: state.maxDegree,
-      circleDelta: state.circleDelta,
-      complete,
-    })) {
+    const lines =
+      chosen.engine === "limit"
+        ? limitLines(limitSummary())
+        : statLines(totals, {
+            minDegree: state.minDegree,
+            maxDegree: state.maxDegree,
+            circleDelta: state.circleDelta,
+            complete,
+          });
+    for (const line of lines) {
       dl.append(el("dt", { textContent: line.label }));
       dl.append(el("dd", {}, el("span", { class: "stat-value", textContent: line.value }), el("span", { class: "stat-detail", textContent: line.detail })));
     }
@@ -371,15 +521,18 @@ function main(): void {
       el(
         "p",
         { class: "note" },
-        "≈ Every figure is from a finite degree, solved numerically. Cited theorems in the places below are exact statements; nothing about this image is.",
+        chosen.engine === "limit"
+          ? "≈ A finite depth and a finite fudge: this is a SUPERSET of the limit set that shrinks onto it as the depth rises. Cited theorems in the places below are exact statements; nothing about this image is."
+          : "≈ Every figure is from a finite degree, solved numerically. Cited theorems in the places below are exact statements; nothing about this image is.",
       ),
     );
     // The stage's alternative text is generated, not written: a hand-written one drifts the first time
     // the state changes (the Contour Integration M6.4 finding).
-    a11y.announce(describeTotals(totals, state));
+    const summary = chosen.engine === "limit" ? describeLimit(limitSummary()) : describeTotals(totals, state);
+    a11y.announce(summary);
     gl.setAttribute(
       "aria-label",
-      `Root cloud, ${alphabet?.label ?? "an alphabet"}, centred at ${state.cx.toFixed(4)} ${state.cy < 0 ? "−" : "+"} ${Math.abs(state.cy).toFixed(4)}i, half-height ${state.halfHeight.toPrecision(3)}. ${describeTotals(totals, state)}`,
+      `${chosen.engine === "limit" ? "Limit set" : "Root cloud"}, ${alphabet?.label ?? "an alphabet"}, centred at ${state.cx.toFixed(4)} ${state.cy < 0 ? "−" : "+"} ${Math.abs(state.cy).toFixed(4)}i, half-height ${state.halfHeight.toPrecision(3)}. ${summary}`,
     );
   }
 
@@ -408,13 +561,26 @@ function main(): void {
   function apply(next: AppState, opts: { resweep?: boolean } = {}): void {
     const before = state;
     state = clampState(next);
+    // Zooming in raises the depth to what the view can resolve, because the alternative is a flat white
+    // frame the reader has to diagnose. It moves the SLIDER, so it is visible and reversible, and it
+    // stops the moment the reader touches the depth themselves.
+    const viewMoved = before.cx !== state.cx || before.cy !== state.cy || before.halfHeight !== state.halfHeight;
+    if (viewMoved && !depthPinned) {
+      const want = handover();
+      if (want.engine === "limit" && state.depth < want.suggestedDepth) {
+        state = clampState({ ...state, depth: want.suggestedDepth });
+      }
+    }
     showError(null);
     refusal = null;
     const alphabetChanged =
       JSON.stringify(before.alphabet) !== JSON.stringify(state.alphabet) ||
       before.minDegree !== state.minDegree ||
       before.maxDegree !== state.maxDegree;
-    if (alphabetChanged || opts.resweep === true) {
+    // A limit-set view drops the root layers, so coming back to the root engine — by zooming out, by
+    // turning the band on, or by choosing it — has nothing to composite until the sweep is re-run.
+    const needsSweep = handover().engine === "roots" && alphabet !== null && stage.loadedDegrees().length === 0;
+    if (alphabetChanged || opts.resweep === true || needsSweep) {
       recompute();
     } else {
       if (before.cx !== state.cx || before.cy !== state.cy || before.halfHeight !== state.halfHeight) {
@@ -508,6 +674,16 @@ function main(): void {
     }
     apply({ ...state, maxDegree: v, minDegree: Math.min(state.minDegree, v) });
   });
+  engineSelect.addEventListener("change", () => {
+    apply({ ...state, engine: engineSelect.value as EngineMode });
+  });
+  depthInput.addEventListener("input", () => {
+    depthPinned = true;
+    apply({ ...state, depth: Number(depthInput.value) });
+  });
+  annulusInput.addEventListener("change", () => {
+    apply({ ...state, annulus: annulusInput.checked });
+  });
   colourSelect.addEventListener("change", () => {
     apply({ ...state, colour: colourSelect.value === "degree" ? "degree" : "density" });
   });
@@ -535,13 +711,17 @@ function main(): void {
   });
   saveButton.addEventListener("click", () => {
     // Read everything the caption claims BEFORE the export's first await.
-    const caption = captionFor({
-      alphabet: alphabet?.label ?? "unknown alphabet",
-      minDegree: state.minDegree,
-      maxDegree: state.maxDegree,
-      roots: totals.roots,
-      complete,
-    });
+    const chosen = handover();
+    const caption =
+      chosen.engine === "limit"
+        ? `Limit set of ${alphabet?.label ?? "unknown alphabet"} to depth ${clampDepth(state.depth)} — \u2248 a superset that shrinks onto the limit set as the depth rises.`
+        : captionFor({
+            alphabet: alphabet?.label ?? "unknown alphabet",
+            minDegree: state.minDegree,
+            maxDegree: state.maxDegree,
+            roots: totals.roots,
+            complete,
+          });
     render(); // the persisted buffer holds the LAST frame; make it this one
     savePng(gl, "polynomial-roots.png", encodeState(state), caption);
   });
@@ -556,12 +736,19 @@ function main(): void {
       showError(next.refused);
       return;
     }
+    depthPinned = next.state.depth !== DEFAULT_STATE.depth;
     apply(next.state);
   });
 
   // --- go ---------------------------------------------------------------------------------------
   if (refusal !== null) showError(`This link could not be opened: ${refusal}. Showing the default view.`);
   resizeCanvas();
+  if (!depthPinned) {
+    const opening = handover();
+    if (opening.engine === "limit" && state.depth < opening.suggestedDepth) {
+      state = clampState({ ...state, depth: opening.suggestedDepth });
+    }
+  }
   recompute();
   draw();
 }

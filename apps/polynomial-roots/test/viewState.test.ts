@@ -25,6 +25,9 @@ const A: AppState = clampState({
   cy: 0,
   halfHeight: 1.45,
   circleDelta: 0.02,
+  engine: "auto",
+  depth: 28,
+  annulus: false,
 });
 const B: AppState = clampState({
   alphabet: { preset: "custom", custom: "1, -1, i, -i" },
@@ -37,6 +40,9 @@ const B: AppState = clampState({
   cy: 0.517839,
   halfHeight: 0.00025,
   circleDelta: 0.004,
+  engine: "limit",
+  depth: 41,
+  annulus: true,
 });
 
 describe("the permalink round trip", () => {

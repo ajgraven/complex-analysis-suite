@@ -107,6 +107,16 @@ body {
   margin-bottom: 8px;
 }
 
+/**
+ * `[hidden]` is a UA rule (`display: none`) and an author rule beats it, so `.row { display: grid }`
+ * silently un-hid every row the shell hides. Found by the a11y roster: its three Polynomial-Roots
+ * entries reported 44 interactive nodes each, and the entry that opens the limit-set engine — whose
+ * two controls do not exist under the root engine — should have reported more. Since PR-1 the `n`
+ * spinner and the custom-alphabet box had been on screen under the Littlewood preset, where neither
+ * does anything.
+ */
+.row[hidden] { display: none; }
+
 .row label { color: var(--muted); }
 
 .control {
@@ -120,6 +130,7 @@ body {
 }
 
 input[type="range"].control { padding: 0; }
+input[type="checkbox"].control { width: auto; justify-self: start; }
 
 .note { margin: 6px 0 0; color: var(--muted); font-size: 12px; }
 .note.warn { color: #ffb3a7; }
