@@ -335,4 +335,41 @@ describe("the solver's honesty", () => {
     const roots = solve([[-1, 0], [0, 0], [1, 0]]);
     expect(worstPairing(roots, [{ re: 1, im: 0 }, { re: -1, im: 0 }])).toBeLessThan(1e-13);
   });
+
+  it("solves a WIDE alphabet as readily as a balanced one — the unit-circle seed, measured", () => {
+    // The classical seed radius `|a_0/a_d|^(1/d)` was removed after a mutation sweep sent the question
+    // to a measurement: over ~20,000 polynomials it never won a case, and on the wide alphabets it is
+    // supposed to protect it was worse (`{1, 1000}` at degree 14: 9.23 sweeps against the unit circle's
+    // 8.40). This pins the claim behind the removal — a lopsided polynomial still converges, and quickly,
+    // because a small alphabet's roots sit near |z| = 1 whatever the coefficients do.
+    let worstSweeps = 0;
+    for (const alphabet of [
+      [1, 1000],
+      [0.001, 1],
+      [1, -1, 500, -500],
+    ]) {
+      const m = alphabet.length;
+      for (const degree of [6, 14]) {
+        for (let i = 0; i < 200; i++) {
+          const coeffs: number[][] = [[alphabet[0], 0]];
+          let rest = i * 7919;
+          for (let k = 1; k <= degree; k++) {
+            coeffs.push([alphabet[rest % m], 0]);
+            rest = Math.floor(rest / m);
+          }
+          if (coeffs[degree][0] === 0) coeffs[degree] = [alphabet[m - 1], 0];
+          const cRe = Float64Array.from(coeffs.map((c) => c[0]));
+          const cIm = Float64Array.from(coeffs.map((c) => c[1]));
+          const ws = makeWorkspace(degree);
+          const r = aberth(cRe, cIm, degree, ws);
+          expect(r.converged, `${alphabet} degree ${degree} index ${i}`).toBe(true);
+          expect(r.backwardErrorEps).toBeLessThan(8.001);
+          worstSweeps = Math.max(worstSweeps, r.iterations);
+        }
+      }
+    }
+    // Measured: the worst case is well inside the 60-sweep budget, so the budget is not what is being
+    // tested here — convergence at a wide dynamic range is.
+    expect(worstSweeps).toBeLessThan(40);
+  });
 });

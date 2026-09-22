@@ -70,6 +70,29 @@ describe("how the numbers are said", () => {
     expect(lines[1].detail).toContain("degrees 1–5");
   });
 
+  it("the SHARE is of the roots, not of the polynomials — a factor of `degree` apart", () => {
+    // Found by a mutation sweep: dividing by `polynomials` instead of `roots` changed no test, and the
+    // number a reader sees would have been wrong by a factor of the degree — 100% real at degree 3
+    // Littlewood instead of 33.3%. The percentage is the claim on screen, so the string carries it.
+    const totals = emptyTotals();
+    addStats(totals, run(3));
+    expect(totals.roots).toBe(48);
+    expect(totals.polynomials).toBe(16);
+    expect(totals.realRoots).toBe(16);
+    const lines = statLines(totals, { minDegree: 3, maxDegree: 3, circleDelta: 0.02, complete: true });
+    const real = lines.find((l) => l.label === "Real roots");
+    expect(real?.value).toBe("16");
+    expect(real?.detail).toContain("33.3%"); // 16/48, not 16/16
+    // EXACT, not `toContain`: at degree 3 the near-circle share is 24/48 = "50.0%" and the mutant's
+    // 24/16 is "150.0%", which CONTAINS "50.0%" — the substring assertion passed the mutant.
+    const near = lines.find((l) => l.label.includes("|z| = 1"));
+    expect(near?.detail).toBe(`${formatShare(totals.nearCircle, totals.roots)} of them — the haze at the circle`);
+    expect(real?.detail).toBe(`${formatShare(totals.realRoots, totals.roots)} of them — the bright line on the axis`);
+    expect(formatShare(totals.nearCircle, totals.roots)).not.toBe(
+      formatShare(totals.nearCircle, totals.polynomials),
+    );
+  });
+
   it("an unfinished sweep says so, so a partial count does not read as the family's", () => {
     const totals = emptyTotals();
     addStats(totals, run(4));

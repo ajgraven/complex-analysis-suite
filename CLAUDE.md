@@ -99,8 +99,8 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **609 test files / 6940 tests**
-*(599 / 6818 before Polynomial Roots — ADR-0046 — added 9 files / 113 tests and its `@cas/gpu`
+Green is **610 test files / 6949 tests**
+*(599 / 6818 before Polynomial Roots — ADR-0046 — added 10 files / 122 tests and its `@cas/gpu`
 extraction 1 / 9; 592 / 6643 before the 2026-09-20 remediation)* with lint and typecheck
 silent. `pnpm lint` includes `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the
 `packages/*` dists first, so a clean clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as
@@ -1434,6 +1434,18 @@ clean pages produced a 90-line diff of pure reordering. **(6)**
 `scripts/check-built-artifacts.mjs` hardcoded its app names in the summary while counting from the roster,
 so a third app made it say *"across 3 published apps (quadrature-domains, complex-dynamics)"*; both are
 derived now. `eslint.config.js`'s `APP_NAMES` was also stale by four apps and is brought current.
+
+**Sweep: 47 mutants, 42 killed, 5 recorded** (three provably equivalent, one equivalent in outcome, one
+unreachable — each with its reason in the plan). Four survivors bought something. **The classical Aberth
+seed radius `|a_0/a_d|^{1/d}` was REMOVED**: the mutant replacing it with 1 changed no test, which sent
+the question to a measurement, and over ~20,000 polynomials the textbook radius never won a case — on the
+WIDE alphabets it exists to protect it was worse (`{1, 1000}` at degree 14 took 9.23 sweeps against the
+unit circle's 8.40). A small alphabet's roots sit near `|z| = 1` whatever the coefficients do, so moving
+the seed circle away from 1 moves it away from the roots. **`clampState` had no ordering test**, and with
+`maxDegree < minDegree` the pool queues nothing: a blank stage with every control looking correct. **And
+the statistics' SHARE had no test on its denominator** — dividing by the polynomial count instead of the
+root count is a factor of the degree, and the first repair still passed the mutant because `"150.0%"`
+contains `"50.0%"` and the assertion used `toContain`.
 
 Work in small, reviewable commits. Pause at each phase/milestone gate for review before proceeding.
 When a command or path in the docs is marked `⚠ verify`, check it against the actual repo

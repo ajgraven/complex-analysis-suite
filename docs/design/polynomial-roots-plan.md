@@ -329,7 +329,27 @@ pass where the stage changed. Sizes: *S* / *M* / *L*.
   > nothing (the first keyed on a caption every page carries), so it keys on the decoded alphabet;
   > `scripts/check-built-artifacts.mjs` hardcoded its app names while counting from the roster, so a
   > third app made it say "across 3 published apps (quadrature-domains, complex-dynamics)". Both fixed.
-  > `eslint.config.js`'s `APP_NAMES` was stale by four apps and is brought current.
+  > `eslint.config.js`'s `APP_NAMES` was stale by four apps and is brought current.  >
+  > **Sweep: 47 mutants, 42 killed, 5 recorded.** Three of the five are provably EQUIVALENT — negating
+  > the even-index coefficients instead of the odd gives `−P(−z)`, whose root set is `P(−z)`'s and whose
+  > normalised digit vector is identical because `−1` is a unit whenever negation is available at all;
+  > dropping the units' bijection check can never fire, since the candidates are ratios of non-zero
+  > values so `u ≠ 0` and injectivity on a finite set forces it; and `buildToneMap`'s empty-frame early
+  > return produces the same all-zero ramp the general path does (`log1p(0) = 0`, an empty histogram, a
+  > zero CDF). The fourth is equivalent IN OUTCOME and says something worth keeping: moving the seed
+  > circle to radius 2 changes only the sweep count (worse on the mean at high degree, better on the
+  > worst case, never outside the budget), which is exactly what the residual stopping rule is for. The
+  > fifth is UNREACHABLE rather than equivalent — painting a polynomial whose solve failed would
+  > reintroduce the fabricated-root defect, and no legal alphabet reaches it (0 failures in ~20,000
+  > polynomials over nine alphabets); the guard stays, and `sweep.test.ts` asserts the unreachability, so
+  > if it ever becomes reachable that test fails first.
+  >
+  > **Four survivors bought tests or code changes.** The seed radius was REMOVED (above). `clampState`
+  > gained its ordering test: with `maxDegree < minDegree` the pool's `for (d = min; d <= max)` queues
+  > nothing, so the stage is blank while every control looks right. And the statistics' SHARE was being
+  > divided by nothing a test checked — the mutant divided by the polynomial count instead of the root
+  > count, a factor of the degree, and the first repair still passed it because `"150.0%"` contains
+  > `"50.0%"` and the assertion used `toContain`.
 - **PR-2 — the limit-set engine and the handover · *L*.** The generated walk shader, the annulus
   policy, first-hit-depth colour, the `auto` engine switch by pixel size with a visible "engine:
   roots / limit set" label, the JS walk and its parity corpus (shader vs JS; JS vs Bandt's
