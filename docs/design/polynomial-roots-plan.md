@@ -2,8 +2,9 @@
 
 > **Status.** A new app established by [ADR-0046](../DECISIONS.md#adr-0046). This is the **forward
 > plan** — what the app is, what the literature and the repo already give it, the one design decision
-> that organises it, and the milestones. Nothing below is committed beyond PR-0; each milestone is a
-> separately-approved gate, green before and after (guardrail: working software at every step). Every
+> that organises it, and the milestones. **PR-0 and PR-1 are done** (see the Roadmap); nothing beyond
+> them is committed, and each milestone is a separately-approved gate, green before and after
+> (guardrail: working software at every step). Every
 > number in §2 was measured on 2026-09-22 in Node on this container and is quoted so the plan can be
 > refuted rather than trusted.
 
@@ -278,8 +279,8 @@ pnpm build`) after the last edit, a mutation sweep over the slice's engine code 
 verified-green baseline (survivors killed or recorded as equivalent with a reason), and a browser
 pass where the stage changed. Sizes: *S* / *M* / *L*.
 
-- **PR-0 — ADR + plan (this) · *S*.** ADR-0046, this document, the `future-app-ideas.md` note.
-- **PR-1 — scaffold, the root engine, the density stage, publish · *L*.** `apps/polynomial-roots`
+- **PR-0 — ADR + plan (this) · *S*. DONE.** ADR-0046, this document, the `future-app-ideas.md` note.
+- **PR-1 — scaffold, the root engine, the density stage, publish · *L*. DONE.** `apps/polynomial-roots`
   from the 2D Hydrodynamics template (port **5184**, tag `pr`); `orbits.ts` + `aberth.ts` + `pool.ts`
   with their goldens; the `R32F` point-accumulation stage, per-degree layers, the scrub, density and
   degree colour; `buildEqualizedCdf` **extracted to `@cas/gpu`** with CD rewired; `#vs=` permalink,
@@ -291,6 +292,44 @@ pass where the stage changed. Sizes: *S* / *M* / *L*.
   CLAUDE.md decision 11. Gate: degree 20 Littlewood renders progressively under 2 s on the CI
   runner's core count; the a11y tree has no unnamed node; the browser suite compiles the stage and
   reads back a non-flat density texture.
+
+  > **DONE.** 113 node tests across 9 files plus 6 browser tests; the repo gate green at 609 files /
+  > 6940 tests; `pnpm a11y` clean on both new roster entries, 35 interactive nodes and 0 unnamed.
+  >
+  > **The extraction is narrower than this plan said**, and correctly so: `@cas/gpu` gets
+  > `equalizedCdfLut` — the inclusive-CDF-and-resample arithmetic — not `buildEqualizedCdf` whole, whose
+  > input is Complex Dynamics' own `k = R + 256·G` escape-count pre-pass. This app bins log-density; the
+  > decode stays app-side on both ends. ADR-0046 action item 2 records it, with the one consequence: the
+  > width cap samples each texel's CENTRE bin, so the last texel tops out at 254/255 and the highest few
+  > bins are in the distribution without being addressable — changing it would alter seven apps' output
+  > for one part in 255.
+  >
+  > **A SMALL STEP IS NOT CONVERGENCE.** The first Aberth settled a root whose step had fallen below a
+  > floor; two iterates within ~1e-15 drive the repulsion sum to ~1e15, which divides the correction to
+  > nothing — the roots are FROZEN. On `−1 + iz + iz²` it returned a double root at `−(1+i)/√2` with
+  > residual 1.47 and said `converged`, and the density drew two roots that do not exist. The residual
+  > is the only certificate, and it is strictly better rather than a trade: over six alphabets to degree
+  > 18, nothing fails under it, including the five Littlewood polynomials to degree 12 the step rule had
+  > failed. A polynomial that does fail is not painted and is counted on screen.
+  >
+  > **The parity test was measuring its own grid, twice.** `y = 0` on a bin boundary put every real root
+  > either side by the sign of its 1e-16 noise; an odd cell count fixed that and exposed the primitive
+  > cube roots of unity at `x = −1/2`, exactly on a vertical boundary (`1 + z + z² − z³ − z⁴ − z⁵` is
+  > Littlewood). Offset off those values, all 25 cases agree EXACTLY, bin for bin.
+  >
+  > **Root agreement splits by MULTIPLICITY**: 1e-13 on simple roots, 4.8e-8 on the double root of
+  > `(z−1)²(z+1)`, 1.19e-5 on the triple root of `1 − z − z² + z³ − z⁴ + z⁵ + z⁶ − z⁷` — `√ε` and `∛ε`.
+  > One tolerance loose enough for the triple root stops testing the rest.
+  >
+  > **The hexahole place could not be honest at these degrees**: the nearest trinary root to
+  > `0.372368 + 0.517839i` at degree 12 is 7.1e-4 away, so CKW's own 0.0005-wide window is EMPTY here.
+  > It opens at half-height 0.008 and its caption says so; the holes are PR-2's, as that gate names.
+  >
+  > **And two instrument defects.** An a11y `expect` selector present in the DEFAULT state verifies
+  > nothing (the first keyed on a caption every page carries), so it keys on the decoded alphabet;
+  > `scripts/check-built-artifacts.mjs` hardcoded its app names while counting from the roster, so a
+  > third app made it say "across 3 published apps (quadrature-domains, complex-dynamics)". Both fixed.
+  > `eslint.config.js`'s `APP_NAMES` was stale by four apps and is brought current.
 - **PR-2 — the limit-set engine and the handover · *L*.** The generated walk shader, the annulus
   policy, first-hit-depth colour, the `auto` engine switch by pixel size with a visible "engine:
   roots / limit set" label, the JS walk and its parity corpus (shader vs JS; JS vs Bandt's

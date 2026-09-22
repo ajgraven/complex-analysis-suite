@@ -59,6 +59,7 @@ const PROJECTS = [
   { name: 'hele-shaw-flow', match: '/apps/hele-shaw-flow/', floor: 1 },
   { name: 'potential-theory', match: '/apps/potential-theory/', floor: 1 },
   { name: 'contour-integration', match: '/apps/contour-integration/', floor: 1 },
+  { name: 'polynomial-roots', match: '/apps/polynomial-roots/', floor: 1 },
 ];
 const GLOBAL_FILE_FLOOR = 200;
 

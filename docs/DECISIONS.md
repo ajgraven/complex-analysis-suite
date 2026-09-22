@@ -54,7 +54,7 @@ Format follows Michael Nygard's ADR convention.
 | [0043](#adr-0043)                                                                                              | Contour Integration rebuilds its shell — two rails, a keyed renderer, KaTeX, textbook vocabulary              | Accepted |
 | [0044](#adr-0044-withdraw-the-in-app-suite-navigation-header-the-launcher-is-the-unified-menu)                | Withdraw the in-app suite navigation header (the launcher is the unified menu)                                 | Accepted |
 | [0045](#adr-0045)                                                                                              | One predicate decides whether a value may be shown                                                            | Accepted |
-| [0046](#adr-0046)                                                                                              | Polynomial Roots — the twelfth published app: a root-cloud renderer on one coefficient tree                  | Proposed |
+| [0046](#adr-0046)                                                                                              | Polynomial Roots — the twelfth published app: a root-cloud renderer on one coefficient tree                  | Accepted |
 
 > **Status legend:** Proposed → Accepted (once you sign off) → Superseded/Deprecated.
 > All thirty-six are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
@@ -4311,7 +4311,7 @@ over 28 records × 94 fixtures disagree exactly once — B3, `=` above and `?` b
 
 ## ADR-0046: Polynomial Roots — the twelfth published app: a root-cloud renderer on one coefficient tree
 
-**Status:** Proposed **Date:** 2026-09-22 **Deciders:** Andrew
+**Status:** Accepted **Date:** 2026-09-22 **Deciders:** Andrew
 
 A new app, `apps/polynomial-roots`, inspired by Baez–Christensen–Derbyshire's *The Beauty of Roots*
 ([math.ucr.edu/home/baez/roots](https://math.ucr.edu/home/baez/roots/)). **No new package**
@@ -4427,9 +4427,20 @@ DF64 reused where it buys depth and not paid for where it does not.
 
 ### Action items
 
-1. [ ] PR-0: this ADR (Proposed), `design/polynomial-roots-plan.md`, a line in
-   `design/future-app-ideas.md`.
-2. [ ] PR-1 through PR-5 as staged above, each with its gate, sweep and browser pass; this ADR moves
-   to Accepted at PR-1.
-3. [ ] At M6, extract `CET_C6` to `@cas/gpu` and rewire Contour Integration; at PR-1, extract
-   `buildEqualizedCdf` and rewire Complex Dynamics.
+1. [x] PR-0: this ADR, `design/polynomial-roots-plan.md`, a line in `design/future-app-ideas.md`.
+2. [x] **PR-1 done, and it corrected decision 6 in one place**: the `@cas/gpu` extraction is
+   `equalizedCdfLut` (`@cas/gpu/histogram`) — the inclusive-CDF-and-resample ARITHMETIC — and not
+   `buildEqualizedCdf` whole, because that function's input is Complex Dynamics' own `k = R + 256·G`
+   escape-count pre-pass, which this app does not have (it bins log-density). The decode stays in CD,
+   the arithmetic is shared, and CD's output is unchanged: its histogram carries `cap + 1` bins with
+   the last empty, so the shared inclusive CDF reproduces the old `cdfK` entry for entry. One
+   consequence is recorded rather than fixed — the width cap samples the bin at the CENTRE of each
+   texel's range, so the last texel tops out at 254/255 and the highest few bins are in the
+   distribution but not addressable by any texel; changing that would alter seven apps' output for
+   one part in 255.
+3. [ ] PR-2 through PR-5 as staged above, each with its gate, sweep and browser pass.
+4. [ ] At M6, extract `CET_C6` to `@cas/gpu` and rewire Contour Integration.
+5. [x] `eslint.config.js`'s `APP_NAMES` brought current: it was stale by four apps
+   (`2d-electrostatics`, `2d-hydrodynamics`, `hele-shaw-flow`, `potential-theory`), so the
+   no-cross-app-imports lint rule had silently stopped covering a third of the suite. The graph-level
+   rule in `.dependency-cruiser.cjs` is generic and did cover them, which is why nothing broke.

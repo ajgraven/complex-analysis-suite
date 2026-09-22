@@ -238,6 +238,28 @@ const PAGES = [
     expect: '[data-card="derivation"] .stepBody[data-step]',
   },
   {
+    id: "polynomial-roots",
+    mount: "polynomial-roots",
+    dist: "apps/polynomial-roots/dist",
+    file: "index.html",
+  },
+  {
+    // A NAMED PLACE, reached through its own permalink. The roster audits a page in its landing state,
+    // so the places panel's captions — which carry the cited theorems — would otherwise only ever be
+    // audited in the default view. This one also proves the link still opens: `expect` names a selector
+    // the place's own state produces, so a build that stopped honouring the link fails by name instead of
+    // quietly auditing the front page under a label claiming otherwise (the M7.1 / M7.4 lesson).
+    id: "polynomial-roots-place",
+    mount: "polynomial-roots",
+    dist: "apps/polynomial-roots/dist",
+    file: "index.html",
+    hash: viewState("pr", { preset: "trinary", dmax: 14 }),
+    // Keyed on the DECODED alphabet, not on anything the default page also has: `.place-fact` was the
+    // first choice and is present whatever link opened the page, so it would have audited the front page
+    // under this name without noticing.
+    expect: '.controls[data-alphabet="trinary"]',
+  },
+  {
     id: "correspondences",
     mount: "correspondences",
     dist: "apps/correspondences/dist",
@@ -651,7 +673,11 @@ async function main() {
   }
 
   if (UPDATE) {
-    writeFileSync(BASELINE_PATH, JSON.stringify(current, null, 2) + "\n");
+    // Sorted by page id: the roster's own order changes whenever an entry is inserted, and writing in
+    // that order made adding two clean pages produce a 90-line diff of pure reordering, in a file whose
+    // only job is to let a reviewer see which findings moved.
+    const sorted = Object.fromEntries(Object.keys(current).sort().map((k) => [k, current[k]]));
+    writeFileSync(BASELINE_PATH, JSON.stringify(sorted, null, 2) + "\n");
     const { rules, nodes } = summaryLine(current);
     console.log(
       `\n✓ Baseline written to ${BASELINE_PATH} — ${rules} rule finding(s), ${nodes} node(s) across ${Object.keys(current).length} page(s).`,

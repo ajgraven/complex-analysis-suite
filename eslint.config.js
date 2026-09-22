@@ -26,6 +26,14 @@ const APP_NAMES = [
   "riemann-map",
   "argument-principle",
   "faber-transform",
+  // Added 2026-09-22 (ADR-0046). The four before `polynomial-roots` were never listed, so this rule had
+  // silently stopped covering a third of the apps; the graph-level rule in .dependency-cruiser.cjs is
+  // generic and did cover them, which is why nothing broke.
+  "2d-electrostatics",
+  "2d-hydrodynamics",
+  "hele-shaw-flow",
+  "potential-theory",
+  "polynomial-roots",
 ];
 
 const noCrossAppImports = APP_NAMES.flatMap((name) => [name, `${name}/*`]).map(

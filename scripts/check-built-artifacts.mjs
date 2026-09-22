@@ -27,6 +27,9 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const APPS = [
   { name: 'quadrature-domains', dir: 'apps/quadrature-domains', srcRoots: ['app'] },
   { name: 'complex-dynamics', dir: 'apps/complex-dynamics', srcRoots: ['src'] },
+  // Polynomial Roots spawns its root-sweep worker pool; without this row the post-build worker-chunk
+  // check would silently skip the app that needs it most (ADR-0046).
+  { name: 'polynomial-roots', dir: 'apps/polynomial-roots', srcRoots: ['src'] },
 ];
 
 // `new Worker( new URL( '<literal>' , import.meta.url` — the bundlable form. Captures the specifier.
@@ -100,7 +103,10 @@ if (problems.length) {
   process.exit(1);
 }
 
+// The app names are DERIVED, not written out: with them hardcoded, adding a third app to the roster
+// made this line say "across 3 published apps (quadrature-domains, complex-dynamics)" — a count and a
+// list that disagreed, in the one message whose job is to say what was checked.
 console.log(
   `✓ built-artifact gate: all ${workersChecked} spawned worker chunk(s) present ` +
-    `across ${APPS.length} published apps (quadrature-domains, complex-dynamics).`,
+    `across ${APPS.length} published apps (${APPS.map((a) => a.name).join(', ')}).`,
 );

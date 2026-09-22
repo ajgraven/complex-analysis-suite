@@ -29,6 +29,9 @@
   "complex-dynamics": {},
   "complex-function-plotter": {},
   "contour-integration": {},
+  "contour-integration-drill": {},
+  "contour-integration-predict": {},
+  "contour-integration-worked": {},
   "correspondences": {},
   "correspondences-mating": {},
   "faber-transform": {
@@ -59,6 +62,8 @@
     }
   },
   "launcher": {},
+  "polynomial-roots": {},
+  "polynomial-roots-place": {},
   "potential-theory": {},
   "quadrature-domains": {
     "color-contrast": {
@@ -93,8 +98,5 @@
       "count": 3,
       "help": "All page content should be contained by landmarks"
     }
-  },
-  "contour-integration-drill": {},
-  "contour-integration-predict": {},
-  "contour-integration-worked": {}
+  }
 }

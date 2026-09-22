@@ -1,0 +1,180 @@
+/* The shell's layout: a bar, a stage, and one rail. Dark, because the density ramp runs from black. */
+:root {
+  --bg: #07080c;
+  --panel: #101218;
+  --line: #222635;
+  --ink: #e6e9f0;
+  --muted: #9aa3b2;
+  --accent: #f3921a;
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+#boot-loading { display: none; }
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+/* The page's h1 is the brand, so the document has a heading structure; the CSS cancels its size. */
+.brand {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 22rem;
+  gap: 12px;
+  padding: 12px 16px 16px;
+  height: calc(100vh - 47px);
+}
+
+.stage {
+  position: relative;
+  min-height: 320px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #000;
+}
+
+.stage-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: grab;
+}
+
+.stage-canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.progress {
+  position: absolute;
+  left: 10px;
+  bottom: 8px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 12px 14px;
+}
+
+.panel h2 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.panel h2:not(:first-child) { margin-top: 16px; }
+
+.row {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.row label { color: var(--muted); }
+
+.control {
+  width: 100%;
+  background: #181b24;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 4px 6px;
+  font: inherit;
+}
+
+input[type="range"].control { padding: 0; }
+
+.note { margin: 6px 0 0; color: var(--muted); font-size: 12px; }
+.note.warn { color: #ffb3a7; }
+
+.buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+.button {
+  background: #1b1f2b;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 5px 10px;
+  font: inherit;
+  cursor: pointer;
+}
+.button:hover { border-color: var(--accent); }
+
+.error {
+  margin: 0 16px;
+  padding: 8px 12px;
+  border: 1px solid #7a3a2c;
+  border-radius: 4px;
+  background: #2a1512;
+  color: #ffd2c8;
+}
+
+.stat-list { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 10px; }
+.stat-list dt { color: var(--muted); }
+.stat-list dd { margin: 0; display: flex; flex-direction: column; }
+.stat-value { font-variant-numeric: tabular-nums; }
+.stat-detail { color: var(--muted); font-size: 12px; }
+
+.place-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+
+.place {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  text-align: left;
+  background: #161a23;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 8px 10px;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+.place:hover { border-color: var(--accent); }
+.place-title { font-weight: 600; }
+.place-seen { color: var(--muted); font-size: 12px; }
+.place-fact { color: #b9d7c4; font-size: 12px; }
+.place-source { color: #7d8698; font-size: 11px; font-style: italic; }
+
+@media (max-width: 900px) {
+  .grid { grid-template-columns: minmax(0, 1fr); height: auto; }
+  .stage { height: 60vh; }
+}

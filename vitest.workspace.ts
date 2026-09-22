@@ -38,4 +38,5 @@ export default defineWorkspace([
   "./apps/2d-hydrodynamics/vite.config.ts",
   "./apps/hele-shaw-flow/vite.config.ts",
   "./apps/potential-theory/vite.config.ts",
+  "./apps/polynomial-roots/vite.config.ts",
 ]);

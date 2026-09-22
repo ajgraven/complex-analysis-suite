@@ -9,11 +9,11 @@
 `complex-analysis-suite` — a monorepo for a growing **suite of complex-analysis /
 complex-dynamics visualization tools** that share common packages and hand data off to
 one another. North-star property: **each new tool builds fewer primitives from scratch
-than the last.** It now unifies twelve apps — Complex Dynamics, Quadrature Domains,
+than the last.** It now unifies thirteen apps — Complex Dynamics, Quadrature Domains,
 Complex Function Plotter, Riemann Map, Argument Principle, Faber Transform, 2D
-Electrostatics, 2D Hydrodynamics, Hele-Shaw Flow, Potential Theory, and Contour Integration, plus the
-anti-holomorphic Correspondences tool (built, not yet published) — riding thirteen shared `@cas/*`
-packages.
+Electrostatics, 2D Hydrodynamics, Hele-Shaw Flow, Potential Theory, Contour Integration, and
+Polynomial Roots, plus the anti-holomorphic Correspondences tool (built, not yet published) — riding
+thirteen shared `@cas/*` packages.
 
 Read the docs in this order before making changes: [`docs/VISION.md`](docs/VISION.md) →
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) → [`docs/DECISIONS.md`](docs/DECISIONS.md)
@@ -55,8 +55,8 @@ Read the docs in this order before making changes: [`docs/VISION.md`](docs/VISIO
     (and on `workflow_dispatch`), gated on `lint` + `typecheck` + `test`. It assembles **one
     combined Pages site** — launcher at the root, `complex-dynamics/`, `quadrature-domains/`,
     `complex-function-plotter/`, `riemann-map/`, `argument-principle/`, `faber-transform/`,
-    `2d-electrostatics/`, `2d-hydrodynamics/`, `hele-shaw-flow/`, `potential-theory/`, and
-    `contour-integration/` beneath it.
+    `2d-electrostatics/`, `2d-hydrodynamics/`, `hele-shaw-flow/`, `potential-theory/`,
+    `contour-integration/`, and `polynomial-roots/` beneath it.
     `apps/correspondences` is **built but not published** (the launcher shows it as "Coming soon"). There are **two** workflows: `ci.yml` (jobs `build` + `browser` + the non-blocking
     `a11y`) and `deploy-pages.yml`; the `browser` job is not a publish blocker. *(Corrected
     2026-09-20: this said "the `build` + `browser` gate" — `grep -n '^  [a-z0-9_-]*:'
@@ -99,9 +99,9 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **599 test files / 6818 tests**
-*(592 files / 6643 tests before the 2026-09-20 remediation — the `--reporter=json` artefact and
-HEAD's own commit message both say so; this line had said 593 / 6649)* with lint and typecheck
+Green is **609 test files / 6940 tests**
+*(599 / 6818 before Polynomial Roots — ADR-0046 — added 9 files / 113 tests and its `@cas/gpu`
+extraction 1 / 9; 592 / 6643 before the 2026-09-20 remediation)* with lint and typecheck
 silent. `pnpm lint` includes `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the
 `packages/*` dists first, so a clean clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as
 **29 per-file specs under `apps/quadrature-domains/vitest/node/`** (via `vitest/node/_run.ts`), and
@@ -128,7 +128,7 @@ gives four configurations against twelve tool apps.)*
 
 **The browser suites are NOT in `pnpm test`** and must be run deliberately — `pnpm test:browser` in
 the app that has one (contour-integration, complex-dynamics, complex-function-plotter, quadrature-domains,
-`packages/gpu`, `packages/schwarz`). They compile real GLSL and need a Chromium, and Playwright pins an
+polynomial-roots, `packages/gpu`, `packages/schwarz`). They compile real GLSL and need a Chromium, and Playwright pins an
 exact build that `pnpm install` does not fetch, so a container holding one under a different version
 cannot launch the provider at all. Four of the six configs say so: contour-integration,
 complex-dynamics and `packages/gpu` take `CAS_CHROMIUM_EXECUTABLE ?? /opt/pw-browsers/chromium` — both,
@@ -1394,6 +1394,46 @@ layer M4.7d specified is wired for the first time. Measured after: F2/E3/C2 reco
 (`panelPlan(len, ∞)` had been taking the MAXIMUM plan), a keystroke in the integrand box 553 → 53 ms,
 `piUpper()` 2.48 ms → 0.07 µs, a hover 33 ms of GL → none, the D7 tab-wedge a 2 ms refusal by name.
 Green: **599 files / 6818 tests**, the browser suite 22 / 232, `pnpm a11y --strict` 682 nodes / 0 unnamed.
+
+**Done — PR-0 and PR-1 of ADR-0046 (Polynomial Roots, the twelfth published app).** `apps/polynomial-roots`
+— every root of every polynomial whose coefficients come from a small finite alphabet, painted by density:
+the picture at the head of Baez–Christensen–Derbyshire's *The Beauty of Roots*. **No new package**; it
+consumes `@cas/ui`, `@cas/gpu`, `@cas/core`, `@cas/flow`, `@cas/interchange` and `@cas/export`, and makes
+ONE second-consumer extraction into `@cas/gpu` — Complex Dynamics' histogram-equalisation arithmetic as
+`equalizedCdfLut` (`@cas/gpu/histogram`), with CD keeping the decode half alone. PR-1 shipped the scaffold,
+the root engine (an app-local Aberth–Ehrlich in a worker pool, pinned against `@cas/core`'s Durand–Kerner),
+the per-degree float-texture density stage, the `#vs=` permalink, PNG export, fourteen named places, and
+the launcher + Pages wiring. PR-2…PR-5 (the limit-set engine, deep zoom by reference, the dragons, the
+gallery) are staged and not started. Plan:
+[`docs/design/polynomial-roots-plan.md`](docs/design/polynomial-roots-plan.md).
+
+Six findings worth carrying. **(1) A SMALL STEP IS NOT CONVERGENCE, and treating it as one shipped a wrong
+answer.** The Aberth solver first settled a root whose STEP had fallen below a floor; when two iterates come
+within ~1e-15 the repulsion sum `Σ 1/(z_k − z_j)` reaches ~1e15 and divides the correction to nothing — the
+roots are FROZEN, not settled. On `−1 + iz + iz²` that returned a double root at `−(1+i)/√2` with residual
+1.47 and reported `converged`, and the density drew two roots that do not exist. The residual is the only
+certificate (`|p| ≤ 8ε·Σ|a_k||z|^k`, Adams/Igarashi), and it is strictly better rather than a trade:
+measured over six alphabets to degree 18, **nothing fails to converge under it**, including the five
+Littlewood polynomials to degree 12 the step rule had failed. A polynomial that does fail is now not
+painted and is counted on screen. **(2) The density's parity test was measuring its own GRID, twice.**
+Brute force and the symmetry-reduced sweep disagreed on two cells because `y = 0` sat on a bin BOUNDARY, so
+every real root fell either side by the sign of its 1e-16 noise; an odd cell count fixed that and exposed
+the primitive cube roots of unity at `x = −1/2`, exactly on a vertical boundary (`1 + z + z² − z³ − z⁴ −
+z⁵` is a Littlewood polynomial). With the grid offset off those values all 25 cases agree **exactly**, bin
+for bin — far stronger than any tolerance. **(3) Root agreement splits by MULTIPLICITY.** Against
+`@cas/core`: 1e-13 on simple roots, 4.8e-8 on the double root of `(z−1)²(z+1)`, 1.19e-5 on the triple root
+of `1 − z − z² + z³ − z⁴ + z⁵ + z⁶ − z⁷` — `√ε` and `∛ε`, arithmetic and not solver quality. One tolerance
+loose enough for the triple root stops testing the 99% the picture is made of. **(4) A gallery entry has to
+SHOW something.** The hexahole place pointed at CKW's own 0.0005-wide window, where measurement says the
+nearest trinary root at degree 12 is 7.1e-4 away — the window is empty at any degree this app computes. It
+opens at half-height 0.008 now and says so; the holes are PR-2's, which that milestone's gate already
+names. **(5) Two instrument defects.** An a11y roster `expect` selector present in the DEFAULT state
+verifies nothing (the first keyed on a caption every page has, so it would have audited the front page
+under the permalink's name); and the baseline is now written SORTED, because in roster order adding two
+clean pages produced a 90-line diff of pure reordering. **(6)**
+`scripts/check-built-artifacts.mjs` hardcoded its app names in the summary while counting from the roster,
+so a third app made it say *"across 3 published apps (quadrature-domains, complex-dynamics)"*; both are
+derived now. `eslint.config.js`'s `APP_NAMES` was also stale by four apps and is brought current.
 
 Work in small, reviewable commits. Pause at each phase/milestone gate for review before proceeding.
 When a command or path in the docs is marked `⚠ verify`, check it against the actual repo
