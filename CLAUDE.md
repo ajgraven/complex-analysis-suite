@@ -1447,6 +1447,16 @@ the statistics' SHARE had no test on its denominator** — dividing by the polyn
 root count is a factor of the degree, and the first repair still passed the mutant because `"150.0%"`
 contains `"50.0%"` and the assertion used `toContain`.
 
+**A browser pass then found two more, both invisible to every test that existed.** The statistics panel
+and the stage's generated description refreshed only when a sweep FINISHED, so a multi-million-polynomial
+sweep filled the picture in beside a panel reading zero and an alternative text saying *"No roots have
+been computed yet"* for its whole duration; they refresh on a throttle now. And **the hexahole place
+rendered BLACK** — at Calegari–Koch–Walker's own 0.0005-wide window the trinary cloud of bounded degree
+puts 1,610 roots into 730,000 pixels, measured at 0.05% lit and two distinct colours. The node places
+test passed it, because *are there roots in this window* and *is there a picture* are different questions
+and only a rendered frame answers the second. The place opens wider now and says it shows the region
+rather than the holes, and the browser suite gained the pairing that tells the two apart.
+
 Work in small, reviewable commits. Pause at each phase/milestone gate for review before proceeding.
 When a command or path in the docs is marked `⚠ verify`, check it against the actual repo
 contents rather than assuming.

@@ -350,6 +350,20 @@ pass where the stage changed. Sizes: *S* / *M* / *L*.
   > divided by nothing a test checked — the mutant divided by the polynomial count instead of the root
   > count, a factor of the degree, and the first repair still passed it because `"150.0%"` contains
   > `"50.0%"` and the assertion used `toContain`.
+  >
+  > **A browser pass then found two more, and both were invisible to every test that existed.** The
+  > statistics panel and the stage's generated description were refreshed only when a sweep FINISHED, so
+  > a multi-million-polynomial sweep filled the picture in beside a panel reading zero and an alternative
+  > text saying *"No roots have been computed yet"* — for its whole duration, measured at 13% progress
+  > with 12.2M roots already counted. They refresh on a throttle now, with the pending one cancelled at
+  > completion so the final counts are what is left on screen. And **the hexahole place rendered BLACK**:
+  > at CKW's own 0.0005-wide window the trinary cloud of bounded degree puts 1,610 roots into 730,000
+  > pixels, measured at 0.05% lit and TWO distinct colours. The node places test passed it, because *are
+  > there roots in this window* and *is there a picture* are different questions and only a rendered
+  > frame answers the second. The place opens at half-height 0.06 now (1.92% lit, in line with the other
+  > deep zooms) and says plainly that it shows the region and not the holes; the browser suite gained the
+  > pairing that tells the two apart — the same alphabet, degrees and centre at both window sizes, with
+  > the wide one above the floor and the tight one below it, so a floor both cleared would assert nothing.
 - **PR-2 — the limit-set engine and the handover · *L*.** The generated walk shader, the annulus
   policy, first-hit-depth colour, the `auto` engine switch by pixel size with a visible "engine:
   roots / limit set" label, the JS walk and its parity corpus (shader vs JS; JS vs Bandt's
