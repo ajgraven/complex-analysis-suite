@@ -64,6 +64,8 @@ export interface AppState {
   readonly theorem: boolean;
   /** Extension digits the overlay enumerates: `|A|^extend` paired points. */
   readonly extend: number;
+  /** Draw the alphabet's cited root bound over the picture, where it has one. */
+  readonly bounds: boolean;
 }
 
 /** Most extension digits the overlay will enumerate. `2^14` is 16,384 Newton solves, about 0.4 s. */
@@ -98,6 +100,7 @@ export const DEFAULT_STATE: AppState = {
   lamp: null,
   theorem: false,
   extend: 8,
+  bounds: false,
 };
 
 /** Clamp a state into what the engine and the stage can actually do. Pure; the codec relies on it. */
@@ -121,6 +124,7 @@ export function clampState(s: AppState): AppState {
     lamp: clampLamp(s.lamp),
     theorem: s.theorem === true,
     extend: Math.round(clampNum(s.extend, 0, MAX_EXTEND, DEFAULT_STATE.extend)),
+    bounds: s.bounds === true,
   };
 }
 

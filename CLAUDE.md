@@ -99,8 +99,8 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **620 test files / 7067 tests**
-*(618 / 7035 before ADR-0046's PR-4 — the dragons — added 2 files / 32 tests; 615 / 6997 before its PR-3 — deep zoom by reference — added 3 files / 38 tests; 610 / 6949 before its PR-2 — the limit-set engine — added 5 files / 48 tests; 599 / 6818 before
+Green is **621 test files / 7085 tests**
+*(620 / 7067 before ADR-0046's PR-5 — the gallery — added 1 file / 18 tests; 618 / 7035 before its PR-4 — the dragons — added 2 files / 32 tests; 615 / 6997 before its PR-3 — deep zoom by reference — added 3 files / 38 tests; 610 / 6949 before its PR-2 — the limit-set engine — added 5 files / 48 tests; 599 / 6818 before
 Polynomial Roots itself added 10 files / 122 tests and its `@cas/gpu` extraction 1 / 9; 592 / 6643 before the 2026-09-20 remediation)* with lint and typecheck
 silent. `pnpm lint` includes `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the
 `packages/*` dists first, so a clean clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as
@@ -1403,8 +1403,8 @@ ONE second-consumer extraction into `@cas/gpu` — Complex Dynamics' histogram-e
 `equalizedCdfLut` (`@cas/gpu/histogram`), with CD keeping the decode half alone. PR-1 shipped the scaffold,
 the root engine (an app-local Aberth–Ehrlich in a worker pool, pinned against `@cas/core`'s Durand–Kerner),
 the per-degree float-texture density stage, the `#vs=` permalink, PNG export, fourteen named places, and
-the launcher + Pages wiring. PR-3…PR-5 (deep zoom by reference, the dragons, the gallery) are staged and
-not started. Plan: [`docs/design/polynomial-roots-plan.md`](docs/design/polynomial-roots-plan.md).
+the launcher + Pages wiring. PR-2…PR-5 (the limit-set engine, deep zoom by reference, the dragons, the
+gallery) follow below; the arc is complete, with M6 (Egan's hue, `CET_C6` extraction) not committed. Plan: [`docs/design/polynomial-roots-plan.md`](docs/design/polynomial-roots-plan.md).
 
 Six findings worth carrying. **(1) A SMALL STEP IS NOT CONVERGENCE, and treating it as one shipped a wrong
 answer.** The Aberth solver first settled a root whose STEP had fallen below a floor; when two iterates come
@@ -1665,6 +1665,35 @@ of the raster's bounds test is the one a far-away point cannot exercise: a huge 
 array for free, while a point just past the right edge has a valid index one row down, so removing the
 check does not lose ink, it MOVES it. And the coverage ramp moved into `cloudAlpha` where the node gate
 can reach it — measuring it found it **saturates at 26 hits**, which the inset never reaches at 9.
+
+**Done — PR-5 of ADR-0046: the gallery, the bounds and the statistics.** The places fall into four groups
+(the Littlewood cloud · Dragons · Other alphabets · Past the last degree), the zoom story is nine frames
+scrubbed by a slider — each a whole state and so a permalink — the `{0, 1}` and `{−1, 0, 1}` root bounds
+are drawn over the stage (`src/stage/bounds.ts`), and the statistics are kept PER DEGREE and tabled. Two
+roster entries (`polynomial-roots-bounds`, `polynomial-roots-story`); `pnpm a11y --strict` reads **1,013
+interactive nodes across 27 pages, 0 unnamed**.
+
+**A BOUND IS A THEOREM, SO IT IS CHECKED — and the check found one half sharp and the other loose.** Every
+`{0, 1}` root to degree 16 lies inside Odlyzko–Poonen's `1/Φ < |z| < Φ`, `Re z < 3/2`, every trinary root to
+degree 10 inside Cauchy's `½ < |z| < 2`, with falsifications beside both. The outermost `{0, 1}` root reaches
+1.6179 by degree 20 against Φ = 1.61803; the rightmost PLATEAUS at Re z ≈ 1.137 (1.1323, 1.1358, 1.1367,
+1.1354 over degrees 14–20), 0.36 inside the half-plane. **Sharp is not visible**: the circle is met by 378
+of 2,368,512 roots beyond `|z| = 1.6` at degree 18, too sparse for a density, so on screen it looks loose
+and the legend says, with the numbers, that it is not.
+
+**The `=` denylist caught three captions, one a real overclaim** — the Littlewood limit-set entry calling
+`|z| = ½ and 2` its edges, the Cauchy annulus stated as a property of a picture that only approaches it.
+The guard stays blunt. **The zoom story hands over at frame 4 by itself** (1–3 roots, 4–9 limit set, no
+frame forcing an engine), and the deck's frames are not exact halvings (0.0024456 against 0.0024417, 0.16%).
+**The aggregate statistics were a mixture**: the per-degree rows show the real share FALLING while real
+roots per polynomial GROWS, which no aggregate can show. **A browser pass found one defect older than the
+slice**: every overview centred at the origin had read "roots are about **0** apart" since PR-2, the
+spacing estimate `|z|^(d+1)` being exactly 0 there.
+
+**Sweep: 36 mutants, 35 killed, 1 recorded equivalent.** Fourteen survived the first pass, three holes:
+the inclusion cannot see an edge moved OUTWARD (every root still passes), so each curve is now tested from
+both sides against its own predicate; no per-degree test had two columns that differed; and the group rule
+was weaker than the grouping — the headline dragon and Egan's point are root-engine views with no lamp.
 
 Work in small, reviewable commits. Pause at each phase/milestone gate for review before proceeding.
 When a command or path in the docs is marked `⚠ verify`, check it against the actual repo

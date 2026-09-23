@@ -32,6 +32,7 @@ const A: AppState = clampState({
   lamp: null,
   theorem: false,
   extend: 8,
+  bounds: false,
 });
 const B: AppState = clampState({
   alphabet: { preset: "custom", custom: "1, -1, i, -i" },
@@ -50,6 +51,7 @@ const B: AppState = clampState({
   lamp: { re: -0.372368, im: 0.517839 },
   theorem: true,
   extend: 11,
+  bounds: true,
 });
 
 describe("the permalink round trip", () => {
@@ -159,6 +161,15 @@ describe("a link that cannot be honoured refuses BY NAME", () => {
     const r = decodeState("#vs=not-base64!!");
     expect(r).not.toBeNull();
     expect(r !== null && "refused" in r).toBe(true);
+  });
+
+  it("names the reason: a bounds flag that is not a boolean", () => {
+    // `"yes"` and `1` read as truthy, and a codec that coerced them would open a link the sharer did
+    // not mint. The sweep removed the type check and nothing noticed.
+    for (const bounds of ["yes", 1, "false"]) {
+      const r = decodeState(forge({ preset: "zero-one", bounds }));
+      expect(r !== null && "refused" in r && r.refused, String(bounds)).toContain('"bounds"');
+    }
   });
 
   it("names the reason: a foreign app", () => {

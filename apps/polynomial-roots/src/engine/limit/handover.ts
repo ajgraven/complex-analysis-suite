@@ -191,6 +191,18 @@ export function chooseEngine(input: HandoverInput): Handover {
       forced: false,
     };
   }
+  // At the origin the estimate `|z|^(d+1)` is 0, and "roots about 0 apart" is a sentence the screen
+  // printed for every overview centred there (found on the Newman place's legend). There are no roots
+  // near the origin to be apart at all — a proper polynomial's roots stay outside a disk about it — so
+  // the estimate says nothing there, and the reason says that instead.
+  if (!(spacing > 0)) {
+    return {
+      ...base,
+      engine: "roots",
+      reason: "the view is centred on the origin, where the root-spacing estimate |z|^(d+1) says nothing; the root engine draws the overview.",
+      forced: false,
+    };
+  }
   return {
     ...base,
     engine: "roots",

@@ -44,8 +44,9 @@ Quadrature-app-onto-Vite ESM-ification, and the shared-package extractions
 `@cas/dynamics`, and `@cas/export` on the ADR-0007 second-consumer rule, and `@cas/conformal`
 extracted *ahead* of its second consumer per [ADR-0018](docs/DECISIONS.md#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore))
 are all done; the Correspondences app exists through its parameter-space milestone plus a complete
-interactive mating visualizer. The whole workspace is green (**7067 Vitest tests**
-across **620** files — 7035 across 618 before ADR-0046's PR-4 (the dragons) added 32 across 2;
+interactive mating visualizer. The whole workspace is green (**7085 Vitest tests**
+across **621** files — 7067 across 620 before ADR-0046's PR-5 (the gallery) added 18 across 1;
+7035 across 618 before its PR-4 (the dragons) added 32 across 2;
 6997 across 615 before its PR-3 (deep zoom by reference) added 38 across 3;
 6949 across 610 before its PR-2 (the limit-set engine) added 48 across 5,
 and 6818 across 599 before Polynomial Roots itself added 122 across 10 and its `@cas/gpu` extraction 9; 6643 across 592 before the 2026-09-20 remediation — plus lint,

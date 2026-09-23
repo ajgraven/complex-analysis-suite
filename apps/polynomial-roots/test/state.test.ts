@@ -5,6 +5,13 @@ import type { AppState } from "../src/state";
 const base = (over: Partial<AppState> = {}): AppState => ({ ...DEFAULT_STATE, ...over });
 
 describe("clampState", () => {
+  it("takes the bounds flag only when it is literally true", () => {
+    // clampState is the last guard on a state built anywhere; a truthy string must not turn it on.
+    expect(clampState(base({ bounds: "false" as never })).bounds).toBe(false);
+    expect(clampState(base({ bounds: 1 as never })).bounds).toBe(false);
+    expect(clampState(base({ bounds: true })).bounds).toBe(true);
+  });
+
   it("ORDERS the degrees, because a reversed range sweeps nothing at all", () => {
     // The pool builds its queue with `for (d = min; d <= max; d++)`, so `max < min` produces no chunks,
     // no points and an empty stage — a blank picture with every control looking correct. Found by a

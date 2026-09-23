@@ -4487,7 +4487,15 @@ DF64 reused where it buys depth and not paid for where it does not.
    at every depth and every point. Decision 1 gains its third reader of the one coefficient tree, as
    it always said it would, and Bousch's `q ∈ D̄ ⟺ 0 ∈ D_q` makes the inset and the limit engine the
    same predicate computed in opposite directions — checked, 1,352 of 1,352 with no disagreements.
-6. [ ] PR-5 as staged above, with its gate, sweep and browser pass.
+6. [x] **PR-5 done — the gallery, the bounds and the per-degree statistics; the arc PR-1…PR-5 is
+   complete.** Decision 7's honest labelling is enforced at the caption level by a blunt `=` denylist,
+   which caught one real overclaim (the Cauchy annulus stated as an exact property of the limit-set
+   picture) beside two locations. The two cited bounds are CHECKED against every root the engine finds
+   rather than drawn on trust, and the check split them: Odlyzko–Poonen's outer circle is essentially
+   met (1.6179 against Φ = 1.61803 by degree 20) but by a vanishing share of roots (378 of 2,368,512
+   beyond |z| = 1.6 at degree 18), while its half-plane is true and 0.36 loose (the rightmost root
+   plateaus at Re z ≈ 1.137). The legend quotes both as `≈` measurements kept apart from the theorem.
+   Detail and the sweep (36 mutants, 35 killed, 1 recorded equivalent) are in the plan's PR-5 block.
 7. [ ] At M6, extract `CET_C6` to `@cas/gpu` and rewire Contour Integration.
 8. [x] `eslint.config.js`'s `APP_NAMES` brought current: it was stale by four apps
    (`2d-electrostatics`, `2d-hydrodynamics`, `hele-shaw-flow`, `potential-theory`), so the

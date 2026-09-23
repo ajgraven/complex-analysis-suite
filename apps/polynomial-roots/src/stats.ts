@@ -11,8 +11,8 @@
 // reader shown "0.4% real" without the degree would take it for a property of Littlewood polynomials.
 import type { SweepStats } from "./engine/sweep.js";
 
-/** The accumulated counts over every chunk of one job. */
-export interface Totals {
+/** The counts one degree contributes. */
+export interface DegreeCounts {
   polynomials: number;
   roots: number;
   realRoots: number;
@@ -20,18 +20,67 @@ export interface Totals {
   nonConverged: number;
 }
 
-/** A fresh, empty accumulator. */
-export function emptyTotals(): Totals {
-  return { polynomials: 0, roots: 0, realRoots: 0, nearCircle: 0, nonConverged: 0 };
+/**
+ * The accumulated counts over every chunk of one job — in aggregate, and PER DEGREE.
+ *
+ * The aggregate is what the headline lines quote; the per-degree rows are what make the header's warning
+ * visible rather than asserted. "0.4% real" over degrees 1–16 is a mixture dominated by the top degree,
+ * and the share at each degree separately is the number that falls — which a single aggregate cannot
+ * show and a reader cannot infer.
+ */
+export interface Totals extends DegreeCounts {
+  readonly byDegree: Map<number, DegreeCounts>;
 }
 
-/** Fold one chunk's stats in. */
-export function addStats(into: Totals, s: SweepStats): void {
-  into.polynomials += s.polynomials;
-  into.roots += s.roots;
-  into.realRoots += s.realRoots;
-  into.nearCircle += s.nearCircle;
-  into.nonConverged += s.nonConverged;
+const zeroCounts = (): DegreeCounts => ({ polynomials: 0, roots: 0, realRoots: 0, nearCircle: 0, nonConverged: 0 });
+
+/** A fresh, empty accumulator. */
+export function emptyTotals(): Totals {
+  return { ...zeroCounts(), byDegree: new Map() };
+}
+
+/** Fold one chunk's stats in, under the degree it was swept at when that is known. */
+export function addStats(into: Totals, s: SweepStats, degree?: number): void {
+  const targets: DegreeCounts[] = [into];
+  if (degree !== undefined) {
+    let row = into.byDegree.get(degree);
+    if (row === undefined) {
+      row = zeroCounts();
+      into.byDegree.set(degree, row);
+    }
+    targets.push(row);
+  }
+  for (const t of targets) {
+    t.polynomials += s.polynomials;
+    t.roots += s.roots;
+    t.realRoots += s.realRoots;
+    t.nearCircle += s.nearCircle;
+    t.nonConverged += s.nonConverged;
+  }
+}
+
+/** One row of the per-degree table: the degree, its counts, and the two shares as display strings. */
+export interface DegreeRow {
+  readonly degree: number;
+  readonly polynomials: string;
+  readonly realShare: string;
+  readonly circleShare: string;
+  /** Mean real roots per polynomial — the quantity with a published asymptotic, unlike the share. */
+  readonly realPerPolynomial: string;
+}
+
+/** The per-degree table, ascending by degree, for the degrees that have reported anything. */
+export function degreeRows(totals: Totals): DegreeRow[] {
+  return [...totals.byDegree.entries()]
+    .sort(([a], [b]) => a - b)
+    .filter(([, c]) => c.roots > 0)
+    .map(([degree, c]) => ({
+      degree,
+      polynomials: formatCount(c.polynomials),
+      realShare: formatShare(c.realRoots, c.roots),
+      circleShare: formatShare(c.nearCircle, c.roots),
+      realPerPolynomial: (c.realRoots / Math.max(1, c.polynomials - c.nonConverged)).toFixed(3),
+    }));
 }
 
 /** A count and its share, formatted. */

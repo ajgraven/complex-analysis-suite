@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { addStats, describeLimit, describeTotals, emptyTotals, formatShare, limitLines, measureLimit, statLines } from "../src/stats";
+import { addStats, degreeRows, describeLimit, describeTotals, emptyTotals, formatShare, limitLines, measureLimit, statLines } from "../src/stats";
 import { sweepChunk } from "../src/engine/sweep";
 import type { SweepStats } from "../src/engine/sweep";
 
@@ -190,5 +190,65 @@ describe("what a limit-set frame holds", () => {
     expect(limitLines(summary)[0].value).toBe("—");
     expect(limitLines(summary)[0].detail).toContain("all inside the excluded band");
     expect(describeLimit(summary)).not.toContain("of the walked area");
+  });
+});
+
+describe("the per-degree table", () => {
+  it("accumulates each degree separately, and the rows add up to the aggregate", () => {
+    const totals = emptyTotals();
+    addStats(totals, run(3), 3);
+    addStats(totals, run(4), 4);
+    addStats(totals, run(4), 4); // a degree can arrive in several chunks
+    const rows = degreeRows(totals);
+    expect(rows.map((r) => r.degree)).toEqual([3, 4]);
+    let polys = 0;
+    for (const [, c] of totals.byDegree) polys += c.polynomials;
+    expect(polys).toBe(totals.polynomials);
+    expect(totals.byDegree.get(4)?.polynomials).toBe(2 * run(4).polynomials);
+  });
+
+  it("shows the share FALLING row by row — the thing the aggregate hides", () => {
+    // The header's own warning, made visible: "x% real" over degrees 1–16 is a mixture dominated by the
+    // top degree, and only the rows show the share fall. Real roots PER POLYNOMIAL, by contrast, grows —
+    // slowly, as the literature says it should (Erdős–Offord put it at O(log d)) — which is why the
+    // table carries both columns.
+    const totals = emptyTotals();
+    for (const d of [4, 8, 12]) addStats(totals, run(d), d);
+    const rows = degreeRows(totals);
+    const share = rows.map((r) => Number.parseFloat(r.realShare));
+    expect(share[0]).toBeGreaterThan(share[1]);
+    expect(share[1]).toBeGreaterThan(share[2]);
+    const perPoly = rows.map((r) => Number(r.realPerPolynomial));
+    expect(perPoly[2]).toBeGreaterThan(perPoly[0]);
+  });
+
+  it("each column reads its own count, in degree order, and a degree that found nothing has no row", () => {
+    // Hand-made stats, so every column has a DIFFERENT expected value and a column reading its
+    // neighbour's count cannot pass. The sweep's survivors were exactly those: the circle share reading
+    // the real count, the per-polynomial mean ignoring failed solves, the polynomial column printing
+    // the root count, and the sort and the empty-row filter removed outright.
+    const totals = emptyTotals();
+    const s = (polynomials: number, roots: number, realRoots: number, nearCircle: number, nonConverged: number) =>
+      ({ polynomials, roots, realRoots, nearCircle, nonConverged }) as never;
+    addStats(totals, s(1000, 2000, 300, 700, 500), 4); // arrives FIRST, but is the higher degree; half failed
+    addStats(totals, s(10, 0, 0, 0, 10), 3); // every solve failed: nothing painted, so no row
+    addStats(totals, s(200, 400, 50, 100, 0), 2);
+    const rows = degreeRows(totals);
+    expect(rows.map((r) => r.degree)).toEqual([2, 4]);
+    expect(rows[1]).toEqual({
+      degree: 4,
+      polynomials: "1,000",
+      realShare: formatShare(300, 2000),
+      circleShare: formatShare(700, 2000),
+      realPerPolynomial: "0.600", // 300 real roots over the 500 polynomials that were SOLVED, not 1,000
+    });
+    expect(rows[1].circleShare).not.toBe(rows[1].realShare);
+  });
+
+  it("an un-tagged chunk still counts in the aggregate, and adds no row", () => {
+    const totals = emptyTotals();
+    addStats(totals, run(5));
+    expect(totals.polynomials).toBe(run(5).polynomials);
+    expect(degreeRows(totals)).toEqual([]);
   });
 });

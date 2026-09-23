@@ -300,6 +300,27 @@ const PAGES = [
     expect: '.panel.dragon[data-pinned="yes"]',
   },
   {
+    // PR-5: the published-bound overlay. Its legend and its toggle exist only for an alphabet the
+    // literature bounds and only with the bound drawn, so the default page never shows them.
+    id: "polynomial-roots-bounds",
+    mount: "polynomial-roots",
+    dist: "apps/polynomial-roots/dist",
+    file: "index.html",
+    hash: viewState("pr", { preset: "zero-one", h: 1.75, dmax: 18, bounds: true }),
+    expect: '.controls[data-bounds="on"]',
+  },
+  {
+    // PR-5: the per-degree statistics table, through the zoom story's first frame. The table appears
+    // only once two degrees have reported, so an audit of the landing page can run before it exists;
+    // this entry WAITS for it, which makes the table's audit deterministic rather than a race.
+    id: "polynomial-roots-story",
+    mount: "polynomial-roots",
+    dist: "apps/polynomial-roots/dist",
+    file: "index.html",
+    hash: viewState("pr", { cx: "0.42065", cy: "0.48354", h: 0.31254, dmax: 20 }),
+    expect: ".panel.stats table.degree-table",
+  },
+  {
     id: "correspondences",
     mount: "correspondences",
     dist: "apps/correspondences/dist",

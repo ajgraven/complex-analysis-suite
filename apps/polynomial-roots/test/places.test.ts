@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { PLACES, placeById } from "../src/places";
+import { GROUPS, PLACES, placeById } from "../src/places";
+import { decodeState, encodeState } from "../src/viewState";
 import { clampState, MAX_DEGREE } from "../src/state";
 import { compileAlphabet } from "../src/engine/alphabet";
 import { orbitSpace } from "../src/engine/orbits";
@@ -169,7 +170,97 @@ describe("the named places", () => {
       });
       if (place.state.engine !== "auto") expect(chosen.engine, place.id).toBe(place.state.engine);
       const mentionsLimit = /limit-set engine|limit set/i.test(place.seen);
-      if (mentionsLimit) expect(chosen.engine, `${place.id} describes the limit set`).toBe("limit");
+      // A STORY's caption describes its frames, not its first one: the zoom story opens on the cloud
+      // and says the limit set arrives later, so its claim is checked against the last frame.
+      const described = place.steps === undefined ? place.state : place.steps[place.steps.length - 1];
+      const chosenThere = chooseEngine({
+        mode: described.engine,
+        ...centreNumbers(described),
+        halfHeight: described.halfHeight,
+        maxDegree: described.maxDegree,
+        annulus: described.annulus,
+        pixels: 1024,
+      });
+      if (mentionsLimit) expect(chosenThere.engine, `${place.id} describes the limit set`).toBe("limit");
+    }
+  });
+});
+
+describe("the gallery's groups", () => {
+  it("every place is in one of the four groups, and every group has places", () => {
+    expect(GROUPS.map((g) => g.id)).toEqual(["tour", "dragons", "alphabets", "beyond"]);
+    for (const place of PLACES) expect(GROUPS.map((g) => g.id), place.id).toContain(place.group);
+    for (const group of GROUPS) {
+      expect(PLACES.filter((p) => p.group === group.id).length, group.id).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it("each group holds exactly the entries §2.3 files under it", () => {
+    // The rule below catches a place whose STATE says what it is for; the headline dragon and Egan's
+    // point are root-engine views with no lamp, so only the membership itself can pin them. The sweep
+    // moved "dragon" into the tour and "newman" into "beyond" and the rule passed both.
+    const members = (g: string) => PLACES.filter((p) => p.group === g).map((p) => p.id);
+    expect(members("tour")).toEqual([
+      "whole", "hole-at-1", "hole-at-i", "four-fifths", "four-fifths-i", "half-e-i-fifth", "feather-08-02", "zoom-story",
+    ]);
+    expect(members("dragons")).toEqual(["dragon", "egan-point", "dragon-inset", "dragon-theorem"]);
+    expect(members("alphabets")).toEqual(["newman", "bandt", "hexaholes-region", "hexaholes", "cube-roots"]);
+    expect(members("beyond")).toEqual(["limit-littlewood", "limit-bandt", "deep-zoom-story", "deep-float64-floor"]);
+  });
+
+  it("the engines' own places are 'past the last degree', and the dragons are together", () => {
+    // Grouping by what an entry is FOR: a place whose state forces the limit or deep engine is about
+    // what lies past a root solver's reach, whatever alphabet it uses — except the hexahole, which is a
+    // feature of Bandt's set and sits with its alphabet.
+    for (const place of PLACES) {
+      const isDragon = place.state.lamp !== null || place.state.theorem;
+      if (isDragon) expect(place.group, place.id).toBe("dragons");
+      else if (place.state.engine === "deep") expect(place.group, place.id).toBe("beyond");
+    }
+  });
+});
+
+describe("the zoom story is a scrubber through the slide deck's own frames", () => {
+  const story = placeById("zoom-story");
+
+  it("has nine frames, each half the height of the last, at the deck's centre and degree", () => {
+    // Height 0.62508 · 2^{−k}, k = 0 … 8. The deck quotes its last frame as 0.0024456; eight exact
+    // halvings of 0.62508 give 0.0024417, 0.16% smaller, so the deck's own frames are not exact halvings
+    // and this app keeps the ratio rather than the rounded figure.
+    const steps = story?.steps;
+    if (steps === undefined) throw new Error("the zoom story has no steps");
+    expect(steps.length).toBe(9);
+    expect(story?.state).toEqual(steps[0]);
+    expect(2 * steps[0].halfHeight).toBeCloseTo(0.62508, 10);
+    for (let k = 1; k < steps.length; k++) expect(steps[k].halfHeight / steps[k - 1].halfHeight).toBeCloseTo(0.5, 12);
+    expect(2 * steps[8].halfHeight).toBeCloseTo(0.0024417, 7);
+    for (const st of steps) {
+      expect(centreNumbers(st)).toEqual({ cx: 0.42065, cy: 0.48354 });
+      expect(st.maxDegree).toBe(20);
+    }
+  });
+
+  it("hands over to the limit set at FRAME 4 — measured, and the caption's 'later frames' is that", () => {
+    const engines = (story?.steps ?? []).map(
+      (st) =>
+        chooseEngine({
+          mode: st.engine,
+          ...centreNumbers(st),
+          halfHeight: st.halfHeight,
+          maxDegree: st.maxDegree,
+          annulus: st.annulus,
+          pixels: 1024,
+        }).engine,
+    );
+    expect(engines).toEqual(["roots", "roots", "roots", "limit", "limit", "limit", "limit", "limit", "limit"]);
+  });
+
+  it("every frame is a permalink, and the link reopens that frame", () => {
+    for (const st of story?.steps ?? []) {
+      const back = decodeState(encodeState(st));
+      if (back === null || "refused" in back) throw new Error("a frame's link did not open");
+      expect(back.state.halfHeight / st.halfHeight).toBeCloseTo(1, 8);
+      expect(back.state.cx).toBe(st.cx);
     }
   });
 });
@@ -229,6 +320,14 @@ describe("what a caption may claim", () => {
     for (const place of PLACES) {
       expect(place.seen, place.id).not.toMatch(/\bprove[sd]?\b/i);
       expect(place.seen, place.id).not.toMatch(/\btheorem\b/i);
+      // PR-5's gate: no `=` in a sentence about the PICTURE. A `seen` caption may approximate or bound
+      // (≈, ≤, <) and may name a map (x ↦ ±1 + zx) but may never write an equality, because nothing this
+      // app draws is exact. `fact`, the cited theorem, is exempt — it is the one place an `=` is earned.
+      // **Blunt on purpose.** Its first run caught three captions: two named a LOCATION ("around z = 1")
+      // and one was a real overclaim — "the inner and outer edges at |z| = ½ and 2 are the picture's
+      // own", an exact edge asserted of a finite-depth picture that only touches the circle |z| = ½ at a
+      // point. A guard subtle enough to pass the first two would have had to understand the third.
+      expect(place.seen, place.id).not.toMatch(/(^|[^≈≤≥<>!])=/);
     }
   });
 

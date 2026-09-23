@@ -716,11 +716,74 @@ pass where the stage changed. Sizes: *S* / *M* / *L*.
   > image and may not contain "theorem" or "proves" — those belong in `fact`, which carries a source —
   > and both new places had put Bousch and Michelen–Yakir in the wrong field. The rule was written three
   > milestones ago against exactly this.
-- **PR-5 — the gallery and the statistics · *M*.** Captioned entries (§2.3, all four groups), the
+- **PR-5 — the gallery and the statistics · *M*. DONE.** Captioned entries (§2.3, all four groups), the
   zoom story as a scrubbable entry, the `{0, 1}` and `{−1, 0, 1}` bounds drawn as overlays, the
   statistics panel, two gallery permalinks in the a11y roster. Gate: every entry's state decodes,
   runs, and reaches its named place; captions pass a denylist for `=` on any sentence about the
   picture.
+
+  > **Built.** `src/places.ts` gains `PlaceGroup` and `GROUPS` (the Littlewood cloud · Dragons · Other
+  > alphabets · Past the last degree), every place a `group`, and a place may carry `steps` — the zoom
+  > story is nine frames, each a whole `AppState` and so each a permalink, scrubbed by a slider beside
+  > the entry rather than inside its button. `src/stage/bounds.ts` is the overlay (a 2D canvas over the
+  > stage, `aria-hidden`, the bound's theorem + source + what was MEASURED as three separate fields),
+  > `bounds` joins the state and the codec, and `src/stats.ts` keeps its counts PER DEGREE, rendered
+  > as a table under the headline lines. Two roster entries: `polynomial-roots-bounds` and
+  > `polynomial-roots-story`.
+  >
+  > **A bound is a theorem, so it is CHECKED, and the check found one of the two is sharp and the other
+  > is not.** Every root of every proper `{0, 1}` polynomial to degree 16 (528,384 at degree 16 alone)
+  > lies inside Odlyzko–Poonen's `1/Φ < |z| < Φ`, `Re z < 3/2`, and every trinary root to degree 10
+  > inside Cauchy's `½ < |z| < 2` — inclusions, with falsifications beside them so the inclusion is
+  > evidence. The outermost `{0, 1}` root climbs 1.0000 → 1.5823 → 1.6134 → 1.6174 → 1.6179 over degrees
+  > 2, 8, 12, 16, 20, against Φ = 1.61803: the circle is essentially met. The rightmost PLATEAUS —
+  > 1.1323, 1.1358, 1.1367, 1.1354 at degrees 14–20 — so the half-plane is 0.36 away from everything the
+  > app draws: true, and loose. The first draft of the test asked for a margin under 0.3 on all three.
+  >
+  > **Sharp is not the same as visible.** On screen the outer circle looks far from the cloud, because
+  > it is met by a vanishing share: 64 / 1,044 / 4,183 roots beyond `|z| = 1.5` at degrees 12 / 16 / 18
+  > (0.25%, 0.20%, 0.18%), and 378 of 2,368,512 beyond 1.6 at 18 — too sparse for a density to show. The
+  > legend says so, with the numbers, and the suite pins the degree-16 count (94 of 528,384).
+  >
+  > **The `=` denylist caught three captions, and one was a real overclaim.** Two were locations ("a gap
+  > around z = 1", "the band around |z| = 1") and are reworded; the third, the Littlewood limit-set
+  > entry, said its "inner and outer edges at |z| = ½ and 2 are the picture's own" — the Cauchy annulus stated as an exact property of the picture, where what the picture shows is an
+  > extent that approaches those radii; it reads "about ½ … about 2" now.
+  > The guard stays blunt (any `=` not preceded by `≈ ≤ ≥ < > !`), because a guard that tries to tell a
+  > location from a claim is one a caption can argue its way past.
+  >
+  > **The zoom story hands over at frame 4, by itself.** Frames 1–3 (half-heights 0.313 → 0.078) are the
+  > root engine and 4–9 the limit-set walk, measured by running `chooseEngine` on every frame; no frame
+  > forces an engine, so the slider shows the ladder rather than asserting it. The deck's own frames are
+  > not exact halvings — its last is 0.0024456 against the halving sequence's 0.0024417, a 0.16% drift —
+  > and the story uses exact halvings of its first frame, so a frame's height is a formula and not a list.
+  >
+  > **The statistics were a mixture.** "0.4% real" over degrees 1–16 is dominated by the top degree; the
+  > per-degree table shows the share FALLING (degrees 4 → 8 → 12, asserted) while the mean number of real
+  > roots per polynomial GROWS — which is the quantity with a published asymptotic, and one an aggregate
+  > cannot show.
+  >
+  > **A browser pass found two defects, one older than this slice.** Every overview centred at the
+  > origin had read "degree-18 roots are about **0** apart here" since PR-2: the spacing estimate
+  > `|z|^(d+1)` is exactly 0 there and the sentence printed it. There are no roots near the origin to be
+  > apart at all, so the estimate says nothing, and the reason now says that (the test forbids the old
+  > sentence and requires the estimate's `e-` form off the origin). And both checkbox rows in `.row`'s
+  > label → control grid wrapped their text over three lines beside a 16px box; they use `.row.check`,
+  > as PR-4's theorem toggle already did.
+  >
+  > **Sweep: 36 mutants, 35 killed, 1 recorded equivalent.** Fourteen survived the first pass, and they
+  > were three holes. **The inclusion cannot see an edge moved OUTWARD** — every root still passes — and
+  > the margins read the roots rather than `contains`, so widening any radius (1/Φ → ½, Φ → 1.7, ½ → 0,
+  > 2 → 2.5) left the suite green; each curve is now tested from both sides against its own predicate.
+  > **The per-degree table had no test in which two columns differed**, so the circle share reading the
+  > real count, the per-polynomial mean ignoring failed solves and the polynomial column printing the
+  > root count all passed, as did removing the sort and the empty-row filter; one hand-made corpus with
+  > a distinct value in every column, arriving out of order, with a degree whose every solve failed,
+  > kills all five. **And the group RULE was weaker than the grouping**: the headline dragon and Egan's
+  > point are root-engine views with no lamp, so moving either out of "Dragons" broke no rule — the
+  > membership is pinned now. The codec's `bounds` type check and `clampState`'s `=== true` each bought
+  > a refusal test. The equivalent is `boundFor`'s key sort, which `compileAlphabet`'s own ordering
+  > already supplies; kept, with its reason beside it.
 - **M6 (later, not committed) — Egan's hue, CET-C6 extraction, custom alphabets polish.** Hue by
   the low-order coefficient bits (root engine only), which is the second consumer of `CET_C6` and
   extracts it to `@cas/gpu`; the custom alphabet editor's symmetry readout ("this alphabet has

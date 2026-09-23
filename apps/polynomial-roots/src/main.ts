@@ -19,6 +19,7 @@ import { clampDepth } from "./engine/limit/walkGlsl.js";
 import { DeepPass } from "./stage/deepPass.js";
 import { dragonBounds, dragonPlan, dragonSet, maxAbsOf, nearestToOrigin, theoremOverlay } from "./engine/dragon.js";
 import { drawInset, drawTheorem, insetDescription, insetLayout, theoremDescription } from "./stage/inset.js";
+import { boundFor, drawBound } from "./stage/bounds.js";
 import { centreOnRoot, coefficientString, emptyFrame, nearestRoot, packFrame, rootAt, runReference } from "./engine/deep/reference.js";
 import type { ReferenceFrame, ReferenceRequest } from "./engine/deep/reference.js";
 import { buildToneMap } from "./stage/tone.js";
@@ -37,9 +38,10 @@ import {
 } from "./state.js";
 import type { AppState } from "./state.js";
 import { decodeState, encodeState } from "./viewState.js";
-import { PLACES } from "./places.js";
+import { GROUPS, PLACES } from "./places.js";
 import {
   addStats,
+  degreeRows,
   deepLines,
   describeDeep,
   describeLimit,
@@ -101,7 +103,11 @@ function main(): void {
   const bar = el("header", { class: "bar" }, brand);
 
   const gl = el("canvas", { class: "stage-canvas" });
-  const stageHost = el("div", { class: "stage" }, gl);
+  // The cited bounds, drawn over the picture. Hidden from assistive technology because what it says is
+  // said in words in the legend below the toggle, which is where a reader of either kind looks for it.
+  const overlay = el("canvas", { class: "stage-overlay" }) as HTMLCanvasElement;
+  overlay.setAttribute("aria-hidden", "true");
+  const stageHost = el("div", { class: "stage" }, gl, overlay);
   const progress = el("div", { class: "progress", role: "status" });
   stageHost.append(progress);
 
@@ -212,7 +218,13 @@ function main(): void {
   });
   const depthRow = labelled("Depth", depthInput);
   const annulusInput = el("input", { class: "control", type: "checkbox", id: "pr-annulus" });
-  const annulusRow = labelled("Walk the |z| ≈ 1 band", annulusInput);
+  // Checkbox rows use `.row.check` (box then text) as the dragon's theorem toggle does: in `.row`'s
+  // label → control grid the text column is what is left beside a 16px box, and PR-5's browser pass
+  // read "Draw the published bound" wrapped over three lines.
+  const annulusRow = el("label", { class: "row check" }, annulusInput, el("span", { textContent: "Walk the |z| ≈ 1 band" }));
+  const boundsInput = el("input", { class: "control", type: "checkbox", id: "pr-bounds" });
+  const boundsRow = el("label", { class: "row check" }, boundsInput, el("span", { textContent: "Draw the published bound" }));
+  const boundsNote = el("p", { class: "note" });
   const engineNote = el("p", { class: "note" });
 
   const exposure = el("input", { class: "control", type: "range", min: "-1.3", max: "1.6", step: "0.01", id: "pr-exposure" });
@@ -229,6 +241,8 @@ function main(): void {
     nRow,
     customRow,
     alphabetNote,
+    boundsRow,
+    boundsNote,
     el("h2", {}, "Engine"),
     labelled("Draw with", engineSelect),
     depthRow,
@@ -252,25 +266,65 @@ function main(): void {
 
   // --- places -----------------------------------------------------------------------------------
   placesPanel.append(el("h2", {}, "Places to look"));
-  const placeList = el("ul", { class: "place-list" });
-  for (const place of PLACES) {
-    const button = el("button", { class: "place", type: "button" });
-    button.append(el("span", { class: "place-title", textContent: place.title }));
-    button.append(el("span", { class: "place-seen", textContent: place.seen }));
-    if (place.fact !== undefined) {
-      button.append(el("span", { class: "place-fact", textContent: `Theorem. ${place.fact}` }));
+  /** Open a place, or one frame of a place's story. */
+  const openPlace = (target: AppState): void => {
+    // A place that names its own depth means it; the zoom must not overrule it.
+    depthPinned = target.depth !== DEFAULT_STATE.depth;
+    apply(target);
+  };
+  for (const group of GROUPS) {
+    const members = PLACES.filter((p) => p.group === group.id);
+    if (members.length === 0) continue;
+    const section = el("section", { class: "place-group" });
+    section.dataset.group = group.id;
+    section.append(el("h3", { class: "place-group-title", textContent: group.title }));
+    section.append(el("p", { class: "note", textContent: group.intro }));
+    const list = el("ul", { class: "place-list" });
+    for (const place of members) {
+      const button = el("button", { class: "place", type: "button" });
+      button.append(el("span", { class: "place-title", textContent: place.title }));
+      button.append(el("span", { class: "place-seen", textContent: place.seen }));
+      if (place.fact !== undefined) {
+        button.append(el("span", { class: "place-fact", textContent: `Theorem. ${place.fact}` }));
+      }
+      if (place.source !== undefined) {
+        button.append(el("span", { class: "place-source", textContent: place.source }));
+      }
+      button.addEventListener("click", () => openPlace(place.state));
+      const item = el("li", {}, button);
+      if (place.steps !== undefined && place.steps.length > 1) {
+        // The story's frames, as a slider OUTSIDE the button: a range input inside a button is not
+        // operable by keyboard in any browser, and a slider whose value the button click resets would
+        // fight the reader. Each frame is a whole state, so a frame is a permalink like any other.
+        const steps = place.steps;
+        const slider = el("input", {
+          type: "range",
+          class: "control story",
+          min: "0",
+          max: String(steps.length - 1),
+          step: "1",
+          value: "0",
+        }) as HTMLInputElement;
+        slider.setAttribute("aria-label", `${place.title}: frame`);
+        const readout = el("span", { class: "stat-detail" });
+        readout.setAttribute("aria-live", "polite");
+        const show = (k: number): void => {
+          readout.textContent = `frame ${k + 1} of ${steps.length}, height ${(2 * steps[k].halfHeight).toPrecision(5)}`;
+        };
+        show(0);
+        slider.addEventListener("input", () => {
+          const k = Number(slider.value);
+          show(k);
+          openPlace(steps[k]);
+        });
+        item.append(el("label", { class: "row story-row" }, el("span", { textContent: "Frame" }), slider), readout);
+        item.dataset.story = place.id;
+      }
+      list.append(item);
     }
-    if (place.source !== undefined) {
-      button.append(el("span", { class: "place-source", textContent: place.source }));
-    }
-    button.addEventListener("click", () => {
-      // A place that names its own depth means it; the zoom must not overrule it.
-      depthPinned = place.state.depth !== DEFAULT_STATE.depth;
-      apply(place.state);
-    });
-    placeList.append(el("li", {}, button));
+    section.append(list);
+    placesPanel.append(section);
   }
-  placesPanel.append(placeList);
 
   // --- rendering --------------------------------------------------------------------------------
   let frame = 0;
@@ -383,6 +437,10 @@ function main(): void {
     const rect = stageHost.getBoundingClientRect();
     const w = Math.max(64, Math.round(rect.width * dpr));
     const h = Math.max(64, Math.round(rect.height * dpr));
+    if (overlay.width !== w || overlay.height !== h) {
+      overlay.width = w;
+      overlay.height = h;
+    }
     if (gl.width !== w || gl.height !== h) {
       gl.width = w;
       gl.height = h;
@@ -403,6 +461,7 @@ function main(): void {
   function render(): void {
     resizeCanvas();
     const a = alphabet;
+    syncOverlay();
     if (a === null) return;
     const aspect = gl.width / Math.max(1, gl.height);
     const centre = centreNumbers(state);
@@ -533,7 +592,7 @@ function main(): void {
       {
         onChunk: (degree, points, stats) => {
           stage.addPoints(degree, points);
-          addStats(totals, stats);
+          addStats(totals, stats, degree);
           toneDirty = true;
           draw();
           // The panel has to keep up with the sweep. Without this it was only refreshed on completion,
@@ -660,6 +719,26 @@ function main(): void {
         "≈ Every root here is Newton-polished from one walk at the view centre and carries the residual it reached. The coefficients are exact; the root is not.",
       ),
     );
+  }
+
+  // --- the published bound ----------------------------------------------------------------------
+  /**
+   * The alphabet's cited root bound, drawn over the stage in the stage's own coordinates.
+   *
+   * Drawn on every frame because the view moves every frame a reader drags; cleared whenever the bound
+   * is off or the alphabet has none, so a stale ring from the previous alphabet can never sit over a
+   * picture it is not a statement about.
+   */
+  function syncOverlay(): void {
+    const ctx = overlay.getContext("2d");
+    if (ctx === null) return;
+    const bound = alphabet === null ? null : boundFor(alphabet);
+    if (!state.bounds || bound === null) {
+      ctx.clearRect(0, 0, overlay.width, overlay.height);
+      return;
+    }
+    const centre = centreNumbers(state);
+    drawBound(ctx, bound, { cx: centre.cx, cy: centre.cy, halfHeight: state.halfHeight, width: overlay.width, height: overlay.height });
   }
 
   // --- the dragon -------------------------------------------------------------------------------
@@ -828,6 +907,16 @@ function main(): void {
     engineSelect.value = state.engine;
     depthInput.value = String(state.depth);
     annulusInput.checked = state.annulus;
+    boundsInput.checked = state.bounds;
+    const bound = alphabet === null ? null : boundFor(alphabet);
+    boundsRow.hidden = bound === null;
+    // What the a11y roster keys on: the legend exists only with a bound drawn, so an entry auditing it
+    // must be able to tell the link was honoured.
+    controls.dataset.bounds = bound !== null && state.bounds ? "on" : "off";
+    boundsNote.hidden = bound === null || !state.bounds;
+    // The statement and its source, in words: the overlay itself is aria-hidden, so this is where a
+    // screen-reader user and a sighted one both learn what the dashed curves claim.
+    boundsNote.textContent = bound === null ? "" : `Theorem. ${bound.statement} ${bound.source} ${bound.measured}`;
     exposure.value = String(Math.log10(state.exposure));
     gamma.value = String(state.gamma);
 
@@ -895,6 +984,39 @@ function main(): void {
       dl.append(el("dd", {}, el("span", { class: "stat-value", textContent: line.value }), el("span", { class: "stat-detail", textContent: line.detail })));
     }
     statsPanel.append(dl);
+    const rows = chosen.engine === "roots" ? degreeRows(totals) : [];
+    if (rows.length > 1) {
+      // Per degree, because the aggregate above is a mixture dominated by the top degree and the share
+      // that FALLS is visible only row by row. A real `<table>` with a caption and scoped headers: a grid
+      // of divs would read to a screen reader as one long run of numbers.
+      const table = el("table", { class: "degree-table" });
+      table.append(el("caption", { textContent: "By degree" }));
+      const head = el("tr", {});
+      for (const h of ["Degree", "Polynomials", "Real", "Real per polynomial", `Within ${state.circleDelta} of |z| = 1`]) {
+        const th = el("th", { textContent: h });
+        th.setAttribute("scope", "col");
+        head.append(th);
+      }
+      table.append(el("thead", {}, head));
+      const body = el("tbody", {});
+      for (const r of rows) {
+        const th = el("th", { textContent: String(r.degree) });
+        th.setAttribute("scope", "row");
+        body.append(
+          el(
+            "tr",
+            {},
+            th,
+            el("td", { textContent: r.polynomials }),
+            el("td", { textContent: r.realShare }),
+            el("td", { textContent: r.realPerPolynomial }),
+            el("td", { textContent: r.circleShare }),
+          ),
+        );
+      }
+      table.append(body);
+      statsPanel.append(table);
+    }
     statsPanel.append(
       el(
         "p",
@@ -1084,6 +1206,9 @@ function main(): void {
   depthInput.addEventListener("input", () => {
     depthPinned = true;
     apply({ ...state, depth: Number(depthInput.value) });
+  });
+  boundsInput.addEventListener("change", () => {
+    apply({ ...state, bounds: boundsInput.checked });
   });
   annulusInput.addEventListener("change", () => {
     apply({ ...state, annulus: annulusInput.checked });

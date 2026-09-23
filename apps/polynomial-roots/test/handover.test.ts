@@ -23,6 +23,11 @@ describe("which engine draws", () => {
     expect(chosen.forced).toBe(false);
     // At the origin the root spacing `|z|^(d+1)` is zero, so no pixel is ever smaller than it.
     expect(chosen.spacing).toBe(0);
+    // And the legend must not then say "roots are about 0 apart", which it did on every overview
+    // centred at the origin until PR-5's browser pass read it off the Newman place.
+    expect(chosen.reason).not.toMatch(/about 0 apart/);
+    expect(chosen.reason).toContain("origin");
+    expect(chooseEngine(at({ cx: 0.657 })).reason).toMatch(/about \d\.\de-\d+ apart/);
   });
 
   it("hands over when a pixel is finer than the degree's own root spacing", () => {

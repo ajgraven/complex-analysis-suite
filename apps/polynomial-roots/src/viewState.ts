@@ -62,6 +62,7 @@ export function encodeState(state: AppState): string {
   if (s.lamp !== null) payload.lamp = [round(s.lamp.re), round(s.lamp.im)];
   if (s.theorem !== d.theorem) payload.theorem = s.theorem;
   if (s.extend !== d.extend) payload.extend = s.extend;
+  if (s.bounds !== d.bounds) payload.bounds = s.bounds;
   return encodeViewState(APP, payload);
 }
 
@@ -117,6 +118,9 @@ export function decodeState(hashOrLink: string): DecodeResult {
   if (s.annulus !== undefined && typeof s.annulus !== "boolean") {
     return { refused: `this link carries an unreadable value for "annulus"` };
   }
+  if (s.bounds !== undefined && typeof s.bounds !== "boolean") {
+    return { refused: `this link carries an unreadable value for "bounds"` };
+  }
   if (s.theorem !== undefined && typeof s.theorem !== "boolean") {
     return { refused: `this link carries an unreadable value for "theorem"` };
   }
@@ -165,6 +169,7 @@ export function decodeState(hashOrLink: string): DecodeResult {
       lamp,
       theorem: s.theorem === true,
       extend: isNum(s.extend) ? s.extend : DEFAULT_STATE.extend,
+      bounds: s.bounds === true,
     }),
   };
 }

@@ -222,3 +222,31 @@ input[type="checkbox"].control { width: auto; justify-self: start; }
   align-items: center;
   gap: 8px;
 }
+
+/* The per-degree statistics. Numbers are right-aligned and tabular so a column of shares can be read
+ * down, which is the whole reason the table exists. */
+.degree-table {
+  width: 100%;
+  margin-top: 10px;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+.degree-table caption { text-align: left; color: var(--muted); padding-bottom: 4px; }
+.degree-table th, .degree-table td { padding: 2px 4px; text-align: right; border-bottom: 1px solid var(--line); }
+.degree-table thead th { color: var(--muted); font-weight: normal; }
+
+/* The gallery's groups and the story slider. */
+.place-group + .place-group { margin-top: 14px; }
+.place-group-title { margin: 0 0 4px; font-size: 0.95rem; }
+.story-row { margin-top: 6px; }
+
+/* The published-bound overlay: exactly over the GL canvas, and transparent to the pointer so the stage's
+ * own drag and wheel still reach the canvas beneath. */
+.stage-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
