@@ -11,7 +11,7 @@
 
 ```
 apps/polynomial-root-analysis/
-  index.html · vite.config.ts (port 5184) · package.json · tsconfig.json · eslint.config.js
+  index.html · vite.config.ts (port 5185) · package.json · tsconfig.json · eslint.config.js
   src/
     main.ts                       runWithFatalBoundary(mount)
     engine/                       pure, DOM-free, node-tested
@@ -55,7 +55,7 @@ apps/polynomial-root-analysis/
       viewState.ts                #vs= codec (namespace "pra"), verified on encode, refusals by name
       app.ts · rails/ · cards/ · stageView.ts · stageController.ts · strip.ts · undo.ts · figure.ts
     ui/
-      stage/                      glStage.ts, phase.glsl.ts (+ pseudozero ladder), cetC6.ts
+      stage/                      glStage.ts, phase.glsl.ts (+ pseudozero ladder); CET_C6 from @cas/gpu
       ink/                        points, discs, hull, trails, loops, lassos, braid strip
       markers.ts                  the plotter's halo-glyph idiom
   test/                           corpus/ + *.test.ts (+ *.browser.test.ts under pnpm test:browser)

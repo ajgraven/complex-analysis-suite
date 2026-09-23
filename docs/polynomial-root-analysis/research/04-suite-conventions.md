@@ -1,6 +1,11 @@
 > Research track 4 for `apps/polynomial-root-analysis`. Surveyed 2026-09-22 against the tree at HEAD by a
 > read-only agent (compressed by the planner; the wiring list was verified file by file). The source of
 > PLAN §6.1. Re-verify against the tree before PRA-0: registries move.
+>
+> _(Corrected 2026-09-23: PR #348 — `apps/polynomial-roots`, ADR-0046 — landed after this survey. It
+> brought `eslint.config.js` `APP_NAMES` current (row 10 below is stale), took port 5184 (the new app
+> takes 5185), took ADR-0046 (this app's record is ADR-0047), and moved Contour Integration's
+> `cetC6.ts` to `@cas/gpu` as `CET_C6` (§5 below names the old path).)_
 
 # Suite conventions survey (Explore agent, 2026-09-22)
 

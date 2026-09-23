@@ -1,0 +1,37 @@
+{
+  "name": "polynomial-roots",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Polynomial Roots — every root of every polynomial whose coefficients come from a small finite alphabet, painted by density. The picture at the head of Baez–Christensen–Derbyshire's \"The Beauty of Roots\": for the Littlewood alphabet {−1, +1} at degree 24 that is 2^24 polynomials and ~400 million roots, with holes at the roots of unity, a line along the real axis, a dense ring at the unit circle (Bousch), and dragon curves inside the disk. An explorer (alphabet, degree scrub, density and degree colour, pan/zoom, permalink, PNG) plus a gallery of named phenomena from the literature. Established by ADR-0046; the root engine is an app-local Aberth–Ehrlich solver in a worker pool splatting per-degree density into float textures, pinned in the node gate against @cas/core's Durand–Kerner. Built on the shared @cas/* packages — @cas/ui (browser shell, fatal boundary, accessible canvas), @cas/gpu (WebGL2 shader substrate, colour ramps, the shared histogram-equalisation tone map), @cas/core (the golden root-finder), @cas/interchange (#vs= permalinks) and @cas/export (PNG figure metadata). No new package (ADR-0007); honest labelling — the picture is ≈ at a finite degree, and only cited theorems read as theorems.",
+  "license": "MIT",
+  "author": "Andrew Graven <andrew@graven.com>",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "test:browser": "vitest run --config vitest.browser.config.ts",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@cas/core": "workspace:*",
+    "@cas/export": "workspace:*",
+    "@cas/gpu": "workspace:*",
+    "@cas/interchange": "workspace:*",
+    "@cas/ui": "workspace:*"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "@vitest/browser": "^2.1.4",
+    "eslint": "^9.17.0",
+    "globals": "^15.14.0",
+    "playwright": "^1.49.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.0",
+    "vite": "^5.4.10",
+    "vitest": "^2.1.4"
+  }
+}

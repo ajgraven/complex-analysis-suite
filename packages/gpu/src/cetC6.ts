@@ -19,8 +19,17 @@
 // whose mean is 0.01817 — so the seam is no more visible than any other step, which is exactly the
 // property a phase portrait needs at arg f = ±π. `test/cetC6.test.ts` pins that.
 //
-// The shader reads it as a 256x1 RGBA8 texture with `REPEAT` wrapping and linear filtering
-// (`glStage.ts`), so the wrap is the hardware's and interpolation across it is free.
+// Contour Integration's shader reads it as a 256x1 RGBA8 texture with `REPEAT` wrapping and linear
+// filtering (`apps/contour-integration/src/ui/stage/glStage.ts`), so the wrap is the hardware's and
+// interpolation across it is free.
+//
+// **In `@cas/gpu` on the second-consumer rule** ([ADR-0007](../../../docs/DECISIONS.md),
+// [ADR-0046](../../../docs/DECISIONS.md#adr-0046) decision 6). It was Contour Integration's alone
+// (`src/ui/stage/cetC6.ts`, M8 step 1.9) until Polynomial Roots' Egan hue — the colour of a root read
+// off its polynomial's low-order coefficients, which is a cyclic, unordered quantity and so exactly
+// what a cyclic map is for — became its second reader. The table moved byte for byte; the FNV-1a of
+// `cetC6Bytes()` is pinned in the test so a future edit to the data cannot pass as a refactor. The
+// CC-BY 4.0 attribution above travels with it and must stay beside the data.
 
 /** The 256 published entries, sRGB in [0, 1], two per line as they are indexed. */
 export const CET_C6: readonly (readonly [number, number, number])[] = [

@@ -8,6 +8,15 @@
  * `(kmax + 0.5) / (uN + 1)`. If the two disagree (e.g. auto-iterations scales `uN` above the base),
  * most escaping pixels fall outside `k < n` and the lookup coordinate no longer matches the texture.
  *
+ * **This file is now only the DECODE.** The equalisation arithmetic — the inclusive cumulative
+ * fraction and the resample onto a width-capped lookup — moved to `@cas/gpu`'s `equalizedCdfLut`
+ * when Polynomial Roots became its second consumer (ADR-0007 / ADR-0046): that app bins log-density
+ * over a root cloud, where this one bins escape times, and what the two share is exactly the
+ * arithmetic and not the meaning of a bin. The output is unchanged — the histogram handed over has
+ * `cap + 1` bins with the last one empty (the pre-pass counts only `k < cap`), so the shared
+ * function's inclusive CDF reproduces this file's former `cdfK` entry for entry, and its
+ * `width = min(m, maxWidth)` reproduces the former `min(cap + 1, maxTexSize)`.
+ *
  * The texture width is capped at `maxTexSize`: since `n` can reach the auto-iter ceiling (20000),
  * which exceeds a typical `MAX_TEXTURE_SIZE` of 16384, the CDF is **resampled** onto
  * `min(n + 1, maxTexSize)` texels rather than truncated. The shader samples with NEAREST + CLAMP at
@@ -15,6 +24,8 @@
  * — the same mapping — and no escaped pixel is dropped from the distribution. When `n + 1 ≤ maxTexSize`
  * the resample is the identity (texel `j` = escape time `j`), so the common path is unchanged.
  */
+import { equalizedCdfLut } from "@cas/gpu/histogram";
+
 export function buildEqualizedCdf(
   px: Uint8Array,
   n: number,
@@ -22,31 +33,15 @@ export function buildEqualizedCdf(
 ): { data: Uint8Array; width: number } {
   const cap = Math.max(1, Math.floor(n));
 
-  // Distribution of escape times over pixels that actually escaped (k < cap).
+  // Distribution of escape times over pixels that actually escaped (k < cap). Bin `cap` exists and
+  // stays empty so the ramp has `cap + 1` texels in the uncapped case — the coordinate the shader
+  // samples at is `(kmax + 0.5) / (uN + 1)`.
   const hist = new Float64Array(cap + 1);
-  let escaped = 0;
   for (let i = 0; i < px.length; i += 4) {
     const k = px[i] + px[i + 1] * 256;
-    if (k < cap) {
-      hist[k]++;
-      escaped++;
-    }
+    if (k < cap) hist[k]++;
   }
 
-  // Exact cumulative escaped fraction at each escape time k ∈ [0, cap].
-  const cdfK = new Float64Array(cap + 1);
-  let cum = 0;
-  for (let k = 0; k <= cap; k++) {
-    if (k < cap) cum += hist[k];
-    cdfK[k] = escaped > 0 ? cum / escaped : 0;
-  }
-
-  // Resample onto the (capped) lookup texture; only the R channel is read by the shader.
-  const width = Math.min(cap + 1, Math.max(1, Math.floor(maxTexSize)));
-  const data = new Uint8Array(width * 4);
-  for (let j = 0; j < width; j++) {
-    const k = Math.min(cap, Math.floor(((j + 0.5) * (cap + 1)) / width));
-    data[j * 4] = Math.round(cdfK[k] * 255);
-  }
+  const { data, width } = equalizedCdfLut(hist, maxTexSize);
   return { data, width };
 }

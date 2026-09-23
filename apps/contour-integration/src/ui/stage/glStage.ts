@@ -3,7 +3,7 @@ import { compileF, type Node } from "@cas/expr";
 import { plotRange, type View, type Viewport } from "../../kernel/camera.js";
 import type { DeclaredProduct } from "../../kernel/branch/declared.js";
 import { buildPhaseFrag, PHASE_VERT, STAGE_MODE_CODE } from "./phase.glsl.js";
-import { cetC6Bytes } from "./cetC6.js";
+import { cetC6Bytes } from "@cas/gpu/cet";
 import { DEFAULT_STAGE_MODE, type StageMode } from "./mode.js";
 import { CUT_GLSL, MAX_CUT_SEGMENTS_GLSL } from "./cut.glsl.js";
 import { declaredProductGlsl } from "./declared.glsl.js";
@@ -28,7 +28,7 @@ export class GLStage {
    *
    * `REPEAT` on S is what makes the seam at `arg f = ±π` the hardware's business: the wrap
    * interpolates from entry 255 into entry 0, which is exactly the join the table was designed to
-   * close (`cetC6.ts` measures it). `LINEAR` because 256 samples across a turn is four per degree
+   * close (`@cas/gpu/cet` measures it). `LINEAR` because 256 samples across a turn is four per degree
    * and a nearest lookup would band a portrait that is otherwise continuous.
    */
   private ramp: WebGLTexture | null = null;

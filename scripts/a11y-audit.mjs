@@ -238,6 +238,109 @@ const PAGES = [
     expect: '[data-card="derivation"] .stepBody[data-step]',
   },
   {
+    id: "polynomial-roots",
+    mount: "polynomial-roots",
+    dist: "apps/polynomial-roots/dist",
+    file: "index.html",
+  },
+  {
+    // A NAMED PLACE, reached through its own permalink. The roster audits a page in its landing state,
+    // so the places panel's captions — which carry the cited theorems — would otherwise only ever be
+    // audited in the default view. This one also proves the link still opens: `expect` names a selector
+    // the place's own state produces, so a build that stopped honouring the link fails by name instead of
+    // quietly auditing the front page under a label claiming otherwise (the M7.1 / M7.4 lesson).
+    id: "polynomial-roots-place",
+    mount: "polynomial-roots",
+    dist: "apps/polynomial-roots/dist",
+    file: "index.html",
+    hash: viewState("pr", { preset: "trinary", dmax: 14 }),
+    // Keyed on the DECODED alphabet, not on anything the default page also has: `.place-fact` was the
+    // first choice and is present whatever link opened the page, so it would have audited the front page
+    // under this name without noticing.
+    expect: '.controls[data-alphabet="trinary"]',
+  },
+  {
+    // THE LIMIT-SET ENGINE, through its own permalink. Its three controls — the engine picker's second
+    // choice, the depth slider and the band toggle — are `hidden` under the root engine, and a hidden
+    // element is not in the accessibility tree, so the landing-state audit above can never reach them.
+    // The M7.1 lesson again: a panel nothing opens is never audited.
+    id: "polynomial-roots-limit",
+    mount: "polynomial-roots",
+    dist: "apps/polynomial-roots/dist",
+    file: "index.html",
+    hash: viewState("pr", { engine: "limit", depth: 26 }),
+    expect: '.controls[data-engine="limit"]',
+  },
+  {
+    // THE DEEP ENGINE, through its own permalink. Its panel — the probe, the arithmetic, the residual —
+    // exists only at a zoom the front page cannot reach, and the reader who gets there arrives by a
+    // link. The centre is carried as a decimal STRING, so this entry also proves the codec still
+    // honours one: a link the app stopped reading would audit the landing page under this name.
+    id: "polynomial-roots-deep",
+    mount: "polynomial-roots",
+    dist: "apps/polynomial-roots/dist",
+    file: "index.html",
+    hash: viewState("pr", {
+      engine: "deep",
+      cx: "4.206512041286740015298812143756041e-1",
+      cy: "4.8372964222232227103378339664795e-1",
+      h: 1e-18,
+    }),
+    expect: '.controls[data-engine="deep"]',
+  },
+  {
+    // The dragon inset, PINNED. A hover is not state, so the only way the roster can reach the inset at
+    // all is through a link that carries a lamp — which is the M7.4 lesson (a panel nothing opens is
+    // never audited) arriving as a reason for the field to be in the permalink in the first place.
+    id: "polynomial-roots-dragon",
+    mount: "polynomial-roots",
+    dist: "apps/polynomial-roots/dist",
+    file: "index.html",
+    hash: viewState("pr", { cx: "0.375453", cy: "0.544825", h: 0.06, dmax: 18, lamp: [0.375453, 0.544825] }),
+    expect: '.panel.dragon[data-pinned="yes"]',
+  },
+  {
+    // PR-5: the published-bound overlay. Its legend and its toggle exist only for an alphabet the
+    // literature bounds and only with the bound drawn, so the default page never shows them.
+    id: "polynomial-roots-bounds",
+    mount: "polynomial-roots",
+    dist: "apps/polynomial-roots/dist",
+    file: "index.html",
+    hash: viewState("pr", { preset: "zero-one", h: 1.75, dmax: 18, bounds: true }),
+    expect: '.controls[data-bounds="on"]',
+  },
+  {
+    // PR-5: the per-degree statistics table, through the zoom story's first frame. The table appears
+    // only once two degrees have reported, so an audit of the landing page can run before it exists;
+    // this entry WAITS for it, which makes the table's audit deterministic rather than a race.
+    id: "polynomial-roots-story",
+    mount: "polynomial-roots",
+    dist: "apps/polynomial-roots/dist",
+    file: "index.html",
+    hash: viewState("pr", { cx: "0.42065", cy: "0.48354", h: 0.31254, dmax: 20 }),
+    expect: ".panel.stats table.degree-table",
+  },
+  {
+    // M6: Egan's hue. Its coefficient slider and legend exist only in that mode, so the landing page
+    // never shows them; the panel's `data-colour` is set from the state, which is the proof the link
+    // was honoured rather than the landing page audited under this entry's name.
+    id: "polynomial-roots-egan",
+    mount: "polynomial-roots",
+    dist: "apps/polynomial-roots/dist",
+    file: "index.html",
+    hash: viewState("pr", { colour: "egan", hue: 4 }),
+    expect: '.controls[data-colour="egan"]',
+  },
+  {
+    // M6.3: the custom alphabet's symmetry readout — a list that exists only for a typed alphabet.
+    id: "polynomial-roots-custom",
+    mount: "polynomial-roots",
+    dist: "apps/polynomial-roots/dist",
+    file: "index.html",
+    hash: viewState("pr", { preset: "custom", custom: "1, i, -1", dmax: 10 }),
+    expect: '.controls[data-alphabet="custom"] ul.symmetries:not([hidden])',
+  },
+  {
     id: "correspondences",
     mount: "correspondences",
     dist: "apps/correspondences/dist",
@@ -651,7 +754,11 @@ async function main() {
   }
 
   if (UPDATE) {
-    writeFileSync(BASELINE_PATH, JSON.stringify(current, null, 2) + "\n");
+    // Sorted by page id: the roster's own order changes whenever an entry is inserted, and writing in
+    // that order made adding two clean pages produce a 90-line diff of pure reordering, in a file whose
+    // only job is to let a reviewer see which findings moved.
+    const sorted = Object.fromEntries(Object.keys(current).sort().map((k) => [k, current[k]]));
+    writeFileSync(BASELINE_PATH, JSON.stringify(sorted, null, 2) + "\n");
     const { rules, nodes } = summaryLine(current);
     console.log(
       `\n✓ Baseline written to ${BASELINE_PATH} — ${rules} rule finding(s), ${nodes} node(s) across ${Object.keys(current).length} page(s).`,

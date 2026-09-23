@@ -9,11 +9,11 @@
 `complex-analysis-suite` — a monorepo for a growing **suite of complex-analysis /
 complex-dynamics visualization tools** that share common packages and hand data off to
 one another. North-star property: **each new tool builds fewer primitives from scratch
-than the last.** It now unifies twelve apps — Complex Dynamics, Quadrature Domains,
+than the last.** It now unifies thirteen apps — Complex Dynamics, Quadrature Domains,
 Complex Function Plotter, Riemann Map, Argument Principle, Faber Transform, 2D
-Electrostatics, 2D Hydrodynamics, Hele-Shaw Flow, Potential Theory, and Contour Integration, plus the
-anti-holomorphic Correspondences tool (built, not yet published) — riding thirteen shared `@cas/*`
-packages.
+Electrostatics, 2D Hydrodynamics, Hele-Shaw Flow, Potential Theory, Contour Integration, and
+Polynomial Roots, plus the anti-holomorphic Correspondences tool (built, not yet published) — riding
+thirteen shared `@cas/*` packages.
 
 Read the docs in this order before making changes: [`docs/VISION.md`](docs/VISION.md) →
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) → [`docs/DECISIONS.md`](docs/DECISIONS.md)
@@ -55,8 +55,8 @@ Read the docs in this order before making changes: [`docs/VISION.md`](docs/VISIO
     (and on `workflow_dispatch`), gated on `lint` + `typecheck` + `test`. It assembles **one
     combined Pages site** — launcher at the root, `complex-dynamics/`, `quadrature-domains/`,
     `complex-function-plotter/`, `riemann-map/`, `argument-principle/`, `faber-transform/`,
-    `2d-electrostatics/`, `2d-hydrodynamics/`, `hele-shaw-flow/`, `potential-theory/`, and
-    `contour-integration/` beneath it.
+    `2d-electrostatics/`, `2d-hydrodynamics/`, `hele-shaw-flow/`, `potential-theory/`,
+    `contour-integration/`, and `polynomial-roots/` beneath it.
     `apps/correspondences` is **built but not published** (the launcher shows it as "Coming soon"). There are **two** workflows: `ci.yml` (jobs `build` + `browser` + the non-blocking
     `a11y`) and `deploy-pages.yml`; the `browser` job is not a publish blocker. *(Corrected
     2026-09-20: this said "the `build` + `browser` gate" — `grep -n '^  [a-z0-9_-]*:'
@@ -99,9 +99,9 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **599 test files / 6818 tests**
-*(592 files / 6643 tests before the 2026-09-20 remediation — the `--reporter=json` artefact and
-HEAD's own commit message both say so; this line had said 593 / 6649)* with lint and typecheck
+Green is **622 test files / 7111 tests**
+*(621 / 7085 before ADR-0046's M6 — Egan's hue, the CET-C6 extraction and the symmetry readout — added 1 file / 26 tests; 620 / 7067 before its PR-5 — the gallery — added 1 file / 18 tests; 618 / 7035 before its PR-4 — the dragons — added 2 files / 32 tests; 615 / 6997 before its PR-3 — deep zoom by reference — added 3 files / 38 tests; 610 / 6949 before its PR-2 — the limit-set engine — added 5 files / 48 tests; 599 / 6818 before
+Polynomial Roots itself added 10 files / 122 tests and its `@cas/gpu` extraction 1 / 9; 592 / 6643 before the 2026-09-20 remediation)* with lint and typecheck
 silent. `pnpm lint` includes `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the
 `packages/*` dists first, so a clean clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as
 **29 per-file specs under `apps/quadrature-domains/vitest/node/`** (via `vitest/node/_run.ts`), and
@@ -128,7 +128,7 @@ gives four configurations against twelve tool apps.)*
 
 **The browser suites are NOT in `pnpm test`** and must be run deliberately — `pnpm test:browser` in
 the app that has one (contour-integration, complex-dynamics, complex-function-plotter, quadrature-domains,
-`packages/gpu`, `packages/schwarz`). They compile real GLSL and need a Chromium, and Playwright pins an
+polynomial-roots, `packages/gpu`, `packages/schwarz`). They compile real GLSL and need a Chromium, and Playwright pins an
 exact build that `pnpm install` does not fetch, so a container holding one under a different version
 cannot launch the provider at all. Four of the six configs say so: contour-integration,
 complex-dynamics and `packages/gpu` take `CAS_CHROMIUM_EXECUTABLE ?? /opt/pw-browsers/chromium` — both,
@@ -1276,7 +1276,7 @@ extracted**: the honest-labelling guardrail above had no shared code at all, onl
 `.mjs` that each later app reimplemented. Branded types make `=` a compile error to write by hand.
 **QD is not migrated onto it**, so the suite has two rigor vocabularies on purpose.
 
-**In planning — Polynomial Root Analysis (the thirteenth app, [ADR-0046](docs/DECISIONS.md) *proposed*, 2026-09-22).**
+**In planning — Polynomial Root Analysis (the fourteenth app, [ADR-0047](docs/DECISIONS.md) *proposed*, 2026-09-22; not ADR-0046's *Polynomial Roots*, the root-cloud renderer above).**
 Roots and coefficients of one polynomial as two draggable point sets over a phase portrait; the Galois
 group over ℚ in three honest tiers (`=` Sₙ/Aₙ at any degree, `=` to degree 7 by Stauduhar descent, `≈`
 8–15 by statistics); loop monodromy by *certified* continuation (Smith discs in exact arithmetic on the
@@ -1406,6 +1406,332 @@ layer M4.7d specified is wired for the first time. Measured after: F2/E3/C2 reco
 (`panelPlan(len, ∞)` had been taking the MAXIMUM plan), a keystroke in the integrand box 553 → 53 ms,
 `piUpper()` 2.48 ms → 0.07 µs, a hover 33 ms of GL → none, the D7 tab-wedge a 2 ms refusal by name.
 Green: **599 files / 6818 tests**, the browser suite 22 / 232, `pnpm a11y --strict` 682 nodes / 0 unnamed.
+
+**Done — PR-0 and PR-1 of ADR-0046 (Polynomial Roots, the twelfth published app).** `apps/polynomial-roots`
+— every root of every polynomial whose coefficients come from a small finite alphabet, painted by density:
+the picture at the head of Baez–Christensen–Derbyshire's *The Beauty of Roots*. **No new package**; it
+consumes `@cas/ui`, `@cas/gpu`, `@cas/core`, `@cas/flow`, `@cas/interchange` and `@cas/export`, and makes
+two second-consumer extractions into `@cas/gpu` — Complex Dynamics' histogram-equalisation arithmetic as
+`equalizedCdfLut` (`@cas/gpu/histogram`, PR-1), with CD keeping the decode half alone, and Contour
+Integration's CET-C6 table as `@cas/gpu/cet` (M6). PR-1 shipped the scaffold,
+the root engine (an app-local Aberth–Ehrlich in a worker pool, pinned against `@cas/core`'s Durand–Kerner),
+the per-degree float-texture density stage, the `#vs=` permalink, PNG export, fourteen named places, and
+the launcher + Pages wiring. PR-2…PR-5 (the limit-set engine, deep zoom by reference, the dragons, the
+gallery) and M6 (Egan's hue, the `CET_C6` extraction, the symmetry readout) follow below. Plan: [`docs/design/polynomial-roots-plan.md`](docs/design/polynomial-roots-plan.md).
+
+Six findings worth carrying. **(1) A SMALL STEP IS NOT CONVERGENCE, and treating it as one shipped a wrong
+answer.** The Aberth solver first settled a root whose STEP had fallen below a floor; when two iterates come
+within ~1e-15 the repulsion sum `Σ 1/(z_k − z_j)` reaches ~1e15 and divides the correction to nothing — the
+roots are FROZEN, not settled. On `−1 + iz + iz²` that returned a double root at `−(1+i)/√2` with residual
+1.47 and reported `converged`, and the density drew two roots that do not exist. The residual is the only
+certificate (`|p| ≤ 8ε·Σ|a_k||z|^k`, Adams/Igarashi), and it is strictly better rather than a trade:
+measured over six alphabets to degree 18, **nothing fails to converge under it**, including the five
+Littlewood polynomials to degree 12 the step rule had failed. A polynomial that does fail is now not
+painted and is counted on screen. **(2) The density's parity test was measuring its own GRID, twice.**
+Brute force and the symmetry-reduced sweep disagreed on two cells because `y = 0` sat on a bin BOUNDARY, so
+every real root fell either side by the sign of its 1e-16 noise; an odd cell count fixed that and exposed
+the primitive cube roots of unity at `x = −1/2`, exactly on a vertical boundary (`1 + z + z² − z³ − z⁴ −
+z⁵` is a Littlewood polynomial). With the grid offset off those values all 25 cases agree **exactly**, bin
+for bin — far stronger than any tolerance. **(3) Root agreement splits by MULTIPLICITY.** Against
+`@cas/core`: 1e-13 on simple roots, 4.8e-8 on the double root of `(z−1)²(z+1)`, 1.19e-5 on the triple root
+of `1 − z − z² + z³ − z⁴ + z⁵ + z⁶ − z⁷` — `√ε` and `∛ε`, arithmetic and not solver quality. One tolerance
+loose enough for the triple root stops testing the 99% the picture is made of. **(4) A gallery entry has to
+SHOW something.** The hexahole place pointed at CKW's own 0.0005-wide window, where measurement says the
+nearest trinary root at degree 12 is 7.1e-4 away — the window is empty at any degree this app computes. It
+opens at half-height 0.008 now and says so; the holes are PR-2's, which that milestone's gate already
+names. **(5) Two instrument defects.** An a11y roster `expect` selector present in the DEFAULT state
+verifies nothing (the first keyed on a caption every page has, so it would have audited the front page
+under the permalink's name); and the baseline is now written SORTED, because in roster order adding two
+clean pages produced a 90-line diff of pure reordering. **(6)**
+`scripts/check-built-artifacts.mjs` hardcoded its app names in the summary while counting from the roster,
+so a third app made it say *"across 3 published apps (quadrature-domains, complex-dynamics)"*; both are
+derived now. `eslint.config.js`'s `APP_NAMES` was also stale by four apps and is brought current.
+
+**Sweep: 47 mutants, 42 killed, 5 recorded** (three provably equivalent, one equivalent in outcome, one
+unreachable — each with its reason in the plan). Four survivors bought something. **The classical Aberth
+seed radius `|a_0/a_d|^{1/d}` was REMOVED**: the mutant replacing it with 1 changed no test, which sent
+the question to a measurement, and over ~20,000 polynomials the textbook radius never won a case — on the
+WIDE alphabets it exists to protect it was worse (`{1, 1000}` at degree 14 took 9.23 sweeps against the
+unit circle's 8.40). A small alphabet's roots sit near `|z| = 1` whatever the coefficients do, so moving
+the seed circle away from 1 moves it away from the roots. **`clampState` had no ordering test**, and with
+`maxDegree < minDegree` the pool queues nothing: a blank stage with every control looking correct. **And
+the statistics' SHARE had no test on its denominator** — dividing by the polynomial count instead of the
+root count is a factor of the degree, and the first repair still passed the mutant because `"150.0%"`
+contains `"50.0%"` and the assertion used `toContain`.
+
+**A browser pass then found two more, both invisible to every test that existed.** The statistics panel
+and the stage's generated description refreshed only when a sweep FINISHED, so a multi-million-polynomial
+sweep filled the picture in beside a panel reading zero and an alternative text saying *"No roots have
+been computed yet"* for its whole duration; they refresh on a throttle now. And **the hexahole place
+rendered BLACK** — at Calegari–Koch–Walker's own 0.0005-wide window the trinary cloud of bounded degree
+puts 1,610 roots into 730,000 pixels, measured at 0.05% lit and two distinct colours. The node places
+test passed it, because *are there roots in this window* and *is there a picture* are different questions
+and only a rendered frame answers the second. The place opens wider now and says it shows the region
+rather than the holes, and the browser suite gained the pairing that tells the two apart.
+
+**Done — PR-2 of ADR-0046: the limit-set engine and the handover.** The app's second reader of the one
+coefficient tree. Fix `z`, walk the partial sums `s_k = s_{k−1} + a_k z^k`, and prune every prefix whose
+remaining tail cannot reach zero — `|s_k| > max|a|·|z|^{k+1}/(1−|z|) + ε`; what survives is the LIMIT SET,
+the points at which a power series over the alphabet can vanish, which Bousch proved is the closure of the
+root set inside the disk. `src/engine/limit/` (`walk.ts` float64, `bandt.ts` the independent decision,
+`walkGlsl.ts` the generated shader, `handover.ts` the engine rule) + `src/stage/limitPass.ts`, which writes
+straight into the stage's existing composite so the equalisation, the ramp, the present pass and the PNG
+export are the same code for both engines. Three new places and one split in two; +47 node tests, +5
+browser tests.
+
+**COUNTING SURVIVORS IS UNAFFORDABLE, and the escape depth is the better quantity anyway.** The plan
+specified a survivor count per pixel. Measured at the app's own flagship window — the CKW hexaholes —
+**2,675 of 2,720 texels spent a 40,000-node budget without finishing**, so the picture was one decided hole
+on a field of "undecided". Existence EXITS EARLY: the moment one branch reaches the cap there is nothing
+left to learn, and the same window then costs **152 nodes a texel**, the Littlewood overview 23, and
+nothing exhausts anywhere. The quantity that falls out is the right one: survival to depth `k` is MONOTONE
+in `k`, so `reach` is the deepest approximation of the limit set a point belongs to — the escape-time
+function of this set — and it is order-independent where a first-hit depth under an early exit would not
+have been. One field replaces two, the present pass needs no change, and the two colour modes become two
+RAMPS over one quantity rather than a third `ColourMode`. **The node budget bites ONLY inside the excluded
+band**, which justifies both: over a 120² grid of `[−2.3, 2.3]²` at depth 40 with the band off not one
+texel runs out and the worst spends 5,546 nodes; with the band walked, 14 of 8,100 do.
+
+**The gate asked for a correlation; an exact INCLUSION was available and is strictly stronger.** Every
+pixel holding a root of any degree must be lit by the walk. Measured over a 128² grid of the opening view,
+band excluded, against the depth-28 walk: **at every degree from 2 to 20, 100.00% — not one root pixel
+missed**; and the walk's surplus falls 5,702 → 1,874 → 960 as the degree climbs 2 → 12 → 20, which is the
+root cloud converging onto the limit set. A correlation would have passed with a systematic offset, a wrong
+fold or a wrong aspect. **Shader against float64: 46,532 texels, ZERO disagreements**, so the assertion is
+equality rather than a tolerance — `reach` is discrete and float32 can only move it within ~1e-7 of a tie.
+**Bandt's Algorithm 1 is the same predicate in the other coordinate system**, `v_k = −s_k/z^k` turning a
+shrinking tail bound into a fixed radius derived by summing the future; the two agree on the frontier
+COUNTS over 624 points, 158 in the set and 466 out.
+
+**A browser pass found three, and the third is the honest-labelling guardrail again.** *(1)* The statistics
+panel described the LAST FRAME: `syncStats` runs before `render` on a recompute, so a link opening at depth
+40 announced "to depth 26" while the controls beside it said 40. It is a pure function of the state now,
+with `limitPixelRadius` shared so the legend's `ε` and the shader's cannot drift. *(2)* **The depth has to
+follow the zoom.** The depth-`D` walk cannot separate points closer than about `|z|^D`, so a deep view at a
+shallow depth over-reports: measured at the zoom story at half-height 4e-4, depth 16 calls 50% of the frame
+in-set against 18% at 24 and 16% at 34, where it has converged. Zooming now raises the depth to
+`log(pixel)/log|z|` — visibly, on the slider, and it stops the moment the reader touches it. *(3)* **A frame
+with NOTHING in the set does not look empty.** The tone map equalises the escape depth over the occupied
+texels, so a window that misses the limit set entirely has its one or two escape levels stretched across the
+whole ramp and comes out as a full, evenly-coloured picture. Measured: `0.372 − 0.542i` at half-height 1e-3
+and below is **0% in the set at depths 16, 24, 34 and 48 alike** — the set is thin there — and it was
+painted in two bright colours. The panel now counts the frame (`measureLimit`) and says so in its own line
+and in the generated description.
+
+**And a CSS defect older than this slice, found by the a11y roster.** `[hidden]` is a UA rule and
+`.row { display: grid }` is an author rule, so every row the shell hides was on screen — since PR-1 the `n`
+spinner and the custom-alphabet box under presets that have neither, and now the depth slider and the band
+toggle under the root engine. The three Polynomial-Roots roster entries all reported 44 interactive nodes,
+and the one that opens the limit-set engine should have reported more; with `.row[hidden] { display: none }`
+they read 40 / 40 / **42**, which is the two controls the link opens. The guard is a browser test, because
+jsdom cannot decide a cascade.
+
+**Sweep: 45 mutants, 45 killed, no survivors and no equivalents.** Eight survived the first pass and every
+one bought a test. Three were about a TIE: `z = ½` exactly is in the Littlewood limit set — `tail[k] = 2^{−k}`
+and `s_k = −2^{−k}` at every level, in powers of two, so float64 reproduces Bousch's own boundary bit for
+bit — and a `≥` in either formulation's prune drops it. Two were about CONJUGATION: over a real alphabet
+`1/z` and `1/conj z` agree everywhere, so the fold could have been conjugating in both the walk and Bandt's
+iteration with every picture still right; `{1, ½+½i, −1}` disagrees with its own conjugate at 772 of 2,816
+points. One was `max|a|` in Foster's fudge, which is 1 for every preset but `range` and a custom list. One
+was the grid taking the larger side of a non-square texel (1,600 of 1,600 cells against 1,300). And one was
+`toPrecision(9)`'s own decimal point, which it writes for everything the app normally carries and drops at
+nine integer digits — `vec2(123456789, 0.0)` is a GLSL compile error no node test could see, and the custom
+alphabet lets a reader type it.
+
+**Done — PR-3 of ADR-0046: deep zoom by reference, and the probe.** The overview is the root engine, the
+zoom the limit-set engine, and below a float32 texel the third rung: `src/engine/deep/`
+(`dd.ts`, `num.ts`, `reference.ts`, `reference.worker.ts`) + `src/stage/deepPass.ts`. One CPU walk per
+frame at the view's own centre — every pixel shares `z₀` to within the view, so the pruning bounds are
+`O(1)` and the survivors are the same for all of them — and each survivor's root is a float32 OFFSET the
+GPU splats, so no number the shader touches is ever `O(1)`. Two new places, a probe panel naming the
+polynomial under the cursor with its residual, a fourth a11y roster entry; +34 node tests across three
+new files and +4 browser tests.
+
+**`@cas/gpu/df64` IS A FLOAT32 PAIR, so on the CPU it is a downgrade** — and ADR-0046 decision 3 said to
+reuse it. Every operation in `df64Ref.ts` runs through `Math.fround`, because its job is to be the
+executable spec for the GLSL, where float32 IS the native type; a df64 carries ~47 bits where a plain JS
+number already has 53, so the decision's ladder stepped DOWN at exactly the point it meant to step up.
+What it was asking for is the same ALGORITHMS at one higher radix, which is `dd.ts`: Dekker's split and
+Knuth's two-sum over float64 pairs, the split factor `2^27 + 1`, `Math.fround` removed. Every operation
+is pinned against exact BigInt rationals rather than against another float computation.
+
+**The floor is reached rather than assumed.** At a half-height of `1e-30` the walk returns 2,223
+polynomials from 15,871 nodes in 2.2 s, worst residual **1.6e-32**; float64's on the same view is
+1.8e-16 — 53 bits and 106 bits made visible. The two agree on the root SET **exactly** from 1e-10 to
+1e-13, part company at 1e-14, and by 1e-24 float64 finds nothing at all, so the handover sits at 1e-11.
+
+**A CENTRE IS NEVER INHERITED, and that is what makes a deep view reachable at all.** A `ReferenceRoot`
+carries a float64 offset, so a centre built by adding one to the old centre is good to about 1e-17; at
+`1e-24` the walk then finds NOTHING there — including the very polynomial the centre was taken from. The
+same trap one level up cost the first measurement its whole ladder: the root engine's points are a
+`Float32Array`, because they are GPU vertex data, so a centre read off one is good to seven digits and
+`|P|` at the supposed root measured 6.4e-8. `centreOnRoot` re-derives the root at the view's own
+precision, and it is the probe's "Centre on this root".
+
+**The permalink's centre is a decimal STRING, and the codec had to become exact.** A JSON number is a
+double and cannot hold the 32 significant figures a `1e-30` view needs. The first printer and parser both
+accumulated in double-double and the round trip was not stable — `π` printed, parsed and printed again
+differed in its last three digits, so the same view shared twice would have been two URLs. Both go through
+BigInt now: exact digits out of the value's own bits, correctly-rounded limbs back in. A link carrying its
+centre as a NUMBER still opens, because every link minted before this milestone does.
+
+**`@cas/flow` is dropped from this app, which now consumes five packages.** `panView`/`zoomView` return an
+absolute float64 `{cx, cy}`, and recovering how far a view moved from one at `1e-30` means subtracting two
+numbers thirty orders apart — the exact cancellation the reference point exists to avoid. The camera is
+`centre + a small increment` in double-double, which is three lines, and one camera is safer than two that
+must be kept in step.
+
+**The walk reaches each polynomial ONCE, but a polynomial can have two roots in the view.** Measured
+against the root engine at `0.6 + 0.45i`: three of the sweep's 147 roots were second roots of polynomials
+already found, with `z₀` in the basin of a root just outside the rect. Each root is deflated out and
+Newton runs again, stopped by a NECESSARY condition on what is left — `|Q(z₀)| ≤ r·max|Q′|`, one Horner
+pass against a Newton's dozen. That is also the engine's performance: the suite went 64 s → **7.5 s**, and
+the 1e-30 case 16.6 s → **2.2 s**. **And the root engine's own list has duplicates**, which the first draft
+of that comparison read as roots the walk had missed: the sweep mirrors each orbit representative over the
+whole group, so a polynomial fixed by a group element yields the same root twice, while the walk enumerates
+up to UNITS. 150 points, 147 distinct.
+
+**At depth the same root comes from MANY polynomials.** If `P` is Littlewood with a root at `α`, so is
+`P·(1 + z^(d+1))`, and `P·(1 + z^(d+1) + z^(2(d+1)))`, for ever. Measured at 1e-30: **2,223 polynomials on
+140 distinct points**, their degrees running 26, 53, 80, 107, 134 — steps of `deg P + 1`. So the deep
+picture's density is a MULTIPLICITY: "how many roots are here" and "how many dots are here" are different
+questions, and the panel reports both.
+
+**Two strides for one vertex layout.** `DeepPass` read four floats per root where `packFrame` writes six,
+so the pass took each position out of the middle of the previous record — and the picture still looked like
+a scatter of dots. One imported constant now, rather than two agreed by inspection.
+
+**The gate, restated with its reason.** The slide deck's own centre `0.42065 + 0.48354i` is not a limit
+point below about 1e-4 — measured, the nearest root of degree ≤ 20 is 2.19e-4 away and the walk dies at 45
+nodes at any half-height below 1e-6, so there is nothing there to continue INTO. The zoom story continues
+past 1e-12, and to 1e-30, **at a root near it**: an exact root of one degree-26 Littlewood polynomial,
+which is what Michelen–Yakir's theorem is about in the first place. The hand-over clause has an exact form,
+as PR-2's did — every root the reference walk finds lands in a texel the limit-set shader calls in-set, **0
+of 50+ outside**, an inclusion rather than a pixel-difference percentage.
+
+**Sweep: 38 mutants, 35 killed, 3 recorded equivalents.** Two of the four first-pass survivors were real,
+and both hid behind a test that pinned an outcome without pinning a reason. **Removing `couldReach` puts
+PHANTOM ROOTS in the picture** rather than merely costing time: with the deflation loop free to run its
+full eight passes, Newton on an over-deflated polynomial converges back into a basin already visited and
+the re-polish on the ORIGINAL lands on a root already in the list — measured at 1e-12, **414 rows for 399
+roots, 15 exact repeats**, with no root missed either way, at 31× the cost (150 ms → 4,689 ms; 3.4 s →
+374.5 s at 1e-30). The deep picture's density IS the multiplicity, so a duplicate is a dot that does not
+exist. And **the 1e-30 gate's `residual < 1e-30` was fifteen orders looser than what it was testing** —
+the double-double's eps at `|α| ≈ 0.64` is `2⁻¹⁰⁶ = 1.2e-32` and the measured worst is 1.549e-32, so it is
+`1e-31` now. Of the three equivalents, `DOUBLE_DOUBLE.bits 106 → 53` is the one worth keeping: the Newton
+break is checked AFTER the update and the iteration is quadratic, so a 53-bit break still leaves ~106
+correct bits, and the worst backward error moves **within the arithmetic's own noise and in either
+direction** with depth (1.549e-32 → 1.417e-32 at the gate's depth, 1.784e-32 → 2.179e-32 one level
+deeper) — so a bound tight enough to catch the second reading passes the first, which is a test pinned to
+a depth rather than to a claim.
+
+**Done — PR-4 of ADR-0046: the dragons.** The third reader of the one coefficient tree. Fix `z` with
+`|z| < 1` and the maps `x ↦ a + z·x` all contract, so `D_z` is their attractor — the set of VALUES of
+every power series over the alphabet, and the curve the pictures are named for. `src/engine/dragon.ts` +
+`src/stage/inset.ts`, a pinned `lamp` and a `theorem` mode in the state and the permalink, two new places,
+a fifth a11y roster entry; +32 node tests across two files and +3 browser tests. The gate is met with
+room: at a degree-30 prefix through Baez's `0.375453 + 0.544825i` the worst PAIRED distance is **1.2e-5
+in a picture of radius 0.542** — 0.002 of an inset pixel.
+
+**THE INSET IS THE LIMIT ENGINE'S OWN QUESTION, DRAWN.** Bousch's `q ∈ D̄ ⟺ 0 ∈ D_q` makes the cloud
+beside the picture the same object as the picture: the stage is a map of where that cloud swallows the
+origin. The two are one predicate computed in opposite directions — one keeps the values and takes a
+minimum, the other throws them away and keeps a depth — and the suite requires them to AGREE: **1,352 of
+1,352, no disagreements.** The first falsification of that was measuring the wrong thing: perturbing the
+tail at a realistic pixel broke 4 of 1,352, because **Foster's fudge (~0.04) swamps the depth-12 tail
+(~2e-4)** and halving, quartering and deleting it all give the same 4. At `ε = 0` the tail is the whole
+criterion and the response is proportional — **0, 60, 144, 288** at factors 1, ½, ¼, 0, the last being
+every in-set point there is. And **an alphabet containing 0 holds the origin for free** at every depth by
+the all-zero prefix, so membership is asked of the PROPER set; Littlewood has no zero coefficient, which
+is why that trap survives unnoticed on the flagship alphabet.
+
+**THE PAIRING SEES WHAT A HAUSDORFF DISTANCE CANNOT.** The extensions' tails index both sides, so every
+predicted point has a named partner and what is reported is the largest distance between partners.
+Michelen–Yakir's derivation gives `T(w) → −R(α)/P′(α)`, and the paper can drop the minus because over
+Littlewood `−A = A` makes the predicted set its own negation — measured, exactly — so a Hausdorff reading
+is blind to the sign on the very alphabet the theorem is stated for. The pairing is not: **6.8e-3 honest
+against 1.09 dropped, 159×.** Over `{0, 1}` the sign moves the set too (1.2e-2 against 8.8e-1).
+
+**The convergence is a U, and the far side is float64 rather than the theorem.** `P·(1 + z^{d+1})` keeps
+`α` a root and doubles the prefix degree exactly, so one root reads at 16, 33, 67 and 135 with no search:
+worst **6.83e-3 → 1.21e-5 → 1.80e-4 → 5.42e-1** against a magnification noise of **1.12e-13 → 1.25e-10 →
+1.57e-4 → 2.47e+8**. So a deep probe's HIGHEST-degree polynomials are the worst prefixes to illustrate
+the theorem with; the mode refuses past a measured floor and names a lower-degree prefix as the repair,
+deciding it before the `|A|^m` Newton solves so the refusal is free.
+
+**Three defects only a browser or a guard could find.** `putImageData` REPLACES rather than composites,
+alpha included, so the first draft's painted background was obliterated and every unlit pixel came back
+transparent black — **and the test that found it was itself wrong**, asking for "> 20 distinct colours",
+a threshold a flat fill passes; the frame carries exactly one colour per per-pixel count plus the
+background (**ten**, from 16,384 values over 6,179 lit pixels with a peak of 9) and that is what is
+asserted. **`recompute` returns early on three paths** — an unreadable alphabet, the deep engine, the
+limit engine — and the dragon's sync sat in the tail, so the panel existed only when the ROOT engine
+drew; the pinned-lamp permalink hands over to the limit engine, so the roster's own entry opened with no
+inset, and its `expect` selector is what caught it. And **PR-1's caption guard caught PR-4's caption**:
+`seen` is the app's `≈` description and may not say "theorem" — that belongs in `fact`, which carries a
+source.
+
+**Sweep: 38 mutants, 38 killed, no survivors and no equivalents.** Four survived the first pass. **A
+COMPLEX alphabet was missing from the corpus** — over a real alphabet the imaginary half of `a·z^k` is
+identically zero, so a sign error there is invisible on every preset the file used. The `x ≥ width` half
+of the raster's bounds test is the one a far-away point cannot exercise: a huge index falls off a typed
+array for free, while a point just past the right edge has a valid index one row down, so removing the
+check does not lose ink, it MOVES it. And the coverage ramp moved into `cloudAlpha` where the node gate
+can reach it — measuring it found it **saturates at 26 hits**, which the inset never reaches at 9.
+
+**Done — PR-5 of ADR-0046: the gallery, the bounds and the statistics.** The places fall into four groups
+(the Littlewood cloud · Dragons · Other alphabets · Past the last degree), the zoom story is nine frames
+scrubbed by a slider — each a whole state and so a permalink — the `{0, 1}` and `{−1, 0, 1}` root bounds
+are drawn over the stage (`src/stage/bounds.ts`), and the statistics are kept PER DEGREE and tabled. Two
+roster entries (`polynomial-roots-bounds`, `polynomial-roots-story`); `pnpm a11y --strict` reads **1,013
+interactive nodes across 27 pages, 0 unnamed**.
+
+**A BOUND IS A THEOREM, SO IT IS CHECKED — and the check found one half sharp and the other loose.** Every
+`{0, 1}` root to degree 16 lies inside Odlyzko–Poonen's `1/Φ < |z| < Φ`, `Re z < 3/2`, every trinary root to
+degree 10 inside Cauchy's `½ < |z| < 2`, with falsifications beside both. The outermost `{0, 1}` root reaches
+1.6179 by degree 20 against Φ = 1.61803; the rightmost PLATEAUS at Re z ≈ 1.137 (1.1323, 1.1358, 1.1367,
+1.1354 over degrees 14–20), 0.36 inside the half-plane. **Sharp is not visible**: the circle is met by 378
+of 2,368,512 roots beyond `|z| = 1.6` at degree 18, too sparse for a density, so on screen it looks loose
+and the legend says, with the numbers, that it is not.
+
+**The `=` denylist caught three captions, one a real overclaim** — the Littlewood limit-set entry calling
+`|z| = ½ and 2` its edges, the Cauchy annulus stated as a property of a picture that only approaches it.
+The guard stays blunt. **The zoom story hands over at frame 4 by itself** (1–3 roots, 4–9 limit set, no
+frame forcing an engine), and the deck's frames are not exact halvings (0.0024456 against 0.0024417, 0.16%).
+**The aggregate statistics were a mixture**: the per-degree rows show the real share FALLING while real
+roots per polynomial GROWS, which no aggregate can show. **A browser pass found one defect older than the
+slice**: every overview centred at the origin had read "roots are about **0** apart" since PR-2, the
+spacing estimate `|z|^(d+1)` being exactly 0 there.
+
+**Sweep: 36 mutants, 35 killed, 1 recorded equivalent.** Fourteen survived the first pass, three holes:
+the inclusion cannot see an edge moved OUTWARD (every root still passes), so each curve is now tested from
+both sides against its own predicate; no per-degree test had two columns that differed; and the group rule
+was weaker than the grouping — the headline dragon and Egan's point are root-engine views with no lamp.
+
+**Done — M6 of ADR-0046: Egan's hue, the CET-C6 extraction, the symmetry readout.** Three commits.
+**M6.1** moves Contour Integration's `CET_C6` to **`@cas/gpu/cet`** by `git mv`, the FNV-1a of its bytes
+(`ddd42cbb`) pinned. **M6.2** colours each root by the first `k` coefficients (1–6) of its own
+unit-normalised polynomial, read as a base-`|A|` FRACTION so a longer shared prefix is a closer colour
+(`src/engine/egan.ts`), through CET-C6; the Egan splat writes an RGBA composite and the present pass shows
+the pixel's circular-mean length as saturation. **M6.3** is a symmetry readout for a typed alphabet.
+
+**Every symmetry image needs its OWN hue**, since the image under `z ↦ 1/z` belongs to the reversed
+polynomial: the sweep computes `|G|` hues per representative (only in that mode) and the stage binds the
+attribute at a different offset per draw. Density BY HUE matches every polynomial solved separately, bin
+for bin, on eight cases, and fails eight ways when the images share the representative's hue. **Coherent
+inside the disk, mixed outside it — by definition**: a root's position is set by the low coefficients for
+`|z| < 1` and the high ones outside. Measured over Littlewood degree 12, `k = 3`, the mean resultant length
+per pixel is **0.990** at `|z|` 0.5–0.7, **0.720** at 0.7–0.8, **0.497** at 0.8–0.9, **0.458** across the
+circle and **0.345** outside, and the legend says so for Littlewood only.
+
+**The plan's example readout cannot occur**: it said "reversal is not a symmetry", and reversal holds for
+every alphabet. **The first readout was then wrong about the mirror, found by looking at the picture**:
+`{1, i, −1}` fails conjugation and IS mirror-symmetric, because `conj A = −1·A` puts `−conj(P)` in the
+family. `conjugationTwist` finds such a `c`, and the verdict is judged against the binned root set on five
+complex alphabets, both answers occurring. **A PR-1 defect, found wiring the third mode**: a link or place
+opening in "By degree" drew its hue through the DENSITY ramp, set from the default state and skipped by
+`apply`'s re-sweep path. Sweeps: **M6.2 27 mutants (25 node, 2 shader), all killed**; **M6.3 10, 9 killed,
+1 recorded equivalent**. `pnpm a11y --strict`: **1,125 nodes across 29 pages, 0 unnamed**.
 
 Work in small, reviewable commits. Pause at each phase/milestone gate for review before proceeding.
 When a command or path in the docs is marked `⚠ verify`, check it against the actual repo

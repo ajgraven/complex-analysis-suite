@@ -112,7 +112,7 @@ validator and a golden-corpus generator.
 
 - **Reuses:** `@cas/conformal` (analytic comparison), `@cas/core`. Discrete map `≈`.
 
-## ▶ 8. Polynomial Root Analysis — *selected (plan in progress: [`docs/polynomial-root-analysis/PLAN.md`](../polynomial-root-analysis/PLAN.md), ADR-0046 proposed)*
+## ▶ 8. Polynomial Root Analysis — *selected (plan in progress: [`docs/polynomial-root-analysis/PLAN.md`](../polynomial-root-analysis/PLAN.md), ADR-0047 proposed)*
 
 Roots and coefficients of one polynomial as two draggable point sets over a phase portrait,
 every overlay a theorem about that picture (Gauss–Lucas, certified Smith root discs, the
@@ -120,7 +120,7 @@ discriminant's zeros in the selected coefficient's plane, the pseudozero ladder)
 groups that act on the roots — the Galois group over ℚ (`=` Sₙ/Aₙ at any degree, `=` to degree 7 by
 Stauduhar descent, `≈` 8–15) and the monodromy of a loop or a family by *certified* continuation —
 animated on the plotted roots, closing with Arnold's topological proof of Abel–Ruffini as executed
-commutator loops. Requested by the owner in September 2026 rather than drawn from this catalogue;
+commutator loops. Distinct from `apps/polynomial-roots` (ADR-0046, the root _cloud_ of all small-alphabet polynomials, under honourable mentions below): this is one polynomial and what acts on it. Requested by the owner in September 2026 rather than drawn from this catalogue;
 recorded here so the reuse notes below can point at it. Reuses `@cas/exact` (widened: factorisation
 over ℤ, `𝔽ₚ[x]`, Smith discs), `@cas/core`, `@cas/expr`, `@cas/gpu`, `@cas/rigor`, `@cas/ui`,
 `@cas/interchange`, `@cas/export`, and extracts the plotter's monodromy stack into `@cas/monodromy`.
@@ -138,6 +138,9 @@ over ℤ, `𝔽ₚ[x]`, Smith discs), `@cas/core`, `@cas/expr`, `@cas/gpu`, `@ca
 - **Harmonic measure & Brownian motion** — the conformal invariant bridging #1's
   equilibrium measure and #5's conformal-invariant randomness.
 - **Apollonian gaskets / integral circle packings** — `@cas/exact` integer curvatures.
+- **Roots of polynomials with restricted coefficients** (Baez–Christensen–Derbyshire's *Beauty
+  of Roots*) — **now planned** as `apps/polynomial-roots`, [ADR-0046](../DECISIONS.md#adr-0046) /
+  [`polynomial-roots-plan.md`](polynomial-roots-plan.md); it was not on this list.
 
 ## Cross-cutting reuse notes
 

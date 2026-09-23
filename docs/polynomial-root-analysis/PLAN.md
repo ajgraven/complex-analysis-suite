@@ -1,6 +1,6 @@
 # `apps/polynomial-root-analysis` — implementation plan
 
-> **Status: PROPOSED.** Awaiting the owner's review. [ADR-0046](../DECISIONS.md#adr-0046) is drafted
+> **Status: PROPOSED.** Awaiting the owner's review. [ADR-0047](../DECISIONS.md#adr-0047) is drafted
 > in _Proposed_ status and becomes _Accepted_ when this plan is; nothing below is committed beyond
 > PRA-0, and each later milestone is a separately-approved gate (CLAUDE.md: working software at
 > every step; pause at each gate for review).
@@ -17,7 +17,8 @@
 
 ## 1. What this app is
 
-**Polynomial Root Analysis** — the thirteenth app. A polynomial's roots and its coefficients drawn as
+**Polynomial Root Analysis** — the fourteenth app (the thirteenth to be published). It is not
+[ADR-0046](../DECISIONS.md#adr-0046)'s _Polynomial Roots_, the root-cloud renderer that landed in parallel — see §1.2. A polynomial's roots and its coefficients drawn as
 two point sets in two complex planes, each draggable with the other following; every analytic overlay
 a theorem about that picture; and, on top of it, the two groups that act on the roots — the **Galois
 group over ℚ** of a typed polynomial, computed and honestly labelled, and the **monodromy group** of a
@@ -54,6 +55,11 @@ discriminant. The suite is the only place where the phase portrait, the electros
   the roots becoming an integer), not derived.
 - Not the Riemann-surface studio: the plotter owns algebraic curves `F(w, z) = 0`. This app owns the
   _univariate_ polynomial and one-parameter families of it; the two share `@cas/monodromy` (§6).
+- **Not the root-cloud picture.** `apps/polynomial-roots` (ADR-0046, merged 2026-09-23 while this
+  plan was being written) owns every root of every polynomial over a small alphabet — Littlewood,
+  Odlyzko–Poonen, the dragons, the limit set. This app owns _one_ polynomial and what acts on it; the
+  ensemble overlay research 03 ranked tenth is therefore **not** on this app's backlog, and a hand-off
+  (a cloud root clicked there opening here as a sandbox polynomial) is a PRA-10 candidate.
 - No cross-app hand-offs in this plan (owner's decision, question 13 of round 1). Candidates are
   listed under [§7 PRA-10](#pra-10--exposition-and-the-long-tail) for later.
 - The narrative layer (a stepper telling Arnold's proof in a lecturer's order) is **not** in the first
@@ -158,7 +164,7 @@ generator; each has its certificate).
 
 **RISKS §3 stands and is narrowed, not overruled.** The plotter's continuation stays `≈` — nearest-match
 tracking has no certificate. This app's tracker is a _different algorithm_ whose per-segment claim is a
-theorem applied in exact arithmetic; ADR-0046 records that the `=` is earned by Smith's theorem, not by
+theorem applied in exact arithmetic; ADR-0047 records that the `=` is earned by Smith's theorem, not by
 the continuation's success, and that a segment which cannot be certified is refused rather than guessed.
 
 ---
@@ -304,7 +310,7 @@ Contour Integration (AST literal scan + mounted-screen scan) is reused.
 
 Roots keep one colour each across every pane and the braid strip (the plotter's hue law
 `hsv(k/n, 0.85, 1)`, so a permutation is readable as colours changing places). The portrait is
-Kovesi's CET-C6 (already in the repo, CC-BY). The pseudozero ladder is drawn as isolines in the ink
+Kovesi's CET-C6 (`@cas/gpu` `CET_C6`, CC-BY, extracted by ADR-0046). The pseudozero ladder is drawn as isolines in the ink
 colour, not as a second hue.
 
 ---
@@ -315,22 +321,23 @@ Research 05's table, turned into commitments. **North star: the app builds fewer
 scratch than Contour Integration did**, and it does — the factoriser, the tracker, the permutation
 code, the exact extractor, the polish and the keyed renderer all exist today.
 
-| Need                                                                           | Today                                                                     | Action                                                                                                                                                                              | Justification                                                   |
-| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| AST → exact ℚ(i) polynomial (`toExactRational`, `simplestRational`)            | `apps/contour-integration/src/kernel/exactRational.ts`                    | **lift to `@cas/exact`**, Contour Integration re-imports, byte-identical golden                                                                                                     | second consumer                                                 |
-| `Field<T>` + exact Gaussian elimination (`solveOver`, rank decided)            | `apps/contour-integration/src/families/{field,linear}.ts`                 | **lift to `@cas/exact`**, unify with the plotter's `Scalar<T>`                                                                                                                      | second consumer (Berlekamp nullspace, resolvent linear algebra) |
-| Newton polish, Cauchy bound, cluster                                           | `packages/faber/src/roots.ts`, `apps/contour-integration/.../poles.ts`    | **lift `polishRoots`/`cauchyBound` to `@cas/core`**                                                                                                                                 | already two consumers                                           |
-| Smith/Weierstrass inclusion discs (exact)                                      | absent                                                                    | **new in `@cas/exact`** (`smithDiscs`)                                                                                                                                              | used by the app and by `@cas/monodromy`'s certified tracker     |
-| Factorisation over ℤ / ℚ, `𝔽ₚ[x]`, Hensel, distinct-degree factorisation       | `apps/quadrature-domains/app/sym/sym-core.mjs` (untyped, on `globalThis`) | **port to TypeScript in `@cas/exact`** over `Frac`/`QiPoly`; QD keeps its own copy (ADR-0008's standing exception) with a cross-check golden                                        | second consumer; a shim would import an app                     |
-| BigInt root refinement (dyadic fixed-point Newton)                             | absent                                                                    | **new in `@cas/exact`** (`dyadic.ts`)                                                                                                                                               | Tier 1 needs ~600-bit roots                                     |
-| Monodromy tracker, `permGroup`, `generatorLoop`, `permDiagram`                 | `apps/complex-function-plotter/src/riemann/`                              | **extract to a new `@cas/monodromy`**; the plotter re-imports; parity golden on its `monodromy.test.ts` cases                                                                       | second consumer (owner-approved, round 2 question 9)            |
-| Certified tracker, derived series, commutator, Sₙ/Aₙ recognisers on generators | absent                                                                    | new in `@cas/monodromy`                                                                                                                                                             | two consumers on day one (sandbox, family)                      |
-| Transitive-group tables (`n ≤ 15`)                                             | absent                                                                    | **fetched from the LMFDB API** by `scripts/fetch-transitive-groups.mjs`, checked in as JSON with provenance and licence (CC BY-SA 4.0; GAP `transgrp` data is free to redistribute) | data, not code                                                  |
-| Keyed DOM builder                                                              | `apps/contour-integration/src/shell/dom.ts`                               | **lift to `@cas/ui`**                                                                                                                                                               | second consumer                                                 |
-| Cyclic phase colormaps, `bakeAtlas`                                            | `apps/complex-function-plotter/src/render/colormaps.ts`                   | not lifted — this app uses CET-C6 as Contour Integration does                                                                                                                       | no new consumer                                                 |
-| Animation transport (`stepT`, `createAnimator`)                                | `apps/complex-function-plotter/src/ui/animate.ts`                         | **lift to `@cas/ui`**                                                                                                                                                               | second consumer                                                 |
-| Permalink, PNG export, rigor, fatal boundary, compute client                   | `@cas/interchange`, `@cas/export`, `@cas/rigor`, `@cas/ui`                | use as-is                                                                                                                                                                           | —                                                               |
-| Draggable point handles                                                        | per-app patterns (2D Electrostatics, Riemann Map)                         | app-local at first; a `@cas/ui` primitive is noted for the _next_ consumer                                                                                                          | not yet a package                                               |
+| Need                                                                           | Today                                                                                                           | Action                                                                                                                                                                                                           | Justification                                                   |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| AST → exact ℚ(i) polynomial (`toExactRational`, `simplestRational`)            | `apps/contour-integration/src/kernel/exactRational.ts`                                                          | **lift to `@cas/exact`**, Contour Integration re-imports, byte-identical golden                                                                                                                                  | second consumer                                                 |
+| `Field<T>` + exact Gaussian elimination (`solveOver`, rank decided)            | `apps/contour-integration/src/families/{field,linear}.ts`                                                       | **lift to `@cas/exact`**, unify with the plotter's `Scalar<T>`                                                                                                                                                   | second consumer (Berlekamp nullspace, resolvent linear algebra) |
+| Newton polish, Cauchy bound, cluster                                           | `packages/faber/src/roots.ts`, `apps/contour-integration/.../poles.ts`                                          | **lift `polishRoots`/`cauchyBound` to `@cas/core`**                                                                                                                                                              | already two consumers                                           |
+| Smith/Weierstrass inclusion discs (exact)                                      | absent                                                                                                          | **new in `@cas/exact`** (`smithDiscs`)                                                                                                                                                                           | used by the app and by `@cas/monodromy`'s certified tracker     |
+| Factorisation over ℤ / ℚ, `𝔽ₚ[x]`, Hensel, distinct-degree factorisation       | `apps/quadrature-domains/app/sym/sym-core.mjs` (untyped, on `globalThis`)                                       | **port to TypeScript in `@cas/exact`** over `Frac`/`QiPoly`; QD keeps its own copy (ADR-0008's standing exception) with a cross-check golden                                                                     | second consumer; a shim would import an app                     |
+| BigInt root refinement (dyadic fixed-point Newton)                             | absent                                                                                                          | **new in `@cas/exact`** (`dyadic.ts`)                                                                                                                                                                            | Tier 1 needs ~600-bit roots                                     |
+| Monodromy tracker, `permGroup`, `generatorLoop`, `permDiagram`                 | `apps/complex-function-plotter/src/riemann/`                                                                    | **extract to a new `@cas/monodromy`**; the plotter re-imports; parity golden on its `monodromy.test.ts` cases                                                                                                    | second consumer (owner-approved, round 2 question 9)            |
+| Certified tracker, derived series, commutator, Sₙ/Aₙ recognisers on generators | absent                                                                                                          | new in `@cas/monodromy`                                                                                                                                                                                          | two consumers on day one (sandbox, family)                      |
+| Transitive-group tables (`n ≤ 15`)                                             | absent                                                                                                          | **fetched from the LMFDB API** by `scripts/fetch-transitive-groups.mjs`, checked in as JSON with provenance and licence (CC BY-SA 4.0; GAP `transgrp` data is free to redistribute)                              | data, not code                                                  |
+| Keyed DOM builder                                                              | `apps/contour-integration/src/shell/dom.ts`                                                                     | **lift to `@cas/ui`**                                                                                                                                                                                            | second consumer                                                 |
+| CET-C6 colormap                                                                | `@cas/gpu` `CET_C6` (extracted from Contour Integration by ADR-0046 M6)                                         | use as-is                                                                                                                                                                                                        | —                                                               |
+| Aberth–Ehrlich solver + worker pool                                            | `apps/polynomial-roots/src/engine/roots/` (app-local by ADR-0046 decision 6, "until a second consumer appears") | this app is that consumer _if_ PRA-1's measurement prefers Aberth to DK + polish at degree ≤ 24; then a second-consumer extraction to `@cas/core` beside `makeDurandKerner`, else DK stays and the row is closed | decide at PRA-1                                                 |
+| Animation transport (`stepT`, `createAnimator`)                                | `apps/complex-function-plotter/src/ui/animate.ts`                                                               | **lift to `@cas/ui`**                                                                                                                                                                                            | second consumer                                                 |
+| Permalink, PNG export, rigor, fatal boundary, compute client                   | `@cas/interchange`, `@cas/export`, `@cas/rigor`, `@cas/ui`                                                      | use as-is                                                                                                                                                                                                        | —                                                               |
+| Draggable point handles                                                        | per-app patterns (2D Electrostatics, Riemann Map)                                                               | app-local at first; a `@cas/ui` primitive is noted for the _next_ consumer                                                                                                                                       | not yet a package                                               |
 
 Each lift is its own commit with the source app's tests green before and after (CLAUDE.md:
 test-guard every refactor), and lands in the milestone that first needs it.
@@ -341,10 +348,10 @@ test-guard every refactor), and lands in the milestone that first needs it.
 (+ deep-linked ladder and family states with `expect` selectors) · `scripts/a11y-baseline.json` ·
 `.github/workflows/deploy-pages.yml` `cp -r` (**not** at PRA-0; at the publish gate) ·
 `apps/launcher/index.html` card (`Coming soon` until publish) + the three SEO blobs ·
-`eslint.config.js` `APP_NAMES` (also add the four apps it is missing, noted in research 04) ·
+`eslint.config.js` `APP_NAMES` (brought current by ADR-0046; add the new slug) ·
 `README.md` (table, count, deploy sentence, tree) · `CLAUDE.md` (enumeration, tree, decision 11, a
-Status paragraph) · `docs/ARCHITECTURE.md` §3/§8 · `docs/DECISIONS.md` ADR-0046 + index row ·
-`docs/design/future-app-ideas.md` status marker · `.claude/launch.json` (`pra`, port **5184**) ·
+Status paragraph) · `docs/ARCHITECTURE.md` §3/§8 · `docs/DECISIONS.md` ADR-0047 + index row ·
+`docs/design/future-app-ideas.md` status marker · `.claude/launch.json` (`pra`, port **5185** — 5184 is Polynomial Roots') ·
 `scripts/check-built-artifacts.mjs` (worker) · root `package.json` `test:browser` chain.
 
 ---
@@ -358,9 +365,9 @@ equivalent with its reason). Sizing is rough order of magnitude (S/M/L).
 
 ### PRA-0 — Scaffold and spine · _S_
 
-The app directory from the 2d-hydrodynamics template (port 5184, namespace `pra`), an empty stage that
+The app directory from the 2d-hydrodynamics template (port 5185, namespace `pra`), an empty stage that
 mounts inside the fatal boundary, the wiring list of §6.1 minus the deploy `cp`, the launcher card as
-_Coming soon_, ADR-0046 accepted, this plan and DESIGN checked in, the five research notes under
+_Coming soon_, ADR-0047 accepted, this plan and DESIGN checked in, the five research notes under
 `docs/polynomial-root-analysis/research/`, `STATUS.md` opened.
 **Gate:** the gate is green with the new app in every registry that must see it; `pnpm a11y` audits the
 empty page clean; one test exists (the census floor).
@@ -506,8 +513,8 @@ critical values, exact capacity `c^{1/n}`) with the electrostatic reading · Mar
 (cubics) and Jensen discs (ℝ mode) · Newton basins as a stage mode with the Hubbard–Schleicher–Sutherland
 starting circles as an `=` overlay, hover orbit, sphere view · bounds picker (Cauchy, Fujiwara, Kojima,
 Eneström–Kakeya) with a Rouché/Pellet disc counter · Kalantari's Basic Family slider with the Voronoi
-limit · random-polynomial ensembles (Kac, Kostlan, Littlewood) as a density texture with the
-Erdős–Turán discrepancy printed `≤` · **the braid in 3D** (ℂ × t ribbon, the braid word returned) ·
+limit · _(random-polynomial ensembles are Polynomial Roots' — §1.2 — and are not duplicated here)_ ·
+**the braid in 3D** (ℂ × t ribbon, the braid word returned) ·
 **snap to a discriminant point and the Puiseux `m`-gon** on leaving it · **Zeng's distance** to the
 nearest polynomial with a multiple root, drawn as an arrow in the coefficient pane · **relax to Fekete**
 (gradient ascent on `Σ log|rᵢ − rⱼ|`, every κ improving live) · the **derived series on a cycle graph**
@@ -587,12 +594,12 @@ earlier at the owner's call.
 ## 11. Suggested first commit (PRA-0)
 
 1. `apps/polynomial-root-analysis/` from the 2d-hydrodynamics template: `package.json` (description
-   naming the maths, ADR-0046 and the packages: `@cas/core`, `@cas/exact`, `@cas/expr`, `@cas/gpu`,
+   naming the maths, ADR-0047 and the packages: `@cas/core`, `@cas/exact`, `@cas/expr`, `@cas/gpu`,
    `@cas/rigor`, `@cas/ui`, `@cas/interchange`, `@cas/export`, and `@cas/monodromy` once it exists),
-   `vite.config.ts` (port 5184), `tsconfig.json`, `eslint.config.js`, `index.html`, `src/main.ts`
+   `vite.config.ts` (port 5185), `tsconfig.json`, `eslint.config.js`, `index.html`, `src/main.ts`
    inside `runWithFatalBoundary`, `test/scaffold.test.ts`.
 2. The wiring list of §6.1 (no deploy `cp`; launcher card _Coming soon_; `.claude/launch.json` entry).
-3. ADR-0046 → Accepted; `docs/polynomial-root-analysis/STATUS.md` opened with _Current: PRA-1_.
+3. ADR-0047 → Accepted; `docs/polynomial-root-analysis/STATUS.md` opened with _Current: PRA-1_.
 4. Gate green; the test census counts the new project.
 
 ---
@@ -611,9 +618,15 @@ new package `@cas/monodromy`; the overlay order of §7 PRA-2/PRA-9; degree cap 2
 **Polynomial Root Analysis**; the ladder as four rung states with no narrative yet; every surfaced
 idea on the PRA-9/PRA-10 backlog; no hand-offs now.
 
+**Reconciled after the fact (2026-09-23):** PR #348 merged `apps/polynomial-roots` (ADR-0046, the
+root-cloud renderer) while this plan was being written, taking the ADR number, port 5184 and the name
+_Polynomial Roots_. This plan's record is therefore **ADR-0047**, its port **5185**, its name unchanged
+(_Polynomial Root Analysis_ — one polynomial and what acts on it, against a cloud of all of them), the
+ensemble overlay is dropped in favour of the sibling (§1.2), and `CET_C6` is taken from `@cas/gpu`.
+
 **Remaining, for the owner at PRA-0:**
 
-1. Accept ADR-0046 (this plan's decisions as a record).
+1. Accept ADR-0047 (this plan's decisions as a record).
 2. Confirm the publish gate (PRA-5 proposed).
 3. Confirm the extraction of the keyed DOM builder and `animate.ts` into `@cas/ui` at PRA-1 (both are
    second-consumer extractions by the rule; listed because they touch Contour Integration and the

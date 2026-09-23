@@ -1,6 +1,6 @@
 # Polynomial Root Analysis — status: read first, update last
 
-Plan: [`PLAN.md`](PLAN.md) · Spec: [`DESIGN.md`](DESIGN.md) · Record: [ADR-0046](../DECISIONS.md#adr-0046) ·
+Plan: [`PLAN.md`](PLAN.md) · Spec: [`DESIGN.md`](DESIGN.md) · Record: [ADR-0047](../DECISIONS.md#adr-0047) ·
 Evidence: [`research/`](research/) · Branch of record for the planning round: `claude/polynomial-galois-suite-7iqcb2`.
 
 **Rule (inherited from M8):** do the step named under _Current_, update this file, commit, push. Never
@@ -9,15 +9,15 @@ not silently changed.
 
 ## Current
 
-**PRA-0 — scaffold and spine**, gated on the owner's three decisions in PLAN §12 (accept ADR-0046;
+**PRA-0 — scaffold and spine**, gated on the owner's three decisions in PLAN §12 (accept ADR-0047;
 confirm PRA-5 as the publish gate; confirm the two `@cas/ui` lifts at PRA-1). Once accepted, flip
-ADR-0046's status line to _Accepted_, then follow PLAN §11 (the suggested first commit) and §6.1 (the
+ADR-0047's status line to _Accepted_, then follow PLAN §11 (the suggested first commit) and §6.1 (the
 wiring list, re-verified against the tree first — research 04 is a snapshot).
 
 ## Done
 
 - 2026-09-22 — two rounds of owner questions (answers recorded verbatim below), five research tracks,
-  PLAN + DESIGN written, ADR-0046 drafted as _Proposed_, the idea entered in
+  PLAN + DESIGN written, ADR-0047 drafted as _Proposed_ (as ADR-0046 until the collision below), the idea entered in
   `docs/design/future-app-ideas.md` as ▶ 8. No code touched.
 
 ## Findings (things learned while executing; each names its step)
@@ -27,14 +27,18 @@ wiring list, re-verified against the tree first — research 04 is a snapshot).
   (research 05 §1). PLAN §6 ports rather than shims; QD keeps its copy under ADR-0008's exception.
 - _(planning)_ The plotter's `src/riemann/` already holds a monodromy tracker, permutation-group code
   and lasso generators (research 05 §9). PLAN §7 PRA-3 extracts them as `@cas/monodromy`.
-- _(planning)_ `eslint.config.js` `APP_NAMES` lists 9 of 13 apps (research 04 §2 row 10); PRA-0 adds
-  the missing four alongside the new slug.
+- _(planning, 2026-09-23)_ **PR #348 landed in parallel** — `apps/polynomial-roots` (ADR-0046, the
+  Baez–Christensen–Derbyshire root-cloud renderer), taking ADR-0046, port 5184, the _Polynomial Roots_
+  name, and bringing `APP_NAMES` current. Reconciled by merging master: this record is **ADR-0047**,
+  the port **5185**, the ensemble overlay dropped (PLAN §1.2), `CET_C6` from `@cas/gpu`, and
+  Polynomial Roots' app-local Aberth solver noted as a possible second-consumer extraction at PRA-1.
+  Research 04's rows on `APP_NAMES`, the port list and `cetC6.ts` are stale by that PR and say so.
 - _(planning)_ Two dev-server ports collide today (5176 plotter/riemann-map, 5177
-  argument-principle/contour-integration; research 04 §1). Not this app's to fix; it takes 5184.
+  argument-principle/contour-integration; research 04 §1). Not this app's to fix.
 
 ## Open questions for the owner
 
-1. Accept ADR-0046 as written, or mark up its decisions.
+1. Accept ADR-0047 as written, or mark up its decisions.
 2. Confirm PRA-5 as the publish gate.
 3. Confirm the `@cas/ui` lifts of Contour Integration's keyed DOM builder and the plotter's
    `animate.ts` at PRA-1.

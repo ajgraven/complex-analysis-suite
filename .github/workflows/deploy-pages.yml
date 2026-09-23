@@ -66,7 +66,8 @@ jobs:
 
       # Builds packages + all apps via the root script. We publish launcher + CD + QD + Complex Function
       # Plotter + Riemann Map + Argument Principle + Faber Transform + 2D Electrostatics + 2D Hydrodynamics
-      # + Hele-Shaw Flow + Potential Theory below; building correspondences too is harmless and keeps
+      # + Hele-Shaw Flow + Potential Theory + Contour Integration + Polynomial Roots below; building
+      # correspondences too is harmless and keeps
       # parity with CI.
       - name: Build
         run: pnpm build
@@ -86,6 +87,7 @@ jobs:
           cp -r apps/hele-shaw-flow/dist     _site/hele-shaw-flow
           cp -r apps/potential-theory/dist   _site/potential-theory
           cp -r apps/contour-integration/dist   _site/contour-integration
+          cp -r apps/polynomial-roots/dist   _site/polynomial-roots
           touch _site/.nojekyll
 
       - uses: actions/configure-pages@v5
