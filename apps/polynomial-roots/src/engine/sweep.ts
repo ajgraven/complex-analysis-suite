@@ -16,6 +16,7 @@ import { compileAlphabet, mapRoot } from "./alphabet.js";
 import { aberth, makeWorkspace } from "./aberth.js";
 import type { AberthWorkspace } from "./aberth.js";
 import { canonicalOf, decodeDigits, orbitSpace, properCount } from "./orbits.js";
+import { imageHues } from "./egan.js";
 import type { OrbitSpace } from "./orbits.js";
 
 /** What to sweep: an alphabet, one degree, and a half-open slice `[lo, hi)` of its index space. */
@@ -26,6 +27,12 @@ export interface SweepRequest {
   readonly hi: number;
   /** Half-width of the band around `|z| = 1` the near-circle statistic counts. */
   readonly circleDelta: number;
+  /**
+   * Egan's hue: how many low-order coefficients colour a root, or 0 (the default) for none. The hues
+   * are only computed when asked for — they are `|G|` floats per root, which at Littlewood's `|G| = 4`
+   * more than doubles what a chunk carries, and the density and degree modes never read them.
+   */
+  readonly hueDigits?: number;
 }
 
 /** The counts a sweep reports — all over the FULL root multiset, not over the representatives. */
@@ -55,6 +62,11 @@ export interface SweepResult {
   readonly degree: number;
   /** `[x, y, weight]` per representative root; `length = 3 × representatives × degree`. */
   readonly points: Float32Array;
+  /**
+   * Egan's hue per root per symmetry image, `|G|` consecutive floats per point in the alphabet's group
+   * order — present exactly when the request asked for `hueDigits > 0`. See `egan.ts`.
+   */
+  readonly hues?: Float32Array;
   readonly representatives: number;
   readonly stats: SweepStats;
 }
@@ -69,6 +81,8 @@ export interface Scratch {
   readonly cRe: Float64Array;
   readonly cIm: Float64Array;
   readonly ws: AberthWorkspace;
+  readonly hueImage: Int32Array;
+  readonly hue: Float64Array;
 }
 
 function makeScratch(degree: number): Scratch {
@@ -78,7 +92,29 @@ function makeScratch(degree: number): Scratch {
     cRe: new Float64Array(degree + 1),
     cIm: new Float64Array(degree + 1),
     ws: makeWorkspace(degree),
+    hueImage: new Int32Array(degree + 1),
+    hue: new Float64Array(8),
   };
+}
+
+/** A Float32Array that grows by doubling, one value at a time. */
+class FloatBuffer {
+  private data: Float32Array;
+  private used = 0;
+  constructor(initial: number) {
+    this.data = new Float32Array(Math.max(1, initial));
+  }
+  push(v: number): void {
+    if (this.used === this.data.length) {
+      const grown = new Float32Array(this.data.length * 2);
+      grown.set(this.data);
+      this.data = grown;
+    }
+    this.data[this.used++] = v;
+  }
+  finish(): Float32Array {
+    return this.data.slice(0, this.used);
+  }
 }
 
 /** A Float32Array that grows by doubling — the canonical count is known only after the walk. */
@@ -142,6 +178,8 @@ export function sweepPrepared(
 
   const estimate = Math.max(1, Math.ceil(((hi - lo) / group.length) * degree * 3 * 1.2));
   const out = new PointBuffer(Math.min(estimate, 1 << 22));
+  const hueDigits = Math.max(0, Math.floor(req.hueDigits ?? 0));
+  const hues = hueDigits > 0 ? new FloatBuffer(Math.min((estimate / 3) * group.length, 1 << 22)) : null;
 
   let representatives = 0;
   let polynomials = 0;
@@ -163,6 +201,7 @@ export function sweepPrepared(
       scratch.cIm[k] = v.im;
     }
     const solved = aberth(scratch.cRe, scratch.cIm, degree, scratch.ws);
+    if (hues !== null) imageHues(alphabet, space, scratch.digits, hueDigits, scratch.hueImage, scratch.hue);
     // Each image of this representative stands for `units / stabiliser` polynomials; summed over the
     // group that is `units · |G| / stabiliser` — the orbit size times the unit multiplicity.
     const weight = units / stabiliser;
@@ -183,6 +222,7 @@ export function sweepPrepared(
       // group's root maps when it draws. `units` is a global scale and is deliberately not baked in —
       // the picture is tone-mapped, and the counts below carry it instead.
       out.push(x, y, 1 / stabiliser);
+      if (hues !== null) for (let g = 0; g < group.length; g++) hues.push(scratch.hue[g]);
       for (const g of group) {
         const p = mapRoot(g, x, y);
         roots += weight;
@@ -195,6 +235,7 @@ export function sweepPrepared(
   return {
     degree,
     points: out.finish(),
+    ...(hues !== null ? { hues: hues.finish() } : {}),
     representatives,
     stats: { polynomials, roots, realRoots, nearCircle, nonConverged },
   };

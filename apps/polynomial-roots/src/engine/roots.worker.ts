@@ -21,6 +21,7 @@ export interface RootsRequest {
   readonly lo: number;
   readonly hi: number;
   readonly circleDelta: number;
+  readonly hueDigits: number;
 }
 
 /** One chunk's answer, or the reason there is none. */
@@ -29,6 +30,7 @@ export interface RootsResponse {
   readonly chunkId: number;
   readonly degree: number;
   readonly points?: Float32Array;
+  readonly hues?: Float32Array;
   readonly representatives?: number;
   readonly stats?: SweepStats;
   readonly error?: string;
@@ -69,10 +71,11 @@ ctx.onmessage = (e): void => {
         chunkId: req.chunkId,
         degree: result.degree,
         points: result.points,
+        ...(result.hues !== undefined ? { hues: result.hues } : {}),
         representatives: result.representatives,
         stats: result.stats,
       },
-      [result.points.buffer],
+      result.hues !== undefined ? [result.points.buffer, result.hues.buffer] : [result.points.buffer],
     );
   } catch (err) {
     ctx.postMessage({

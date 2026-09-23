@@ -5,6 +5,12 @@ import type { AppState } from "../src/state";
 const base = (over: Partial<AppState> = {}): AppState => ({ ...DEFAULT_STATE, ...over });
 
 describe("clampState", () => {
+  it("clamps Egan's coefficient count into what the mode colours by", () => {
+    expect(clampState(base({ hueDigits: 8 })).hueDigits).toBe(6);
+    expect(clampState(base({ hueDigits: 0 })).hueDigits).toBe(1);
+    expect(clampState(base({ hueDigits: 2.6 })).hueDigits).toBe(3);
+  });
+
   it("takes the bounds flag only when it is literally true", () => {
     // clampState is the last guard on a state built anywhere; a truthy string must not turn it on.
     expect(clampState(base({ bounds: "false" as never })).bounds).toBe(false);

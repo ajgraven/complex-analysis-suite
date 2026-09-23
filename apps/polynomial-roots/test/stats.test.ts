@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { addStats, degreeRows, describeLimit, describeTotals, emptyTotals, formatShare, limitLines, measureLimit, statLines } from "../src/stats";
+import { compileAlphabet } from "../src/engine/alphabet";
+import { addStats, degreeRows, describeLimit, describeTotals, eganNote, emptyTotals, formatShare, limitLines, measureLimit, statLines } from "../src/stats";
 import { sweepChunk } from "../src/engine/sweep";
 import type { SweepStats } from "../src/engine/sweep";
 
@@ -250,5 +251,33 @@ describe("the per-degree table", () => {
     addStats(totals, run(5));
     expect(totals.polynomials).toBe(run(5).polynomials);
     expect(degreeRows(totals)).toEqual([]);
+  });
+});
+
+describe("the Egan legend", () => {
+  const compiled = (preset: string, n?: number) => {
+    const r = compileAlphabet({ preset, n } as never);
+    if ("error" in r) throw new Error(r.error);
+    return r.alphabet;
+  };
+
+  it("counts the hues the alphabet can give: L·m^k, the constant term's classes included", () => {
+    expect(eganNote(compiled("littlewood"), { hueDigits: 3 }, "roots")).toContain("8 hues");
+    // {−2 … 2}: two constant-term classes (1 and 2) times 5² — the constant term is read too.
+    expect(eganNote(compiled("range", 2), { hueDigits: 2 }, "roots")).toContain("50 hues");
+    expect(eganNote(compiled("littlewood"), { hueDigits: 1 }, "roots")).toContain("the first coefficient after");
+  });
+
+  it("quotes its measurement only for the alphabet it was measured on", () => {
+    expect(eganNote(compiled("littlewood"), { hueDigits: 3 }, "roots")).toContain("≈ Measured");
+    expect(eganNote(compiled("trinary"), { hueDigits: 3 }, "roots")).not.toContain("Measured");
+  });
+
+  it("says the hue is not being drawn when another engine owns the view", () => {
+    for (const engine of ["limit", "deep"] as const) {
+      const note = eganNote(compiled("littlewood"), { hueDigits: 3 }, engine);
+      expect(note).toContain("root cloud only");
+      expect(note).not.toContain("hues");
+    }
   });
 });

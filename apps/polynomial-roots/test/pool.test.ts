@@ -41,6 +41,7 @@ class FakeWorker {
             chunkId: req.chunkId,
             degree: result.degree,
             points: result.points,
+            ...(result.hues !== undefined ? { hues: result.hues } : {}),
             representatives: result.representatives,
             stats: result.stats,
           };
@@ -86,14 +87,14 @@ describe("the pool", () => {
   it("sweeps a whole job across its workers and reports the same totals as one sweep", () => {
     const { pool, workers } = makePool(4);
     const degree = 12;
-    const whole = sweepChunk({ spec, degree, lo: 0, hi: Infinity, circleDelta: 0.02 });
+    const whole = sweepChunk({ spec, degree, lo: 0, hi: Infinity, circleDelta: 0.02, hueDigits: 0 });
     if ("error" in whole) throw new Error(whole.error);
 
     let roots = 0;
     let points = 0;
     let done = false;
     pool.run(
-      { spec, minDegree: degree, maxDegree: degree, totals: [1 << degree], circleDelta: 0.02 },
+      { spec, minDegree: degree, maxDegree: degree, totals: [1 << degree], circleDelta: 0.02, hueDigits: 0 },
       {
         onChunk: (_d, p, stats) => {
           points += p.length;
@@ -115,6 +116,35 @@ describe("the pool", () => {
     pool.dispose();
   });
 
+  it("carries the job's hue request to the workers and each chunk's hues back, |G| per point", () => {
+    // A job without hues gets none (the default modes never pay for them); one with hues gets them on
+    // every chunk, aligned with the points. Forwarding is one line each way and an unforwarded field
+    // is a picture painted in a single colour.
+    for (const hueDigits of [0, 2]) {
+      const { pool, workers } = makePool(2);
+      let chunks = 0;
+      let aligned = 0;
+      pool.run(
+        { spec, minDegree: 9, maxDegree: 9, totals: [1 << 9], circleDelta: 0.02, hueDigits },
+        {
+          onChunk: (_d, p, _s, hues) => {
+            chunks++;
+            if (hues !== undefined && hues.length === (p.length / 3) * 4) aligned++;
+          },
+          onProgress: () => {},
+          onDone: () => {},
+          onError: (m) => {
+            throw new Error(m);
+          },
+        },
+      );
+      drain(workers);
+      expect(chunks).toBeGreaterThan(0);
+      expect(aligned, `hueDigits ${hueDigits}`).toBe(hueDigits > 0 ? chunks : 0);
+      pool.dispose();
+    }
+  });
+
   it("DISPATCHES the degrees in ascending order, so the cheap picture is computed first", () => {
     // The assertion is about the order chunks are HANDED OUT, not the order they come back: with N
     // workers, chunks of two adjacent degrees are in flight at once and either can finish first. The
@@ -123,7 +153,7 @@ describe("the pool", () => {
     const { pool, workers, dispatched } = makePool(2);
     const arrived: number[] = [];
     pool.run(
-      { spec, minDegree: 2, maxDegree: 6, totals: [4, 8, 16, 32, 64], circleDelta: 0.02 },
+      { spec, minDegree: 2, maxDegree: 6, totals: [4, 8, 16, 32, 64], circleDelta: 0.02, hueDigits: 0 },
       {
         onChunk: (d) => arrived.push(d),
         onProgress: () => {},
@@ -148,7 +178,7 @@ describe("the pool", () => {
     const { pool, workers } = makePool(2);
     const first: number[] = [];
     pool.run(
-      { spec, minDegree: 8, maxDegree: 8, totals: [1 << 8], circleDelta: 0.02 },
+      { spec, minDegree: 8, maxDegree: 8, totals: [1 << 8], circleDelta: 0.02, hueDigits: 0 },
       {
         onChunk: (d) => first.push(d),
         onProgress: () => {},
@@ -162,7 +192,7 @@ describe("the pool", () => {
     const second: number[] = [];
     let secondDone = false;
     pool.run(
-      { spec, minDegree: 3, maxDegree: 3, totals: [1 << 3], circleDelta: 0.02 },
+      { spec, minDegree: 3, maxDegree: 3, totals: [1 << 3], circleDelta: 0.02, hueDigits: 0 },
       {
         onChunk: (d) => second.push(d),
         onProgress: () => {},
@@ -186,7 +216,7 @@ describe("the pool", () => {
     let doneCount = 0;
     const progress: [number, number][] = [];
     pool.run(
-      { spec, minDegree: 5, maxDegree: 7, totals: [32, 64, 128], circleDelta: 0.02 },
+      { spec, minDegree: 5, maxDegree: 7, totals: [32, 64, 128], circleDelta: 0.02, hueDigits: 0 },
       {
         onChunk: () => {},
         onProgress: (d, t) => progress.push([d, t]),
@@ -212,7 +242,7 @@ describe("the pool", () => {
     const { pool, workers } = makePool(2);
     let done = false;
     pool.run(
-      { spec, minDegree: 5, maxDegree: 5, totals: [0], circleDelta: 0.02 },
+      { spec, minDegree: 5, maxDegree: 5, totals: [0], circleDelta: 0.02, hueDigits: 0 },
       {
         onChunk: () => {
           throw new Error("nothing should be swept");
@@ -234,7 +264,7 @@ describe("the pool", () => {
     const seen: string[] = [];
     let done = false;
     pool.run(
-      { spec, minDegree: 9, maxDegree: 9, totals: [1 << 9], circleDelta: 0.02 },
+      { spec, minDegree: 9, maxDegree: 9, totals: [1 << 9], circleDelta: 0.02, hueDigits: 0 },
       {
         onChunk: () => {},
         onProgress: () => {},

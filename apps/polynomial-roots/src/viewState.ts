@@ -19,6 +19,7 @@ import type { AlphabetSpec, Cx } from "./engine/alphabet.js";
 import { compileAlphabet } from "./engine/alphabet.js";
 import { MAX_DEPTH as WALK_MAX_DEPTH, MIN_DEPTH as WALK_MIN_DEPTH } from "./engine/limit/walk.js";
 import { ddFromString } from "./engine/deep/dd.js";
+import { MAX_HUE_DIGITS, MIN_HUE_DIGITS } from "./engine/egan.js";
 import { clampState, DEFAULT_STATE, MAX_DEGREE, MAX_EXTEND } from "./state.js";
 import type { AppState } from "./state.js";
 
@@ -44,6 +45,7 @@ export function encodeState(state: AppState): string {
   if (s.minDegree !== d.minDegree) payload.dmin = s.minDegree;
   if (s.maxDegree !== d.maxDegree) payload.dmax = s.maxDegree;
   if (s.colour !== d.colour) payload.colour = s.colour;
+  if (s.hueDigits !== d.hueDigits) payload.hue = s.hueDigits;
   if (s.exposure !== d.exposure) payload.exposure = round(s.exposure);
   if (s.gamma !== d.gamma) payload.gamma = round(s.gamma);
   // The centre goes on the wire as a STRING. A JSON number is a double and a deep view's centre is not
@@ -104,7 +106,7 @@ export function decodeState(hashOrLink: string): DecodeResult {
   if (isNum(s.dmax) && (s.dmax < 1 || s.dmax > MAX_DEGREE)) {
     return { refused: `this link asks for degree ${s.dmax}, outside the range 1–${MAX_DEGREE} this app computes` };
   }
-  if (s.colour !== undefined && s.colour !== "density" && s.colour !== "degree") {
+  if (s.colour !== undefined && s.colour !== "density" && s.colour !== "degree" && s.colour !== "egan") {
     return { refused: `this link asks for a colour mode this app does not have ("${String(s.colour)}")` };
   }
   if (s.engine !== undefined && !["auto", "roots", "limit", "deep"].includes(String(s.engine))) {
@@ -123,6 +125,11 @@ export function decodeState(hashOrLink: string): DecodeResult {
   }
   if (s.theorem !== undefined && typeof s.theorem !== "boolean") {
     return { refused: `this link carries an unreadable value for "theorem"` };
+  }
+  if (s.hue !== undefined && (!isNum(s.hue) || s.hue < MIN_HUE_DIGITS || s.hue > MAX_HUE_DIGITS)) {
+    return {
+      refused: `this link asks Egan's hue to read ${String(s.hue)} coefficients, outside the range ${MIN_HUE_DIGITS}–${MAX_HUE_DIGITS} this app colours by`,
+    };
   }
   if (isNum(s.extend) && (s.extend < 0 || s.extend > MAX_EXTEND)) {
     return { refused: `this link asks for ${s.extend} extension digits, outside the range 0–${MAX_EXTEND} this app enumerates` };
@@ -156,7 +163,7 @@ export function decodeState(hashOrLink: string): DecodeResult {
       alphabet,
       minDegree: isNum(s.dmin) ? s.dmin : DEFAULT_STATE.minDegree,
       maxDegree: isNum(s.dmax) ? s.dmax : DEFAULT_STATE.maxDegree,
-      colour: s.colour === "degree" ? "degree" : "density",
+      colour: s.colour === "degree" || s.colour === "egan" ? s.colour : "density",
       exposure: isNum(s.exposure) ? s.exposure : DEFAULT_STATE.exposure,
       gamma: isNum(s.gamma) ? s.gamma : DEFAULT_STATE.gamma,
       cx: s.cx === undefined ? DEFAULT_STATE.cx : String(s.cx),
@@ -170,6 +177,7 @@ export function decodeState(hashOrLink: string): DecodeResult {
       theorem: s.theorem === true,
       extend: isNum(s.extend) ? s.extend : DEFAULT_STATE.extend,
       bounds: s.bounds === true,
+      hueDigits: isNum(s.hue) ? s.hue : DEFAULT_STATE.hueDigits,
     }),
   };
 }

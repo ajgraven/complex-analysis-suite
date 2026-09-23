@@ -24,6 +24,7 @@ import { centreOnRoot, coefficientString, emptyFrame, nearestRoot, packFrame, ro
 import type { ReferenceFrame, ReferenceRequest } from "./engine/deep/reference.js";
 import { buildToneMap } from "./stage/tone.js";
 import { RAMPS } from "./stage/ramps.js";
+import { MAX_HUE_DIGITS, MIN_HUE_DIGITS } from "./engine/egan.js";
 import {
   centreNumbers,
   clampState,
@@ -46,6 +47,7 @@ import {
   describeDeep,
   describeLimit,
   describeTotals,
+  eganNote,
   emptyTotals,
   limitLines,
   measureLimit,
@@ -134,7 +136,14 @@ function main(): void {
     if (err instanceof StageUnavailable) throw new Error(err.message);
     throw err;
   }
-  stage.setRamp(RAMPS.density.stops);
+  /** Egan's hue has its own map (CET-C6, in the stage); under it the density ramp is what the limit and
+   * deep engines fall back to, since the hue is the root engine's alone. */
+  const rampFor = (colour: AppState["colour"]) => RAMPS[colour === "degree" ? "degree" : "density"].stops;
+  // The OPENING state's ramp, not the default's. This read `RAMPS.density` from PR-1 on, and `apply`
+  // only changed the ramp on its no-resweep path — so a link or a place opening in "By degree" drew the
+  // degree mode's mean-degree hue through the DENSITY ramp until the reader touched the control. Found
+  // wiring M6's third mode through the same two lines.
+  stage.setRamp(rampFor(state.colour));
 
   const a11y = attachCanvasA11y(gl, {
     role: "application",
@@ -198,6 +207,17 @@ function main(): void {
   const colourSelect = el("select", { class: "control", id: "pr-colour" });
   colourSelect.append(el("option", { value: "density", textContent: "Density" }));
   colourSelect.append(el("option", { value: "degree", textContent: "By degree" }));
+  colourSelect.append(el("option", { value: "egan", textContent: "Egan's hue (coefficients)" }));
+  const hueInput = el("input", {
+    class: "control",
+    type: "range",
+    min: String(MIN_HUE_DIGITS),
+    max: String(MAX_HUE_DIGITS),
+    step: "1",
+    id: "pr-hue",
+  });
+  const hueRow = labelled("Coefficients", hueInput);
+  const colourNote = el("p", { class: "note" });
 
   const engineSelect = el("select", { class: "control", id: "pr-engine" });
   for (const [value, label] of [
@@ -254,6 +274,8 @@ function main(): void {
     degreeNote,
     el("h2", {}, "Colour"),
     labelled("Mode", colourSelect),
+    hueRow,
+    colourNote,
     labelled("Exposure", exposure),
     labelled("Gamma", gamma),
     el("div", { class: "buttons" }, computeButton, resetButton, copyButton, saveButton),
@@ -491,6 +513,8 @@ function main(): void {
         annulus: state.annulus,
       });
       any = true;
+    } else if (state.colour === "egan") {
+      any = stage.paintEgan(view, aspect, a.group, state.minDegree, state.maxDegree);
     } else {
       stage.paint(view, aspect, a.group);
       any = stage.composeDegrees(state.minDegree, state.maxDegree);
@@ -521,6 +545,7 @@ function main(): void {
       // Under the limit engine the one quantity is the escape depth, so the colour choice picks the
       // RAMP rather than a second channel; `G` carries nothing and the mean reader stays off.
       byDegree: engine !== "limit" && state.colour === "degree",
+      egan: engine === "roots" && state.colour === "egan",
       degreeRange:
         engine === "deep"
           ? [deepFrame.degreeMin, Math.max(deepFrame.degreeMin + 1, deepFrame.degreeMax)]
@@ -531,6 +556,8 @@ function main(): void {
     if (measured) syncStats();
   }
   let lastMaxDensity = 0;
+  /** The coefficient count the loaded layers' hues were swept with, 0 for none. */
+  let sweptHueDigits = 0;
 
   // --- the sweep --------------------------------------------------------------------------------
   function recompute(): void {
@@ -577,6 +604,9 @@ function main(): void {
       return;
     }
 
+    // Egan's hues cost |G| floats per root, so they are swept only when the mode is on — and switching
+    // to it, or changing how many coefficients it reads, re-sweeps (see `apply`).
+    sweptHueDigits = state.colour === "egan" ? state.hueDigits : 0;
     const totalsPerDegree: number[] = [];
     for (let d = state.minDegree; d <= state.maxDegree; d++) {
       totalsPerDegree.push(orbitSpace(alphabet, d).total);
@@ -588,10 +618,11 @@ function main(): void {
         maxDegree: state.maxDegree,
         totals: totalsPerDegree,
         circleDelta: state.circleDelta,
+        hueDigits: sweptHueDigits,
       },
       {
-        onChunk: (degree, points, stats) => {
-          stage.addPoints(degree, points);
+        onChunk: (degree, points, stats, hues) => {
+          stage.addPoints(degree, points, hues);
           addStats(totals, stats, degree);
           toneDirty = true;
           draw();
@@ -904,6 +935,11 @@ function main(): void {
     minDegree.value = String(state.minDegree);
     maxDegree.value = String(state.maxDegree);
     colourSelect.value = state.colour;
+    controls.dataset.colour = state.colour;
+    hueInput.value = String(state.hueDigits);
+    hueRow.hidden = state.colour !== "egan";
+    colourNote.hidden = state.colour !== "egan";
+    colourNote.textContent = alphabet === null ? "" : eganNote(alphabet, state, handover().engine);
     engineSelect.value = state.engine;
     depthInput.value = String(state.depth);
     annulusInput.checked = state.annulus;
@@ -1068,6 +1104,9 @@ function main(): void {
   function apply(next: AppState, opts: { resweep?: boolean } = {}): void {
     const before = state;
     state = clampState(next);
+    // On EVERY path, including the ones that re-sweep: opening a place changes the alphabet and the
+    // colour together, and the re-sweep path is the one that used to skip this.
+    if (before.colour !== state.colour) stage.setRamp(rampFor(state.colour));
     // Zooming in raises the depth to what the view can resolve, because the alternative is a flat white
     // frame the reader has to diagnose. It moves the SLIDER, so it is visible and reversible, and it
     // stops the moment the reader touches the depth themselves.
@@ -1086,14 +1125,16 @@ function main(): void {
       before.maxDegree !== state.maxDegree;
     // A limit-set view drops the root layers, so coming back to the root engine — by zooming out, by
     // turning the band on, or by choosing it — has nothing to composite until the sweep is re-run.
-    const needsSweep = handover().engine === "roots" && alphabet !== null && stage.loadedDegrees().length === 0;
+    const needsSweep =
+      handover().engine === "roots" &&
+      alphabet !== null &&
+      (stage.loadedDegrees().length === 0 || (state.colour === "egan" && sweptHueDigits !== state.hueDigits));
     if (alphabetChanged || opts.resweep === true || needsSweep) {
       recompute();
     } else {
       if (before.cx !== state.cx || before.cy !== state.cy || before.halfHeight !== state.halfHeight) {
         stage.invalidate();
       }
-      if (before.colour !== state.colour) stage.setRamp(RAMPS[state.colour].stops);
       toneDirty = true;
       syncControls();
       syncStats();
@@ -1214,7 +1255,11 @@ function main(): void {
     apply({ ...state, annulus: annulusInput.checked });
   });
   colourSelect.addEventListener("change", () => {
-    apply({ ...state, colour: colourSelect.value === "degree" ? "degree" : "density" });
+    const v = colourSelect.value;
+    apply({ ...state, colour: v === "degree" || v === "egan" ? v : "density" });
+  });
+  hueInput.addEventListener("input", () => {
+    apply({ ...state, hueDigits: Number(hueInput.value) });
   });
   exposure.addEventListener("input", () => {
     apply({ ...state, exposure: Math.pow(10, Number(exposure.value)) });

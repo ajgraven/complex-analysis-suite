@@ -33,6 +33,7 @@ const A: AppState = clampState({
   theorem: false,
   extend: 8,
   bounds: false,
+  hueDigits: 3,
 });
 const B: AppState = clampState({
   alphabet: { preset: "custom", custom: "1, -1, i, -i" },
@@ -52,6 +53,7 @@ const B: AppState = clampState({
   theorem: true,
   extend: 11,
   bounds: true,
+  hueDigits: 5,
 });
 
 describe("the permalink round trip", () => {
@@ -161,6 +163,17 @@ describe("a link that cannot be honoured refuses BY NAME", () => {
     const r = decodeState("#vs=not-base64!!");
     expect(r).not.toBeNull();
     expect(r !== null && "refused" in r).toBe(true);
+  });
+
+  it("carries Egan's hue and its coefficient count, and refuses a count it does not colour by", () => {
+    const egan = { ...DEFAULT_STATE, colour: "egan" as const, hueDigits: 4 };
+    const back = decodeState(encodeState(egan));
+    expect(back !== null && "state" in back && back.state.colour).toBe("egan");
+    expect(back !== null && "state" in back && back.state.hueDigits).toBe(4);
+    for (const hue of [0, 7, "3"]) {
+      const r = decodeState(forge({ colour: "egan", hue }));
+      expect(r !== null && "refused" in r && r.refused, String(hue)).toContain("coefficients");
+    }
   });
 
   it("names the reason: a bounds flag that is not a boolean", () => {

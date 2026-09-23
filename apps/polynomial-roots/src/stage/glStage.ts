@@ -19,10 +19,17 @@
 // textures are the app's memory budget (a degree is 4 MB at 1024²) and are dropped when the degree
 // leaves the range.
 //
+// **Egan's hue splats straight into the composite**, the way the limit pass writes into it: the hue
+// needs two more channels (the weighted unit vector of the hue angle), and giving every degree an RGBA
+// layer would double the app's whole memory budget for one colour mode. So in that mode the selected
+// degrees are re-splatted into the one RGBA composite on every change — the scrub costs a re-splat
+// there, as a pan already does everywhere — and the per-degree RG layers are left alone.
+//
 // A view change invalidates every texture, because the points are stored in world coordinates and
 // projected when they are drawn. Panning therefore re-splats; scrubbing does not.
 import { createProgram } from "@cas/gpu/shader";
 import { buildGradientLUT } from "@cas/gpu/colormap";
+import { cetC6Bytes } from "@cas/gpu/cet";
 import type { ColorStop } from "@cas/gpu/colormap";
 
 /** The world window the stage draws: centre and half-height, with the aspect taken from the canvas. */
@@ -94,7 +101,54 @@ precision highp float;
 uniform sampler2D uLayer;
 in vec2 vUv;
 out vec4 fragColor;
-void main() { fragColor = texture(uLayer, vUv); }`;
+// An RG layer samples as (r, g, 0, 1): the alpha must not be summed into the composite's fourth channel.
+void main() { fragColor = vec4(texture(uLayer, vUv).rg, 0.0, 0.0); }`;
+
+/**
+ * Egan's splat: the same points, with the hue of the symmetry image being drawn. `aHue` is bound at a
+ * different OFFSET for each image (`|G|` floats per point in the hue buffer), which is how one draw per
+ * image reads its own polynomial's colour without a second copy of the positions.
+ */
+const VERT_EGAN = `#version 300 es
+precision highp float;
+layout(location = 0) in vec2 aPos;
+layout(location = 1) in float aWeight;
+layout(location = 2) in float aHue;
+uniform vec2 uCentre;
+uniform vec2 uHalfExtent;
+uniform vec3 uFlags;
+uniform float uDegree;
+out float vWeight;
+out float vDegree;
+out float vHue;
+void main() {
+  vec2 z = aPos;
+  if (uFlags.z > 0.5) z.y = -z.y;
+  if (uFlags.y > 0.5) {
+    float d = dot(z, z);
+    z = d > 0.0 ? vec2(z.x, -z.y) / d : vec2(0.0);
+  }
+  if (uFlags.x > 0.5) z = -z;
+  gl_Position = vec4((z - uCentre) / uHalfExtent, 0.0, 1.0);
+  gl_PointSize = 1.0;
+  vWeight = aWeight;
+  vDegree = uDegree;
+  vHue = aHue;
+}`;
+
+const FRAG_EGAN = `#version 300 es
+precision highp float;
+in float vWeight;
+in float vDegree;
+in float vHue;
+out vec4 fragColor;
+void main() {
+  // B, A: the hue as a weighted unit vector. Summed per pixel, its direction is the mean hue and its
+  // length over R is how much the pixel's roots AGREE — a circular mean, because the hue is cyclic and
+  // an arithmetic mean of 0.95 and 0.05 is 0.5, the opposite colour.
+  float a = 6.283185307179586 * vHue;
+  fragColor = vec4(vWeight, vWeight * vDegree, vWeight * cos(a), vWeight * sin(a));
+}`;
 
 /** Tone-map the composite through the equalisation ramp and the colour ramp. */
 const FRAG_PRESENT = `#version 300 es
@@ -102,6 +156,8 @@ precision highp float;
 uniform sampler2D uComposite;
 uniform sampler2D uTone;     // width x 1, equalisation in .r
 uniform sampler2D uRamp;     // 256 x 1 colour ramp
+uniform sampler2D uHueRamp;  // CET-C6, 256 x 1, REPEAT — Egan's hue
+uniform float uEganMode;     // 1: hue by the circular mean of B, A; saturation by its length
 uniform float uMaxDensity;
 uniform float uExposure;
 uniform float uDegreeMode;   // 0 density, 1 by the per-pixel mean of G/R
@@ -111,7 +167,7 @@ uniform vec3 uExhausted;     // the neutral for a pixel whose walk ran out of no
 in vec2 vUv;
 out vec4 fragColor;
 void main() {
-  vec2 acc = texture(uComposite, vUv).rg;
+  vec4 acc = texture(uComposite, vUv);
   float d = acc.r;
   // A count is never negative, so the limit pass uses negative R as a STATUS. An uncomputed pixel must
   // not be painted as an empty one — that is the difference between "there is nothing here" and "this
@@ -122,7 +178,19 @@ void main() {
   float norm = log(1.0 + uMaxDensity * uExposure);
   float t = norm > 0.0 ? clamp(log(1.0 + d * uExposure) / norm, 0.0, 1.0) : 0.0;
   float eq = texture(uTone, vec2(t, 0.5)).r;
-  if (uDegreeMode > 0.5) {
+  if (uEganMode > 0.5) {
+    // The mean resultant length is the pixel's COHERENCE: 1 when every root here shares its prefix, 0
+    // when the prefixes are evenly mixed. It is shown as saturation — mixed toward the hue's own luma, so
+    // a muddy pixel keeps its brightness — because a mean hue over disagreeing roots is not a colour
+    // anything in the picture has, and painting it at full chroma would claim an agreement that is not
+    // there. The mean is read in texture space, so the seam at 0 = 1 is CET-C6's own and invisible.
+    vec2 v = acc.ba / max(d, 1e-9);
+    float coherence = clamp(length(v), 0.0, 1.0);
+    float u = fract(atan(v.y, v.x) / 6.283185307179586 + 1.0);
+    vec3 hue = texture(uHueRamp, vec2(u, 0.5)).rgb;
+    float luma = dot(hue, vec3(0.2126, 0.7152, 0.0722));
+    fragColor = vec4(mix(vec3(luma), hue, coherence) * (0.25 + 0.75 * eq), 1.0);
+  } else if (uDegreeMode > 0.5) {
     // Hue from the mean degree at this pixel; the equalised density becomes the brightness, so a
     // thinly-populated degree is still placed on the ramp rather than being washed out.
     float meanDegree = acc.g / max(d, 1e-9);
@@ -141,6 +209,8 @@ interface Layer {
   readonly framebuffer: WebGLFramebuffer;
   /** The GPU buffers holding this degree's representative roots, in world coordinates. */
   readonly buffers: WebGLBuffer[];
+  /** Egan's hues for each buffer, `|G|` floats per point, or null for a chunk swept without them. */
+  readonly hues: (WebGLBuffer | null)[];
   /** Points in each buffer. */
   readonly counts: number[];
   /** True once every chunk of this degree has been splatted into the texture for the current view. */
@@ -166,6 +236,8 @@ export class GlStage {
   readonly gl: WebGL2RenderingContext;
   readonly precision: Precision;
   private readonly pointProgram: WebGLProgram;
+  private readonly eganProgram: WebGLProgram;
+  private hueTexture: WebGLTexture;
   private readonly accumProgram: WebGLProgram;
   private readonly presentProgram: WebGLProgram;
   private readonly vao: WebGLVertexArrayObject;
@@ -176,6 +248,8 @@ export class GlStage {
   private rampTexture: WebGLTexture;
   private size = 0;
   private readonly internalFormat: number;
+  /** The composite's format: four channels, because Egan's hue needs two beyond density and degree. */
+  private readonly compositeFormat: number;
 
   constructor(readonly canvas: HTMLCanvasElement) {
     const gl = canvas.getContext("webgl2", {
@@ -198,8 +272,10 @@ export class GlStage {
     const floatBlend = gl.getExtension("EXT_float_blend") !== null;
     this.precision = floatBlend ? "float32" : "float16";
     this.internalFormat = floatBlend ? gl.RG32F : gl.RG16F;
+    this.compositeFormat = floatBlend ? gl.RGBA32F : gl.RGBA16F;
 
     this.pointProgram = createProgram(gl, VERT_POINTS, FRAG_POINTS);
+    this.eganProgram = createProgram(gl, VERT_EGAN, FRAG_EGAN);
     this.accumProgram = createProgram(gl, VERT_QUAD, FRAG_ACCUM);
     this.presentProgram = createProgram(gl, VERT_QUAD, FRAG_PRESENT);
     const vao = gl.createVertexArray();
@@ -209,6 +285,11 @@ export class GlStage {
     this.emptyVao = emptyVao;
     this.toneTexture = this.makeLut(new Uint8Array([0, 0, 0, 255]), 1);
     this.rampTexture = this.makeLut(new Uint8Array([0, 0, 0, 255]), 1);
+    // CET-C6 wraps: REPEAT, so linear filtering across the seam blends entry 255 into entry 0 (the step
+    // there is an ordinary one — `@cas/gpu/cet` pins it) instead of clamping to one end.
+    this.hueTexture = this.makeLut(cetC6Bytes(), 256);
+    gl.bindTexture(gl.TEXTURE_2D, this.hueTexture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
   }
 
   /** Upload a colour ramp (the reader's choice of `RAMPS`). */
@@ -240,6 +321,7 @@ export class GlStage {
   resize(size: number): void {
     const s = Math.max(64, Math.min(2048, Math.floor(size)));
     if (s === this.size) return;
+    this.eganKey = "";
     this.size = s;
     this.dropLayers();
     if (this.composite !== null) {
@@ -254,13 +336,23 @@ export class GlStage {
     return this.size;
   }
 
-  private target(): { texture: WebGLTexture; framebuffer: WebGLFramebuffer } {
+  private target(rgba = false): { texture: WebGLTexture; framebuffer: WebGLFramebuffer } {
     const gl = this.gl;
     const texture = gl.createTexture();
     const framebuffer = gl.createFramebuffer();
     if (texture === null || framebuffer === null) throw new StageUnavailable("WebGL2 could not allocate a render target.");
     gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, this.internalFormat, this.size, this.size, 0, gl.RG, gl.FLOAT, null);
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      rgba ? this.compositeFormat : this.internalFormat,
+      this.size,
+      this.size,
+      0,
+      rgba ? gl.RGBA : gl.RG,
+      gl.FLOAT,
+      null,
+    );
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -279,13 +371,16 @@ export class GlStage {
     const existing = this.layers.get(degree);
     if (existing !== undefined) return existing;
     const { texture, framebuffer } = this.target();
-    const layer: Layer = { texture, framebuffer, buffers: [], counts: [], painted: false };
+    const layer: Layer = { texture, framebuffer, buffers: [], hues: [], counts: [], painted: false };
     this.layers.set(degree, layer);
     return layer;
   }
 
-  /** Add one chunk of a degree's roots. The buffer is `[x, y, weight]` triples in world coordinates. */
-  addPoints(degree: number, points: Float32Array): void {
+  /**
+   * Add one chunk of a degree's roots. The buffer is `[x, y, weight]` triples in world coordinates;
+   * `hues`, when the sweep computed them, is `|G|` floats per point.
+   */
+  addPoints(degree: number, points: Float32Array, hues?: Float32Array): void {
     if (points.length === 0) return;
     const gl = this.gl;
     const layer = this.layerFor(degree);
@@ -295,16 +390,28 @@ export class GlStage {
     gl.bufferData(gl.ARRAY_BUFFER, points, gl.STATIC_DRAW);
     layer.buffers.push(buffer);
     layer.counts.push(points.length / 3);
+    let hueBuffer: WebGLBuffer | null = null;
+    if (hues !== undefined && hues.length > 0) {
+      hueBuffer = gl.createBuffer();
+      if (hueBuffer !== null) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, hueBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, hues, gl.STATIC_DRAW);
+      }
+    }
+    layer.hues.push(hueBuffer);
+    this.epoch++;
     layer.painted = false;
   }
 
   /** Forget every accumulated degree (an alphabet change, or a resolution change). */
   dropLayers(): void {
     const gl = this.gl;
+    this.epoch++;
     for (const layer of this.layers.values()) {
       gl.deleteTexture(layer.texture);
       gl.deleteFramebuffer(layer.framebuffer);
       for (const b of layer.buffers) gl.deleteBuffer(b);
+      for (const b of layer.hues) if (b !== null) gl.deleteBuffer(b);
     }
     this.layers.clear();
   }
@@ -312,14 +419,93 @@ export class GlStage {
   /** Forget the degrees outside this range; the scrub keeps the rest. */
   dropOutside(minDegree: number, maxDegree: number): void {
     const gl = this.gl;
+    this.epoch++;
     for (const [degree, layer] of [...this.layers]) {
       if (degree >= minDegree && degree <= maxDegree) continue;
       gl.deleteTexture(layer.texture);
       gl.deleteFramebuffer(layer.framebuffer);
       for (const b of layer.buffers) gl.deleteBuffer(b);
+      for (const b of layer.hues) if (b !== null) gl.deleteBuffer(b);
       this.layers.delete(degree);
     }
   }
+
+  /** True when every chunk loaded so far carries Egan's hues — the mode can draw only then. */
+  hasHues(): boolean {
+    for (const layer of this.layers.values()) if (layer.hues.some((h) => h === null)) return false;
+    return true;
+  }
+
+  /**
+   * Egan's mode: re-splat the selected degrees, with each image's hue, straight into the composite.
+   * Returns false when nothing was drawn. A chunk without hues is skipped rather than drawn in a
+   * guessed colour; the shell re-sweeps when the mode is chosen (`hasHues`).
+   */
+  paintEgan(
+    view: StageView,
+    aspect: number,
+    transforms: readonly StageTransform[],
+    minDegree: number,
+    maxDegree: number,
+  ): boolean {
+    const gl = this.gl;
+    // Re-splatting every loaded point on every frame would make a hover or a tone change cost a whole
+    // sweep's worth of draws; the composite is kept while nothing it depends on has moved. Anything
+    // else that writes the composite clears the key.
+    const key = `${view.cx},${view.cy},${view.halfHeight},${aspect},${minDegree},${maxDegree},${this.epoch},${this.size}`;
+    if (this.composite !== null && key === this.eganKey) return this.eganDrawn;
+    if (this.composite === null) this.composite = this.target(true);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.composite.framebuffer);
+    gl.viewport(0, 0, this.size, this.size);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.useProgram(this.eganProgram);
+    gl.bindVertexArray(this.vao);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE);
+    gl.uniform2f(gl.getUniformLocation(this.eganProgram, "uCentre"), view.cx, view.cy);
+    gl.uniform2f(gl.getUniformLocation(this.eganProgram, "uHalfExtent"), view.halfHeight * aspect, view.halfHeight);
+    const uFlags = gl.getUniformLocation(this.eganProgram, "uFlags");
+    const uDegree = gl.getUniformLocation(this.eganProgram, "uDegree");
+    const stride = 4 * transforms.length;
+    let drawn = 0;
+    for (const [degree, layer] of this.layers) {
+      if (degree < minDegree || degree > maxDegree) continue;
+      gl.uniform1f(uDegree, degree);
+      for (let i = 0; i < layer.buffers.length; i++) {
+        const hue = layer.hues[i];
+        if (hue === null) continue;
+        gl.bindBuffer(gl.ARRAY_BUFFER, layer.buffers[i]);
+        gl.enableVertexAttribArray(0);
+        gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 12, 0);
+        gl.enableVertexAttribArray(1);
+        gl.vertexAttribPointer(1, 1, gl.FLOAT, false, 12, 8);
+        gl.bindBuffer(gl.ARRAY_BUFFER, hue);
+        gl.enableVertexAttribArray(2);
+        for (let g = 0; g < transforms.length; g++) {
+          const t = transforms[g];
+          // The image's own hue: the g-th of the point's |G| floats.
+          gl.vertexAttribPointer(2, 1, gl.FLOAT, false, stride, 4 * g);
+          gl.uniform3f(uFlags, t.neg ? 1 : 0, t.rev ? 1 : 0, t.conj ? 1 : 0);
+          gl.drawArrays(gl.POINTS, 0, layer.counts[i]);
+        }
+        drawn++;
+      }
+    }
+    gl.disableVertexAttribArray(2);
+    gl.disable(gl.BLEND);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.bindVertexArray(null);
+    this.eganKey = key;
+    this.eganDrawn = drawn > 0;
+    return drawn > 0;
+  }
+
+  /** What the composite last held from `paintEgan`, or "" once anything else has written it. */
+  private eganKey = "";
+  private eganDrawn = false;
+  /** Bumped whenever the loaded points change — a chunk added, a degree or every layer dropped. */
+  private epoch = 0;
 
   /** Which degrees currently hold points. */
   loadedDegrees(): number[] {
@@ -378,14 +564,16 @@ export class GlStage {
    * same code for both engines and a difference between their pictures can only come from the walk.
    */
   compositeTarget(): { framebuffer: WebGLFramebuffer; size: number } {
-    if (this.composite === null) this.composite = this.target();
+    this.eganKey = "";
+    if (this.composite === null) this.composite = this.target(true);
     return { framebuffer: this.composite.framebuffer, size: this.size };
   }
 
   /** Sum the selected degrees into the composite target. Returns false when nothing is selected. */
   composeDegrees(minDegree: number, maxDegree: number): boolean {
     const gl = this.gl;
-    if (this.composite === null) this.composite = this.target();
+    this.eganKey = "";
+    if (this.composite === null) this.composite = this.target(true);
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.composite.framebuffer);
     gl.viewport(0, 0, this.size, this.size);
     gl.clearColor(0, 0, 0, 0);
@@ -413,12 +601,13 @@ export class GlStage {
   readDensity(): Float32Array {
     const gl = this.gl;
     if (this.composite === null) return new Float32Array(0);
-    const buf = new Float32Array(this.size * this.size * 2);
+    // RGBA/FLOAT is the one read-back combination WebGL2 guarantees for a float colour buffer.
+    const buf = new Float32Array(this.size * this.size * 4);
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.composite.framebuffer);
-    gl.readPixels(0, 0, this.size, this.size, gl.RG, gl.FLOAT, buf);
+    gl.readPixels(0, 0, this.size, this.size, gl.RGBA, gl.FLOAT, buf);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     const density = new Float32Array(this.size * this.size);
-    for (let i = 0, j = 0; i < density.length; i++, j += 2) density[i] = buf[j];
+    for (let i = 0, j = 0; i < density.length; i++, j += 4) density[i] = buf[j];
     return density;
   }
 
@@ -427,6 +616,8 @@ export class GlStage {
     maxDensity: number;
     exposure: number;
     byDegree: boolean;
+    /** Egan's hue — the composite must have been filled by `paintEgan`. */
+    egan?: boolean;
     degreeRange: readonly [number, number];
     excluded?: readonly [number, number, number];
     exhausted?: readonly [number, number, number];
@@ -448,6 +639,10 @@ export class GlStage {
     gl.activeTexture(gl.TEXTURE2);
     gl.bindTexture(gl.TEXTURE_2D, this.rampTexture);
     gl.uniform1i(gl.getUniformLocation(this.presentProgram, "uRamp"), 2);
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, this.hueTexture);
+    gl.uniform1i(gl.getUniformLocation(this.presentProgram, "uHueRamp"), 3);
+    gl.uniform1f(gl.getUniformLocation(this.presentProgram, "uEganMode"), options.egan === true ? 1 : 0);
     gl.uniform1f(gl.getUniformLocation(this.presentProgram, "uMaxDensity"), options.maxDensity);
     gl.uniform1f(gl.getUniformLocation(this.presentProgram, "uExposure"), options.exposure);
     gl.uniform1f(gl.getUniformLocation(this.presentProgram, "uDegreeMode"), options.byDegree ? 1 : 0);
@@ -475,7 +670,9 @@ export class GlStage {
     }
     gl.deleteTexture(this.toneTexture);
     gl.deleteTexture(this.rampTexture);
+    gl.deleteTexture(this.hueTexture);
     gl.deleteProgram(this.pointProgram);
+    gl.deleteProgram(this.eganProgram);
     gl.deleteProgram(this.accumProgram);
     gl.deleteProgram(this.presentProgram);
     gl.deleteVertexArray(this.vao);

@@ -164,6 +164,14 @@ export const PLACES: readonly Place[] = [
     state: at(-0.0572, 0.72229, 0.06, { maxDegree: 18 }),
   },
   {
+    id: "egan-hue",
+    group: "dragons",
+    title: "The cloud coloured by its coefficients",
+    seen: "Each root takes the hue of the first three coefficients of its own polynomial. Inside the disk the colours come in solid patches, one per prefix, nested the way the dragons are; toward the unit circle and outside it they mix to grey, because out there a root's position is set by the polynomial's other end.",
+    source: "Greg Egan's Littlewood applet, which colours roots by their low-order coefficients.",
+    state: at(0, 0, 1.45, { colour: "egan", hueDigits: 3 }),
+  },
+  {
     id: "newman",
     group: "alphabets",
     title: "{0, 1}: the Newman polynomials",

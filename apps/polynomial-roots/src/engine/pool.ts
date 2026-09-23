@@ -25,11 +25,16 @@ export interface PoolJob {
   /** Size of each degree's index space, in order `minDegree … maxDegree`. */
   readonly totals: readonly number[];
   readonly circleDelta: number;
+  /** Egan's hue: coefficients to colour by, or 0 for none (see `sweep.ts`). */
+  readonly hueDigits: number;
 }
 
-/** Called as each chunk lands. `points` is `[x, y, weight]` triples for that degree. */
+/**
+ * Called as each chunk lands. `points` is `[x, y, weight]` triples for that degree; `hues` is present
+ * exactly when the job asked for them, `|G|` per point.
+ */
 export interface PoolHandlers {
-  onChunk: (degree: number, points: Float32Array, stats: SweepStats) => void;
+  onChunk: (degree: number, points: Float32Array, stats: SweepStats, hues?: Float32Array) => void;
   onProgress: (done: number, total: number) => void;
   onDone: () => void;
   onError: (message: string) => void;
@@ -147,6 +152,7 @@ export class RootPool {
         lo: next.lo,
         hi: next.hi,
         circleDelta: job.circleDelta,
+        hueDigits: job.hueDigits,
       };
       this.inFlight++;
       w.postMessage(req);
@@ -169,7 +175,7 @@ export class RootPool {
       return;
     }
     if (res.points !== undefined && res.stats !== undefined) {
-      handlers.onChunk(res.degree, res.points, res.stats);
+      handlers.onChunk(res.degree, res.points, res.stats, res.hues);
     }
     const done = this.totalChunks - this.queue.length - this.inFlight;
     handlers.onProgress(done, this.totalChunks);

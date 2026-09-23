@@ -321,6 +321,17 @@ const PAGES = [
     expect: ".panel.stats table.degree-table",
   },
   {
+    // M6: Egan's hue. Its coefficient slider and legend exist only in that mode, so the landing page
+    // never shows them; the panel's `data-colour` is set from the state, which is the proof the link
+    // was honoured rather than the landing page audited under this entry's name.
+    id: "polynomial-roots-egan",
+    mount: "polynomial-roots",
+    dist: "apps/polynomial-roots/dist",
+    file: "index.html",
+    hash: viewState("pr", { colour: "egan", hue: 4 }),
+    expect: '.controls[data-colour="egan"]',
+  },
+  {
     id: "correspondences",
     mount: "correspondences",
     dist: "apps/correspondences/dist",

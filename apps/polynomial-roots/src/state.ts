@@ -8,10 +8,14 @@ import type { AlphabetSpec, Cx } from "./engine/alphabet.js";
 import { ddAdd, ddFromString, ddMul, ddToNumber, ddToString } from "./engine/deep/dd.js";
 import type { DD } from "./engine/deep/dd.js";
 import type { EngineMode } from "./engine/limit/handover.js";
+import { DEFAULT_HUE_DIGITS, MAX_HUE_DIGITS, MIN_HUE_DIGITS } from "./engine/egan.js";
 import { MAX_DEPTH as WALK_MAX_DEPTH, MIN_DEPTH as WALK_MIN_DEPTH } from "./engine/limit/walk.js";
 
-/** How the density is coloured. */
-export type ColourMode = "density" | "degree";
+/**
+ * How the density is coloured: by itself, by the mean degree, or by Egan's hue — the low-order
+ * coefficients of each root's polynomial (`engine/egan.ts`, root engine only).
+ */
+export type ColourMode = "density" | "degree" | "egan";
 
 /** Everything the reader can change. */
 export interface AppState {
@@ -66,6 +70,8 @@ export interface AppState {
   readonly extend: number;
   /** Draw the alphabet's cited root bound over the picture, where it has one. */
   readonly bounds: boolean;
+  /** Egan's hue: how many coefficients after the constant term colour a root. */
+  readonly hueDigits: number;
 }
 
 /** Most extension digits the overlay will enumerate. `2^14` is 16,384 Newton solves, about 0.4 s. */
@@ -101,6 +107,7 @@ export const DEFAULT_STATE: AppState = {
   theorem: false,
   extend: 8,
   bounds: false,
+  hueDigits: DEFAULT_HUE_DIGITS,
 };
 
 /** Clamp a state into what the engine and the stage can actually do. Pure; the codec relies on it. */
@@ -111,7 +118,7 @@ export function clampState(s: AppState): AppState {
     alphabet: s.alphabet,
     minDegree,
     maxDegree,
-    colour: s.colour === "degree" ? "degree" : "density",
+    colour: s.colour === "degree" || s.colour === "egan" ? s.colour : "density",
     exposure: clampNum(s.exposure, 0.05, 40, 1),
     gamma: clampNum(s.gamma, 0.2, 5, 1),
     cx: clampCoordinate(s.cx),
@@ -125,6 +132,7 @@ export function clampState(s: AppState): AppState {
     theorem: s.theorem === true,
     extend: Math.round(clampNum(s.extend, 0, MAX_EXTEND, DEFAULT_STATE.extend)),
     bounds: s.bounds === true,
+    hueDigits: Math.round(clampNum(s.hueDigits, MIN_HUE_DIGITS, MAX_HUE_DIGITS, DEFAULT_HUE_DIGITS)),
   };
 }
 

@@ -203,7 +203,7 @@ describe("the gallery's groups", () => {
     expect(members("tour")).toEqual([
       "whole", "hole-at-1", "hole-at-i", "four-fifths", "four-fifths-i", "half-e-i-fifth", "feather-08-02", "zoom-story",
     ]);
-    expect(members("dragons")).toEqual(["dragon", "egan-point", "dragon-inset", "dragon-theorem"]);
+    expect(members("dragons")).toEqual(["dragon", "egan-point", "egan-hue", "dragon-inset", "dragon-theorem"]);
     expect(members("alphabets")).toEqual(["newman", "bandt", "hexaholes-region", "hexaholes", "cube-roots"]);
     expect(members("beyond")).toEqual(["limit-littlewood", "limit-bandt", "deep-zoom-story", "deep-float64-floor"]);
   });

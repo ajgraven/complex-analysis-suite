@@ -342,3 +342,35 @@ export function describeDeep(s: DeepSummary): string {
   }
   return `${formatCount(s.count)} roots of ${s.alphabet} polynomials of degree ${s.degreeMin} to ${s.degreeMax}, on ${formatCount(s.distinct)} distinct points, each solved from one walk at the view centre in ${s.precision === "dd" ? "double-double" : "float64"} and drawn as an offset from it, to a worst residual of ${s.residual.toExponential(2)}. ${s.reason}`;
 }
+
+/**
+ * The Egan hue's legend: what the colour reads, how many classes that is, and — for the flagship
+ * alphabet, where it was measured — where it means something.
+ *
+ * The measured sentence is Littlewood's alone and says so: coherence depends on `max|a|` and on the
+ * alphabet's shape through the tail bound, and a number measured on one alphabet quoted under another is
+ * exactly the kind of `≈` that stops being honest. Under the other engines the sentence says the hue is
+ * not being drawn, because the colour control still reads "Egan's hue" there.
+ */
+export function eganNote(
+  alphabet: { readonly id?: string; readonly spec: { readonly preset: string }; readonly leading: readonly number[]; readonly values: readonly unknown[] },
+  state: { readonly hueDigits: number },
+  engine: "roots" | "limit" | "deep",
+): string {
+  if (engine !== "roots") {
+    return `Egan's hue colours the root cloud only. This view is drawn by the ${engine === "limit" ? "limit-set walk" : "deep engine"}, coloured by density.`;
+  }
+  const k = state.hueDigits;
+  const classes = alphabet.leading.length * Math.pow(alphabet.values.length, k);
+  const which = k === 1 ? "the first coefficient" : `the first ${k} coefficients`;
+  const head =
+    `Each root is coloured by ${which} after the constant term of its own polynomial, scaled so the ` +
+    `constant term is its representative — ${formatCount(classes)} hues, and polynomials sharing a longer prefix get closer ones. ` +
+    `A pixel whose roots disagree is drawn toward grey in proportion.`;
+  if (alphabet.spec.preset !== "littlewood") return head;
+  return (
+    `${head} ≈ Measured over every Littlewood polynomial of degree 12, three coefficients: pixels with |z| < 0.7 are 99% one hue, ` +
+    `0.8–0.9 about half, and outside the unit circle about a third — there a root's position is decided by the polynomial's top ` +
+    `coefficients, which this colouring does not read.`
+  );
+}
