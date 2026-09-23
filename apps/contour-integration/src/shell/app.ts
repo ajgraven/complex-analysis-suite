@@ -10,7 +10,7 @@
 // recompute that wrote the URL, which is a question about ORDER that only exists when there are
 // several orders. At 1.1 `commit` does the first four; the hash (1.3) and the undo stack (1.11)
 // join it where the plan puts them.
-import { attachCanvasA11y } from "@cas/ui";
+import { attachCanvasA11y, h, patch } from "@cas/ui";
 
 import { Frac } from "@cas/exact";
 
@@ -45,7 +45,6 @@ import {
   type FigureCaption,
 } from "./figure.js";
 import { decodeShell, encodeShell } from "./viewState.js";
-import { patch, h } from "./dom.js";
 import { render, type ShellActions } from "./render.js";
 import { defaultSession, resetTransient, type Session, type SweepRow } from "./session.js";
 import { createStageController, type StageController } from "./stageController.js";

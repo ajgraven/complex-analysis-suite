@@ -20,7 +20,7 @@ import {
   type Certificate,
   type Verdict,
 } from "@cas/rigor";
-import { Frac, SqrtExt } from "@cas/exact";
+import { Frac, SqrtExt, toExactRational } from "@cas/exact";
 import { HEADLINES, headlineFails, lemmaLabel, type ConstraintId } from "./vocabulary.js";
 import {
   certificateClaim,
@@ -45,7 +45,6 @@ import {
 import { NO_BRANCH, cutPolyline, type BranchChoice } from "../kernel/branch/model.js";
 import { formatFrac } from "../kernel/formatExact.js";
 import { LATEX } from "../kernel/notation.js";
-import { toExactRational } from "../kernel/exactRational.js";
 import {
   asExponentialOfPolynomial,
   asExponentialOfPower,

@@ -21,7 +21,7 @@ import { paramChannel } from "../../shell/state.js";
 import type { Param } from "../../engine/contour/model.js";
 import { limitTag, paramSymbol, tagLabel } from "../../engine/vocabulary.js";
 import { mathSpoken, mathText } from "../math.js";
-import { h, type Desc } from "../dom.js";
+import { h, type Desc } from "@cas/ui";
 import { card, nothing, type Card } from "./card.js";
 
 /** How many stops the slider has. The old shell's number, so a drag feels the same in both. */

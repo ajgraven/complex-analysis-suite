@@ -15,9 +15,8 @@
 // edge of the log² keyhole contributes `(log x + 2πi)² = log²x + 4πi log x − 4π²`, so the row carries
 // a genuine `π²`. D5 goes one further and carries a `π³`. ADR-0041: π is transcendental, so ℚ(i)[π]
 // is a polynomial ring and its fraction field admits exact elimination — the rank stays DECIDED.
-import { Frac, Gauss } from "@cas/exact";
+import { Frac, Gauss, simplestRational } from "@cas/exact";
 import type { Node } from "@cas/expr";
-import { simplestRational } from "../kernel/exactRational.js";
 import { RatPi } from "../kernel/ratPi.js";
 import { crossCheckNumeric } from "./crossCheck.js";
 import type { Bindings } from "./schema.js";

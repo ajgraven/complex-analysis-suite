@@ -27,7 +27,7 @@ import {
 } from "../src/shell/state.js";
 import { bar } from "../src/shell/bar.js";
 import type { ShellActions } from "../src/shell/cards/card.js";
-import { patch } from "../src/shell/dom.js";
+import { patch } from "@cas/ui";
 import { defaultSession } from "../src/shell/session.js";
 import { STAGE_MODE_LABELS, STAGE_MODES } from "../src/ui/stage/mode.js";
 

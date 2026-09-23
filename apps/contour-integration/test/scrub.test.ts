@@ -17,7 +17,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { circleTemplate, semicircleTemplate } from "../src/engine/contour/templates.js";
 import type { Param } from "../src/engine/contour/model.js";
-import { patch } from "../src/shell/dom.js";
+import { patch } from "@cas/ui";
 import { TRACK_PX, scrub, scrubbedValue, steppedValue } from "../src/shell/scrub.js";
 
 /** A hand-built parameter: a decade-free linear range, so a pixel count is arithmetic in the head. */

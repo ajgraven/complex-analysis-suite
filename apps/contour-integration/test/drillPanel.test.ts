@@ -31,7 +31,7 @@ import {
 import { PROGRESS_KEY, clearedOf, readProgress } from "../src/shell/drillProgress.js";
 import { compile, defaultState, resolveState, type ShellState } from "../src/shell/state.js";
 import { mathPlain, mathSpoken } from "../src/shell/math.js";
-import { patch } from "../src/shell/dom.js";
+import { patch } from "@cas/ui";
 import { defaultSession, resetTransient, type Session } from "../src/shell/session.js";
 import { drillMask, drillPanel } from "../src/shell/drillPanel.js";
 import type { CardContext, ShellActions } from "../src/shell/cards/card.js";

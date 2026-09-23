@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Frac, piUpper, QiPoly } from "@cas/exact";
+import { Frac, piUpper, QiPoly, toExactRational } from "@cas/exact";
 import { parse } from "@cas/expr";
 import { mayReportValue, assembleVerdict } from "@cas/rigor";
 import {
@@ -9,7 +9,6 @@ import {
   maxModulusBound,
   mlArcBound,
 } from "../src/kernel/bounds/mlRational.js";
-import { toExactRational } from "../src/kernel/exactRational.js";
 
 const q = (n: number, d = 1): Frac => Frac.of(BigInt(n), BigInt(d));
 const exact = (src: string) => {

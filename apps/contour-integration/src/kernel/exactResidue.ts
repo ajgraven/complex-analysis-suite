@@ -23,8 +23,8 @@ import {
   seriesInverse,
   seriesMul,
   splitOrder,
+  simplestRational,
 } from "@cas/exact";
-import { simplestRational } from "./exactRational.js";
 
 export type Cx = readonly [re: number, im: number];
 

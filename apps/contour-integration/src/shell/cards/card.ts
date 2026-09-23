@@ -16,7 +16,7 @@ import type { LemmaId, PieceRole } from "../../engine/contour/model.js";
 import type { PoleReport } from "../../kernel/poles.js";
 import type { DeclarationState } from "../../shell/state.js";
 import type { ShellMode, ShellState, StateResolution } from "../../shell/state.js";
-import { h, type Child, type Desc } from "../dom.js";
+import { h, type Child, type Desc } from "@cas/ui";
 import type { Session } from "../session.js";
 
 /** Everything a card may CALL. Implemented once, in `mountShell2`. */

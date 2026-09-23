@@ -24,7 +24,7 @@
 import { CONTRAST_CELLS, contrastTable, type ContrastTable, type ContrastTableCell } from "./contrastGrid.js";
 import { constraintLabel, type ConstraintId } from "../engine/vocabulary.js";
 import type { CardContext } from "./cards/card.js";
-import { h, type Child, type Desc } from "./dom.js";
+import { h, type Child, type Desc } from "@cas/ui";
 import { mathText } from "./math.js";
 
 /**

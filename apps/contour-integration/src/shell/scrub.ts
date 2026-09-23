@@ -18,7 +18,7 @@
 // decades in the last pixel.
 import { fmt } from "../kernel/decimal.js";
 import { admissibleStep, admissibleValue, type Param } from "../engine/contour/model.js";
-import { h, type Desc } from "./dom.js";
+import { h, type Desc } from "@cas/ui";
 
 /**
  * How many pixels a drag across the WHOLE range takes.

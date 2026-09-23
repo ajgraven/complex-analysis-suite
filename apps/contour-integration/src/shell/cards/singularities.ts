@@ -13,7 +13,7 @@ import { fmt, fmtCx } from "../../kernel/decimal.js";
 import { declaredOrder } from "../../shell/state.js";
 import type { ContourIntegral } from "../../engine/contour/integrate.js";
 import { tagLabel } from "../../engine/vocabulary.js";
-import { h, type Desc } from "../dom.js";
+import { h, type Desc } from "@cas/ui";
 import { math, mathText } from "../math.js";
 import { card, nothing, type Card } from "./card.js";
 import { drillMask } from "../drillPanel.js";

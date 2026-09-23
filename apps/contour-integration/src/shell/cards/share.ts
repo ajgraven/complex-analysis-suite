@@ -18,7 +18,7 @@
 import { encodeShell } from "../../shell/viewState.js";
 import { shareRefusal } from "../errors.js";
 import { fmtNum } from "../format.js";
-import { h, type Child, type Desc } from "../dom.js";
+import { h, type Child, type Desc } from "@cas/ui";
 import { mathText } from "../math.js";
 import { card, type Card, type CardContext } from "./card.js";
 

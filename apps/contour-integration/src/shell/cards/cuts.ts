@@ -32,7 +32,7 @@ import {
 import { declaredOrder } from "../../shell/state.js";
 import { effectiveBranch } from "../../kernel/branch/model.js";
 import { isoShown } from "../../ui/stage/mode.js";
-import { h, type Child } from "../dom.js";
+import { h, type Child } from "@cas/ui";
 import { drawnBranch } from "../stageView.js";
 import { mathSpoken, mathText } from "../math.js";
 import { card, type Card } from "./card.js";

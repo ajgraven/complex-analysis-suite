@@ -26,3 +26,9 @@ export type { ComputeClient, ComputeClientOptions } from "./computeClient.js";
 
 export { drawDirectionTicks } from "./canvasOverlay.js";
 export type { DirectionTicksOptions, Vec2 } from "./canvasOverlay.js";
+
+// The keyed DOM builder — a description of the DOM and a `patch` that reconciles it without replacing a
+// node whose key persists. Moved from Contour Integration's M8 shell when Polynomial Root Analysis
+// became its second consumer (ADR-0047).
+export { h, patch, text } from "./dom.js";
+export type { Child, Desc } from "./dom.js";

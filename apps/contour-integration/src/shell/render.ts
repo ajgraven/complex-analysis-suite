@@ -27,7 +27,7 @@ import { parametersCard } from "./cards/parameters.js";
 import { singularitiesCard } from "./cards/singularities.js";
 import { targetCard } from "./cards/target.js";
 import type { Card, CardContext, ShellActions } from "./cards/card.js";
-import { h, type Desc } from "./dom.js";
+import { h, type Desc } from "@cas/ui";
 import type { Session } from "./session.js";
 
 export type { ShellActions } from "./cards/card.js";

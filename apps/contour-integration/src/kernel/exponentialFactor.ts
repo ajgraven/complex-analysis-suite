@@ -10,9 +10,8 @@
 //
 // Narrow on purpose: exactly one `exp` factor, whose argument is `i·a·z` with `a` rational, times a
 // rational function. `exp(z²)`, two exponentials, or a non-rational remainder all decline.
-import { Frac, Gauss, QiPoly } from "@cas/exact";
+import { Frac, Gauss, QiPoly, toExactRational } from "@cas/exact";
 import type { Node } from "@cas/expr";
-import { toExactRational } from "./exactRational.js";
 
 export interface ExponentialForm {
   /**

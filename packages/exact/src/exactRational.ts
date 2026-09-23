@@ -1,5 +1,9 @@
 // Reading an expression as an EXACT rational function over ℚ(i) — or refusing.
 //
+// Moved from apps/contour-integration/src/kernel/ by ADR-0047 (Polynomial Root Analysis, the second
+// consumer, reads its typed polynomials through it). Unchanged otherwise; "M2" below is Contour
+// Integration's milestone that wrote it.
+//
 // `@cas/expr`'s own `fToRational` already walks an AST over ℂ(z), but with floating `Complex`
 // coefficients: it *rounds* whatever it cannot represent. For M2 that is the wrong trade. The whole
 // value of the exact path is that a residue computed in ℚ(i) is a decision rather than an estimate,
@@ -9,7 +13,8 @@
 // So this refuses instead, with a reason, and the caller falls back to the numeric path it already
 // has. Refusal is the common case, not the error case: `sin(z)/z`, `exp(1/z)` and every
 // transcendental in the gallery land here.
-import { Frac, Gauss, QiPoly } from "@cas/exact";
+import { Frac, Gauss } from "./gaussian.js";
+import { QiPoly } from "./qiPoly.js";
 import type { Node } from "@cas/expr";
 
 export interface ExactRational {

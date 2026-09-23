@@ -33,11 +33,10 @@
 //
 // and `Res_w` is exactly what `exactPolesOf` already computes. E1: `Res_w = 1`, `ρ = −1`, giving
 // `−e^{iπa}` — the record's own expression. E2 at `ρ = i`: `Res_w = 1`, giving `−i·e^{−πξ/2}`.
-import { Frac, Gauss, QiPoly, SqrtExt } from "@cas/exact";
+import { Frac, Gauss, QiPoly, SqrtExt, toExactRational } from "@cas/exact";
 import { fracCmp } from "./bounds/ratBound.js";
 import { exact, type Certificate } from "@cas/rigor";
 import type { Node } from "@cas/expr";
-import { toExactRational } from "./exactRational.js";
 import { splitFactors } from "./exponentialFactor.js";
 import { exactPolesOf } from "./algebraic.js";
 import { numericRoots } from "./poles.js";

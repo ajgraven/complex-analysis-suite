@@ -9,7 +9,7 @@
 import { fixtureLabel, isVariant } from "../../families/describe.js";
 import { citationLine } from "../../families/describe.js";
 import { identityLatex, identityText, targetLatex } from "../../families/latex.js";
-import { h } from "../dom.js";
+import { h } from "@cas/ui";
 import { math, mathText } from "../math.js";
 import { card, disclosure, nothing, type Card } from "./card.js";
 import { drillMask } from "../drillPanel.js";

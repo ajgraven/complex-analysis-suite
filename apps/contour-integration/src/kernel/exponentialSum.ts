@@ -27,11 +27,11 @@ import {
   seriesInverse,
   seriesMul,
   splitOrder,
+  simplestRational,
 } from "@cas/exact";
 import type { Node } from "@cas/expr";
-// `exactRational` owns the policy for reading a float literal as the rational it was meant to be;
-// there is no cycle, since it imports nothing from here.
-import { simplestRational } from "./exactRational.js";
+// `simplestRational` (now in @cas/exact, ADR-0047) owns the policy for reading a float literal as the
+// rational it was meant to be.
 
 export interface ExpRationalTerm {
   /** The coefficient `λ` in `e^{λz}`. Zero is the purely rational part. */

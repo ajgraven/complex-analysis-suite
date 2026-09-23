@@ -18,10 +18,9 @@
 // than the exponential basis (`π²` has no seat there, which is the same wall the log families met);
 // it is M5.7's subject. Here the collision is DETECTED and reported by name, so a sum can never
 // quietly omit or mis-weight the one term the record is usually about.
-import { Frac, Gauss, QiPoly } from "@cas/exact";
+import { Frac, Gauss, QiPoly, toExactRational } from "@cas/exact";
 import type { Node } from "@cas/expr";
 import { exact, refuse, type Certificate } from "@cas/rigor";
-import { toExactRational } from "./exactRational.js";
 import { splitFactors } from "./exponentialFactor.js";
 import { formatGauss } from "./formatExact.js";
 

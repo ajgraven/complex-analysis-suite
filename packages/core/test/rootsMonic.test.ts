@@ -4,6 +4,9 @@ import {
   trimPoly,
   rootsMonic,
   rootsMonicClosure,
+  cauchyBound,
+  polishRoot,
+  polishRoots,
   type ComplexTuple,
 } from "../src/index.js";
 
@@ -60,5 +63,42 @@ describe("rootsMonic (app-facing Durand–Kerner plumbing)", () => {
     expect(rootsMatch(roots ?? [], [[-1, 0], [1, 0]])).toBe(true);
     // A pMonic that is always non-finite ⇒ bailOnNonFinite ⇒ null (not a certified garbage root).
     expect(rootsMonicClosure(() => [Infinity, 0], 2)).toBeNull();
+  });
+});
+
+describe("cauchyBound + polishRoot (lifted from @cas/faber and Contour Integration, ADR-0047)", () => {
+  const cubic: ComplexTuple[] = [[-6, 0], [11, 0], [-6, 0], [1, 0]]; // (z−1)(z−2)(z−3)
+
+  it("bounds every root, and scales with the leading coefficient", () => {
+    expect(cauchyBound(cubic)).toBe(12); // 1 + max(6, 11, 6)
+    expect(cauchyBound(cubic.map(([re, im]) => [2 * re, 2 * im] as ComplexTuple))).toBe(12);
+    const p: ComplexTuple[] = [[1, 2], [-3, 0.5], [0.25, -1], [2, 1]];
+    const R = cauchyBound(p);
+    for (const r of rootsMonic(p)) expect(Math.hypot(r[0], r[1])).toBeLessThanOrEqual(R);
+  });
+
+  it("claims nothing for a zero leading coefficient", () => {
+    expect(cauchyBound([[1, 0], [0, 0]])).toBe(1);
+    expect(cauchyBound([])).toBe(1);
+  });
+
+  it("converges quadratically and stops once the step is below the floor", () => {
+    const z = polishRoot(cubic, [1.1, 0.05]);
+    expect(Math.hypot(z[0] - 1, z[1])).toBeLessThan(1e-15);
+    // One step from 1.1 is not yet there; the step count is honoured.
+    const one = polishRoot(cubic, [1.1, 0], { steps: 1 });
+    expect(Math.abs(one[0] - 1)).toBeGreaterThan(1e-4);
+  });
+
+  it("never steps on a vanishing derivative, and never leaves the finite numbers", () => {
+    const zsq1: ComplexTuple[] = [[-1, 0], [0, 0], [1, 0]]; // z² − 1: p′(0) = 0
+    expect(polishRoot(zsq1, [0, 0])).toEqual([0, 0]);
+    const huge: ComplexTuple[] = [[1e308, 0], [0, 0], [1, 0]]; // the step overflows at a tiny z
+    expect(polishRoot(huge, [1e-160, 0], { derivativeFloor: 0 })).toEqual([1e-160, 0]);
+  });
+
+  it("polishRoots maps polishRoot over every estimate", () => {
+    const got = polishRoots(cubic, [[0.9, 0], [2.1, 0], [2.95, 0]]);
+    [1, 2, 3].forEach((r, i) => expect(Math.abs(got[i][0] - r)).toBeLessThan(1e-14));
   });
 });

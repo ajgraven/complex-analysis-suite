@@ -54,7 +54,7 @@ import {
 } from "./drill.js";
 import { type TemplateId } from "./templates.js";
 import { constraintLabel, disposalLabel, templateLabel } from "../engine/vocabulary.js";
-import { h, type Child, type Desc } from "./dom.js";
+import { h, type Child, type Desc } from "@cas/ui";
 import { mathPlain, mathSpoken, mathText } from "./math.js";
 import type { Session } from "./session.js";
 import { card, type CardContext } from "./cards/card.js";

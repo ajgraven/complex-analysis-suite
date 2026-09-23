@@ -1,7 +1,8 @@
 // The keyed builder: a description of the DOM, and a patch that reconciles it.
 //
-// M8 step 1.1, plan §4.0. About 120 lines and NO dependency — ADR-0007 admits no framework without
-// a second consumer, and one app's shell is one consumer.
+// Contour Integration's M8 step 1.1, plan §4.0. About 120 lines and NO dependency — ADR-0007 admitted
+// no framework without a second consumer, and one app's shell was one consumer; Polynomial Root
+// Analysis is the second, so it moved here (ADR-0047).
 //
 // **What it exists to make impossible.** The old shell rebuilds a card with `replaceChildren` and
 // then discovers what that costs: M7.2's sweep found that rebuilding the contour card on a mouse

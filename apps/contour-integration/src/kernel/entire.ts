@@ -28,7 +28,7 @@
 // (`instantiate.ts`), so the constant case is the one that actually occurs.
 import type { Node } from "@cas/expr";
 import { exact, unknown, type Certificate } from "@cas/rigor";
-import { toExactRational } from "./exactRational.js";
+import { toExactRational } from "@cas/exact";
 
 export type EntireDecision =
   | { readonly entire: true; readonly certificate: Certificate }

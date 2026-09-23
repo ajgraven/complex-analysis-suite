@@ -18,7 +18,7 @@ import { buildDerivation } from "../src/engine/derivation.js";
 import { buildSteps } from "../src/engine/steps.js";
 import { circleTemplate } from "../src/engine/contour/templates.js";
 import { compile, defaultState, offeredCorpus, resolveState, type ShellState } from "../src/shell/state.js";
-import { patch } from "../src/shell/dom.js";
+import { patch } from "@cas/ui";
 import { render } from "../src/shell/render.js";
 import { defaultSession, type Session } from "../src/shell/session.js";
 import type { ShellActions } from "../src/shell/cards/card.js";

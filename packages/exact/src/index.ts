@@ -21,6 +21,12 @@
 //                   content-clearing — eliminate a variable between two curves (correspondence cusp locus;
 //                   CD's multiplier-specialization).
 //   - render.ts   : shared coefficient/polynomial string formatting.
+//   - exactRational.ts: an @cas/expr AST read EXACTLY as num/den over ℚ(i), or refused with a reason, and
+//                   `simplestRational` (the simplest rational a double literal could have come from). Moved
+//                   from Contour Integration when Polynomial Root Analysis became its second consumer
+//                   (ADR-0047) — the one module here that reads an AST, hence the type-only @cas/expr edge.
+//   - smith.ts    : Smith's (1970) root-inclusion discs computed EXACTLY on dyadic approximations, with the
+//                   exact disjointness / membership tests and a rational √ upper bound (ADR-0047).
 // Consumers: apps/correspondences (deleted-correspondence curve + cusp locus, #16) and — from #17 —
 // apps/complex-dynamics (dynatomic / Gleason / multiplier component data).
 export { bigGcd, Frac, Gauss } from "./gaussian.js";
@@ -38,3 +44,20 @@ export { arctanBounds, piBounds, piLower, piUpper, type RationalInterval } from 
 export { BiPoly } from "./biPoly.js";
 export { bareissDet, discriminant, integerPrimitive, primitivePoly, resultant } from "./resultant.js";
 export { renderBiPolyText, renderGaussMag, renderQiPolyText } from "./render.js";
+export {
+  simplestRational,
+  toExactRational,
+  type ExactRational,
+  type ExactRationalResult,
+} from "./exactRational.js";
+export {
+  compareFrac,
+  discsDisjoint,
+  fracOfDouble,
+  gaussOfDoubles,
+  inDisc,
+  smithDiscs,
+  SmithDisc,
+  sqrtUpperBound,
+  type SmithResult,
+} from "./smith.js";

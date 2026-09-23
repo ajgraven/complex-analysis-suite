@@ -19,13 +19,12 @@
 // exact value with no corroboration rather than with a misleading one. D3's `wedge-disagreement`
 // trap describes the cross-check that IS available for a keyhole (the same integral by the `2π/n`
 // wedge), and it is a job for M4.2e onward, not a float comparison.
-import { Frac, Gauss, SqrtExt } from "@cas/exact";
+import { Frac, Gauss, SqrtExt, toExactRational } from "@cas/exact";
 import { LATEX } from "../kernel/notation.js";
 import { assembleVerdict, exact, refuse, type Certificate } from "@cas/rigor";
 import { ExpSum, formatTwoPiIExpSum } from "../kernel/expSum.js";
 import { branchResidue, type PowerFactor } from "../kernel/branchResidue.js";
 import { asCyclotomic, cyclotomicResidueSum } from "../kernel/cyclotomic.js";
-import { toExactRational } from "../kernel/exactRational.js";
 import type { Node } from "@cas/expr";
 import type { PoleReport } from "../kernel/poles.js";
 import type { ContourIntegral } from "./contour/integrate.js";

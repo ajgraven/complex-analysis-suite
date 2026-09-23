@@ -21,7 +21,7 @@ import {
 } from "../src/shell/state.js";
 import { encodeShell } from "../src/shell/viewState.js";
 import { shareRefusal } from "../src/shell/errors.js";
-import { patch } from "../src/shell/dom.js";
+import { patch } from "@cas/ui";
 import { render } from "../src/shell/render.js";
 import { defaultSession, type Session } from "../src/shell/session.js";
 import type { ShellActions } from "../src/shell/cards/card.js";

@@ -13,7 +13,7 @@ import { describe, expect, it } from "vitest";
 
 import { circleTemplate } from "../src/engine/contour/templates.js";
 import { compile, defaultState, resolveState, type ShellState } from "../src/shell/state.js";
-import { patch } from "../src/shell/dom.js";
+import { patch } from "@cas/ui";
 import { render } from "../src/shell/render.js";
 import { argumentOf, stepIndex } from "../src/shell/argument.js";
 import { defaultSession, type Session, type SweepRow } from "../src/shell/session.js";

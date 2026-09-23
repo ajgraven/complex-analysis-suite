@@ -2,8 +2,8 @@
 // Newton polish. Ascending-power `Cx[]` in (index i = coeff of ζ^i). Monomial-basis root-finding is
 // ill-conditioned at high degree, so on non-convergence we return `converged:false` (callers surface a
 // warning) rather than emitting garbage. Ported verbatim from the QD app's faber-analysis.mjs.
-import { Complex, makeDurandKerner, objAlgebra } from "@cas/core";
-import type { Cx } from "@cas/core";
+import { Complex, cauchyBound, makeDurandKerner, objAlgebra, polishRoot } from "@cas/core";
+import type { ComplexTuple, Cx } from "@cas/core";
 
 const C = Complex;
 // Durand–Kerner over the {re,im} algebra — the same kernel QD's other root-finders and CD use.
@@ -40,23 +40,14 @@ export function polynomialRoots(
   const lead = a[d];
   const mon = a.map((co) => C.div(co, lead)); // ascending; mon[d] = 1
 
-  // Cauchy root bound R = 1 + max_{k<d} |a_k| (monic).
-  let maxAbs = 0;
-  for (let k = 0; k < d; k++) {
-    const r = Math.hypot(mon[k].re, mon[k].im);
-    if (r > maxAbs) maxAbs = r;
-  }
-  const R = 1 + maxAbs;
+  // Cauchy root bound R = 1 + max_{k<d} |a_k| (monic, so |a_d| = 1 and the bound is exactly this).
+  const monT: ComplexTuple[] = mon.map((c) => [c.re, c.im]);
+  const R = cauchyBound(monT);
 
   const evalP = (pt: Cx): Cx => {
     let acc: Cx = { re: mon[d].re, im: mon[d].im };
     for (let k = d - 1; k >= 0; k--) acc = C.add(C.mul(acc, pt), mon[k]);
     return acc;
-  };
-  const evalDP = (pt: Cx): Cx => {
-    let der: Cx = { re: 0, im: 0 };
-    for (let k = d; k >= 1; k--) der = C.add(C.mul(der, pt), C.scale(mon[k], k));
-    return der;
   };
 
   // Initial guesses on a circle of radius R, angle 2πj/d + 0.4. The phase offset breaks symmetry so no
@@ -73,16 +64,12 @@ export function polynomialRoots(
   const converged = dk.converged;
   const iter = dk.iterations;
 
+  // Newton polish on the monic form (≤ 8 steps, stop below 1e-15) — @cas/core's polishRoot, lifted
+  // from this loop and Contour Integration's copy (ADR-0047).
   if (polish) {
     for (let j = 0; j < d; j++) {
-      for (let s = 0; s < 8; s++) {
-        const pj = evalP(z[j]);
-        const der = evalDP(z[j]);
-        if (C.abs2(der) < 1e-300) break;
-        const step = C.div(pj, der);
-        z[j] = C.sub(z[j], step);
-        if (Math.hypot(step.re, step.im) < 1e-15) break;
-      }
+      const [re, im] = polishRoot(monT, [z[j].re, z[j].im]);
+      z[j] = { re, im };
     }
   }
 

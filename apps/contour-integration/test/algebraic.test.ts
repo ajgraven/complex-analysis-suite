@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { Frac, Gauss, QiPoly, SqrtExt } from "@cas/exact";
+import { Frac, Gauss, QiPoly, SqrtExt, toExactRational } from "@cas/exact";
 import { parse } from "@cas/expr";
 import { evalSqrt, exactPolesOf, splitRoots, weightedSum } from "../src/kernel/algebraic.js";
-import { toExactRational } from "../src/kernel/exactRational.js";
 import { rootsOfQiPoly } from "./helpers/rootsOfQiPoly.js";
 
 const g = (re: number, im = 0): Gauss => new Gauss(Frac.of(BigInt(re)), Frac.of(BigInt(im)));

@@ -41,7 +41,7 @@
 // whose contour is clockwise. Until then `σ` is MEASURED rather than assumed — by the same exact-sign
 // predicate every other winding number uses — and it is derived once and used for both the arithmetic
 // and the sentence, so the two cannot drift apart.
-import { Frac, Gauss, SqrtExt } from "@cas/exact";
+import { Frac, Gauss, SqrtExt, toExactRational } from "@cas/exact";
 import { LATEX } from "../kernel/notation.js";
 import { constraintLabel } from "./vocabulary.js";
 import { assembleVerdict, exact, refuse, type Certificate } from "@cas/rigor";
@@ -49,7 +49,6 @@ import type { Node } from "@cas/expr";
 import { ExpSum, formatExpSum, formatTwoPiIExpSum } from "../kernel/expSum.js";
 import { branchResidueAtInfinity, residueAtInfinityOf } from "../kernel/atInfinity.js";
 import { multiBranchResidue, type MultiPowerFactor } from "../kernel/branchResidue.js";
-import { toExactRational } from "../kernel/exactRational.js";
 import { formatFrac, formatSqrtExt } from "../kernel/formatExact.js";
 import type { BranchChoice } from "../kernel/branch/model.js";
 import type { Cx, Resolved } from "../kernel/geom.js";

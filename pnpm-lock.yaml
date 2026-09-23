@@ -749,6 +749,10 @@ importers:
         version: 2.1.9(@types/node@26.1.1)(@vitest/browser@2.1.9)(jsdom@26.1.0)(msw@2.15.0(@types/node@26.1.1)(typescript@5.9.3))(terser@5.48.0)
 
   packages/exact:
+    dependencies:
+      '@cas/expr':
+        specifier: workspace:*
+        version: link:../expr
     devDependencies:
       '@eslint/js':
         specifier: ^9.17.0

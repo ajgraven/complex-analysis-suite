@@ -25,7 +25,7 @@ import { constraintLabel, paramSymbol, tagLabel } from "../../engine/vocabulary.
 import { argumentOf, stepIndex } from "../argument.js";
 import { drillMask } from "../drillPanel.js";
 import { fmt, fmtCx } from "../../kernel/decimal.js";
-import { h, type Child, type Desc } from "../dom.js";
+import { h, type Child, type Desc } from "@cas/ui";
 import { scrub } from "../scrub.js";
 import { planSweep } from "../sweep.js";
 import type { Param } from "../../engine/contour/model.js";

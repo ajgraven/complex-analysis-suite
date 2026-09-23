@@ -6,7 +6,7 @@
 // to become what the residue theorem actually says — `Σₖ n(γ,zₖ)·Res` — with the sum as the special
 // case `wₖ ≡ 1`.
 import { describe, expect, it } from "vitest";
-import { Frac } from "@cas/exact";
+import { Frac, toExactRational } from "@cas/exact";
 import { makeComplexFn, parse } from "@cas/expr";
 import type { Cx } from "../src/kernel/geom.js";
 import {
@@ -15,7 +15,6 @@ import {
   cyclotomicRoots,
   cyclotomicWeightedSum,
 } from "../src/kernel/cyclotomic.js";
-import { toExactRational } from "../src/kernel/exactRational.js";
 import { findPoles } from "../src/kernel/poles.js";
 import { analyse } from "../src/engine/analyse.js";
 import { applyResidueTheorem } from "../src/engine/residueTheorem.js";

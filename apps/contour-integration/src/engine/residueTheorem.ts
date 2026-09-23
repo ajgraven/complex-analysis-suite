@@ -11,14 +11,13 @@
 // machinery — exact ℚ(i) arithmetic on one side, floating Gauss–Legendre panels on the other —
 // arriving at the same number is strong evidence that both are right, and a disagreement is a bug
 // report. This module is where they are compared, and a disagreement is reported as one.
-import { Frac, Gauss, SqrtExt } from "@cas/exact";
+import { Frac, Gauss, SqrtExt, toExactRational } from "@cas/exact";
 import { LATEX } from "../kernel/notation.js";
 import { assembleVerdict, bound, estimate, exact, refuse, type Certificate, type Verdict } from "@cas/rigor";
 import type { Node } from "@cas/expr";
 import type { Cx } from "../kernel/geom.js";
 import { ExpSum, formatTwoPiIExpSum, weightedExpSum } from "../kernel/expSum.js";
 import { asCyclotomic, cyclotomicWeightedSum } from "../kernel/cyclotomic.js";
-import { toExactRational } from "../kernel/exactRational.js";
 import type { RatPi } from "../kernel/ratPi.js";
 import type { PoleReport } from "../kernel/poles.js";
 import type { ContourIntegral } from "./contour/integrate.js";

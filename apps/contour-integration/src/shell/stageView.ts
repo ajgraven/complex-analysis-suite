@@ -38,7 +38,7 @@ import { drawBranchHandles, drawContour, drawPenPath, type InkOptions } from "..
 import { GLStage } from "../ui/stage/glStage.js";
 import { drawnContour } from "./state.js";
 import type { ShellState, StateResolution } from "./state.js";
-import { h, patch } from "./dom.js";
+import { h, patch } from "@cas/ui";
 import { readout } from "./readout.js";
 import { mathSpoken, mathText } from "./math.js";
 import type { Session } from "./session.js";

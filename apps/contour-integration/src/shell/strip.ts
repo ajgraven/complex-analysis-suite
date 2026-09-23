@@ -22,7 +22,7 @@
 // object identity would therefore miss on every tick and re-walk the contour sixty times a second:
 // that is M5.1's finding (the old shell relinking its GLSL every frame, its guard comparing identity
 // against a product rebuilt on every resolve) in the one other place the shape recurs.
-import { attachCanvasA11y } from "@cas/ui";
+import { attachCanvasA11y, h, patch } from "@cas/ui";
 import { integrandEmptyClause } from "./errors.js";
 
 import { accumulateForIntegral, type Accumulation, type AccumulationStep } from "../engine/contour/accumulate.js";
@@ -36,7 +36,6 @@ import { drawnContour, showStepDetail } from "./state.js";
 import { drillMask } from "./drillPanel.js";
 import { degrees, stepDetail } from "./stepDetail.js";
 import type { ShellState, StateResolution } from "./state.js";
-import { h, patch } from "./dom.js";
 import { fmtApprox, fmtNum } from "./format.js";
 import { fmtCx } from "../kernel/decimal.js";
 import { mathText } from "./math.js";

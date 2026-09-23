@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { Frac, Gauss, QiPoly } from "@cas/exact";
+import { Frac, Gauss, QiPoly, simplestRational, toExactRational } from "@cas/exact";
 import { parse } from "@cas/expr";
-import { simplestRational, toExactRational } from "../src/kernel/exactRational.js";
 import { findPoles } from "../src/kernel/poles.js";
 import {
   exactPoleAt,

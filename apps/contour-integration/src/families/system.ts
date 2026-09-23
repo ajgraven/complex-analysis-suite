@@ -6,10 +6,9 @@
 // own unknowns fails on the SHAPE of its contour, not on the value of any particular instance, and
 // the goldens enter only because a parameter can reach into a coefficient (B1's `sgn(a)` flips an
 // orientation, and with it a sign in `M`).
-import { Frac, Gauss } from "@cas/exact";
+import { Frac, Gauss, simplestRational } from "@cas/exact";
 import { evaluate, parse, type Node } from "@cas/expr";
 import { crossCheckNumeric, evaluatorBindings } from "./crossCheck.js";
-import { simplestRational } from "../kernel/exactRational.js";
 import type { Bindings, Family, FamilyPiece } from "./schema.js";
 import {
   realifyRows,

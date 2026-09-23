@@ -15,6 +15,12 @@ the Aberth question is decided by measurement there).
 
 ## Done
 
+- 2026-09-23 — **PRA-1.1, the lifts.** `cauchyBound` + `polishRoot(s)` into `@cas/core` from
+  `@cas/faber` and Contour Integration (both shown **bit-identical** by fingerprinting
+  `polynomialRoots` and `findPoles` before and after); `toExactRational`/`simplestRational` moved
+  (`git mv`) into `@cas/exact`; `smithDiscs` + exact disc tests new in `@cas/exact`; the keyed
+  builder moved (`git mv`) into `@cas/ui` with its eleven tests.
+
 - 2026-09-23 — **PRA-0.** Owner accepted ADR-0047 and the three PLAN §12 decisions. The app
   (`apps/polynomial-root-analysis`, port 5185, `@cas/ui` only) mounts a header, a notice and two empty
   named panes inside `runWithFatalBoundary`; wired into `vitest.workspace.ts`, the test census,
@@ -30,6 +36,25 @@ the Aberth question is decided by measurement there).
   `docs/design/future-app-ideas.md` as ▶ 8. No code touched.
 
 ## Findings (things learned while executing; each names its step)
+
+- _(PRA-1.1)_ **`smithDiscs` in `Frac` arithmetic took 8.2 s at degree 24**, three orders over the
+  8 ms budget: `Frac.of` reduces by gcd on every operation. Rewritten over scaled Gaussian integers
+  (one common denominator per side, homogenised Horner, no reduction inside the loops) it took
+  18–45 ms; the remaining cost was the 276 pairwise disjointness tests on ~6000-bit products, so a
+  log₂-bracket prefilter decides every pair farther than a relative 1e-6 from touching and only the
+  rest reach the exact test. **0.8–1.8 ms at degree 24** (unity, random, and 1e-30-scaled roots),
+  inside budget, so discs are computed per frame. The prefilter's two margins were each mutated in
+  both directions; it took a bisection to the exact touching threshold and an EXACTLY touching pair
+  (`z² − 1` about −1/3 and 1, ρ = 4/3) to kill them — the random corpus never came close enough.
+- _(PRA-1.1)_ **The disjointness test is exact and tight**, not PLAN/DESIGN's AM–GM
+  `|zᵢ − zⱼ|² > 2(sᵢ + sⱼ)`: `δ² − sᵢ − sⱼ > 0 ∧ (δ² − sᵢ − sⱼ)² > 4sᵢsⱼ` is the same inequality
+  squared, and the AM–GM form would merge discs a factor √2 apart (tested: radii 1 and 0 at distance
+  √1.01 are disjoint, which AM–GM cannot see).
+- _(PRA-1.1)_ **`@cas/exact` gains its first package edge, a type-only `@cas/expr`**, because
+  `toExactRational` reads an AST. `@cas/expr` has no `@cas` dependencies, so the DAG stays acyclic.
+- _(PRA-1.1)_ **The `animate.ts` lift is deferred to PRA-3**, where this app first animates
+  (running a loop, playing a motion). Nothing in PRA-1 moves on its own, so lifting it now would be
+  extraction ahead of a consumer, which the owner's approval did not ask for.
 
 - _(PRA-0, re-verifying PLAN against the tree)_ **Aberth lives in
   `apps/polynomial-roots/src/engine/aberth.ts`**, not the `src/engine/roots/` PLAN §6 names.

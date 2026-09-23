@@ -26,7 +26,7 @@ import { constraintLabel } from "../../engine/vocabulary.js";
 import { rowKeys } from "../../engine/contrast.js";
 import { drillMask } from "../drillPanel.js";
 import { fmtApprox, fmtNum } from "../format.js";
-import { h, type Child, type Desc } from "../dom.js";
+import { h, type Child, type Desc } from "@cas/ui";
 import { math, mathText } from "../math.js";
 import { card, disclosure, nothing, type Card, type CardContext } from "./card.js";
 

@@ -26,7 +26,7 @@ import { changesAt, contrastStrip, ladder } from "../src/shell/contrasts.js";
 import { constraintLabel } from "../src/engine/vocabulary.js";
 import { circleTemplate } from "../src/engine/contour/templates.js";
 import { compile, defaultState, resolveState, type ShellState } from "../src/shell/state.js";
-import { patch } from "../src/shell/dom.js";
+import { patch } from "@cas/ui";
 import { defaultSession, type Session } from "../src/shell/session.js";
 import type { CardContext, ShellActions } from "../src/shell/cards/card.js";
 

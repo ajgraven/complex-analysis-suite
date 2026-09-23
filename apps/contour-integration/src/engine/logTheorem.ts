@@ -17,12 +17,11 @@
 // there is no single power to divide out, and the value comes back as an element of ℚ(i)(π) —
 // `exactInPi` rather than `piUnits`. That is the same ring the family's `M` lives in, which is why
 // Pass 5 can solve the two together without leaving exact arithmetic.
-import { Gauss, Frac } from "@cas/exact";
+import { Gauss, Frac, toExactRational } from "@cas/exact";
 import { LATEX } from "../kernel/notation.js";
 import { assembleVerdict, exact, refuse, type Certificate } from "@cas/rigor";
 import { logResidue, type LogFactor } from "../kernel/logResidue.js";
 import { RatPi, formatRatPi } from "../kernel/ratPi.js";
-import { toExactRational } from "../kernel/exactRational.js";
 import type { Node } from "@cas/expr";
 import type { PoleReport } from "../kernel/poles.js";
 import type { ContourIntegral } from "./contour/integrate.js";

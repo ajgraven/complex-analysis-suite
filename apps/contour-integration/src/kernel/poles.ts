@@ -13,10 +13,9 @@
 // The exact path still uses the numeric one: floating roots make excellent **candidates**, and a
 // candidate is only promoted once the exact denominator vanishes there. Guess, then verify.
 import { tupleAlgebra, makeDurandKerner, type ComplexTuple } from "@cas/core";
-import { SqrtExt, type Frac } from "@cas/exact";
+import { SqrtExt, type Frac, toExactRational } from "@cas/exact";
 import { fToRational, type Node } from "@cas/expr";
 import { estimate, exact as exactCert, unknown, type Certificate } from "@cas/rigor";
-import { toExactRational } from "./exactRational.js";
 import { decideEntire, entireRefusal } from "./entire.js";
 import { asExponentialTimesRational } from "./exponentialFactor.js";
 import { asExponentialSum, isEntire, residueAtZero, type ExpRationalForm } from "./exponentialSum.js";

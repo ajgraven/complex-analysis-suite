@@ -83,3 +83,72 @@ export function rootsMonic(coeffs: readonly ComplexTuple[], residualTol = 1e-6):
   if (!roots) return [];
   return roots.filter((r) => tupleAlgebra.abs(pMonic(r)) <= residualTol);
 }
+
+/**
+ * Cauchy's root bound: every root of `p` (ascending coefficients) satisfies `|z| ≤ 1 + max_{k<n} |a_k/a_n|`.
+ * A zero leading coefficient returns 1 (no bound is claimed; callers seed on the unit circle).
+ *
+ * Lifted on the ADR-0007 second-consumer rule from the two private copies in `@cas/faber`'s
+ * `polynomialRoots` and Contour Integration's `kernel/poles.ts` (ADR-0047, PRA-1), with Polynomial
+ * Root Analysis the third. `@cas/faber` passes its monic form, where `|a_n| = 1` and the bound is
+ * bit-identical to the one it computed inline.
+ */
+export function cauchyBound(p: readonly ComplexTuple[]): number {
+  const n = p.length - 1;
+  const lead = n >= 0 ? tupleAlgebra.abs(p[n]) : 0;
+  if (lead === 0) return 1;
+  let m = 0;
+  for (let k = 0; k < n; k++) m = Math.max(m, tupleAlgebra.abs(p[k]) / lead);
+  return 1 + m;
+}
+
+export interface PolishOptions {
+  /** Newton steps at most. Default 8. */
+  readonly steps?: number;
+  /** Stop once a step's modulus falls below this. Default 1e-15; 0 never stops early. */
+  readonly stopBelow?: number;
+  /** Stop when `|p′(z)|²` is at or below this (the step would be meaningless). Default 1e-300. */
+  readonly derivativeFloor?: number;
+}
+
+/**
+ * Newton-polish one root estimate `z0` of `p` (ascending coefficients). A step that would leave the
+ * finite numbers is not taken, so a polish never turns a finite estimate into NaN. The arithmetic is
+ * the naive complex quotient `v·conj(d)/|d|²` both lifted copies used, so each reproduces bit for bit
+ * (`@cas/faber`: the defaults; Contour Integration: `{ steps: 3, stopBelow: 0, derivativeFloor: 0 }`).
+ */
+export function polishRoot(
+  p: readonly ComplexTuple[],
+  z0: ComplexTuple,
+  opts: PolishOptions = {},
+): ComplexTuple {
+  const steps = opts.steps ?? 8;
+  const stopBelow = opts.stopBelow ?? 1e-15;
+  const floor = opts.derivativeFloor ?? 1e-300;
+  const dp: ComplexTuple[] = [];
+  for (let k = 1; k < p.length; k++) dp.push([p[k][0] * k, p[k][1] * k]);
+  if (dp.length === 0) return z0;
+
+  let z = z0;
+  for (let s = 0; s < steps; s++) {
+    const v = evalPolyHorner(p, z);
+    const d = evalPolyHorner(dp, z);
+    const d2 = d[0] * d[0] + d[1] * d[1];
+    if (d2 <= floor) break;
+    const step: ComplexTuple = [(v[0] * d[0] + v[1] * d[1]) / d2, (v[1] * d[0] - v[0] * d[1]) / d2];
+    const next: ComplexTuple = [z[0] - step[0], z[1] - step[1]];
+    if (!Number.isFinite(next[0]) || !Number.isFinite(next[1])) break;
+    z = next;
+    if (Math.hypot(step[0], step[1]) < stopBelow) break;
+  }
+  return z;
+}
+
+/** {@link polishRoot} applied to every estimate. */
+export function polishRoots(
+  p: readonly ComplexTuple[],
+  roots: readonly ComplexTuple[],
+  opts: PolishOptions = {},
+): ComplexTuple[] {
+  return roots.map((r) => polishRoot(p, r, opts));
+}

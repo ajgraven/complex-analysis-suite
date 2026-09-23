@@ -26,11 +26,10 @@
 //
 // The differential cross-check against the numeric evaluator is kept from `exactConstant`, and for
 // the same reason: the two share no arithmetic, so agreement is evidence rather than a restatement.
-import { Frac, Gauss, SqrtExt } from "@cas/exact";
+import { Frac, Gauss, SqrtExt, simplestRational } from "@cas/exact";
 import { type Node } from "@cas/expr";
 import { ExpSum } from "../kernel/expSum.js";
 import { Exponent } from "../kernel/exponent.js";
-import { simplestRational } from "../kernel/exactRational.js";
 import { crossCheckNumeric } from "./crossCheck.js";
 import type { Bindings } from "./schema.js";
 

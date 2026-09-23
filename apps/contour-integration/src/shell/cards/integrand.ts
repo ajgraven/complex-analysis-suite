@@ -14,7 +14,7 @@ import { toLatex } from "@cas/expr";
 import { declaredOrder } from "../../shell/state.js";
 import { PRESETS } from "../../shell/presets.js";
 import { contourIntegrandLatex } from "../../families/latex.js";
-import { h } from "../dom.js";
+import { h } from "@cas/ui";
 import { math, mathText } from "../math.js";
 import { card, type Card } from "./card.js";
 import { integrandEmpty } from "../errors.js";

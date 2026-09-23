@@ -26,7 +26,7 @@ import {
   withParam,
   type ShellState,
 } from "../src/shell/state.js";
-import { patch } from "../src/shell/dom.js";
+import { patch } from "@cas/ui";
 import { mathSpoken } from "../src/shell/math.js";
 import { fmt } from "../src/kernel/decimal.js";
 import { render } from "../src/shell/render.js";

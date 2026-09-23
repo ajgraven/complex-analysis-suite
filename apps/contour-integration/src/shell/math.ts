@@ -12,7 +12,7 @@
 // stray dollar swallows the rest of a sentence.
 import katex from "katex";
 
-import { h, type Desc } from "./dom.js";
+import { h, type Desc } from "@cas/ui";
 
 /**
  * LaTeX source → KaTeX's HTML, **bounded**.
