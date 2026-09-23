@@ -71,6 +71,15 @@ export function paintDragon(points: Float64Array, layout: InsetLayout): Uint32Ar
   return hits;
 }
 
+/**
+ * Coverage for a pixel the cloud hit `n` times — the ramp, as a function rather than a line inside the
+ * canvas half, so the node gate can reach it. It is what makes the frame carry one colour per distinct
+ * count: a constant would paint a flat silhouette and lose the density the picture is about.
+ */
+export function cloudAlpha(hits: number): number {
+  return hits <= 0 ? 0 : Math.min(1, 0.24 + 0.16 * Math.log2(1 + hits));
+}
+
 /** How many pixels the cloud lit, and the busiest one — the numbers the description quotes. */
 export function inkStats(hits: Uint32Array): { lit: number; peak: number } {
   let lit = 0;
@@ -159,7 +168,7 @@ export function drawInset(
   const ink = [0x8f, 0xd0, 0xff];
   for (let i = 0; i < hits.length; i++) {
     // A per-pixel count into coverage, so a dense fold reads as solid and a single stray point shows.
-    const a = hits[i] === 0 ? 0 : Math.min(1, 0.24 + 0.16 * Math.log2(1 + hits[i]));
+    const a = cloudAlpha(hits[i]);
     for (let c = 0; c < 3; c++) data[4 * i + c] = Math.round(bg[c] + (ink[c] - bg[c]) * a);
     data[4 * i + 3] = 255;
   }

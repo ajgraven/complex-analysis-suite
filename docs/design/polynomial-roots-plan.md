@@ -686,6 +686,26 @@ pass where the stage changed. Sizes: *S* / *M* / *L*.
   > about the root and not about where the reader clicked: seeding at `3` on a prefix whose roots are
   > inside is not an error, because Newton walks in. The refusal needs a polynomial whose root really is
   > out, which is what the test uses.
+  >
+  > **Sweep: 38 mutants, 38 killed, no survivors and no equivalents.** Four survived the first pass and
+  > every one bought a test. **A COMPLEX alphabet was missing from the corpus**: over a real alphabet the
+  > imaginary half of the shift `a·z^k` is identically zero, so a sign error there is invisible on
+  > Littlewood, `{0,1}`, `{−1,0,1}` and `{−n…n}` alike — every preset the file used. The fourth roots of
+  > unity are the cheapest alphabet that is not real. **`|α|^{n+1}` against `|α|^n`** changes only the
+  > reported magnification and the noise read from it, both of which the panel prints, so it is pinned
+  > directly rather than through a picture. **The `x ≥ width` half of the raster's bounds test is the one
+  > a far-away point cannot exercise** — a huge index falls off the end of a typed array and is dropped
+  > for free, while a point just past the RIGHT edge has a perfectly valid index one row down, so
+  > removing the check does not lose ink, it MOVES it. And the cloud's coverage ramp moved out of the
+  > canvas half into `cloudAlpha`, where the node gate can reach it: a constant paints a flat silhouette
+  > and would make the browser suite's "one colour per distinct count" meaningless. Measuring it found
+  > the ramp **saturates at 26 hits**; the inset's busiest pixel at Baez's point is 9, so the flat top is
+  > never reached there, and the test says where it would be.
+  >
+  > **PR-1's caption guard caught PR-4's own caption.** `seen` is the app's `≈` description of its own
+  > image and may not contain "theorem" or "proves" — those belong in `fact`, which carries a source —
+  > and both new places had put Bousch and Michelen–Yakir in the wrong field. The rule was written three
+  > milestones ago against exactly this.
 - **PR-5 — the gallery and the statistics · *M*.** Captioned entries (§2.3, all four groups), the
   zoom story as a scrubbable entry, the `{0, 1}` and `{−1, 0, 1}` bounds drawn as overlays, the
   statistics panel, two gallery permalinks in the a11y roster. Gate: every entry's state decodes,

@@ -33,8 +33,12 @@ describe("the attractor", () => {
     // The self-similarity is the DEFINITION, so the enumeration can be checked against it without any
     // reference value: the depth-d set must be exactly what applying every map to the depth-(d−1) set
     // produces. Nothing about the alphabet, the point or the loop order is assumed.
+    // **A COMPLEX alphabet is in the list on purpose.** Every preset the rest of this file uses is
+    // real, and over a real alphabet the imaginary half of the shift `a·z^k` is identically zero — so a
+    // sign error in that multiply is invisible on all of them. The fourth roots of unity are the
+    // cheapest alphabet that is not real.
     const z = { re: 0.42, im: 0.38 };
-    for (const a of [LITTLEWOOD, NEWMAN, A("trinary")]) {
+    for (const a of [LITTLEWOOD, NEWMAN, A("trinary"), A("roots-of-unity", { n: 4 })]) {
       const prev = dragonSet(a, z, 3);
       const here = dragonSet(a, z, 4);
       const want = new Set<string>();
@@ -239,6 +243,11 @@ describe("theorem mode: Michelen–Yakir, paired rather than Hausdorff", () => {
     const overlay = theoremOverlay(LITTLEWOOD, { digits, alpha, extend: 8 });
     if ("error" in overlay) throw new Error(overlay.error);
     expect(overlay.degree).toBeGreaterThanOrEqual(24);
+    // The magnification is `|α|^{n+1}` and not `|α|^n`: it is the scale the theorem's own `T_{n,α}`
+    // divides by, and it is what the panel prints as the zoom factor and what `noise` is read from.
+    const absAlpha = Math.hypot(alpha.re, alpha.im);
+    expect(overlay.magnification / Math.pow(absAlpha, overlay.degree + 1)).toBeCloseTo(1, 9);
+    expect(overlay.noise).toBeCloseTo(1e-16 / overlay.magnification, 30);
     expect(overlay.predicted.length / 2).toBe(256);
     expect(overlay.actual.length).toBe(overlay.predicted.length);
     const insetPixel = overlay.radius / 110;

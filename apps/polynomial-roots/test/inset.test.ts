@@ -3,7 +3,7 @@ import { compileAlphabet } from "../src/engine/alphabet";
 import type { Alphabet } from "../src/engine/alphabet";
 import { dragonBounds, dragonPlan, dragonSet } from "../src/engine/dragon";
 import type { DragonPlan, TheoremOverlay } from "../src/engine/dragon";
-import { inkStats, insetDescription, insetLayout, paintDragon, theoremDescription, toCanvas } from "../src/stage/inset";
+import { cloudAlpha, inkStats, insetDescription, insetLayout, paintDragon, theoremDescription, toCanvas } from "../src/stage/inset";
 
 const A = (preset: string): Alphabet => {
   const r = compileAlphabet({ preset } as never);
@@ -81,10 +81,32 @@ describe("the inset's arithmetic", () => {
     expect(row(Math.floor(layout.height / 2))).toBeGreaterThan(0);
   });
 
-  it("drops a point outside the frame instead of wrapping it", () => {
+  it("drops a point outside the frame instead of WRAPPING it onto the next row", () => {
+    // The `x >= width` half of the bounds test is the one a far-away point cannot exercise: a huge index
+    // falls off the end of the typed array and is dropped for free. What needs it is a point just past
+    // the RIGHT edge, whose index `y·width + x` is a perfectly valid pixel one row down — so removing
+    // the check does not lose ink, it MOVES it, which is worse.
     const layout = insetLayout([-1, -1, 1, 1], 20, 20, 0);
-    const hits = paintDragon(new Float64Array([0, 0, 50, 50, -50, -50]), layout);
-    expect(inkStats(hits).lit).toBe(1);
+    expect(inkStats(paintDragon(new Float64Array([0, 0, 50, 50, -50, -50]), layout)).lit).toBe(1);
+    const justPast = toCanvas(layout, 0, 0);
+    const wrapped = paintDragon(new Float64Array([(20 - justPast.x + 1) / layout.scale, 0]), layout);
+    expect(inkStats(wrapped).lit).toBe(0);
+  });
+
+  it("the cloud's coverage RAMPS with the count, so the picture carries its density", () => {
+    // A constant would paint a flat silhouette: the frame would then carry two colours whatever the
+    // cloud did, and the browser suite's "one colour per distinct count" would be meaningless.
+    expect(cloudAlpha(0)).toBe(0);
+    expect(cloudAlpha(1)).toBeCloseTo(0.4, 9);
+    expect(cloudAlpha(9)).toBeCloseTo(0.24 + 0.16 * Math.log2(10), 9);
+    // Strictly increasing until it SATURATES, which measurement puts at 26 hits — `0.24 + 0.16·log2(27)`
+    // is the first value past 1. The inset's own busiest pixel at Baez's point is 9, so the flat top is
+    // never reached there; a coarser frame or a denser cloud would reach it, and then the picture stops
+    // distinguishing densities rather than stops drawing.
+    for (let n = 1; n < 25; n++) expect(cloudAlpha(n + 1), String(n)).toBeGreaterThan(cloudAlpha(n));
+    expect(cloudAlpha(25)).toBeLessThan(1);
+    expect(cloudAlpha(26)).toBe(1);
+    expect(cloudAlpha(1e9)).toBe(1);
   });
 });
 
