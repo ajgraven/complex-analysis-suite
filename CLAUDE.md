@@ -1276,6 +1276,18 @@ extracted**: the honest-labelling guardrail above had no shared code at all, onl
 `.mjs` that each later app reimplemented. Branded types make `=` a compile error to write by hand.
 **QD is not migrated onto it**, so the suite has two rigor vocabularies on purpose.
 
+**In planning — Polynomial Root Analysis (the thirteenth app, [ADR-0046](docs/DECISIONS.md) *proposed*, 2026-09-22).**
+Roots and coefficients of one polynomial as two draggable point sets over a phase portrait; the Galois
+group over ℚ in three honest tiers (`=` Sₙ/Aₙ at any degree, `=` to degree 7 by Stauduhar descent, `≈`
+8–15 by statistics); loop monodromy by *certified* continuation (Smith discs in exact arithmetic on the
+dyadic floats, refused by name when a segment cannot be certified); Arnold's Abel–Ruffini proof as
+executed commutator loops. **Nothing is wired yet.** Read
+[`docs/polynomial-root-analysis/STATUS.md`](docs/polynomial-root-analysis/STATUS.md) first, then
+[`PLAN.md`](docs/polynomial-root-analysis/PLAN.md) and [`DESIGN.md`](docs/polynomial-root-analysis/DESIGN.md);
+the first code lands at PRA-0 after the owner's three decisions in PLAN §12. It widens `@cas/exact`
+(factorisation over ℤ, `𝔽ₚ[x]`, Smith discs) and extracts the plotter's monodromy stack into
+`@cas/monodromy` (ADR-0007, second consumer).
+
 Deferred / exploratory (not started): further correspondence families (circle-and-cardioid → cubic
 Chebyshev → general d:d), the remaining non-Laurent σ families (power-weighted PQD, log-weighted LQD),
 analytic branch continuation through cusps (uncertified — RISKS §3), and QD Schwarz df64 deep-zoom.

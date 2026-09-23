@@ -1,6 +1,6 @@
 # `apps/polynomial-root-analysis` — design spec
 
-> Companion to [`PLAN.md`](PLAN.md). PLAN says *what* and *in what order*; this says *how*: module
+> Companion to [`PLAN.md`](PLAN.md). PLAN says _what_ and _in what order_; this says _how_: module
 > layout, the core types, the verdict rules per card, the algorithms pass by pass, the data formats,
 > the worker protocol, the state/URL contract, the test corpus, and what is deliberately left open.
 > Status follows PLAN's (PROPOSED). Where a choice is provisional it is marked `⚠ decide at PRA-n`.
@@ -75,73 +75,120 @@ export type Ring = "C" | "R" | "Q";
 export type Cx = readonly [re: number, im: number];
 
 export interface Polynomial {
-  readonly degree: number;                 // 1 … 24
+  readonly degree: number; // 1 … 24
   readonly ring: Ring;
-  readonly source: "roots" | "coeffs";     // which float form is the truth right now
-  readonly lead: Cx;                       // aₙ; 1 unless typed otherwise; fixed by a drag
-  readonly coeffs: readonly Cx[];          // a₀ … aₙ  (ascending), derived when source === "roots"
-  readonly roots: readonly Cx[];           // r₁ … rₙ, derived when source === "coeffs" (tracked)
-  readonly labels: readonly number[];      // root identity across drags (1 … n), permuted by tracking
-  readonly exact: QiPoly | null;           // ℚ mode only: the truth; both float forms derive from it
+  readonly source: "roots" | "coeffs"; // which float form is the truth right now
+  readonly lead: Cx; // aₙ; 1 unless typed otherwise; fixed by a drag
+  readonly coeffs: readonly Cx[]; // a₀ … aₙ  (ascending), derived when source === "roots"
+  readonly roots: readonly Cx[]; // r₁ … rₙ, derived when source === "coeffs" (tracked)
+  readonly labels: readonly number[]; // root identity across drags (1 … n), permuted by tracking
+  readonly exact: QiPoly | null; // ℚ mode only: the truth; both float forms derive from it
 }
 
 // engine/roots/discs.ts  (backed by @cas/exact smithDiscs)
-export interface RootDisc { centre: Cx; radiusSq: Frac; component: number; count: number }
+export interface RootDisc {
+  centre: Cx;
+  radiusSq: Frac;
+  component: number;
+  count: number;
+}
 export interface RootReport {
-  root: Cx; label: number; disc: RootDisc;
-  multiplicity: { value: number; exact: boolean };   // exact ⇔ yunSquarefree said so
-  kappa: number;                                     // Σ|aₖ||r|ᵏ / |p′(r)|
-  gains: readonly number[];                          // |∂r/∂aₖ| = |rᵏ / p′(r)|
+  root: Cx;
+  label: number;
+  disc: RootDisc;
+  multiplicity: { value: number; exact: boolean }; // exact ⇔ yunSquarefree said so
+  kappa: number; // Σ|aₖ||r|ᵏ / |p′(r)|
+  gains: readonly number[]; // |∂r/∂aₖ| = |rᵏ / p′(r)|
 }
 
 // engine/loops/loop.ts
 export type Loop =
-  | { kind: "lasso"; point: number; sign: 1 | -1 }        // around branch point #point of the selected coefficient
+  | { kind: "lasso"; point: number; sign: 1 | -1 } // around branch point #point of the selected coefficient
   | { kind: "word"; parts: readonly Loop[] }
   | { kind: "inverse"; of: Loop }
   | { kind: "commutator"; a: Loop; b: Loop }
-  | { kind: "drawn"; vertices: readonly Cx[] };           // the pen; closed; base point = vertices[0]
-export interface LoopContext { coefficient: number; base: Cx; branchPoints: readonly RootDisc[] }
+  | { kind: "drawn"; vertices: readonly Cx[] }; // the pen; closed; base point = vertices[0]
+export interface LoopContext {
+  coefficient: number;
+  base: Cx;
+  branchPoints: readonly RootDisc[];
+}
 
 // @cas/monodromy
-export type Perm = readonly number[];                      // image of i is perm[i], 0-based
+export type Perm = readonly number[]; // image of i is perm[i], 0-based
 export interface TrackResult {
-  perm: Perm | null;                                       // null ⇔ refused
-  evidence: TrackEvidence;                                 // per segment: disjointness proven / bisections / refusal reason
-  paths: readonly (readonly Cx[])[];                       // per root, the sampled continuation (animation + braid)
+  perm: Perm | null; // null ⇔ refused
+  evidence: TrackEvidence; // per segment: disjointness proven / bisections / refusal reason
+  paths: readonly (readonly Cx[])[]; // per root, the sampled continuation (animation + braid)
 }
 
 // engine/loops/motion.ts
-export interface Motion { perm: Perm; frames: readonly (readonly Cx[])[]; fallback: boolean }
+export interface Motion {
+  perm: Perm;
+  frames: readonly (readonly Cx[])[];
+  fallback: boolean;
+}
 
 // engine/galois — evidence (plain data; certificates are made in engine/certify.ts)
 export interface GaloisEvidence {
   degree: number;
-  factorisation: { factors: string[]; irreducible: boolean };           // exact, over ℤ
-  discriminant: { value: string; isSquare: boolean };                     // decimal string of the integer
-  cycleTypes: { type: number[]; prime: number }[];                        // Dedekind witnesses
+  factorisation: { factors: string[]; irreducible: boolean }; // exact, over ℤ
+  discriminant: { value: string; isSquare: boolean }; // decimal string of the integer
+  cycleTypes: { type: number[]; prime: number }[]; // Dedekind witnesses
   snan: { verdict: "S" | "A" | "open"; rows: { hypothesis: string; witness: string }[] };
   identification:
-    | { tier: 1; label: string; name: string; order: number; parity: -1 | 1; solvable: boolean;
-        descent: DescentStep[]; generators: Perm[] }                     // generators act on plotted roots
-    | { tier: 2; candidates: { label: string; name: string; order: number; solvable: boolean; score: number;
-        indistinguishableFrom: string[] }[]; primesUsed: number }
+    | {
+        tier: 1;
+        label: string;
+        name: string;
+        order: number;
+        parity: -1 | 1;
+        solvable: boolean;
+        descent: DescentStep[];
+        generators: Perm[];
+      } // generators act on plotted roots
+    | {
+        tier: 2;
+        candidates: {
+          label: string;
+          name: string;
+          order: number;
+          solvable: boolean;
+          score: number;
+          indistinguishableFrom: string[];
+        }[];
+        primesUsed: number;
+      }
     | { tier: 0 };
 }
 export interface DescentStep {
-  from: string; to: string; index: number;            // e.g. "5T5" → "5T3", [S5 : F20] = 6
-  resolvent: { degree: number; coefficients: string[]; bits: number };   // exact integers after certified rounding
-  root: { value: string; coset: number } | null;      // the rational simple root, if any
+  from: string;
+  to: string;
+  index: number; // e.g. "5T5" → "5T3", [S5 : F20] = 6
+  resolvent: { degree: number; coefficients: string[]; bits: number }; // exact integers after certified rounding
+  root: { value: string; coset: number } | null; // the rational simple root, if any
   outcome: "descend" | "stay";
 }
 
 // engine/family/family.ts
-export interface Family { text: string; poly: BiPoly; base: Cx; branchPoints: RootDisc[];
-  lassos: { point: number; result: TrackResult }[]; group: GroupEvidence | null }
+export interface Family {
+  text: string;
+  poly: BiPoly;
+  base: Cx;
+  branchPoints: RootDisc[];
+  lassos: { point: number; result: TrackResult }[];
+  group: GroupEvidence | null;
+}
 
 // engine/formula/tree.ts
-export type FormulaNode = Node /* @cas/expr */;          // vars a0..a{n−1}; calls sqrt, cbrt, root(k, ·)
-export interface RadicalReport { node: FormulaNode; k: number; winding: number; shift: number; closed: boolean }
+export type FormulaNode = Node /* @cas/expr */; // vars a0..a{n−1}; calls sqrt, cbrt, root(k, ·)
+export interface RadicalReport {
+  node: FormulaNode;
+  k: number;
+  winding: number;
+  shift: number;
+  closed: boolean;
+}
 
 // shell/state.ts
 export interface ShellState {
@@ -154,10 +201,21 @@ export interface ShellState {
   formula: string | null;
   family: { text: string; base: [string, string] } | null;
   rung: 2 | 3 | 4 | 5 | null;
-  overlays: { critical: boolean; hull: boolean; discs: boolean; branchPoints: boolean; trails: boolean;
-              pseudozero: number | null /* log10 ε */; kappa: boolean };
-  view: { overlay: boolean; stageMode: "quiet" | "full" | "iso" | "textbook";
-          rootCam: Cam; coeffCam: Cam };
+  overlays: {
+    critical: boolean;
+    hull: boolean;
+    discs: boolean;
+    branchPoints: boolean;
+    trails: boolean;
+    pseudozero: number | null /* log10 ε */;
+    kappa: boolean;
+  };
+  view: {
+    overlay: boolean;
+    stageMode: "quiet" | "full" | "iso" | "textbook";
+    rootCam: Cam;
+    coeffCam: Cam;
+  };
 }
 ```
 
@@ -174,32 +232,32 @@ both and checks the other side to `1e-12`.
 certificates and every card renders `describeLevel` beside the glyph. ADR-0045's predicate
 `valueRefusal(value, verdict, of)` is reused verbatim, the caller naming what it shows.
 
-| Card | Row | Certificate |
-|---|---|---|
-| Roots | coordinate | `estimate` (DK + polish) |
-| Roots | "1 root in this disc" / "`k` roots in this component" | `exact` — method "Smith 1970, exact Gauss evaluation on the dyadic roots"; restriction none |
-| Roots | multiplicity | `exact` in ℚ (Yun) · `estimate` otherwise, claim worded "cluster of `k` within `ρ`" |
-| Analysis | discriminant | `exact` in ℚ · `estimate` otherwise |
-| Analysis | branch points of `aⱼ` | `exact` in ℚ (isolated roots of the exact polynomial) · `estimate` otherwise |
-| Analysis | critical point inside the hull | `exact` on the dyadic points (an exact orientation test) |
-| Analysis | bound circle | `bound("≤")` with the exact `Frac` radius |
-| Analysis | pseudozero component count | `exact` (Mosier, from the discs) — the *picture* is `estimate` and says so once in the legend |
-| Monodromy | permutation | `exact` when every segment certified; else `refuse(reason)` and no permutation prints |
-| Monodromy | generated group (order, name) | `exact` when enumerated under the cap; `bound("≥")` on the order when capped |
-| Galois | irreducible / factorisation | `exact` |
-| Galois | `G ≤ Aₙ` | `exact` |
-| Galois | contains type λ | `exact`, provenance the prime |
-| Galois | `= Sₙ` / `= Aₙ` | `exact`, provenance the theorem's hypotheses as `Step`s |
-| Galois | `= nTj` (Tier 1) | `exact`, provenance the descent steps; restriction "degree ≤ 7" |
-| Galois | labelled generator | `exact` per generator, provenance the coset's certified integer root |
-| Galois | `≈ nTj` (Tier 2) | `estimate`, claim listing every consistent candidate; restriction naming indistinguishable pairs |
-| Galois | solvable | meets the group row's level |
-| Correspondence | "`= m`" at a node | `exact` when the disc holds one integer and the resolvent's exact root test confirms |
-| Family | branch point | `exact` |
-| Family | monodromy group | `exact` when every branch point has a certified lasso; `refuse` naming the missing one |
-| Family | bridge sentence | `exact` (a theorem; provenance Hermite/Harris, Hilbert) — displayed only in family mode |
-| Ladder | "node closes / fails at depth N" | `exact`, provenance the sampling criterion (§4.8) |
-| Ladder | identity `[a, b] = c` | `exact`, composed |
+| Card           | Row                                                   | Certificate                                                                                      |
+| -------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Roots          | coordinate                                            | `estimate` (DK + polish)                                                                         |
+| Roots          | "1 root in this disc" / "`k` roots in this component" | `exact` — method "Smith 1970, exact Gauss evaluation on the dyadic roots"; restriction none      |
+| Roots          | multiplicity                                          | `exact` in ℚ (Yun) · `estimate` otherwise, claim worded "cluster of `k` within `ρ`"              |
+| Analysis       | discriminant                                          | `exact` in ℚ · `estimate` otherwise                                                              |
+| Analysis       | branch points of `aⱼ`                                 | `exact` in ℚ (isolated roots of the exact polynomial) · `estimate` otherwise                     |
+| Analysis       | critical point inside the hull                        | `exact` on the dyadic points (an exact orientation test)                                         |
+| Analysis       | bound circle                                          | `bound("≤")` with the exact `Frac` radius                                                        |
+| Analysis       | pseudozero component count                            | `exact` (Mosier, from the discs) — the _picture_ is `estimate` and says so once in the legend    |
+| Monodromy      | permutation                                           | `exact` when every segment certified; else `refuse(reason)` and no permutation prints            |
+| Monodromy      | generated group (order, name)                         | `exact` when enumerated under the cap; `bound("≥")` on the order when capped                     |
+| Galois         | irreducible / factorisation                           | `exact`                                                                                          |
+| Galois         | `G ≤ Aₙ`                                              | `exact`                                                                                          |
+| Galois         | contains type λ                                       | `exact`, provenance the prime                                                                    |
+| Galois         | `= Sₙ` / `= Aₙ`                                       | `exact`, provenance the theorem's hypotheses as `Step`s                                          |
+| Galois         | `= nTj` (Tier 1)                                      | `exact`, provenance the descent steps; restriction "degree ≤ 7"                                  |
+| Galois         | labelled generator                                    | `exact` per generator, provenance the coset's certified integer root                             |
+| Galois         | `≈ nTj` (Tier 2)                                      | `estimate`, claim listing every consistent candidate; restriction naming indistinguishable pairs |
+| Galois         | solvable                                              | meets the group row's level                                                                      |
+| Correspondence | "`= m`" at a node                                     | `exact` when the disc holds one integer and the resolvent's exact root test confirms             |
+| Family         | branch point                                          | `exact`                                                                                          |
+| Family         | monodromy group                                       | `exact` when every branch point has a certified lasso; `refuse` naming the missing one           |
+| Family         | bridge sentence                                       | `exact` (a theorem; provenance Hermite/Harris, Hilbert) — displayed only in family mode          |
+| Ladder         | "node closes / fails at depth N"                      | `exact`, provenance the sampling criterion (§4.8)                                                |
+| Ladder         | identity `[a, b] = c`                                 | `exact`, composed                                                                                |
 
 A refusal never carries a value-bearing field: `TrackResult.perm` is `null` on refusal, and
 `GaloisEvidence.identification` is `{ tier: 0 }` when nothing closed — the card then prints the
@@ -259,6 +317,7 @@ coefficients` that is **linear in `t` on each segment** for a coefficient loop a
 `d` for a family segment, and the current certified roots `z₁ … zₙ` with their labels.
 
 Per segment `[tₐ, t_b]`:
+
 1. `Wᵢ(t) = p_t(zᵢ)/∏_{j≠i}(zᵢ − zⱼ)` at the **fixed** previous roots. Linear case: `|Wᵢ(t)|` is convex
    in `t`, so `max = max(|Wᵢ(tₐ)|, |Wᵢ(t_b)|)`; take `sᵢ = n²·max(norm2)` exactly. Polynomial case:
    expand `Wᵢ` in `s ∈ [0,1]` and bound `|Wᵢ| ≤ Σₖ |cₖ|` with `sqrtUpper` on each `norm2(cₖ)`.
@@ -291,9 +350,9 @@ tracker on the same polyline, for frame-rate animation only; it never produces a
    gives the multiset of factor degrees = the cycle type; record `(type, first witness prime)`; keep
    counting occurrences for Tier 2.
 5. Sₙ/Aₙ: transitive (irreducible) + a transposition (seen, or the power trick on a `(2, odd…)` type)
-   + a `p`-cycle with prime `p > n/2` ⇒ `Sₙ` (Conrad 2.1); a 3-cycle + such a `p`-cycle ⇒ `Aₙ` if disc
-   is a square else `Sₙ` (2.2); a transposition + an `(n−1)`-cycle ⇒ `Sₙ` (3.1). Each hypothesis is a
-   row with its witness. Nothing else is claimed at Tier 0.
+   - a `p`-cycle with prime `p > n/2` ⇒ `Sₙ` (Conrad 2.1); a 3-cycle + such a `p`-cycle ⇒ `Aₙ` if disc
+     is a square else `Sₙ` (2.2); a transposition + an `(n−1)`-cycle ⇒ `Sₙ` (3.1). Each hypothesis is a
+     row with its witness. Nothing else is claimed at Tier 0.
 
 ### 4.6 Tier 1 — Stauduhar descent with generic invariants (degree ≤ 7)
 
@@ -397,14 +456,42 @@ the transitive sublattice plus the derived series.
 ### 5.3 Test corpora (`test/corpus/`)
 
 ```ts
-export interface SandboxCase { id: string; text: string; ring: Ring;
-  expect: { degree: number; multiplicities?: number[]; discIsSquare?: boolean; hullContainsCritical: true } }
-export interface GaloisCase { id: string; text: string; source: "Klüners–Malle" | "LMFDB" | "research-01";
-  group: string; order: number; solvable: boolean; tier: 0 | 1 | 2; rows?: string[] }
-export interface FamilyCase { id: string; text: string; base: [string, string];
-  branchPoints: number; perms: Perm[]; group: string }
-export interface LadderCase { rung: 2 | 3 | 4 | 5; formula: string; word: Loop; perm: Perm;
-  closesAtDepth: number | null }
+export interface SandboxCase {
+  id: string;
+  text: string;
+  ring: Ring;
+  expect: {
+    degree: number;
+    multiplicities?: number[];
+    discIsSquare?: boolean;
+    hullContainsCritical: true;
+  };
+}
+export interface GaloisCase {
+  id: string;
+  text: string;
+  source: "Klüners–Malle" | "LMFDB" | "research-01";
+  group: string;
+  order: number;
+  solvable: boolean;
+  tier: 0 | 1 | 2;
+  rows?: string[];
+}
+export interface FamilyCase {
+  id: string;
+  text: string;
+  base: [string, string];
+  branchPoints: number;
+  perms: Perm[];
+  group: string;
+}
+export interface LadderCase {
+  rung: 2 | 3 | 4 | 5;
+  formula: string;
+  word: Loop;
+  perm: Perm;
+  closesAtDepth: number | null;
+}
 ```
 
 ---
@@ -412,6 +499,7 @@ export interface LadderCase { rung: 2 | 3 | 4 | 5; formula: string; word: Loop; 
 ## 6. Worker protocol
 
 `createComputeClient<GaloisRequest, GaloisEvidence>` with:
+
 - `GaloisRequest = { coefficients: string[]; ring: "Q"; degreeCap: 15; primesBelow: 1000; bitsCap: 4096 }`
   — decimal strings, so `Frac` class identity never crosses the boundary;
 - `compute` = the same `runPipeline` the worker calls (`runSync` parity, as CD's `JuliaMetricsClient`);
@@ -432,7 +520,7 @@ export interface LadderCase { rung: 2 | 3 | 4 | 5; formula: string; word: Loop; 
 - **Verified on encode** (M6.2's rule): the loop word is re-sampled and the motion re-realised from
   the encoded state and compared by shape before a link is minted; a state that cannot be honoured
   refuses rather than minting a link that opens a different picture.
-- A drawn loop is carried as its vertices (semantics, not samples: the vertices *are* the object);
+- A drawn loop is carried as its vertices (semantics, not samples: the vertices _are_ the object);
   a lasso word is carried as the tree; a motion as the permutation; trails are never carried.
 - Undo/redo over `ShellState` snapshots, as M8; a drag is one undo step (its release), not a frame.
 - The figure export composites `[gl, ink]` of both panes plus the strip, stamps `Software`,
@@ -458,11 +546,11 @@ export interface LadderCase { rung: 2 | 3 | 4 | 5; formula: string; word: Loop; 
 
 ## 9. Vocabulary (initial decisions)
 
-*root* · *coefficient* · *branch point of `aⱼ`* (never "discriminant zero" on screen; the analysis
-card's discriminant row says "the discriminant vanishes at these values of `aⱼ`") · *loop*, *lasso*,
-*word*, *commutator* · *swap* (a transposition), *cycle* · *monodromy permutation*, *monodromy group of
-the family* · *Galois group over ℚ* · *closes* / *fails to close* · *certified* / *refused* ·
-*exactly `k` roots in this disc*. Denied on screen: `Smith`, `Stauduhar`, `Dedekind`, `tier`, `DK`,
+_root_ · _coefficient_ · _branch point of `aⱼ`_ (never "discriminant zero" on screen; the analysis
+card's discriminant row says "the discriminant vanishes at these values of `aⱼ`") · _loop_, _lasso_,
+_word_, _commutator_ · _swap_ (a transposition), _cycle_ · _monodromy permutation_, _monodromy group of
+the family_ · _Galois group over ℚ_ · _closes_ / _fails to close_ · _certified_ / _refused_ ·
+_exactly `k` roots in this disc_. Denied on screen: `Smith`, `Stauduhar`, `Dedekind`, `tier`, `DK`,
 `Weierstrass`, `nTj` without its name, `Sn`/`An` without subscripts.
 
 ---
@@ -471,7 +559,7 @@ the family* · *Galois group over ℚ* · *closes* / *fails to close* · *certif
 
 - The exact monomials used for invariants (searched at build time; the search order is an
   implementation detail with a test that the stabiliser is exact).
-- Whether degree 6 and 7 use additional absolute resolvents as *shortcuts* before the descent
+- Whether degree 6 and 7 use additional absolute resolvents as _shortcuts_ before the descent
   (`⚠ decide at PRA-5` by timing).
 - The lens geometry for cycles of length ≥ 4 beyond the collision check and its fallback.
 - The braid strip's over/under convention and its colour law beyond "one colour per root".

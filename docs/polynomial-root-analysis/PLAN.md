@@ -1,7 +1,7 @@
 # `apps/polynomial-root-analysis` — implementation plan
 
 > **Status: PROPOSED.** Awaiting the owner's review. [ADR-0046](../DECISIONS.md#adr-0046) is drafted
-> in *Proposed* status and becomes *Accepted* when this plan is; nothing below is committed beyond
+> in _Proposed_ status and becomes _Accepted_ when this plan is; nothing below is committed beyond
 > PRA-0, and each later milestone is a separately-approved gate (CLAUDE.md: working software at
 > every step; pause at each gate for review).
 >
@@ -28,16 +28,16 @@ radical level each, and the quintic stalls because A₅ is its own commutator su
 
 Three pages of content live in one page of app, chosen by a **mode** (sandbox · family · ladder):
 
-| Mode | Content | Honesty |
-|---|---|---|
+| Mode        | Content                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Honesty                                                                                                                                                                                       |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Sandbox** | Type or drag a polynomial. Roots ↔ coefficients (Vieta one way, a tracked re-solve the other). Ring selector ℂ / ℝ / ℚ. Overlays: critical points + Gauss–Lucas hull, certified root discs, discriminant points in the coefficient pane, drag trails, the pseudozero ladder on the GPU, conditioning gauges. Galois card (ℚ mode): tiers `=` Sₙ/Aₙ at any degree, `=` full identification to degree 7, `≈` ranked candidates 8–15. Loops in the coefficient pane → permutation, `=` or refused. Galois correspondence as a lattice of numeric invariants. | Roots `≈` with `=` inclusion discs; discriminant, multiplicities and the group `=` in ℚ mode, otherwise labelled; every monodromy permutation `=` (certified tracking) or `⚠` refused by name |
-| **Family** | `p(t, z)` with coefficients polynomial in `t` over ℚ. Branch points (exact zeros of `disc_z`), a flower of lassos from a base point, each lasso's permutation, the generated group = the Galois group over ℂ(t); the bridge to the arithmetic group and to specialisations (Hilbert irreducibility). Showpieces `x⁵ − x − t`, `x⁴ − 4x² + t`, Trinks' `x⁷ − 7x + 3`. | Branch points `=`; permutations `=` or refused; the group `=` when every branch point is accounted for |
-| **Ladder** | Four rungs — quadratic, cubic, quartic, quintic. Each rung: a generic polynomial, a candidate formula (a tree with radical nodes), commutator words of increasing depth, and the derived series of Sₙ. Run a word: the roots move, the formula's nodes close or fail, the depth that kills the formula is reported. The quintic rung shows the same 60 elements lighting up again. | Every "fails to close" is a measured winding, every identity in the ladder is checked by the permutation engine, the derived series is enumerated, not quoted |
+| **Family**  | `p(t, z)` with coefficients polynomial in `t` over ℚ. Branch points (exact zeros of `disc_z`), a flower of lassos from a base point, each lasso's permutation, the generated group = the Galois group over ℂ(t); the bridge to the arithmetic group and to specialisations (Hilbert irreducibility). Showpieces `x⁵ − x − t`, `x⁴ − 4x² + t`, Trinks' `x⁷ − 7x + 3`.                                                                                                                                                                                      | Branch points `=`; permutations `=` or refused; the group `=` when every branch point is accounted for                                                                                        |
+| **Ladder**  | Four rungs — quadratic, cubic, quartic, quintic. Each rung: a generic polynomial, a candidate formula (a tree with radical nodes), commutator words of increasing depth, and the derived series of Sₙ. Run a word: the roots move, the formula's nodes close or fail, the depth that kills the formula is reported. The quintic rung shows the same 60 elements lighting up again.                                                                                                                                                                        | Every "fails to close" is a measured winding, every identity in the ladder is checked by the permutation engine, the derived series is enumerated, not quoted                                 |
 
 ### 1.1 The gap this fills
 
 Research 02 §8 and 03 §7: four live browser demos animate root swaps (Stein 2019, Akalin 2016,
-Kalicki–Morales–Ostrander 2019, relint.de 2026) and all four move the *roots* and derive coefficient
+Kalicki–Morales–Ostrander 2019, relint.de 2026) and all four move the _roots_ and derive coefficient
 loops by Vieta. **None** lets a reader draw a loop in coefficient space and tracks the roots along it;
 none draws the discriminant locus; none shows a nested commutator as a structured object; none shows
 A₅ = [A₅, A₅]; none computes a Galois group; none has a GPU backdrop; none labels a single number.
@@ -50,10 +50,10 @@ discriminant. The suite is the only place where the phase portrait, the electros
 - Not a computer-algebra system. The Galois engine reaches `=` only where research 01 says it can
   (Sₙ/Aₙ at any degree; full identification to degree 7) and says `≈` above that, naming the
   candidates it cannot separate. Degree 8–11 certification (PARI's `galdata` tables) is deferred.
-- Not a proof assistant for Galois theory. The correspondence is shown *numerically* (an H-invariant of
+- Not a proof assistant for Galois theory. The correspondence is shown _numerically_ (an H-invariant of
   the roots becoming an integer), not derived.
 - Not the Riemann-surface studio: the plotter owns algebraic curves `F(w, z) = 0`. This app owns the
-  *univariate* polynomial and one-parameter families of it; the two share `@cas/monodromy` (§6).
+  _univariate_ polynomial and one-parameter families of it; the two share `@cas/monodromy` (§6).
 - No cross-app hand-offs in this plan (owner's decision, question 13 of round 1). Candidates are
   listed under [§7 PRA-10](#pra-10--exposition-and-the-long-tail) for later.
 - The narrative layer (a stepper telling Arnold's proof in a lecturer's order) is **not** in the first
@@ -80,12 +80,12 @@ The discriminant becomes a univariate polynomial in `aⱼ` whose zeros are the p
 collide; for `a₀` there are `n − 1` of them, at `a₀ = −q(cₖ)` for the critical points `cₖ` of
 `q = p − a₀` (research 02 §1.3, 03 §6). A lasso from the base point around zero number `k` induces the
 transposition of the two roots that collide there; the `n − 1` lassos generate `Sₙ` (Żołądek Lemma 2).
-So the coefficient pane is where every permutation is *made*, and a commutator of lassos is a loop the
+So the coefficient pane is where every permutation is _made_, and a commutator of lassos is a loop the
 reader can see.
 
 **(c) Two groups act on the roots, and they are not the same group.** The **Galois group over ℚ** of a
 polynomial with rational coefficients is a permutation group with no intrinsic motion; it is computed
-(research 01) and *animated* by moving the roots along non-crossing paths realising a chosen element,
+(research 01) and _animated_ by moving the roots along non-crossing paths realising a chosen element,
 the coefficients tracing loops by Vieta. The **monodromy group** of a family `p(t, z)` is the group
 generated by the lassos around its branch points; by Hermite/Harris it equals the Galois group of the
 family over ℂ(t), a normal subgroup of the arithmetic group over ℚ(t), and Hilbert irreducibility says a
@@ -97,14 +97,14 @@ theorem that connects them is displayed as a certificate on the family page, and
 card and monodromy card are two cards, not one.
 
 **(d) Radicals follow commutators.** Anything built from the coefficients by `+ − × ÷` returns to its
-value along every loop; `ᵏ√F` returns along every *commutator* of loops, because the winding of `F`
+value along every loop; `ᵏ√F` returns along every _commutator_ of loops, because the winding of `F`
 around 0 along `γ₁γ₂γ₁⁻¹γ₂⁻¹` is `m₁ + m₂ − m₁ − m₂ = 0`. A formula with `N` nested radical levels is
 therefore trivial on every `N`-fold nested commutator, while the roots undergo the corresponding
 iterated commutator of permutations. `[(12),(23)] = (123)`; `[(123),(234)] = (14)(23)`;
 `[(123),(345)] = (235)` — the third feeds into itself, which is `A₅ = [A₅, A₅]`, and the cubic and
 quartic succeed at depth 2 and 3 because `S₃ ⊳ A₃ ⊳ 1` and `S₄ ⊳ A₄ ⊳ V₄ ⊳ 1` terminate
 (research 02 §1.3, Ramond 2020). This is Arnold's proof, and the app's ladder mode is that proof with
-the identities *executed* rather than quoted.
+the identities _executed_ rather than quoted.
 
 **(e) The picture is a charge picture.** `log|p(z)| = Σ log|z − rᵢ|` is the potential of unit charges
 at the roots (research 03 §0): the phase portrait's hue vortices are the roots, the critical points are
@@ -117,7 +117,7 @@ polynomial within `ε` has the same number of roots in this component".
 ## 3. Rigor architecture — how `=` is earned
 
 All labels come from `@cas/rigor` (ADR-0040): a `Certificate` only from its five constructors, a
-`Verdict` only from `assembleVerdict`, the level the *meet* over evidence. ADR-0045's rule applies
+`Verdict` only from `assembleVerdict`, the level the _meet_ over evidence. ADR-0045's rule applies
 verbatim: nothing prints a value the argument has not earned, and the caller says which value it is
 showing.
 
@@ -130,26 +130,26 @@ roots. That is the app's `=` engine for roots, multiplicities-as-clusters, branc
 step-to-step tracking certificate — one theorem, exact arithmetic, `O(n²)` BigInt operations on
 ~`n·53`-bit numbers.
 
-| Claim | Level | How it is earned |
-|---|---|---|
-| Coefficients (ℚ mode) | `=` | Typed text → `toExactRational`; decimals via `simplestRational`, shown back so the reader sees what was taken |
-| Root coordinates | `≈` | Durand–Kerner + Newton polish (`@cas/core`) |
-| "exactly one root in `D(zᵢ, ρᵢ)`" / "exactly `k` roots in this component" | `=` | Smith discs, exact `Gauss` evaluation on the dyadic roots; `ρᵢ` an exact `Frac` upper bound on `n|Wᵢ|` |
-| Multiplicity | `=` (ℚ) / `≈` (ℂ, ℝ) | `yunSquarefree` over ℚ; otherwise a cluster count, labelled as such (a float polynomial with a multiple root is a measure-zero event) |
-| Discriminant, and its zeros in the `aⱼ`-plane | `=` (ℚ) / `≈` (ℂ, ℝ) | `@cas/exact` `discriminant` with `aⱼ` the inner variable; zeros isolated by Smith discs on the exact polynomial. In ℂ mode: the zeros of `z·q′ − j·q` and `aⱼ = −q(z)/zʲ`, numeric |
-| Critical points, hull, Marden foci, bounds circles | `≈` / `≤` | Numeric roots of `p′` with their own Smith discs; bounds are exact `Frac` from the dyadic coefficients |
-| Pseudozero level `ε` shown on the GPU | `≈` | float32 shader; the honest default `ε = 2⁻⁵³`; the `=` statement per component (Mosier) is computed on the CPU from the exact discs, not from pixels |
-| Monodromy permutation of a loop | `=` or `⚠` | Certified tracking (DESIGN §4.4): on each segment the discs about the *previous* roots with radius `n·max|Wᵢ(t)|` over the segment (exact, since `Wᵢ` is linear in `t` on a coefficient segment) are pairwise disjoint ⇒ no root swap on that segment; a segment that will not certify is bisected to a floor and then **refused by name** ("the loop passes within δ of a branch point") |
-| Galois group: "contains an element of cycle type λ" | `=` | Dedekind: `f mod p` squarefree with that factorisation shape, prime named as witness |
-| `G ≤ Aₙ` or not | `=` | `disc f` an exact integer; integer square test |
-| `G = Sₙ` / `G = Aₙ` | `=` | Conrad's theorems 2.1 / 2.2 / 3.1 with the power trick, each hypothesis a certified row |
-| `G = nTj` for `n ≤ 7` | `=` | Resolvent method: roots refined in BigInt to a precision at which every resolvent coefficient's disc has radius < ½, rounded, then the integer polynomial factored / root-tested **exactly**; the numerics only suggest, the exact computation proves (research 01 §3(d)) |
-| The group *labelled* on the plotted roots (generators as permutations of roots 1..n) | `=` | Stauduhar integrality test for one invariant per conjugate, certified rounding + exact verification against the resolvent |
-| `G ≈ nTj` for `8 ≤ n ≤ 15` | `≈` | Cycle-type statistics vs the transitive-group table; the row names every candidate consistent with the certified types and parity, and says when two are statistically indistinguishable (8T10 / 8T11) |
-| Solvable / not | `=` when the group is `=`, else `≈` | Table lookup |
-| Monodromy group of a family | `=` | Every zero of the exact `disc_z` accounted for by a certified lasso; the generated group enumerated (BFS, capped and *saying* so) |
-| "This formula fails to close at depth N" | `=` | Winding counts along the motion are integers measured from a sampled path whose samples are dense enough that consecutive arguments differ by < π (checked, else refined) |
-| A permutation identity in the ladder | `=` | Composed by `@cas/monodromy` and compared, not quoted |
+| Claim                                                                                | Level                               | How it is earned                                                                                                                                                                                                                                                          |
+| ------------------------------------------------------------------------------------ | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Coefficients (ℚ mode)                                                                | `=`                                 | Typed text → `toExactRational`; decimals via `simplestRational`, shown back so the reader sees what was taken                                                                                                                                                             |
+| Root coordinates                                                                     | `≈`                                 | Durand–Kerner + Newton polish (`@cas/core`)                                                                                                                                                                                                                               |
+| "exactly one root in `D(zᵢ, ρᵢ)`" / "exactly `k` roots in this component"            | `=`                                 | Smith discs, exact `Gauss` evaluation on the dyadic roots; `ρᵢ` an exact `Frac` upper bound on `n                                                                                                                                                                         | Wᵢ    | `                                                                                                                                                                                                                                                                     |
+| Multiplicity                                                                         | `=` (ℚ) / `≈` (ℂ, ℝ)                | `yunSquarefree` over ℚ; otherwise a cluster count, labelled as such (a float polynomial with a multiple root is a measure-zero event)                                                                                                                                     |
+| Discriminant, and its zeros in the `aⱼ`-plane                                        | `=` (ℚ) / `≈` (ℂ, ℝ)                | `@cas/exact` `discriminant` with `aⱼ` the inner variable; zeros isolated by Smith discs on the exact polynomial. In ℂ mode: the zeros of `z·q′ − j·q` and `aⱼ = −q(z)/zʲ`, numeric                                                                                        |
+| Critical points, hull, Marden foci, bounds circles                                   | `≈` / `≤`                           | Numeric roots of `p′` with their own Smith discs; bounds are exact `Frac` from the dyadic coefficients                                                                                                                                                                    |
+| Pseudozero level `ε` shown on the GPU                                                | `≈`                                 | float32 shader; the honest default `ε = 2⁻⁵³`; the `=` statement per component (Mosier) is computed on the CPU from the exact discs, not from pixels                                                                                                                      |
+| Monodromy permutation of a loop                                                      | `=` or `⚠`                          | Certified tracking (DESIGN §4.4): on each segment the discs about the _previous_ roots with radius `n·max                                                                                                                                                                 | Wᵢ(t) | `over the segment (exact, since`Wᵢ`is linear in`t` on a coefficient segment) are pairwise disjoint ⇒ no root swap on that segment; a segment that will not certify is bisected to a floor and then **refused by name** ("the loop passes within δ of a branch point") |
+| Galois group: "contains an element of cycle type λ"                                  | `=`                                 | Dedekind: `f mod p` squarefree with that factorisation shape, prime named as witness                                                                                                                                                                                      |
+| `G ≤ Aₙ` or not                                                                      | `=`                                 | `disc f` an exact integer; integer square test                                                                                                                                                                                                                            |
+| `G = Sₙ` / `G = Aₙ`                                                                  | `=`                                 | Conrad's theorems 2.1 / 2.2 / 3.1 with the power trick, each hypothesis a certified row                                                                                                                                                                                   |
+| `G = nTj` for `n ≤ 7`                                                                | `=`                                 | Resolvent method: roots refined in BigInt to a precision at which every resolvent coefficient's disc has radius < ½, rounded, then the integer polynomial factored / root-tested **exactly**; the numerics only suggest, the exact computation proves (research 01 §3(d)) |
+| The group _labelled_ on the plotted roots (generators as permutations of roots 1..n) | `=`                                 | Stauduhar integrality test for one invariant per conjugate, certified rounding + exact verification against the resolvent                                                                                                                                                 |
+| `G ≈ nTj` for `8 ≤ n ≤ 15`                                                           | `≈`                                 | Cycle-type statistics vs the transitive-group table; the row names every candidate consistent with the certified types and parity, and says when two are statistically indistinguishable (8T10 / 8T11)                                                                    |
+| Solvable / not                                                                       | `=` when the group is `=`, else `≈` | Table lookup                                                                                                                                                                                                                                                              |
+| Monodromy group of a family                                                          | `=`                                 | Every zero of the exact `disc_z` accounted for by a certified lasso; the generated group enumerated (BFS, capped and _saying_ so)                                                                                                                                         |
+| "This formula fails to close at depth N"                                             | `=`                                 | Winding counts along the motion are integers measured from a sampled path whose samples are dense enough that consecutive arguments differ by < π (checked, else refined)                                                                                                 |
+| A permutation identity in the ladder                                                 | `=`                                 | Composed by `@cas/monodromy` and compared, not quoted                                                                                                                                                                                                                     |
 
 Two rules from Contour Integration's review are adopted unchanged: a refusal never carries a field a
 consumer could read as a claim (ADR-0045's second finding), and a value earned by different rows than
@@ -157,7 +157,7 @@ its neighbour has its own predicate (`=` on the group name does not license `=` 
 generator; each has its certificate).
 
 **RISKS §3 stands and is narrowed, not overruled.** The plotter's continuation stays `≈` — nearest-match
-tracking has no certificate. This app's tracker is a *different algorithm* whose per-segment claim is a
+tracking has no certificate. This app's tracker is a _different algorithm_ whose per-segment claim is a
 theorem applied in exact arithmetic; ADR-0046 records that the `=` is earned by Smith's theorem, not by
 the continuation's success, and that a segment which cannot be certified is refused rather than guessed.
 
@@ -181,7 +181,7 @@ the continuation's success, and that a segment which cannot be certified is refu
   multiplicity certificate, condition number `κ(rᵢ) = Σ|aₖ||rᵢ|ᵏ / |p′(rᵢ)|`, per-coefficient drag gain
   `∂rᵢ/∂aₖ = −rᵢᵏ/p′(rᵢ)`.
 - **`Loop`** — a closed path in the `aⱼ`-plane (or the `t`-plane in family mode), carried
-  *semantically*: `{ kind: "lasso", point: k, sign: ±1 }`, `{ kind: "word", parts: Loop[] }`,
+  _semantically_: `{ kind: "lasso", point: k, sign: ±1 }`, `{ kind: "word", parts: Loop[] }`,
   `{ kind: "commutator", a: Loop, b: Loop }`, `{ kind: "inverse", of: Loop }`, or
   `{ kind: "drawn", vertices: Cx[] }`. A word is a tree so a nested commutator is a structured object
   the UI can expand (research 02 §8 item 3). Sampled polylines are derived, never stored.
@@ -203,14 +203,14 @@ the continuation's success, and that a segment which cannot be certified is refu
 
 ### 4.2 Engines
 
-| Engine | Where | Runs |
-|---|---|---|
-| Numeric roots, polish, Smith discs, critical points, bounds, κ | `@cas/core` (roots) + app `src/engine/roots/` (discs on `@cas/exact`) | main thread, per frame |
-| Exact layer: `toExactRational`, squarefree, discriminant, discriminant-in-`aⱼ`, rational roots | `@cas/exact` | main thread (sub-ms at `n ≤ 24`) |
-| Tracking (certified + preview), permutations, groups, lassos, derived series | `@cas/monodromy` | main thread for previews; the certified pass in the worker when a loop is long |
-| Galois tiers 0–2, resolvents, BigInt root refinement, the labelled group | app `src/galois/` on `@cas/exact` | **worker** (`createComputeClient`, coefficients passed as strings) |
-| Formula evaluator with branch tracking | app `src/engine/formula/` | main thread, per frame |
-| GPU: phase portrait, pseudozero ladder, isolines | `@cas/gpu` + app `src/ui/stage/` | GPU |
+| Engine                                                                                         | Where                                                                 | Runs                                                                           |
+| ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Numeric roots, polish, Smith discs, critical points, bounds, κ                                 | `@cas/core` (roots) + app `src/engine/roots/` (discs on `@cas/exact`) | main thread, per frame                                                         |
+| Exact layer: `toExactRational`, squarefree, discriminant, discriminant-in-`aⱼ`, rational roots | `@cas/exact`                                                          | main thread (sub-ms at `n ≤ 24`)                                               |
+| Tracking (certified + preview), permutations, groups, lassos, derived series                   | `@cas/monodromy`                                                      | main thread for previews; the certified pass in the worker when a loop is long |
+| Galois tiers 0–2, resolvents, BigInt root refinement, the labelled group                       | app `src/galois/` on `@cas/exact`                                     | **worker** (`createComputeClient`, coefficients passed as strings)             |
+| Formula evaluator with branch tracking                                                         | app `src/engine/formula/`                                             | main thread, per frame                                                         |
+| GPU: phase portrait, pseudozero ladder, isolines                                               | `@cas/gpu` + app `src/ui/stage/`                                      | GPU                                                                            |
 
 ### 4.3 The stage and the panes
 
@@ -229,13 +229,13 @@ Contour Integration accumulator's slot.
 `createComputeClient` with the Galois request carrying the exact coefficients as decimal strings and the
 ring; the worker re-parses; results carry certificates as plain data re-branded on receipt through
 `@cas/rigor`'s constructors (a `Certificate` does not survive structured clone and must not be forged
-from JSON — the worker returns *evidence*, the main thread assembles the verdict). The app joins
+from JSON — the worker returns _evidence_, the main thread assembles the verdict). The app joins
 `scripts/check-built-artifacts.mjs`'s list because it spawns a worker.
 
 ### 4.5 Performance budget
 
 - Root re-solve during a coefficient drag: ≤ 2 ms at `n = 24` (DK seeded from the previous roots +
-  polish; the tracker's *preview* pass, not the certified one).
+  polish; the tracker's _preview_ pass, not the certified one).
 - Smith discs: exact `Gauss` at `n = 24` ≈ `n² = 576` multiplications of ~1300-bit numbers — measured
   before PRA-1's gate, budget ≤ 8 ms; if over, discs are computed on release rather than per frame,
   and the plan says so.
@@ -251,9 +251,9 @@ from JSON — the worker returns *evidence*, the main thread assembles the verdi
 ### 5.1 Layout
 
 The M8 shell idiom (ADR-0043): a keyed DOM builder, **two rails** around the stage, KaTeX for every
-formula, a vocabulary module with a denylist test. Left rail — *what is being analysed*: the polynomial
+formula, a vocabulary module with a denylist test. Left rail — _what is being analysed_: the polynomial
 box (typed, `z` the variable), the ring selector, the degree, the coefficient list with exact forms in ℚ
-mode, the family box in family mode, the mode switch. Right rail — *what it proves*: the roots card
+mode, the family box in family mode, the mode switch. Right rail — _what it proves_: the roots card
 (each root with its disc, count, multiplicity, κ), the analysis card (discriminant, critical points,
 bounds, the conditioning gauges), the **Galois card**, the **monodromy card** (the loop word, its
 permutation, the certificate or the refusal), the **correspondence card** (the lattice), and in ladder
@@ -263,7 +263,7 @@ second consumer, so it is extracted into `@cas/ui` at PRA-1 on the ADR-0007 rule
 ### 5.2 Interaction rules
 
 1. **A drag never changes the truth silently.** A root drag makes root form the source; a coefficient
-   drag makes coefficient form the source and routes through the tracker so root *labels* persist
+   drag makes coefficient form the source and routes through the tracker so root _labels_ persist
    (root 3 stays root 3 across the drag). The badge on each root shows whether its identity across the
    last drag was certified.
 2. **Snap with intent, never silently** (Contour Integration rule 4): in ℚ mode a release snaps to the
@@ -294,10 +294,10 @@ second consumer, so it is extracted into `@cas/ui` at PRA-1 on the ADR-0007 rule
 
 ### 5.3 Vocabulary
 
-`engine/vocabulary.ts` decides the words once: *root*, *coefficient*, *branch point* (of the selected
-coefficient), *loop*, *lasso*, *commutator*, *swap*, *cycle*, *monodromy permutation*, *Galois group
-over ℚ*, *monodromy group of the family*, *closes* / *fails to close* (of a formula node), *certified* /
-*refused*. House ids (`tier0`, `smith`, `stauduhar`) never reach a reader; the two-part denylist from
+`engine/vocabulary.ts` decides the words once: _root_, _coefficient_, _branch point_ (of the selected
+coefficient), _loop_, _lasso_, _commutator_, _swap_, _cycle_, _monodromy permutation_, _Galois group
+over ℚ_, _monodromy group of the family_, _closes_ / _fails to close_ (of a formula node), _certified_ /
+_refused_. House ids (`tier0`, `smith`, `stauduhar`) never reach a reader; the two-part denylist from
 Contour Integration (AST literal scan + mounted-screen scan) is reused.
 
 ### 5.4 Colour and type
@@ -315,22 +315,22 @@ Research 05's table, turned into commitments. **North star: the app builds fewer
 scratch than Contour Integration did**, and it does — the factoriser, the tracker, the permutation
 code, the exact extractor, the polish and the keyed renderer all exist today.
 
-| Need | Today | Action | Justification |
-|---|---|---|---|
-| AST → exact ℚ(i) polynomial (`toExactRational`, `simplestRational`) | `apps/contour-integration/src/kernel/exactRational.ts` | **lift to `@cas/exact`**, Contour Integration re-imports, byte-identical golden | second consumer |
-| `Field<T>` + exact Gaussian elimination (`solveOver`, rank decided) | `apps/contour-integration/src/families/{field,linear}.ts` | **lift to `@cas/exact`**, unify with the plotter's `Scalar<T>` | second consumer (Berlekamp nullspace, resolvent linear algebra) |
-| Newton polish, Cauchy bound, cluster | `packages/faber/src/roots.ts`, `apps/contour-integration/.../poles.ts` | **lift `polishRoots`/`cauchyBound` to `@cas/core`** | already two consumers |
-| Smith/Weierstrass inclusion discs (exact) | absent | **new in `@cas/exact`** (`smithDiscs`) | used by the app and by `@cas/monodromy`'s certified tracker |
-| Factorisation over ℤ / ℚ, `𝔽ₚ[x]`, Hensel, distinct-degree factorisation | `apps/quadrature-domains/app/sym/sym-core.mjs` (untyped, on `globalThis`) | **port to TypeScript in `@cas/exact`** over `Frac`/`QiPoly`; QD keeps its own copy (ADR-0008's standing exception) with a cross-check golden | second consumer; a shim would import an app |
-| BigInt root refinement (dyadic fixed-point Newton) | absent | **new in `@cas/exact`** (`dyadic.ts`) | Tier 1 needs ~600-bit roots |
-| Monodromy tracker, `permGroup`, `generatorLoop`, `permDiagram` | `apps/complex-function-plotter/src/riemann/` | **extract to a new `@cas/monodromy`**; the plotter re-imports; parity golden on its `monodromy.test.ts` cases | second consumer (owner-approved, round 2 question 9) |
-| Certified tracker, derived series, commutator, Sₙ/Aₙ recognisers on generators | absent | new in `@cas/monodromy` | two consumers on day one (sandbox, family) |
-| Transitive-group tables (`n ≤ 15`) | absent | **fetched from the LMFDB API** by `scripts/fetch-transitive-groups.mjs`, checked in as JSON with provenance and licence (CC BY-SA 4.0; GAP `transgrp` data is free to redistribute) | data, not code |
-| Keyed DOM builder | `apps/contour-integration/src/shell/dom.ts` | **lift to `@cas/ui`** | second consumer |
-| Cyclic phase colormaps, `bakeAtlas` | `apps/complex-function-plotter/src/render/colormaps.ts` | not lifted — this app uses CET-C6 as Contour Integration does | no new consumer |
-| Animation transport (`stepT`, `createAnimator`) | `apps/complex-function-plotter/src/ui/animate.ts` | **lift to `@cas/ui`** | second consumer |
-| Permalink, PNG export, rigor, fatal boundary, compute client | `@cas/interchange`, `@cas/export`, `@cas/rigor`, `@cas/ui` | use as-is | — |
-| Draggable point handles | per-app patterns (2D Electrostatics, Riemann Map) | app-local at first; a `@cas/ui` primitive is noted for the *next* consumer | not yet a package |
+| Need                                                                           | Today                                                                     | Action                                                                                                                                                                              | Justification                                                   |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| AST → exact ℚ(i) polynomial (`toExactRational`, `simplestRational`)            | `apps/contour-integration/src/kernel/exactRational.ts`                    | **lift to `@cas/exact`**, Contour Integration re-imports, byte-identical golden                                                                                                     | second consumer                                                 |
+| `Field<T>` + exact Gaussian elimination (`solveOver`, rank decided)            | `apps/contour-integration/src/families/{field,linear}.ts`                 | **lift to `@cas/exact`**, unify with the plotter's `Scalar<T>`                                                                                                                      | second consumer (Berlekamp nullspace, resolvent linear algebra) |
+| Newton polish, Cauchy bound, cluster                                           | `packages/faber/src/roots.ts`, `apps/contour-integration/.../poles.ts`    | **lift `polishRoots`/`cauchyBound` to `@cas/core`**                                                                                                                                 | already two consumers                                           |
+| Smith/Weierstrass inclusion discs (exact)                                      | absent                                                                    | **new in `@cas/exact`** (`smithDiscs`)                                                                                                                                              | used by the app and by `@cas/monodromy`'s certified tracker     |
+| Factorisation over ℤ / ℚ, `𝔽ₚ[x]`, Hensel, distinct-degree factorisation       | `apps/quadrature-domains/app/sym/sym-core.mjs` (untyped, on `globalThis`) | **port to TypeScript in `@cas/exact`** over `Frac`/`QiPoly`; QD keeps its own copy (ADR-0008's standing exception) with a cross-check golden                                        | second consumer; a shim would import an app                     |
+| BigInt root refinement (dyadic fixed-point Newton)                             | absent                                                                    | **new in `@cas/exact`** (`dyadic.ts`)                                                                                                                                               | Tier 1 needs ~600-bit roots                                     |
+| Monodromy tracker, `permGroup`, `generatorLoop`, `permDiagram`                 | `apps/complex-function-plotter/src/riemann/`                              | **extract to a new `@cas/monodromy`**; the plotter re-imports; parity golden on its `monodromy.test.ts` cases                                                                       | second consumer (owner-approved, round 2 question 9)            |
+| Certified tracker, derived series, commutator, Sₙ/Aₙ recognisers on generators | absent                                                                    | new in `@cas/monodromy`                                                                                                                                                             | two consumers on day one (sandbox, family)                      |
+| Transitive-group tables (`n ≤ 15`)                                             | absent                                                                    | **fetched from the LMFDB API** by `scripts/fetch-transitive-groups.mjs`, checked in as JSON with provenance and licence (CC BY-SA 4.0; GAP `transgrp` data is free to redistribute) | data, not code                                                  |
+| Keyed DOM builder                                                              | `apps/contour-integration/src/shell/dom.ts`                               | **lift to `@cas/ui`**                                                                                                                                                               | second consumer                                                 |
+| Cyclic phase colormaps, `bakeAtlas`                                            | `apps/complex-function-plotter/src/render/colormaps.ts`                   | not lifted — this app uses CET-C6 as Contour Integration does                                                                                                                       | no new consumer                                                 |
+| Animation transport (`stepT`, `createAnimator`)                                | `apps/complex-function-plotter/src/ui/animate.ts`                         | **lift to `@cas/ui`**                                                                                                                                                               | second consumer                                                 |
+| Permalink, PNG export, rigor, fatal boundary, compute client                   | `@cas/interchange`, `@cas/export`, `@cas/rigor`, `@cas/ui`                | use as-is                                                                                                                                                                           | —                                                               |
+| Draggable point handles                                                        | per-app patterns (2D Electrostatics, Riemann Map)                         | app-local at first; a `@cas/ui` primitive is noted for the _next_ consumer                                                                                                          | not yet a package                                               |
 
 Each lift is its own commit with the source app's tests green before and after (CLAUDE.md:
 test-guard every refactor), and lands in the milestone that first needs it.
@@ -356,15 +356,17 @@ pnpm test && pnpm build` green before and after, never piped. Every slice carrie
 (tree verified green first; `killed/total`; each survivor closed by an assertion or recorded as
 equivalent with its reason). Sizing is rough order of magnitude (S/M/L).
 
-### PRA-0 — Scaffold and spine · *S*
+### PRA-0 — Scaffold and spine · _S_
+
 The app directory from the 2d-hydrodynamics template (port 5184, namespace `pra`), an empty stage that
 mounts inside the fatal boundary, the wiring list of §6.1 minus the deploy `cp`, the launcher card as
-*Coming soon*, ADR-0046 accepted, this plan and DESIGN checked in, the five research notes under
+_Coming soon_, ADR-0046 accepted, this plan and DESIGN checked in, the five research notes under
 `docs/polynomial-root-analysis/research/`, `STATUS.md` opened.
 **Gate:** the gate is green with the new app in every registry that must see it; `pnpm a11y` audits the
 empty page clean; one test exists (the census floor).
 
-### PRA-1 — The two panes · *L*
+### PRA-1 — The two panes · _L_
+
 Typed polynomial (`@cas/expr` parse; `toExactRational` lifted to `@cas/exact`; a non-polynomial
 refuses by name), the dual representation with its `source` tag, ring modes ℂ/ℝ/ℚ with their invariants,
 root drag (Vieta, `O(n)` incremental), coefficient drag (re-solve seeded from the previous roots +
@@ -382,7 +384,8 @@ Smith discs at `n = 24` measured against the 8 ms budget and the number written 
 `applyState(s)` from a state as unlike `s` as the app gets lands on `s` (M6.1's two-state test, not the
 fixed-point test); sweep ≥ 20 mutants.
 
-### PRA-2 — Analysis overlays, wave 1 · *M*
+### PRA-2 — Analysis overlays, wave 1 · _M_
+
 Critical points + Gauss–Lucas hull (with the electrostatic sentence), the exact discriminant (ℚ) and
 its numeric twin, **discriminant points in the coefficient pane for the selected coefficient** (exact
 via `@cas/exact` `discriminant` with `aⱼ` inner; numeric via `z·q′ − j·q`), drag trails as a root locus
@@ -395,7 +398,8 @@ mode, are the isolated roots of the exact discriminant (both routes, compared); 
 `ε = 1e-7` shows one component containing roots 10..19 (the count row reads `= 10`); a browser test
 compiles the ladder shader and checks one isoline pixel against a CPU evaluation; sweep.
 
-### PRA-3 — `@cas/monodromy` and loops · *L*
+### PRA-3 — `@cas/monodromy` and loops · _L_
+
 Extract the plotter's `monodromy.ts`, `permGroup.ts`, `generatorLoop.ts`, `permDiagram.ts` into
 `@cas/monodromy` (plotter re-imports; its `monodromy.test.ts` cases become the package's parity golden).
 Add: the **certified tracker** (DESIGN §4.4), `commutator`, `derivedSeries`, `Sₙ/Aₙ` recognisers on
@@ -411,7 +415,8 @@ motion realising `(12345)` makes each coefficient trace a closed loop (asserted:
 `1e-12`) and the roots land on their images; the braid strip's crossing count equals the word length
 for a transposition lens; the plotter's Riemann-surface tests are green through the extraction; sweep.
 
-### PRA-4 — The exact engine and Galois Tier 0 · *L*
+### PRA-4 — The exact engine and Galois Tier 0 · _L_
+
 `@cas/exact` gains `𝔽ₚ[x]` (`ModPoly`: arithmetic, gcd, powmod, distinct-degree + Cantor–Zassenhaus
 equal-degree factorisation), Hensel lifting and Zassenhaus recombination (`factorOverZ`), rational-root
 test, integer square test, and `Field`/`linear` lifted from Contour Integration. The app's `src/galois/`
@@ -419,7 +424,7 @@ worker: irreducibility (and the factorisation shown when reducible — the group
 irreducible factor and the joint group deferred), the exact discriminant and its square test, Dedekind
 cycle types from the primes below 1000 with witnesses, and the **Sₙ/Aₙ certificate** (Conrad 2.1, 2.2,
 3.1 with the power trick), each hypothesis a certificate row. The Galois card shows the growing list
-"contains an element of type λ (witness p)" as a *visualisable* object.
+"contains an element of type λ (witness p)" as a _visualisable_ object.
 **Gate:** the Klüners–Malle test polynomials for every transitive group of degree ≤ 7 factor
 correctly over ℤ and report irreducible; QD's `sym-core` factorisation of 50 random integer polynomials
 agrees with the port (cross-check golden, the two implementations sharing no code); `x⁵ − x − 1` reads
@@ -427,7 +432,8 @@ agrees with the port (cross-check golden, the two implementations sharing no cod
 not a square"; `x⁵ + 20x + 16` reads `= A₅`; the Tier-0 certificate on a D₅ quintic does **not** close
 and the card says "contains …; not yet identified" with no group name printed; sweep.
 
-### PRA-5 — Tier 1 identification and the labelled group · *L*
+### PRA-5 — Tier 1 identification and the labelled group · _L_
+
 BigInt dyadic root refinement; complex disc arithmetic over exact centres and `Frac` radii; the
 resolvent engine (degree 5: Dummit's sextic from explicit coefficients, plus the C₅/D₅ resolvent;
 degree 6: the `x₁ + x₂`, `x₁ + x₂ + x₃`, `x₁ − x₂` resolvents; degree 7: the degree-35 resolvent + the
@@ -446,7 +452,8 @@ labelled generators, applied to the numeric roots, preserve the resolvent's cert
 8T11 as indistinguishable and prints `≈`; Trinks' `x⁷ − 7x + 3` reads `= 7T5` (order 168) with "not
 solvable"; `pnpm a11y --strict` clean; sweep.
 
-### PRA-6 — The Galois correspondence, numerically · *M*
+### PRA-6 — The Galois correspondence, numerically · _M_
+
 Subgroup lattices for the 37 groups of degree ≤ 7 (fetched with the tables: subgroups up to
 conjugacy, with the derived series marked), each node carrying an H-invariant (an orbit sum of a root
 monomial) evaluated at the numeric roots with its disc; a node reads "= integer m" when the disc
@@ -460,7 +467,8 @@ conjugates' invariants reading `= integer` exactly at the nodes Conrad's worked 
 D₅ quintic the `F₂₀`-invariant reads `= 40` (Dummit's `θ`); a lasso transposition applied to the D₅
 roots moves that invariant off `40` (asserted with the disc); sweep.
 
-### PRA-7 — Families · *M*
+### PRA-7 — Families · _M_
+
 The family box (`p(t, z)` over ℚ, `BiPoly`), exact branch points as roots of `disc_z` isolated by Smith
 discs, the base point, the flower of lassos (`generatorLoop`'s tethered lassos from a common base
 point), each lasso's certified permutation, the generated group with its enumeration cap stated, the
@@ -474,7 +482,8 @@ certified transpositions and `= S₅`; `x⁴ − 4x² + t` gives the two named p
 tether crosses another branch point's disc refuses; specialising `x⁵ − x − t` at `t = 1` opens the
 sandbox's `x⁵ − x − 1` and the bridge card cites the `= S₅` from PRA-4; sweep.
 
-### PRA-8 — The ladder: Abel–Ruffini · *L*
+### PRA-8 — The ladder: Abel–Ruffini · _L_
+
 The formula tree (typed through `@cas/expr` over `a0..a{n−1}` with `sqrt`/`cbrt`/`root(k, ·)`, plus a
 gallery: the quadratic formula, Cardano, Ferrari, and candidate quintic formulas of nesting depth 1..4),
 the branch-tracked evaluator (one rotation counter per radical node; "closes" is a measured winding of
@@ -490,7 +499,8 @@ fails on the depth-`N` word from Ramond's self-feeding identity, whose permutati
 (composed and compared); the enumerated derived series of `S₅` is `120, 60, 60` and of `S₄` is
 `24, 12, 4, 1`; every rung audits clean through its permalink in the a11y roster; sweep.
 
-### PRA-9 — Overlays, wave 2, and the surfaced ideas · *M–L* (backlog, owner-ordered)
+### PRA-9 — Overlays, wave 2, and the surfaced ideas · _M–L_ (backlog, owner-ordered)
+
 Each is a slice with its own gate; the owner picks the order. Singular lemniscates (isolines of `|p|` at
 critical values, exact capacity `c^{1/n}`) with the electrostatic reading · Marden's Steiner inellipse
 (cubics) and Jensen discs (ℝ mode) · Newton basins as a stage mode with the Hubbard–Schleicher–Sutherland
@@ -504,7 +514,8 @@ nearest polynomial with a multiple root, drawn as an arrow in the coefficient pa
 of `S₅` as an animated "the same 60 light up again" · **Sendov's conjecture** as a conjecture-badged
 overlay · real-perturbation pseudozero sets in ℝ mode.
 
-### PRA-10 — Exposition and the long tail · *L*
+### PRA-10 — Exposition and the long tail · _L_
+
 **The narrative layer, essential for the final product**: a stepper giving Arnold's proof in a
 lecturer's order (as Contour Integration's M8 stepper), the front door of classics, prediction prompts
 graded from the certificates, the faded drill over the ladder — designed to address the ladder's
@@ -546,20 +557,20 @@ receiving tool asks.
 
 ## 9. Risk register
 
-| Risk | Severity | Likelihood | Mitigation |
-|---|---|---|---|
-| The certified tracker refuses too often near branch points (bisection floor reached on honest loops) | M | M | The lasso generator sizes lassos from the exact branch-point discs (radius ≥ 3× the disc); the preview always animates; the refusal names the distance so a reader can enlarge the lasso; measured on the corpus before PRA-3's gate |
-| BigInt cost of exact discs per frame at `n = 24` | M | M | Budget in §4.5; discs on release if over; the number written down rather than assumed |
-| Tier 1 precision growth (degree-35 resolvent, coefficient discs must have radius < ½) | M | L | Iterate: double the precision until every radius < ½ (research 01 §3(d)); cap at 4096 bits and refuse by name beyond it |
-| A resolvent that is not squarefree | M | M | Tschirnhaus retry `x ↦ x + k`, `k = 1, 2, …`, each attempt a row; refuse after three |
-| The monodromy ↔ Galois conceptual trap (a reader takes a loop's permutation for a Galois element) | H | H | Two cards; the bridge sentence only in family mode; the denylist asserts the word "Galois" is absent from the monodromy card; PRA-10's narrative carries the explanation |
-| Transitive-group data provenance and licence | L | L | Fetched by a checked-in script from the LMFDB API with a recorded date; CC BY-SA 4.0 attribution in the README and the data file; GAP `transgrp` counts cross-checked against OEIS A002106 |
-| Coefficient-drag continuity: root labels jump when the drag crosses a branch point | M | H | It *should* jump (a branch point was crossed) and the badge says so: the preview tracker flags a crossing, the label swap is shown as a permutation chip, and the certified pass on release decides it |
-| Ill-conditioned high-degree coefficient drags (Wilkinson) make the coefficient pane useless | M | M | The κ gauge and the pseudozero ladder are the explanation, not a bug; the degree cap is 24 and the gauge turns the drag handle's colour |
-| The formula evaluator's radical argument passes through 0 | M | M | Refuse the run by name ("the radicand of node k vanished at frame f"); the lens paths make it measure-zero |
-| Extraction of the plotter's monodromy stack breaks the Riemann-surface studio | M | L | Parity golden from its own tests; the extraction is a `git mv` + re-import with no numerics change, proven byte-identical on its corpus |
-| A worker result forged into a `Certificate` | H | L | Evidence crosses the boundary as plain data; only the main thread's `@cas/rigor` constructors make certificates; a test asserts the worker module never imports `@cas/rigor` |
-| Scope: PRA-8 without PRA-10's narrative reads as a toy | M | M | The ladder card's rungs carry one sentence each from the vocabulary module — enough to name what is shown, not a lecture; the owner decided narrative comes later |
+| Risk                                                                                                 | Severity | Likelihood | Mitigation                                                                                                                                                                                                                           |
+| ---------------------------------------------------------------------------------------------------- | -------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| The certified tracker refuses too often near branch points (bisection floor reached on honest loops) | M        | M          | The lasso generator sizes lassos from the exact branch-point discs (radius ≥ 3× the disc); the preview always animates; the refusal names the distance so a reader can enlarge the lasso; measured on the corpus before PRA-3's gate |
+| BigInt cost of exact discs per frame at `n = 24`                                                     | M        | M          | Budget in §4.5; discs on release if over; the number written down rather than assumed                                                                                                                                                |
+| Tier 1 precision growth (degree-35 resolvent, coefficient discs must have radius < ½)                | M        | L          | Iterate: double the precision until every radius < ½ (research 01 §3(d)); cap at 4096 bits and refuse by name beyond it                                                                                                              |
+| A resolvent that is not squarefree                                                                   | M        | M          | Tschirnhaus retry `x ↦ x + k`, `k = 1, 2, …`, each attempt a row; refuse after three                                                                                                                                                 |
+| The monodromy ↔ Galois conceptual trap (a reader takes a loop's permutation for a Galois element)    | H        | H          | Two cards; the bridge sentence only in family mode; the denylist asserts the word "Galois" is absent from the monodromy card; PRA-10's narrative carries the explanation                                                             |
+| Transitive-group data provenance and licence                                                         | L        | L          | Fetched by a checked-in script from the LMFDB API with a recorded date; CC BY-SA 4.0 attribution in the README and the data file; GAP `transgrp` counts cross-checked against OEIS A002106                                           |
+| Coefficient-drag continuity: root labels jump when the drag crosses a branch point                   | M        | H          | It _should_ jump (a branch point was crossed) and the badge says so: the preview tracker flags a crossing, the label swap is shown as a permutation chip, and the certified pass on release decides it                               |
+| Ill-conditioned high-degree coefficient drags (Wilkinson) make the coefficient pane useless          | M        | M          | The κ gauge and the pseudozero ladder are the explanation, not a bug; the degree cap is 24 and the gauge turns the drag handle's colour                                                                                              |
+| The formula evaluator's radical argument passes through 0                                            | M        | M          | Refuse the run by name ("the radicand of node k vanished at frame f"); the lens paths make it measure-zero                                                                                                                           |
+| Extraction of the plotter's monodromy stack breaks the Riemann-surface studio                        | M        | L          | Parity golden from its own tests; the extraction is a `git mv` + re-import with no numerics change, proven byte-identical on its corpus                                                                                              |
+| A worker result forged into a `Certificate`                                                          | H        | L          | Evidence crosses the boundary as plain data; only the main thread's `@cas/rigor` constructors make certificates; a test asserts the worker module never imports `@cas/rigor`                                                         |
+| Scope: PRA-8 without PRA-10's narrative reads as a toy                                               | M        | M          | The ladder card's rungs carry one sentence each from the vocabulary module — enough to name what is shown, not a lecture; the owner decided narrative comes later                                                                    |
 
 ---
 
@@ -568,7 +579,7 @@ receiving tool asks.
 PRA-0 S · PRA-1 L · PRA-2 M · PRA-3 L · PRA-4 L · PRA-5 L · PRA-6 M · PRA-7 M · PRA-8 L · PRA-9 M–L
 (owner-ordered slices) · PRA-10 L. Contour Integration's scale: the exact engine (PRA-4/5) and the
 monodromy package (PRA-3) are the two hard parts; the panes (PRA-1) are the widest; the ladder (PRA-8)
-is the one that has to be *right* rather than large. Publish at PRA-5's gate (the Galois card live),
+is the one that has to be _right_ rather than large. Publish at PRA-5's gate (the Galois card live),
 earlier at the owner's call.
 
 ---
@@ -580,8 +591,8 @@ earlier at the owner's call.
    `@cas/rigor`, `@cas/ui`, `@cas/interchange`, `@cas/export`, and `@cas/monodromy` once it exists),
    `vite.config.ts` (port 5184), `tsconfig.json`, `eslint.config.js`, `index.html`, `src/main.ts`
    inside `runWithFatalBoundary`, `test/scaffold.test.ts`.
-2. The wiring list of §6.1 (no deploy `cp`; launcher card *Coming soon*; `.claude/launch.json` entry).
-3. ADR-0046 → Accepted; `docs/polynomial-root-analysis/STATUS.md` opened with *Current: PRA-1*.
+2. The wiring list of §6.1 (no deploy `cp`; launcher card _Coming soon_; `.claude/launch.json` entry).
+3. ADR-0046 → Accepted; `docs/polynomial-root-analysis/STATUS.md` opened with _Current: PRA-1_.
 4. Gate green; the test census counts the new project.
 
 ---
@@ -601,6 +612,7 @@ new package `@cas/monodromy`; the overlay order of §7 PRA-2/PRA-9; degree cap 2
 idea on the PRA-9/PRA-10 backlog; no hand-offs now.
 
 **Remaining, for the owner at PRA-0:**
+
 1. Accept ADR-0046 (this plan's decisions as a record).
 2. Confirm the publish gate (PRA-5 proposed).
 3. Confirm the extraction of the keyed DOM builder and `animate.ts` into `@cas/ui` at PRA-1 (both are
