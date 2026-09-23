@@ -13,6 +13,7 @@
     "./shader": "./src/shader.ts",
     "./colormap": "./src/colormap.ts",
     "./histogram": "./src/histogram.ts",
+    "./cet": "./src/cetC6.ts",
     "./mask": "./src/maskTexture.ts",
     "./dual-backend": "./src/dualBackend.ts"
   },

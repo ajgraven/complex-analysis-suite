@@ -20,7 +20,7 @@ import { compileF, makeComplexFn } from "@cas/expr";
 import { COMPLEX_DERIVED_GLSL, COMPLEX_SINGLE_GLSL, createProgram } from "@cas/gpu";
 import { buildPhaseFrag, PHASE_VERT, STAGE_MODE_CODE } from "../src/ui/stage/phase.glsl.js";
 import { ISO_STRENGTH } from "../src/ui/stage/mode.js";
-import { cetC6Bytes } from "../src/ui/stage/cetC6.js";
+import { cetC6Bytes } from "@cas/gpu/cet";
 import { CUT_GLSL } from "../src/ui/stage/cut.glsl.js";
 import { declaredProductGlsl } from "../src/ui/stage/declared.glsl.js";
 import { evaluateDeclared, type DeclaredProduct } from "../src/kernel/branch/declared.js";
