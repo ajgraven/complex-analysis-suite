@@ -475,6 +475,13 @@ function main(): void {
 
   // --- the sweep --------------------------------------------------------------------------------
   function recompute(): void {
+    // **Before the branches, not after them.** `recompute` returns early on three paths — an unreadable
+    // alphabet, the deep engine and the limit engine — and the dragon's panel is not an engine's, it is
+    // the state's. Wired in the tail it existed on the ROOT engine's path alone, so the pinned-lamp
+    // permalink, whose view hands over to the limit engine, opened with no inset at all; the a11y
+    // roster's `expect` selector is what caught it, which is the whole reason PR-1 put one there.
+    syncDragonControls();
+    scheduleInset();
     const compiled = compileAlphabet(state.alphabet);
     if ("error" in compiled) {
       alphabet = null;
@@ -560,8 +567,6 @@ function main(): void {
     syncControls();
     syncStats();
     syncProbe();
-    syncDragonControls();
-    scheduleInset();
   }
 
   function showError(message: string | null): void {

@@ -702,6 +702,16 @@ pass where the stage changed. Sizes: *S* / *M* / *L*.
   > the ramp **saturates at 26 hits**; the inset's busiest pixel at Baez's point is 9, so the flat top is
   > never reached there, and the test says where it would be.
   >
+  > **A browser pass found the panel was wired on ONE engine's path.** `recompute` returns early on
+  > three of them — an unreadable alphabet, the deep engine and the limit engine — and the dragon's sync
+  > sat in the tail, so the panel existed only when the ROOT engine drew. The pinned-lamp permalink's own
+  > view hands over to the limit engine at degree 18, so the entry the roster audits opened with no inset
+  > at all. The a11y roster's `expect` selector is what caught it, which is exactly what PR-1 put one
+  > there for; the calls are before the branches now, because the dragon is the state's and not an
+  > engine's. Verified in a real browser afterwards: the link opens with 8,192 values at depth 12,
+  > "finer than a pixel", and the origin reported INSIDE the cloud — Bousch's criterion agreeing with the
+  > pixel the stage drew.
+  >
   > **PR-1's caption guard caught PR-4's own caption.** `seen` is the app's `≈` description of its own
   > image and may not contain "theorem" or "proves" — those belong in `fact`, which carries a source —
   > and both new places had put Bousch and Michelen–Yakir in the wrong field. The rule was written three

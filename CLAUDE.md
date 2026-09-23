@@ -1612,6 +1612,60 @@ direction** with depth (1.549e-32 → 1.417e-32 at the gate's depth, 1.784e-32 �
 deeper) — so a bound tight enough to catch the second reading passes the first, which is a test pinned to
 a depth rather than to a claim.
 
+**Done — PR-4 of ADR-0046: the dragons.** The third reader of the one coefficient tree. Fix `z` with
+`|z| < 1` and the maps `x ↦ a + z·x` all contract, so `D_z` is their attractor — the set of VALUES of
+every power series over the alphabet, and the curve the pictures are named for. `src/engine/dragon.ts` +
+`src/stage/inset.ts`, a pinned `lamp` and a `theorem` mode in the state and the permalink, two new places,
+a fifth a11y roster entry; +32 node tests across two files and +3 browser tests. The gate is met with
+room: at a degree-30 prefix through Baez's `0.375453 + 0.544825i` the worst PAIRED distance is **1.2e-5
+in a picture of radius 0.542** — 0.002 of an inset pixel.
+
+**THE INSET IS THE LIMIT ENGINE'S OWN QUESTION, DRAWN.** Bousch's `q ∈ D̄ ⟺ 0 ∈ D_q` makes the cloud
+beside the picture the same object as the picture: the stage is a map of where that cloud swallows the
+origin. The two are one predicate computed in opposite directions — one keeps the values and takes a
+minimum, the other throws them away and keeps a depth — and the suite requires them to AGREE: **1,352 of
+1,352, no disagreements.** The first falsification of that was measuring the wrong thing: perturbing the
+tail at a realistic pixel broke 4 of 1,352, because **Foster's fudge (~0.04) swamps the depth-12 tail
+(~2e-4)** and halving, quartering and deleting it all give the same 4. At `ε = 0` the tail is the whole
+criterion and the response is proportional — **0, 60, 144, 288** at factors 1, ½, ¼, 0, the last being
+every in-set point there is. And **an alphabet containing 0 holds the origin for free** at every depth by
+the all-zero prefix, so membership is asked of the PROPER set; Littlewood has no zero coefficient, which
+is why that trap survives unnoticed on the flagship alphabet.
+
+**THE PAIRING SEES WHAT A HAUSDORFF DISTANCE CANNOT.** The extensions' tails index both sides, so every
+predicted point has a named partner and what is reported is the largest distance between partners.
+Michelen–Yakir's derivation gives `T(w) → −R(α)/P′(α)`, and the paper can drop the minus because over
+Littlewood `−A = A` makes the predicted set its own negation — measured, exactly — so a Hausdorff reading
+is blind to the sign on the very alphabet the theorem is stated for. The pairing is not: **6.8e-3 honest
+against 1.09 dropped, 159×.** Over `{0, 1}` the sign moves the set too (1.2e-2 against 8.8e-1).
+
+**The convergence is a U, and the far side is float64 rather than the theorem.** `P·(1 + z^{d+1})` keeps
+`α` a root and doubles the prefix degree exactly, so one root reads at 16, 33, 67 and 135 with no search:
+worst **6.83e-3 → 1.21e-5 → 1.80e-4 → 5.42e-1** against a magnification noise of **1.12e-13 → 1.25e-10 →
+1.57e-4 → 2.47e+8**. So a deep probe's HIGHEST-degree polynomials are the worst prefixes to illustrate
+the theorem with; the mode refuses past a measured floor and names a lower-degree prefix as the repair,
+deciding it before the `|A|^m` Newton solves so the refusal is free.
+
+**Three defects only a browser or a guard could find.** `putImageData` REPLACES rather than composites,
+alpha included, so the first draft's painted background was obliterated and every unlit pixel came back
+transparent black — **and the test that found it was itself wrong**, asking for "> 20 distinct colours",
+a threshold a flat fill passes; the frame carries exactly one colour per per-pixel count plus the
+background (**ten**, from 16,384 values over 6,179 lit pixels with a peak of 9) and that is what is
+asserted. **`recompute` returns early on three paths** — an unreadable alphabet, the deep engine, the
+limit engine — and the dragon's sync sat in the tail, so the panel existed only when the ROOT engine
+drew; the pinned-lamp permalink hands over to the limit engine, so the roster's own entry opened with no
+inset, and its `expect` selector is what caught it. And **PR-1's caption guard caught PR-4's caption**:
+`seen` is the app's `≈` description and may not say "theorem" — that belongs in `fact`, which carries a
+source.
+
+**Sweep: 38 mutants, 38 killed, no survivors and no equivalents.** Four survived the first pass. **A
+COMPLEX alphabet was missing from the corpus** — over a real alphabet the imaginary half of `a·z^k` is
+identically zero, so a sign error there is invisible on every preset the file used. The `x ≥ width` half
+of the raster's bounds test is the one a far-away point cannot exercise: a huge index falls off a typed
+array for free, while a point just past the right edge has a valid index one row down, so removing the
+check does not lose ink, it MOVES it. And the coverage ramp moved into `cloudAlpha` where the node gate
+can reach it — measuring it found it **saturates at 26 hits**, which the inset never reaches at 9.
+
 Work in small, reviewable commits. Pause at each phase/milestone gate for review before proceeding.
 When a command or path in the docs is marked `⚠ verify`, check it against the actual repo
 contents rather than assuming.
