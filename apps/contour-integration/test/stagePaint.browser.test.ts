@@ -26,7 +26,7 @@ import { mountShell2 } from "../src/shell/app.js";
 import { offeredCorpus } from "../src/shell/state.js";
 import { buildPhaseFrag, PHASE_VERT, STAGE_MODE_CODE } from "../src/ui/stage/phase.glsl.js";
 import { CUT_GLSL } from "../src/ui/stage/cut.glsl.js";
-import { cetC6Bytes } from "../src/ui/stage/cetC6.js";
+import { cetC6Bytes } from "@cas/gpu/cet";
 import { ISO_STRENGTH } from "../src/ui/stage/mode.js";
 
 const mounted: ReturnType<typeof mountShell2>[] = [];

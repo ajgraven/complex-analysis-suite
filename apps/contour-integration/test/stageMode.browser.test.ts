@@ -12,7 +12,7 @@
 import { afterEach, expect, describe, it } from "vitest";
 
 import { mountShell2 } from "../src/shell/app.js";
-import { CET_C6 } from "../src/ui/stage/cetC6.js";
+import { CET_C6 } from "@cas/gpu/cet";
 import { DARK_INK, LIGHT_INK, type InkTheme } from "../src/ui/inkTheme.js";
 import type { StageMode } from "../src/ui/stage/mode.js";
 import { plotToScreen } from "../src/kernel/camera.js";

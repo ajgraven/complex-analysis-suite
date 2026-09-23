@@ -43,12 +43,18 @@ import {
   buildColormapLUT,
   makeColormapTexture,
 } from "@cas/gpu/colormap";
+import { CET_C6, cetC6Bytes } from "@cas/gpu/cet";
 ```
 
 **Colormaps** (`./colormap`) — `sampleStops(stops, t)` interpolates a `ColorStop[]` ramp;
 `buildGradientLUT` / `buildColormapLUT` bake one into a lookup table; `makeColormapTexture(gl, …)`
 uploads it as a GL texture. Extracted once it had its second consumer per ADR-0007 — Complex
 Dynamics (`src/palettes.ts`) and the Quadrature app's Schwarz renderer both use it.
+
+**CET-C6** (`./cet`) — `CET_C6`, Peter Kovesi's cyclic perceptually-uniform colour map as 256 sRGB
+triples (CC-BY 4.0; cite Kovesi, arXiv:1509.03700), and `cetC6Bytes()`, the same table as 256 opaque
+RGBA8 texels ready for a 256×1 texture. Contour Integration's phase portrait and Polynomial Roots' Egan
+hue both read it; it moved from the former byte for byte when the latter became its second consumer.
 
 **Shader plumbing** (`./shader`) — `compileShader(gl, type, src)`, `linkProgram(gl, vs, fs)`,
 and `createProgram(gl, vsSource, fsSource)` (compile + link in one call), each throwing with

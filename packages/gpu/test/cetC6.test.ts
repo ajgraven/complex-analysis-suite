@@ -7,7 +7,7 @@
 // it, which is satisfied by any 256 colours at all.
 import { describe, expect, it } from "vitest";
 
-import { CET_C6, cetC6Bytes } from "../src/ui/stage/cetC6.js";
+import { CET_C6, cetC6Bytes } from "../src/cetC6.js";
 
 /** Rec. 709 luma, the measure the browser suite's `dark` threshold is set against. */
 const luma = (c: readonly [number, number, number]): number =>
@@ -42,11 +42,22 @@ describe("CET-C6", () => {
   });
 
   it("has no entry dark enough to be mistaken for ink", () => {
-    // What `stageMode.browser.test.ts`'s differential measurement rests on. Measured darkest 93.1;
+    // What Contour Integration's `stageMode.browser.test.ts` differential measurement rests on. Measured darkest 93.1;
     // an absolute "dark pixel" threshold below that counts hues rather than isolines, which is why
     // that suite compares the two frames per pixel instead of counting dark ones.
     const darkest = Math.min(...CET_C6.map(luma));
     expect(darkest).toBeGreaterThan(90);
+  });
+
+  it("is byte-identical to the table Contour Integration shipped before the move", () => {
+    // FNV-1a over `cetC6Bytes()`, measured in `apps/contour-integration` before the `git mv` (ddd42cbb,
+    // 1024 bytes). The extraction's own gate: a refactor that moves data must not change it.
+    let h = 0x811c9dc5;
+    for (const v of cetC6Bytes()) {
+      h ^= v;
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    expect(h.toString(16)).toBe("ddd42cbb");
   });
 
   it("uploads as 256 opaque RGBA texels", () => {

@@ -5,7 +5,7 @@
 // than features of the function — Kovesi's "false features", and the single most common defect in
 // published domain-colouring figures.
 //
-// **The hue path is CET-C6** (`ui/stage/cetC6.ts`, sampled as a 256×1 texture), which is what
+// **The hue path is CET-C6** (`@cas/gpu/cet`, sampled as a 256×1 texture), which is what
 // PLAN.md §5.3 names and what this file's interim OkLCh sweep was a placeholder for until M8 step
 // 1.9. The sweep spaced hue uniformly in ANGLE, which is not uniform in discriminability: measured
 // over C6's own 256 entries, the Oklab hue-angle step ranges 0.0048…0.0648 rad with a mean of
@@ -140,7 +140,7 @@ uniform vec2 uParamC;
 uniform float uModulusDepth; // 0 = flat phase only
 uniform float uGridStrength;
 uniform float uIsoStrength;  // 0 = no modulus contours
-uniform sampler2D uRamp;     // CET-C6, 256x1, REPEAT + LINEAR (ui/stage/cetC6.ts)
+uniform sampler2D uRamp;     // CET-C6, 256x1, REPEAT + LINEAR (@cas/gpu/cet)
 uniform int uMode;           // ui/stage/mode.ts, via STAGE_MODE_CODE below
 uniform vec3 uPaper;         // the textbook plate's ground, in sRGB [0,1]
 uniform float uWash;         // export only: 0 = the portrait as shown, 1 = washed onto paper

@@ -15,7 +15,7 @@ import { COMPLEX_DERIVED_GLSL, COMPLEX_SINGLE_GLSL, createProgram } from "@cas/g
 
 import { buildPhaseFrag, PHASE_VERT, STAGE_MODE_CODE } from "../src/ui/stage/phase.glsl.js";
 import { CUT_GLSL } from "../src/ui/stage/cut.glsl.js";
-import { CET_C6, cetC6Bytes } from "../src/ui/stage/cetC6.js";
+import { CET_C6, cetC6Bytes } from "@cas/gpu/cet";
 import type { StageMode } from "../src/ui/stage/mode.js";
 
 const STDLIB = `${COMPLEX_SINGLE_GLSL}\n${COMPLEX_DERIVED_GLSL}\nuniform vec2 uA;\n${CUT_GLSL}\n`;

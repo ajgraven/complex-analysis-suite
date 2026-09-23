@@ -26,6 +26,7 @@ It currently hosts **twelve** applications riding **thirteen** shared `@cas/*` p
 | **Hele-Shaw Flow** (`apps/hele-shaw-flow`)         | Free-boundary flow in a Hele-Shaw cell as a conformal map of the disk evolving in time: the exact Graven–Makarov "twisting" quadrature domain (a complex charge grows it to a double point or a (3,2)-cusp), and a numerical interior-droplet Polubarinova–Galin evolver (injection smooths; suction fingers into a cusp) | Vite + TypeScript |
 | **Potential Theory** (`apps/potential-theory`)     | A compact set `K` as a grounded conductor: equilibrium charge, logarithmic capacity, and Green's-function equipotentials from the exterior conformal map, with Faber-polynomial zeros and Fekete/Leja points as two more roads to the equilibrium measure (exact `=` for SC polygons + closed forms, log-lightning `≈` for smooth blobs) | Vite + TypeScript |
 | **Contour Integration** (`apps/contour-integration`) | Contour integration and the residue theorem: a sandbox — drag the contour across a pole and watch `∮` jump by `2πi·Res` — and a **28-integral worked-example gallery**, each solved in closed form from `2πi Σ n(γ,aₖ)·Res` with exactly-decided windings, exact residues, certified arc bounds, and a **Closing Ledger** that answers *does this argument close?* — presented as two rails around the stage with every formula typeset, a front door of eight classics over an eight-group taxonomy, and a faded drill | Vite + TypeScript |
+| **Polynomial Roots** (`apps/polynomial-roots`)     | Every root of every polynomial whose coefficients come from a small finite alphabet, painted by density — the fractal root clouds of Baez, Christensen & Derbyshire's *The Beauty of Roots*. Littlewood `{−1, +1}`, Newman `{0, 1}`, `{−1, 0, 1}`, integer ranges, roots of unity and a custom alphabet, with the symmetry reduction DERIVED per alphabet; a degree scrub over per-degree float-texture layers, histogram-equalised density and colour-by-degree, and — handing over as you zoom — a per-pixel LIMIT-SET engine that prunes the coefficient tree in a generated shader and paints the escape depth, so the picture keeps resolving past any degree, and below a float32 texel a DEEP engine that walks the tree once per frame at the view's own centre in double-double and splats each survivor's root as a float32 OFFSET, reaching `1e-30`; a probe that names the polynomial under the cursor with its residual; `#vs=` permalinks + PNG export, and a gallery of the named places from the literature | Vite + TypeScript |
 
 The Correspondences tool was the **forcing function** for the whole suite: its
 requirements deliberately drove which shared packages got extracted, and in what order.
@@ -43,9 +44,13 @@ Quadrature-app-onto-Vite ESM-ification, and the shared-package extractions
 `@cas/dynamics`, and `@cas/export` on the ADR-0007 second-consumer rule, and `@cas/conformal`
 extracted *ahead* of its second consumer per [ADR-0018](docs/DECISIONS.md#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore))
 are all done; the Correspondences app exists through its parameter-space milestone plus a complete
-interactive mating visualizer. The whole workspace is green (**6818 Vitest tests**
-across **599** files — 6643 across 592 before the 2026-09-20 remediation; this
-line had said 6649 across 593, which HEAD's own commit message already contradicted — plus lint,
+interactive mating visualizer. The whole workspace is green (**7111 Vitest tests**
+across **622** files — 7085 across 621 before ADR-0046's M6 (Egan's hue) added 26 across 1;
+7067 across 620 before its PR-5 (the gallery) added 18 across 1;
+7035 across 618 before its PR-4 (the dragons) added 32 across 2;
+6997 across 615 before its PR-3 (deep zoom by reference) added 38 across 3;
+6949 across 610 before its PR-2 (the limit-set engine) added 48 across 5,
+and 6818 across 599 before Polynomial Roots itself added 122 across 10 and its `@cas/gpu` extraction 9; 6643 across 592 before the 2026-09-20 remediation — plus lint,
 typecheck, and per-app builds).
 
 What's **deferred / exploratory** (by design, not omission):
@@ -118,7 +123,7 @@ complex-analysis-suite/
 │   ├── exact/                ← @cas/exact       exact polynomial arithmetic (CD + Correspondences)
 │   ├── schwarz/              ← @cas/schwarz     the Schwarz-reflection σ engine (CD + Correspondences)
 │   ├── dynamics/             ← @cas/dynamics    inverse-Böttcher exterior maps + external rays (Complex Dynamics)
-│   ├── export/               ← @cas/export      PNG text-chunk reproducibility metadata, `tEXt` + `iTXt` (CD + plotter + Riemann Map + Argument Principle + 2D Electrostatics + 2D Hydrodynamics + Contour Integration)
+│   ├── export/               ← @cas/export      PNG text-chunk reproducibility metadata, `tEXt` + `iTXt` (CD + plotter + Riemann Map + Argument Principle + 2D Electrostatics + 2D Hydrodynamics + Contour Integration + Polynomial Roots)
 │   ├── conformal/            ← @cas/conformal   the conformal-map builder: Vandermonde–Arnoldi + lightning + forward map + interior/exterior Schwarz–Christoffel (Riemann Map + Faber Transform + @cas/flow)
 │   ├── faber/                ← @cas/faber       the exterior Faber-transform engine: Faber-polynomial recurrence, exact rational images, exterior-map Laurent jets (Quadrature Domains + Faber Transform + Potential Theory)
 │   ├── ui/                   ← @cas/ui          the shared browser shell: accessible canvas, fatal-error boundary, off-thread compute, direction ticks
@@ -137,7 +142,8 @@ complex-analysis-suite/
     ├── 2d-hydrodynamics/     ← ideal flow past a body via conformal transplant: the airfoil + a closed-form gallery
     ├── hele-shaw-flow/       ← free-boundary Hele-Shaw evolution: the twist + droplet showpieces
     ├── potential-theory/     ← a compact set K as a grounded conductor (equilibrium measure, capacity, Green)
-    └── contour-integration/  ← contour integration + the residue theorem: a sandbox and a 28-integral worked-example gallery
+    ├── contour-integration/  ← contour integration + the residue theorem: a sandbox and a 28-integral worked-example gallery
+    └── polynomial-roots/     ← fractal root clouds of small-alphabet polynomials (Littlewood and friends)
 ```
 
 > **The thirteen packages that exist** are `@cas/core`, `@cas/gpu`, `@cas/expr`,
