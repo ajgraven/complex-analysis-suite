@@ -112,6 +112,19 @@ validator and a golden-corpus generator.
 
 - **Reuses:** `@cas/conformal` (analytic comparison), `@cas/core`. Discrete map `≈`.
 
+## ▶ 8. Polynomial Root Analysis — *selected (plan in progress: [`docs/polynomial-root-analysis/PLAN.md`](../polynomial-root-analysis/PLAN.md), ADR-0047 proposed)*
+
+Roots and coefficients of one polynomial as two draggable point sets over a phase portrait,
+every overlay a theorem about that picture (Gauss–Lucas, certified Smith root discs, the
+discriminant's zeros in the selected coefficient's plane, the pseudozero ladder), then the two
+groups that act on the roots — the Galois group over ℚ (`=` Sₙ/Aₙ at any degree, `=` to degree 7 by
+Stauduhar descent, `≈` 8–15) and the monodromy of a loop or a family by *certified* continuation —
+animated on the plotted roots, closing with Arnold's topological proof of Abel–Ruffini as executed
+commutator loops. Distinct from `apps/polynomial-roots` (ADR-0046, the root _cloud_ of all small-alphabet polynomials, under honourable mentions below): this is one polynomial and what acts on it. Requested by the owner in September 2026 rather than drawn from this catalogue;
+recorded here so the reuse notes below can point at it. Reuses `@cas/exact` (widened: factorisation
+over ℤ, `𝔽ₚ[x]`, Smith discs), `@cas/core`, `@cas/expr`, `@cas/gpu`, `@cas/rigor`, `@cas/ui`,
+`@cas/interchange`, `@cas/export`, and extracts the plotter's monodromy stack into `@cas/monodromy`.
+
 ## ◇ Honourable mentions (near-free given the stack)
 
 - **Newton / rational-map basins** — one shader off the dynamics engine (`@cas/gpu`,
