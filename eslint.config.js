@@ -34,6 +34,7 @@ const APP_NAMES = [
   "hele-shaw-flow",
   "potential-theory",
   "polynomial-roots",
+  "polynomial-root-analysis", // ADR-0047 (PRA-0)
 ];
 
 const noCrossAppImports = APP_NAMES.flatMap((name) => [name, `${name}/*`]).map(

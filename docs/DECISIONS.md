@@ -55,7 +55,7 @@ Format follows Michael Nygard's ADR convention.
 | [0044](#adr-0044-withdraw-the-in-app-suite-navigation-header-the-launcher-is-the-unified-menu)                | Withdraw the in-app suite navigation header (the launcher is the unified menu)                                 | Accepted |
 | [0045](#adr-0045)                                                                                              | One predicate decides whether a value may be shown                                                            | Accepted |
 | [0046](#adr-0046)                                                                                              | Polynomial Roots — the twelfth published app: a root-cloud renderer on one coefficient tree                  | Accepted |
-| [0047](#adr-0047)                                                                                              | Polynomial Root Analysis: the fourteenth app, `@cas/exact` widened, `@cas/monodromy` extracted, certified tracking earns `=` | Proposed |
+| [0047](#adr-0047)                                                                                              | Polynomial Root Analysis: the fourteenth app, `@cas/exact` widened, `@cas/monodromy` extracted, certified tracking earns `=` | Accepted |
 
 > **Status legend:** Proposed → Accepted (once you sign off) → Superseded/Deprecated.
 > All thirty-six are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
@@ -4506,9 +4506,11 @@ DF64 reused where it buys depth and not paid for where it does not.
    (`2d-electrostatics`, `2d-hydrodynamics`, `hele-shaw-flow`, `potential-theory`), so the
    no-cross-app-imports lint rule had silently stopped covering a third of the suite. The graph-level
    rule in `.dependency-cruiser.cjs` is generic and did cover them, which is why nothing broke.
+<a id="adr-0047"></a>
+
 ## ADR-0047: Polynomial Root Analysis — the fourteenth app, `@cas/exact` widened, `@cas/monodromy` extracted, certified tracking earns `=`
 
-**Status:** Proposed (2026-09-22). Becomes Accepted with the plan it records:
+**Status:** Accepted (2026-09-23; proposed 2026-09-22), with the plan it records:
 [`docs/polynomial-root-analysis/PLAN.md`](polynomial-root-analysis/PLAN.md) and its
 [`DESIGN.md`](polynomial-root-analysis/DESIGN.md), grounded in five research tracks under
 [`docs/polynomial-root-analysis/research/`](polynomial-root-analysis/research/). Narrows
@@ -4592,7 +4594,9 @@ import.
 
 ### Action items
 
-1. [ ] Owner accepts this ADR and the plan (PLAN §12). _(Drafted as ADR-0046 on 2026-09-22;
-   renumbered 2026-09-23 when PR #348 took that number.)_
-2. [ ] Confirm the publish gate (PRA-5) and the `@cas/ui` lifts of the keyed builder and `animate.ts`.
-3. [ ] PRA-0 lands with `STATUS.md` opened.
+1. [x] Owner accepts this ADR and the plan (PLAN §12) — accepted 2026-09-23. _(Drafted as ADR-0046
+   on 2026-09-22; renumbered 2026-09-23 when PR #348 took that number.)_
+2. [x] Confirm the publish gate (PRA-5) and the `@cas/ui` lifts of the keyed builder and `animate.ts`
+   — both confirmed 2026-09-23.
+3. [x] PRA-0 lands with `STATUS.md` opened — the scaffold, wired into the workspace, the test census,
+   `APP_NAMES`, the a11y roster and `.claude/launch.json`, with the launcher card _Coming soon_.

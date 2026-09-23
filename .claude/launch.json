@@ -38,6 +38,18 @@
         "--strictPort"
       ],
       "port": 5177
+    },
+    {
+      "name": "pra",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "apps/polynomial-root-analysis/node_modules/vite/bin/vite.js",
+        "apps/polynomial-root-analysis",
+        "--port",
+        "5185",
+        "--strictPort"
+      ],
+      "port": 5185
     }
   ]
 }

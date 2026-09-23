@@ -9,10 +9,11 @@
 `complex-analysis-suite` — a monorepo for a growing **suite of complex-analysis /
 complex-dynamics visualization tools** that share common packages and hand data off to
 one another. North-star property: **each new tool builds fewer primitives from scratch
-than the last.** It now unifies thirteen apps — Complex Dynamics, Quadrature Domains,
+than the last.** It now unifies fourteen apps — Complex Dynamics, Quadrature Domains,
 Complex Function Plotter, Riemann Map, Argument Principle, Faber Transform, 2D
 Electrostatics, 2D Hydrodynamics, Hele-Shaw Flow, Potential Theory, Contour Integration, and
-Polynomial Roots, plus the anti-holomorphic Correspondences tool (built, not yet published) — riding
+Polynomial Roots, plus two built but not yet published — the anti-holomorphic Correspondences tool and
+Polynomial Root Analysis (ADR-0047, in construction) — riding
 thirteen shared `@cas/*` packages.
 
 Read the docs in this order before making changes: [`docs/VISION.md`](docs/VISION.md) →
@@ -57,7 +58,8 @@ Read the docs in this order before making changes: [`docs/VISION.md`](docs/VISIO
     `complex-function-plotter/`, `riemann-map/`, `argument-principle/`, `faber-transform/`,
     `2d-electrostatics/`, `2d-hydrodynamics/`, `hele-shaw-flow/`, `potential-theory/`,
     `contour-integration/`, and `polynomial-roots/` beneath it.
-    `apps/correspondences` is **built but not published** (the launcher shows it as "Coming soon"). There are **two** workflows: `ci.yml` (jobs `build` + `browser` + the non-blocking
+    `apps/correspondences` and `apps/polynomial-root-analysis` are **built but not published** (the launcher
+    shows both as "Coming soon"; the latter publishes at PRA-5, ADR-0047). There are **two** workflows: `ci.yml` (jobs `build` + `browser` + the non-blocking
     `a11y`) and `deploy-pages.yml`; the `browser` job is not a publish blocker. *(Corrected
     2026-09-20: this said "the `build` + `browser` gate" — `grep -n '^  [a-z0-9_-]*:'
     .github/workflows/ci.yml` gives `build:` 46, `browser:` 131, `a11y:` 187.)*
@@ -99,8 +101,8 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **622 test files / 7111 tests**
-*(621 / 7085 before ADR-0046's M6 — Egan's hue, the CET-C6 extraction and the symmetry readout — added 1 file / 26 tests; 620 / 7067 before its PR-5 — the gallery — added 1 file / 18 tests; 618 / 7035 before its PR-4 — the dragons — added 2 files / 32 tests; 615 / 6997 before its PR-3 — deep zoom by reference — added 3 files / 38 tests; 610 / 6949 before its PR-2 — the limit-set engine — added 5 files / 48 tests; 599 / 6818 before
+Green is **623 test files / 7116 tests**
+*(622 / 7111 before ADR-0047's PRA-0 — the Polynomial Root Analysis scaffold — added 1 file / 5 tests; 621 / 7085 before ADR-0046's M6 — Egan's hue, the CET-C6 extraction and the symmetry readout — added 1 file / 26 tests; 620 / 7067 before its PR-5 — the gallery — added 1 file / 18 tests; 618 / 7035 before its PR-4 — the dragons — added 2 files / 32 tests; 615 / 6997 before its PR-3 — deep zoom by reference — added 3 files / 38 tests; 610 / 6949 before its PR-2 — the limit-set engine — added 5 files / 48 tests; 599 / 6818 before
 Polynomial Roots itself added 10 files / 122 tests and its `@cas/gpu` extraction 1 / 9; 592 / 6643 before the 2026-09-20 remediation)* with lint and typecheck
 silent. `pnpm lint` includes `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the
 `packages/*` dists first, so a clean clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as
@@ -121,8 +123,8 @@ does not read it.)*
 deleted at the M8 cutover.)* **Never pipe the gate through `tail` or `head`** — doing so has
 truncated real failures before.
 
-Dev servers go through `.claude/launch.json` (one entry per app that has one — **four today**:
-`qd-esm` 5199, `cd-esm` 5188, `corr` 5176, `contour` 5177), not a bare `vite` left running in the
+Dev servers go through `.claude/launch.json` (one entry per app that has one — **five today**:
+`qd-esm` 5199, `cd-esm` 5188, `corr` 5176, `contour` 5177, `pra` 5185), not a bare `vite` left running in the
 background. *(Corrected 2026-09-20: this said "one entry per app"; `grep '"name"' .claude/launch.json`
 gives four configurations against twelve tool apps.)*
 
@@ -1276,15 +1278,18 @@ extracted**: the honest-labelling guardrail above had no shared code at all, onl
 `.mjs` that each later app reimplemented. Branded types make `=` a compile error to write by hand.
 **QD is not migrated onto it**, so the suite has two rigor vocabularies on purpose.
 
-**In planning — Polynomial Root Analysis (the fourteenth app, [ADR-0047](docs/DECISIONS.md) *proposed*, 2026-09-22; not ADR-0046's *Polynomial Roots*, the root-cloud renderer above).**
+**In progress — Polynomial Root Analysis (the fourteenth app, [ADR-0047](docs/DECISIONS.md) *accepted* 2026-09-23; not ADR-0046's *Polynomial Roots*, the root-cloud renderer above).**
 Roots and coefficients of one polynomial as two draggable point sets over a phase portrait; the Galois
 group over ℚ in three honest tiers (`=` Sₙ/Aₙ at any degree, `=` to degree 7 by Stauduhar descent, `≈`
 8–15 by statistics); loop monodromy by *certified* continuation (Smith discs in exact arithmetic on the
 dyadic floats, refused by name when a segment cannot be certified); Arnold's Abel–Ruffini proof as
-executed commutator loops. **Nothing is wired yet.** Read
+executed commutator loops. **PRA-0 (the scaffold) has landed**: `apps/polynomial-root-analysis` (port 5185,
+namespace `pra`) mounts two empty, named panes inside the fatal boundary, is wired into the workspace, the
+test census, `APP_NAMES`, the a11y roster and `.claude/launch.json`, and shows on the launcher as *Coming
+soon*; it is built but not published until PRA-5. Read
 [`docs/polynomial-root-analysis/STATUS.md`](docs/polynomial-root-analysis/STATUS.md) first, then
-[`PLAN.md`](docs/polynomial-root-analysis/PLAN.md) and [`DESIGN.md`](docs/polynomial-root-analysis/DESIGN.md);
-the first code lands at PRA-0 after the owner's three decisions in PLAN §12. It widens `@cas/exact`
+[`PLAN.md`](docs/polynomial-root-analysis/PLAN.md) and [`DESIGN.md`](docs/polynomial-root-analysis/DESIGN.md).
+It widens `@cas/exact`
 (factorisation over ℤ, `𝔽ₚ[x]`, Smith discs) and extracts the plotter's monodromy stack into
 `@cas/monodromy` (ADR-0007, second consumer).
 

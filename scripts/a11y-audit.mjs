@@ -352,6 +352,14 @@ const PAGES = [
     dist: "apps/correspondences/dist",
     file: "mating.html",
   },
+  {
+    // Built but not yet published (ADR-0047 publishes at PRA-5), audited from PRA-0 like
+    // correspondences so the page is clean before it has anything on it.
+    id: "polynomial-root-analysis",
+    mount: "polynomial-root-analysis",
+    dist: "apps/polynomial-root-analysis/dist",
+    file: "index.html",
+  },
 ];
 
 // The WCAG 2.0/2.1 A + AA conformance set plus axe's best-practice pack (landmarks/regions, valid

@@ -368,8 +368,8 @@ tools:
   **one combined Pages site**: `apps/launcher/dist` at the root, with `complex-dynamics/`,
   `quadrature-domains/`, `complex-function-plotter/`, `riemann-map/`, `argument-principle/`,
   `faber-transform/`, `2d-electrostatics/`, `2d-hydrodynamics/`, `hele-shaw-flow/`, `potential-theory/`,
-  `contour-integration/`, and `polynomial-roots/` beneath it (`apps/correspondences` is built but **not**
-  published). Note the
+  `contour-integration/`, and `polynomial-roots/` beneath it (`apps/correspondences` and
+  `apps/polynomial-root-analysis` are built but **not** published; the latter publishes at PRA-5, ADR-0047). Note the
   shape — apps build independently but publish
   *together*, as a single artifact, not as independent Pages sites.
 - `apps/correspondences` is **built but not published** (kept in the build for CI parity; the
@@ -458,7 +458,7 @@ shippable. The launcher delivers the *experience* of a suite (one entry point, m
 between tools, hand-off between them) at a fraction of the cost and coupling. If a unified shell is ever wanted, it can be added later as *another*
 app that embeds the others — but it is explicitly out of scope now.
 
-The launcher is a static stub (`apps/launcher`) listing all twelve published apps plus a "Coming soon"
-correspondences card (thirteen cards in all), and it is the **whole** of the unified menu: the in-app nav header
+The launcher is a static stub (`apps/launcher`) listing all twelve published apps plus two "Coming soon"
+cards — Polynomial Root Analysis and Correspondences (fourteen cards in all), and it is the **whole** of the unified menu: the in-app nav header
 that once accompanied it is withdrawn (ADR-0044), and ADR-0032's U7 — wiring that header's hand-off picker to
 the interchange codec — is closed as withdrawn rather than done. See [MIGRATION](MIGRATION.md).

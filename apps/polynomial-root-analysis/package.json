@@ -1,0 +1,31 @@
+{
+  "name": "polynomial-root-analysis",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Polynomial Root Analysis — one polynomial and what acts on its roots. Roots and coefficients as two draggable point sets over a phase portrait (Vieta one way, a tracked re-solve the other), with certified Smith inclusion discs; the Galois group over ℚ in three honest tiers (= Sₙ/Aₙ at any degree, = to degree 7 by resolvents, ≈ 8–15 by statistics); loop monodromy by certified continuation, refused by name where a segment cannot be certified; and Arnold's topological proof of Abel–Ruffini as executed commutator loops. Established by ADR-0047 (plan: docs/polynomial-root-analysis/PLAN.md). Not ADR-0046's Polynomial Roots, the root-cloud renderer. PRA-0 is the scaffold: @cas/ui (fatal boundary, accessible canvas) only; @cas/core, @cas/exact, @cas/expr, @cas/gpu, @cas/rigor, @cas/interchange, @cas/export and the new @cas/monodromy join in the milestones that first need them (ADR-0007).",
+  "license": "MIT",
+  "author": "Andrew Graven <andrew@graven.com>",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@cas/ui": "workspace:*"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "eslint": "^9.17.0",
+    "globals": "^15.14.0",
+    "jsdom": "^26.1.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.0",
+    "vite": "^5.4.10",
+    "vitest": "^2.1.4"
+  }
+}

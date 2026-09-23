@@ -60,6 +60,7 @@ const PROJECTS = [
   { name: 'potential-theory', match: '/apps/potential-theory/', floor: 1 },
   { name: 'contour-integration', match: '/apps/contour-integration/', floor: 1 },
   { name: 'polynomial-roots', match: '/apps/polynomial-roots/', floor: 1 },
+  { name: 'polynomial-root-analysis', match: '/apps/polynomial-root-analysis/', floor: 1 },
 ];
 const GLOBAL_FILE_FLOOR = 200;
 

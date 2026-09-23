@@ -39,4 +39,5 @@ export default defineWorkspace([
   "./apps/hele-shaw-flow/vite.config.ts",
   "./apps/potential-theory/vite.config.ts",
   "./apps/polynomial-roots/vite.config.ts",
+  "./apps/polynomial-root-analysis/vite.config.ts",
 ]);

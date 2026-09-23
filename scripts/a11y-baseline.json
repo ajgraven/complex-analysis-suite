@@ -62,6 +62,7 @@
     }
   },
   "launcher": {},
+  "polynomial-root-analysis": {},
   "polynomial-roots": {},
   "polynomial-roots-deep": {},
   "polynomial-roots-limit": {},

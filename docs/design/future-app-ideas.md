@@ -112,7 +112,7 @@ validator and a golden-corpus generator.
 
 - **Reuses:** `@cas/conformal` (analytic comparison), `@cas/core`. Discrete map `≈`.
 
-## ▶ 8. Polynomial Root Analysis — *selected (plan in progress: [`docs/polynomial-root-analysis/PLAN.md`](../polynomial-root-analysis/PLAN.md), ADR-0047 proposed)*
+## ▶ 8. Polynomial Root Analysis — *in progress (ADR-0047 accepted; PRA-0 scaffold landed — [`STATUS.md`](../polynomial-root-analysis/STATUS.md), [`PLAN.md`](../polynomial-root-analysis/PLAN.md))*
 
 Roots and coefficients of one polynomial as two draggable point sets over a phase portrait,
 every overlay a theorem about that picture (Gauss–Lucas, certified Smith root discs, the

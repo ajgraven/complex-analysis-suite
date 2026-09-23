@@ -1,9 +1,8 @@
 # `apps/polynomial-root-analysis` — implementation plan
 
-> **Status: PROPOSED.** Awaiting the owner's review. [ADR-0047](../DECISIONS.md#adr-0047) is drafted
-> in _Proposed_ status and becomes _Accepted_ when this plan is; nothing below is committed beyond
-> PRA-0, and each later milestone is a separately-approved gate (CLAUDE.md: working software at
-> every step; pause at each gate for review).
+> **Status: ACCEPTED** (2026-09-23), with [ADR-0047](../DECISIONS.md#adr-0047). PRA-0 has landed;
+> progress is tracked in [`STATUS.md`](STATUS.md). Each later milestone is a separately-approved gate
+> (CLAUDE.md: working software at every step; pause at each gate for review).
 >
 > Grounded in five research tracks in [`research/`](research/): Galois-group computation in the
 > browser (01), monodromy and Abel–Ruffini visualisation (02), root-visualisation methods (03), suite
@@ -624,7 +623,7 @@ _Polynomial Roots_. This plan's record is therefore **ADR-0047**, its port **518
 (_Polynomial Root Analysis_ — one polynomial and what acts on it, against a cloud of all of them), the
 ensemble overlay is dropped in favour of the sibling (§1.2), and `CET_C6` is taken from `@cas/gpu`.
 
-**Remaining, for the owner at PRA-0:**
+**Decided at PRA-0 (owner, 2026-09-23): all three accepted as written.**
 
 1. Accept ADR-0047 (this plan's decisions as a record).
 2. Confirm the publish gate (PRA-5 proposed).

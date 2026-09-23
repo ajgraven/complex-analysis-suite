@@ -10,7 +10,7 @@ visualization tools** that share common underlying packages and can hand data of
 another. The organizing goal — the **north star** — is that **each new tool added to the
 suite requires building fewer primitives from scratch than the last**.
 
-It currently hosts **twelve** applications riding **thirteen** shared `@cas/*` packages:
+It currently hosts **fourteen** applications — twelve published, Correspondences and Polynomial Root Analysis built but not yet published — riding **thirteen** shared `@cas/*` packages:
 
 | App                                                | What it does                                                                                                                                                                                                                                                                                                  | Stack                   |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
@@ -27,6 +27,7 @@ It currently hosts **twelve** applications riding **thirteen** shared `@cas/*` p
 | **Potential Theory** (`apps/potential-theory`)     | A compact set `K` as a grounded conductor: equilibrium charge, logarithmic capacity, and Green's-function equipotentials from the exterior conformal map, with Faber-polynomial zeros and Fekete/Leja points as two more roads to the equilibrium measure (exact `=` for SC polygons + closed forms, log-lightning `≈` for smooth blobs) | Vite + TypeScript |
 | **Contour Integration** (`apps/contour-integration`) | Contour integration and the residue theorem: a sandbox — drag the contour across a pole and watch `∮` jump by `2πi·Res` — and a **28-integral worked-example gallery**, each solved in closed form from `2πi Σ n(γ,aₖ)·Res` with exactly-decided windings, exact residues, certified arc bounds, and a **Closing Ledger** that answers *does this argument close?* — presented as two rails around the stage with every formula typeset, a front door of eight classics over an eight-group taxonomy, and a faded drill | Vite + TypeScript |
 | **Polynomial Roots** (`apps/polynomial-roots`)     | Every root of every polynomial whose coefficients come from a small finite alphabet, painted by density — the fractal root clouds of Baez, Christensen & Derbyshire's *The Beauty of Roots*. Littlewood `{−1, +1}`, Newman `{0, 1}`, `{−1, 0, 1}`, integer ranges, roots of unity and a custom alphabet, with the symmetry reduction DERIVED per alphabet; a degree scrub over per-degree float-texture layers, histogram-equalised density and colour-by-degree, and — handing over as you zoom — a per-pixel LIMIT-SET engine that prunes the coefficient tree in a generated shader and paints the escape depth, so the picture keeps resolving past any degree, and below a float32 texel a DEEP engine that walks the tree once per frame at the view's own centre in double-double and splats each survivor's root as a float32 OFFSET, reaching `1e-30`; a probe that names the polynomial under the cursor with its residual; `#vs=` permalinks + PNG export, and a gallery of the named places from the literature | Vite + TypeScript |
+| **Polynomial Root Analysis** (`apps/polynomial-root-analysis`) | *In construction — built, not yet published (ADR-0047).* One polynomial and what acts on its roots: roots and coefficients as two linked draggable point sets with exact Smith inclusion discs, the Galois group over ℚ in three honest tiers, loop monodromy by certified continuation, and Arnold's topological proof of Abel–Ruffini as commutator loops. PRA-0 (the scaffold) has landed; see [`docs/polynomial-root-analysis/STATUS.md`](docs/polynomial-root-analysis/STATUS.md) | Vite + TypeScript |
 
 The Correspondences tool was the **forcing function** for the whole suite: its
 requirements deliberately drove which shared packages got extracted, and in what order.
@@ -102,8 +103,9 @@ Each app is an independent static Vite build (`base: "./"`), so its assets resol
 `.github/workflows/deploy-pages.yml` publishes on every push to `master`, gated on
 lint + typecheck + test: one combined Pages site with the launcher at the root and
 `complex-dynamics/`, `quadrature-domains/`, `complex-function-plotter/`, `riemann-map/`,
-`argument-principle/`, `faber-transform/`, `2d-electrostatics/`, `2d-hydrodynamics/`, `hele-shaw-flow/`, and `potential-theory/` beneath it. Correspondences is built but not yet
-published (the launcher lists it as "Coming soon"). `ci.yml` remains the separate
+`argument-principle/`, `faber-transform/`, `2d-electrostatics/`, `2d-hydrodynamics/`, `hele-shaw-flow/`, `potential-theory/`,
+`contour-integration/`, and `polynomial-roots/` beneath it. Correspondences and Polynomial Root Analysis are built but not yet
+published (the launcher lists both as "Coming soon"). `ci.yml` remains the separate
 lint/typecheck/test/build gate plus a `browser` job for the WebGL2 GLSL harness. See
 [ARCHITECTURE §8](docs/ARCHITECTURE.md#8-build--deployment-model).
 
@@ -143,7 +145,8 @@ complex-analysis-suite/
     ├── hele-shaw-flow/       ← free-boundary Hele-Shaw evolution: the twist + droplet showpieces
     ├── potential-theory/     ← a compact set K as a grounded conductor (equilibrium measure, capacity, Green)
     ├── contour-integration/  ← contour integration + the residue theorem: a sandbox and a 28-integral worked-example gallery
-    └── polynomial-roots/     ← fractal root clouds of small-alphabet polynomials (Littlewood and friends)
+    ├── polynomial-roots/     ← fractal root clouds of small-alphabet polynomials (Littlewood and friends)
+    └── polynomial-root-analysis/ ← one polynomial: roots ↔ coefficients, Galois group, monodromy, Abel–Ruffini (in construction)
 ```
 
 > **The thirteen packages that exist** are `@cas/core`, `@cas/gpu`, `@cas/expr`,
