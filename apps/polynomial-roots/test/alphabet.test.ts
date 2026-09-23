@@ -6,9 +6,12 @@ import {
   mapRoot,
   parseAlphabet,
   specId,
+  symmetryReadout,
+  conjugationTwist,
   valuesOfSpec,
 } from "../src/engine/alphabet";
 import type { AlphabetSpec, Cx } from "../src/engine/alphabet";
+import { aberth, makeWorkspace } from "../src/engine/aberth";
 
 const ok = <T>(r: T | { error: string }): T => {
   if (typeof r === "object" && r !== null && "error" in r) throw new Error(String(r.error));
@@ -233,5 +236,122 @@ describe("presets and their parameters", () => {
     const a = alpha({ preset: "roots-of-unity", n: 4 });
     const exact = a.values.filter((v) => (v.re === 0 && Math.abs(v.im) === 1) || (v.im === 0 && Math.abs(v.re) === 1));
     expect(exact).toHaveLength(4);
+  });
+});
+
+describe("the symmetry readout", () => {
+  const specs: AlphabetSpec[] = [
+    { preset: "littlewood" },
+    { preset: "zero-one" },
+    { preset: "trinary" },
+    { preset: "roots-of-unity", n: 3 },
+    { preset: "roots-of-unity", n: 4 },
+    { preset: "custom", custom: "1, -1, i, -i" },
+    { preset: "custom", custom: "0, 1, i" },
+    { preset: "custom", custom: "2, -2, 5" },
+    { preset: "custom", custom: "1, i, -1" },
+    { preset: "custom", custom: "1, 2+i, 2-i" },
+  ];
+  const has = (vals: readonly Cx[], v: Cx) =>
+    vals.some((w) => Math.abs(w.re - v.re) < 1e-9 && Math.abs(w.im - v.im) < 1e-9);
+  const line = (spec: AlphabetSpec, name: string) => {
+    const found = symmetryReadout(alpha(spec)).lines.find((l) => l.name === name);
+    if (found === undefined) throw new Error(`no ${name} line`);
+    return found;
+  };
+
+  it("says yes and no exactly where brute force does, and names a value that REALLY breaks a failure", () => {
+    for (const spec of specs) {
+      const a = alpha(spec);
+      const neg = a.values.every((v) => has(a.values, { re: -v.re, im: -v.im }));
+      const conj = a.values.every((v) => has(a.values, { re: v.re, im: -v.im }));
+      expect(line(spec, "negation").holds, specId(spec)).toBe(neg);
+      // The mirror's verdict is judged by the ROOT SET below; here only that plain closure implies it.
+      if (conj) expect(line(spec, "conjugation").holds, specId(spec)).toBe(true);
+      if (!neg) {
+        // The witness sentence names v and −v; −v must be absent and v present.
+        const w = a.values.find((v) => !has(a.values, { re: -v.re, im: -v.im }));
+        expect(w).toBeDefined();
+        expect(line(spec, "negation").text).toContain(`${formatCx(w as Cx)} is in the alphabet`);
+      }
+      if (!conj && !line(spec, "conjugation").holds) {
+        const w = a.values.find((v) => !has(a.values, { re: v.re, im: -v.im }));
+        expect(line(spec, "conjugation").text).toContain(`conjugate ${formatCx({ re: (w as Cx).re, im: -(w as Cx).im })} is not`);
+      }
+    }
+  });
+
+  it("never says reversal fails — it holds for every alphabet, which the plan's example had wrong", () => {
+    for (const spec of specs) {
+      expect(line(spec, "reversal").holds).toBe(true);
+      expect(alpha(spec).group.some((g) => g.rev && !g.neg && !g.conj)).toBe(true);
+    }
+  });
+
+  it("separates a REAL alphabet's free mirror from a complex alphabet's used one", () => {
+    expect(line({ preset: "littlewood" }, "conjugation").text).toContain("for free");
+    expect(line({ preset: "custom", custom: "1, 2+i, 2-i" }, "conjugation").text).toContain("the reduction uses it");
+    expect(line({ preset: "custom", custom: "1, 2, i" }, "conjugation").holds).toBe(false);
+  });
+
+  it("judges the MIRROR by the root set — {1, i, −1} fails conjugation and is mirror-symmetric anyway", () => {
+    // The first draft said "need not be mirror-symmetric" about {1, i, −1} beside a picture that plainly
+    // was: conj A = −1·A, so −conj(P) is in the family and has the conjugate roots. The verdict is
+    // therefore checked against every root of every polynomial, binned, not against the alphabet.
+    expect(conjugationTwist(alpha({ preset: "custom", custom: "1, i, -1" }))).toEqual({ re: -1, im: 0 });
+    const seen = new Set<boolean>();
+    for (const custom of ["1, i, -1", "1, 2, i", "i, -i, 2", "1, 1+i, 1-i", "0, 1, i"]) {
+      const spec: AlphabetSpec = { preset: "custom", custom };
+      const a = alpha(spec);
+      // Bins over [−3, 3]², offset off every small-alphabet root, and the count's mirror compared.
+      const n = 25;
+      const off = 0.0137162;
+      const bins = new Float64Array(n * n);
+      const degree = 5;
+      const ws = makeWorkspace(degree);
+      const cRe = new Float64Array(degree + 1);
+      const cIm = new Float64Array(degree + 1);
+      const m = a.values.length;
+      const total = Math.pow(m, degree + 1);
+      for (let idx = 0; idx < total; idx++) {
+        let rest = idx;
+        let proper = true;
+        for (let k = 0; k <= degree; k++) {
+          const d = rest % m;
+          rest = (rest - d) / m;
+          cRe[k] = a.values[d].re;
+          cIm[k] = a.values[d].im;
+          if ((k === 0 || k === degree) && Math.hypot(cRe[k], cIm[k]) < 1e-12) proper = false;
+        }
+        if (!proper) continue;
+        if (!aberth(cRe, cIm, degree, ws).converged) throw new Error("no convergence");
+        for (let r = 0; r < degree; r++) {
+          // Mirror-symmetric bins: y and −y must land in mirrored cells, so the grid is symmetric about 0
+          // in y with an ODD cell count — y = 0 is then a cell's centre, not a boundary a real root's
+          // ±1e-16 noise decides (the first draft used 24 and read 730 roots of "asymmetry" off the axis).
+          const i = Math.floor(((ws.rootRe[r] + 3 + off) / 6) * n);
+          const j = Math.floor(((ws.rootIm[r] + 3) / 6) * n);
+          if (i >= 0 && j >= 0 && i < n && j < n) bins[j * n + i]++;
+        }
+      }
+      let asym = 0;
+      for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) asym += Math.abs(bins[j * n + i] - bins[(n - 1 - j) * n + i]);
+      const mirrored = asym === 0;
+      expect(line(spec, "conjugation").holds, `${custom}: asymmetry ${asym}`).toBe(mirrored);
+      seen.add(mirrored);
+    }
+    // Both verdicts occur, so neither answer could pass by being given every time.
+    expect([...seen].sort()).toEqual([false, true]);
+  });
+
+  it("reports the fold the sweep actually runs: units × |G|, Christensen's 8 for Littlewood", () => {
+    expect(symmetryReadout(alpha({ preset: "littlewood" })).fold).toBe(8);
+    expect(symmetryReadout(alpha({ preset: "zero-one" })).fold).toBe(2);
+    for (const spec of specs) {
+      const a = alpha(spec);
+      expect(symmetryReadout(a).fold).toBe(a.units.length * a.group.length);
+    }
+    expect(line({ preset: "zero-one" }, "units").holds).toBe(false);
+    expect(line({ preset: "roots-of-unity", n: 3 }, "units").text).toContain("3 units");
   });
 });

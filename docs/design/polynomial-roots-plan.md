@@ -146,7 +146,7 @@ full-plane path. **Web Workers** run the root engine and the reference walk; the
 | Density accumulation | **new**: `gl.POINTS` into an `R32F` framebuffer with `gl.blendFunc(gl.ONE, gl.ONE)` — CD's `renderAccumulate` is the only additive blend in the repo and it accumulates frames, not points | `EXT_color_buffer_float` required; probed at boot, refused by name |
 | Tone mapping | `apps/complex-dynamics/src/render/histogram.ts` `buildEqualizedCdf` → **extracted to `@cas/gpu`** at PR-1 (this app is its second consumer, ADR-0007) — log density with an equalised CDF and an exposure slider | CD rewired, byte-identical output pinned |
 | Colour ramps | `@cas/gpu/colormap` (`buildGradientLUT`, `makeColormapTexture`) with an app-local "hot" ramp (black → dark red → yellow → white, Derbyshire's) and a sequential ramp for degree | the viridis stop tables exist twice already (CD, Argument Principle); a third copy is refused — noted as a follow-up extraction, not done here |
-| CET-C6 | `apps/contour-integration/src/ui/stage/cetC6.ts` → **`@cas/gpu`** when the **Egan hue mode** lands (M6): hue from the low-order coefficient bits is cyclic, which is what C6 is for; this app is then the second consumer | CC-BY 4.0 attribution travels with the table |
+| CET-C6 | `apps/contour-integration/src/ui/stage/cetC6.ts` → **`@cas/gpu/cet`** — **done at M6.1**, by `git mv`, byte for byte (FNV-1a `ddd42cbb` pinned); the Egan hue mode is the second consumer | CC-BY 4.0 attribution travels with the table |
 | Deep zoom | `@cas/gpu/df64` (`df`, `dfAdd`, `dfMul`, …) — the **JS** half, on the CPU reference walk | `DF64_GLSL` is deliberately not used (§3) |
 | Pan / zoom | `@cas/flow` `pixelToWorld` / `panView` / `zoomView` (`View`, `Viewport`) | Riemann Map's `attachPanZoom` is app-local; a second consumer would extract it — this app takes `@cas/flow`'s instead |
 | Permalink | `@cas/interchange` `encodeViewState` / `decodeViewState`, app tag **`pr`** | fields optional-on-decode with named defaults, as 2D Hydrodynamics |
@@ -784,11 +784,65 @@ pass where the stage changed. Sizes: *S* / *M* / *L*.
   > membership is pinned now. The codec's `bounds` type check and `clampState`'s `=== true` each bought
   > a refusal test. The equivalent is `boundFor`'s key sort, which `compileAlphabet`'s own ordering
   > already supplies; kept, with its reason beside it.
-- **M6 (later, not committed) — Egan's hue, CET-C6 extraction, custom alphabets polish.** Hue by
+- **M6 — Egan's hue, CET-C6 extraction, custom alphabets polish · DONE.** Hue by
   the low-order coefficient bits (root engine only), which is the second consumer of `CET_C6` and
   extracts it to `@cas/gpu`; the custom alphabet editor's symmetry readout ("this alphabet has
   conjugation and negation; reversal is not a symmetry, so `|z| > 1` is computed with the reversed
   alphabet").
+
+  > **Built, in three commits.** **M6.1** moves `CET_C6` + `cetC6Bytes` to `@cas/gpu/cet` by `git mv`
+  > with the FNV-1a of the bytes (`ddd42cbb`) pinned, and rewires Contour Integration (its four CET
+  > browser suites, 57 tests, pass). **M6.2** is Egan's hue: `src/engine/egan.ts`, a `hueDigits` field
+  > (1–6, default 3, codec `hue`), `colour: "egan"`, an Egan splat into an RGBA composite
+  > (`GlStage.paintEgan`) and a present branch. **M6.3** is `symmetryReadout` / `conjugationTwist` in
+  > `alphabet.ts`, shown as a list under a custom alphabet. A place (`egan-hue`) and two roster entries
+  > (`polynomial-roots-egan`, `polynomial-roots-custom`).
+  >
+  > **The hue is a base-|A| FRACTION of the unit-normalised coefficients, so prefixes NEST.**
+  > `t = (ℓ + Σ_{j≤k} d_j·m^{−j})/L`: polynomials agreeing on `j` coefficients get hues within
+  > `m^{−j}/L`, which is the dragon's own geometry, and a degree-2 polynomial simply stops the expansion
+  > early, so one pixel can mix degrees without the classes meaning different things per layer. Read
+  > off the NORMALISED polynomial, because `P` and `−P` share every root and differ in every coefficient.
+  >
+  > **Every symmetry image needs its own hue**, because the image under `z ↦ 1/z` belongs to the
+  > reversed polynomial. The sweep computes `|G|` hues per representative (only when the mode is on —
+  > it more than doubles a chunk at Littlewood's `|G| = 4`), and the stage binds the hue attribute at a
+  > different offset for each of its `|G|` draws. Pinned both ways: density BY HUE matches every
+  > polynomial solved separately on eight cases, bin for bin, with every hue class present, and fails
+  > eight ways when the images share the representative's hue; on the GPU, binding offset 0 for every
+  > image fails the per-image colour check.
+  >
+  > **The colouring is coherent INSIDE the disk and not outside it — which is the definition.** A root's
+  > position is governed by the end of its polynomial that dominates there: the low coefficients for
+  > `|z| < 1`, the high ones outside. Measured as the mean resultant length of the hues per pixel over
+  > every Littlewood polynomial of degree 12, three coefficients: **0.990** for `0.5 ≤ |z| < 0.7`,
+  > **0.720** at 0.7–0.8, **0.497** at 0.8–0.9, **0.458** across the circle and **0.345** outside it. The
+  > present pass shows that length as SATURATION (a circular mean over disagreeing hues is a colour
+  > nothing in the pixel has), and the legend quotes the numbers for Littlewood only.
+  >
+  > **The plan's example readout cannot occur.** "Reversal is not a symmetry, so `|z| > 1` is computed
+  > with the reversed alphabet" — reversal holds for EVERY alphabet (reversing a vector over `A` is a
+  > vector over `A`), which is why every picture here is symmetric under `z ↦ 1/z`. What varies is
+  > negation, conjugation and the units, so those lines can say no, each naming the value that breaks it.
+  >
+  > **And the first readout was wrong about the mirror, found by looking at the picture.** `{1, i, −1}`
+  > is not closed under conjugation, and the readout said the picture "need not be mirror-symmetric"
+  > beside one that plainly was: `conj A = −1·A`, so `−conj(P)` is in the family and has the conjugate
+  > roots. `conjugationTwist` finds such a `c`; the verdict is judged against the ROOT SET — every root
+  > of every polynomial binned, the mirror compared exactly — on five complex alphabets, both verdicts
+  > occurring. The reduction does not use the twisted form and the readout says so. (The first binning
+  > used 24 cells and read 730 roots of "asymmetry" off the real axis; an odd count puts `y = 0` at a
+  > cell's centre.)
+  >
+  > **A PR-1 defect found wiring the third mode through the same two lines**: a link or place opening in
+  > "By degree" drew its mean-degree hue through the DENSITY ramp, because the ramp was set from the
+  > default state and `apply` skipped it on the re-sweep path. It is set from the opening state and on
+  > every path now; verified by screenshot (viridis, where it had been the heat ramp).
+  >
+  > **Sweeps: M6.2 27 mutants (25 node, 2 shader), all killed** after three survivors bought boundary
+  > tests (`k = 1`, a short polynomial's `a_d`, the clamp's upper edge); **M6.3 10 mutants, 9 killed, 1
+  > recorded equivalent** (`conjugationTwist`'s second inclusion — `c ≠ 0` is injective and both sets
+  > have `|A|` elements).
 - **Deferred with their reasons.** An **exact BigInt reference** (`@cas/exact`) below `1e−30` —
   unbounded zoom, cost growing with depth; **Bohemian matrices** (eigenvalues of bounded-height
   matrices) — a different enumeration on the same stage; **hand-offs** (click a root → its

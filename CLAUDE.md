@@ -99,8 +99,8 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **621 test files / 7085 tests**
-*(620 / 7067 before ADR-0046's PR-5 — the gallery — added 1 file / 18 tests; 618 / 7035 before its PR-4 — the dragons — added 2 files / 32 tests; 615 / 6997 before its PR-3 — deep zoom by reference — added 3 files / 38 tests; 610 / 6949 before its PR-2 — the limit-set engine — added 5 files / 48 tests; 599 / 6818 before
+Green is **622 test files / 7111 tests**
+*(621 / 7085 before ADR-0046's M6 — Egan's hue, the CET-C6 extraction and the symmetry readout — added 1 file / 26 tests; 620 / 7067 before its PR-5 — the gallery — added 1 file / 18 tests; 618 / 7035 before its PR-4 — the dragons — added 2 files / 32 tests; 615 / 6997 before its PR-3 — deep zoom by reference — added 3 files / 38 tests; 610 / 6949 before its PR-2 — the limit-set engine — added 5 files / 48 tests; 599 / 6818 before
 Polynomial Roots itself added 10 files / 122 tests and its `@cas/gpu` extraction 1 / 9; 592 / 6643 before the 2026-09-20 remediation)* with lint and typecheck
 silent. `pnpm lint` includes `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the
 `packages/*` dists first, so a clean clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as
@@ -1399,12 +1399,13 @@ Green: **599 files / 6818 tests**, the browser suite 22 / 232, `pnpm a11y --stri
 — every root of every polynomial whose coefficients come from a small finite alphabet, painted by density:
 the picture at the head of Baez–Christensen–Derbyshire's *The Beauty of Roots*. **No new package**; it
 consumes `@cas/ui`, `@cas/gpu`, `@cas/core`, `@cas/flow`, `@cas/interchange` and `@cas/export`, and makes
-ONE second-consumer extraction into `@cas/gpu` — Complex Dynamics' histogram-equalisation arithmetic as
-`equalizedCdfLut` (`@cas/gpu/histogram`), with CD keeping the decode half alone. PR-1 shipped the scaffold,
+two second-consumer extractions into `@cas/gpu` — Complex Dynamics' histogram-equalisation arithmetic as
+`equalizedCdfLut` (`@cas/gpu/histogram`, PR-1), with CD keeping the decode half alone, and Contour
+Integration's CET-C6 table as `@cas/gpu/cet` (M6). PR-1 shipped the scaffold,
 the root engine (an app-local Aberth–Ehrlich in a worker pool, pinned against `@cas/core`'s Durand–Kerner),
 the per-degree float-texture density stage, the `#vs=` permalink, PNG export, fourteen named places, and
 the launcher + Pages wiring. PR-2…PR-5 (the limit-set engine, deep zoom by reference, the dragons, the
-gallery) follow below; the arc is complete, with M6 (Egan's hue, `CET_C6` extraction) not committed. Plan: [`docs/design/polynomial-roots-plan.md`](docs/design/polynomial-roots-plan.md).
+gallery) and M6 (Egan's hue, the `CET_C6` extraction, the symmetry readout) follow below. Plan: [`docs/design/polynomial-roots-plan.md`](docs/design/polynomial-roots-plan.md).
 
 Six findings worth carrying. **(1) A SMALL STEP IS NOT CONVERGENCE, and treating it as one shipped a wrong
 answer.** The Aberth solver first settled a root whose STEP had fallen below a floor; when two iterates come
@@ -1694,6 +1695,31 @@ spacing estimate `|z|^(d+1)` being exactly 0 there.
 the inclusion cannot see an edge moved OUTWARD (every root still passes), so each curve is now tested from
 both sides against its own predicate; no per-degree test had two columns that differed; and the group rule
 was weaker than the grouping — the headline dragon and Egan's point are root-engine views with no lamp.
+
+**Done — M6 of ADR-0046: Egan's hue, the CET-C6 extraction, the symmetry readout.** Three commits.
+**M6.1** moves Contour Integration's `CET_C6` to **`@cas/gpu/cet`** by `git mv`, the FNV-1a of its bytes
+(`ddd42cbb`) pinned. **M6.2** colours each root by the first `k` coefficients (1–6) of its own
+unit-normalised polynomial, read as a base-`|A|` FRACTION so a longer shared prefix is a closer colour
+(`src/engine/egan.ts`), through CET-C6; the Egan splat writes an RGBA composite and the present pass shows
+the pixel's circular-mean length as saturation. **M6.3** is a symmetry readout for a typed alphabet.
+
+**Every symmetry image needs its OWN hue**, since the image under `z ↦ 1/z` belongs to the reversed
+polynomial: the sweep computes `|G|` hues per representative (only in that mode) and the stage binds the
+attribute at a different offset per draw. Density BY HUE matches every polynomial solved separately, bin
+for bin, on eight cases, and fails eight ways when the images share the representative's hue. **Coherent
+inside the disk, mixed outside it — by definition**: a root's position is set by the low coefficients for
+`|z| < 1` and the high ones outside. Measured over Littlewood degree 12, `k = 3`, the mean resultant length
+per pixel is **0.990** at `|z|` 0.5–0.7, **0.720** at 0.7–0.8, **0.497** at 0.8–0.9, **0.458** across the
+circle and **0.345** outside, and the legend says so for Littlewood only.
+
+**The plan's example readout cannot occur**: it said "reversal is not a symmetry", and reversal holds for
+every alphabet. **The first readout was then wrong about the mirror, found by looking at the picture**:
+`{1, i, −1}` fails conjugation and IS mirror-symmetric, because `conj A = −1·A` puts `−conj(P)` in the
+family. `conjugationTwist` finds such a `c`, and the verdict is judged against the binned root set on five
+complex alphabets, both answers occurring. **A PR-1 defect, found wiring the third mode**: a link or place
+opening in "By degree" drew its hue through the DENSITY ramp, set from the default state and skipped by
+`apply`'s re-sweep path. Sweeps: **M6.2 27 mutants (25 node, 2 shader), all killed**; **M6.3 10, 9 killed,
+1 recorded equivalent**. `pnpm a11y --strict`: **1,125 nodes across 29 pages, 0 unnamed**.
 
 Work in small, reviewable commits. Pause at each phase/milestone gate for review before proceeding.
 When a command or path in the docs is marked `⚠ verify`, check it against the actual repo

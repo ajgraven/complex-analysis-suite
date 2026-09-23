@@ -405,3 +405,118 @@ export function mapRoot(g: SymmetryElement, re: number, im: number): { re: numbe
   }
   return { re: x, im: y };
 }
+
+/** One line of the symmetry readout: a candidate, whether the alphabet has it, and what that means. */
+export interface SymmetryLine {
+  readonly name: "negation" | "reversal" | "conjugation" | "units";
+  readonly holds: boolean;
+  readonly text: string;
+}
+
+/**
+ * The custom alphabet editor's readout: each candidate symmetry, decided, with its consequence for the
+ * picture — and, when one FAILS, the value that breaks it, so the reader can see why rather than take
+ * the app's word.
+ *
+ * **ADR-0046's plan quoted an example that cannot occur** — "reversal is not a symmetry, so `|z| > 1` is
+ * computed with the reversed alphabet". Reversal holds for EVERY alphabet (reversing a vector over `A` is
+ * a vector over `A`; see this file's header), which is exactly why every picture in the app is symmetric
+ * under `z ↦ 1/z`. What varies between alphabets is negation, conjugation and the units, so those are
+ * the lines that can say no, and reversal's line says why it never does.
+ *
+ * Every verdict is read off the compiled alphabet (`hasNeg`, `hasConj`, `units`), so the readout cannot
+ * disagree with the reduction the sweep actually runs; the witnesses are recomputed here only to NAME
+ * the failure.
+ */
+export function symmetryReadout(a: Alphabet): { lines: SymmetryLine[]; fold: number } {
+  const has = (v: Cx): boolean => indexOf(a.values, v) >= 0;
+  const lines: SymmetryLine[] = [];
+  if (a.hasNeg) {
+    lines.push({
+      name: "negation",
+      holds: true,
+      text: "Negation holds (−A = A): the picture is symmetric under z ↦ −z, and half of it is drawn as the image of the other half.",
+    });
+  } else {
+    const witness = a.values.find((v) => !has(cx(-v.re, -v.im)));
+    lines.push({
+      name: "negation",
+      holds: false,
+      text: `Negation fails: ${formatCx(witness ?? a.values[0])} is in the alphabet and ${formatCx(cx(-(witness?.re ?? 0), -(witness?.im ?? 0)))} is not, so the picture need not be symmetric under z ↦ −z, and both halves are computed.`,
+    });
+  }
+  lines.push({
+    name: "reversal",
+    holds: true,
+    text: "Reversal always holds: reversing a proper polynomial's coefficients gives another, whose roots are the reciprocals — so every picture here is symmetric under z ↦ 1/z.",
+  });
+  if (a.allReal) {
+    lines.push({
+      name: "conjugation",
+      holds: true,
+      text: "Every value is real, so each polynomial's roots come in conjugate pairs: the picture is mirror-symmetric about the real axis for free, with no reduction needed.",
+    });
+  } else if (a.hasConj) {
+    lines.push({
+      name: "conjugation",
+      holds: true,
+      text: "Conjugation holds (conj A = A): the picture is mirror-symmetric about the real axis, and the reduction uses it.",
+    });
+  } else {
+    const witness = a.values.find((v) => !has(cx(v.re, -v.im)));
+    const twist = conjugationTwist(a);
+    lines.push(
+      twist !== null
+        ? {
+            // **The mirror can hold when conjugation fails.** `{1, i, −1}` is not closed under conjugation
+            // (conj i = −i is not in it), but conj A = −1·A, so `P ↦ c·conj(P)` stays in the family and
+            // conjugates every root: the picture IS mirror-symmetric. The first draft of this readout said
+            // "need not be", beside a picture that visibly was — found by looking at it.
+            name: "conjugation",
+            holds: true,
+            text: `Conjugation alone fails (${formatCx(witness ?? a.values[0])} is in the alphabet and its conjugate is not), but conj A = ${formatCx(twist)}·A, so conjugating a polynomial and multiplying by ${formatCx(twist)} stays in the family and conjugates its roots: the picture IS mirror-symmetric about the real axis. The reduction does not use this twisted form, so both halves are computed.`,
+          }
+        : {
+            name: "conjugation",
+            holds: false,
+            text: `Conjugation fails: ${formatCx(witness ?? a.values[0])} is in the alphabet and its conjugate ${formatCx(cx(witness?.re ?? 0, -(witness?.im ?? 0)))} is not, and no scalar multiple of the alphabet is its conjugate either, so the picture need not be mirror-symmetric about the real axis.`,
+          },
+    );
+  }
+  const n = a.units.length;
+  lines.push({
+    name: "units",
+    holds: n > 1,
+    text:
+      n > 1
+        ? `${n} units (${a.units.map(formatCx).join(", ")}): P and u·P have the same roots, so one polynomial in each set of ${n} is solved.`
+        : "Only the unit 1: no two polynomials over this alphabet are multiples of each other by a unit, so none are skipped for it.",
+  });
+  // Each solved polynomial stands for up to `units × |G|` — exactly that many unless a symmetry FIXES it,
+  // in which case its stabiliser weight accounts for the difference (`orbits.ts`).
+  return { lines, fold: n * a.group.length };
+}
+
+/**
+ * A scalar `c` with `conj(A) = c·A`, or null. Then `c⁻¹·conj(P)` has
+ * coefficients in `A` and the roots of `conj(P)`, so the family's root set is closed under `z ↦ z̄`
+ * even though `A` itself is not. Candidates are the ratios `conj(v)/w` of a fixed non-zero `v` to every
+ * non-zero `w`, since `c` must carry some `w` to `conj(v)`.
+ */
+export function conjugationTwist(a: Alphabet): Cx | null {
+  const conjA = a.values.map((v) => cx(v.re, -v.im));
+  const v0 = a.values[a.nonZero[0]];
+  const target = cx(v0.re, -v0.im);
+  for (const j of a.nonZero) {
+    const w = a.values[j];
+    const den = w.re * w.re + w.im * w.im;
+    // c = conj(v0) / w
+    const c = cx((target.re * w.re + target.im * w.im) / den, (target.im * w.re - target.re * w.im) / den);
+    const image = a.values.map((v) => mul(c, v));
+    // Both inclusions, though one suffices: `c ≠ 0` is injective and both sets have |A| elements, so
+    // `c·A ⊆ conj A` already forces equality — the M6.3 sweep's one equivalent mutant. Kept for the
+    // reason `compileAlphabet` keeps its permutation check: the argument is an edit away from false.
+    if (image.every((x) => indexOf(conjA, x) >= 0) && conjA.every((x) => indexOf(image, x) >= 0)) return c;
+  }
+  return null;
+}

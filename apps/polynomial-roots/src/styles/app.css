@@ -250,3 +250,8 @@ input[type="checkbox"].control { width: auto; justify-self: start; }
   height: 100%;
   pointer-events: none;
 }
+
+/* M6.3 — the custom alphabet's symmetry readout. */
+.symmetries { list-style: none; padding: 0; margin: 0.25rem 0 0.5rem; display: grid; gap: 0.25rem; }
+.symmetries[hidden] { display: none; }
+.symmetries li.fails { color: #ffb3a7; } /* the panel's own warning colour, as .note.warn */

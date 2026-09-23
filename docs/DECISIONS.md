@@ -4496,7 +4496,11 @@ DF64 reused where it buys depth and not paid for where it does not.
    beyond |z| = 1.6 at degree 18), while its half-plane is true and 0.36 loose (the rightmost root
    plateaus at Re z ≈ 1.137). The legend quotes both as `≈` measurements kept apart from the theorem.
    Detail and the sweep (36 mutants, 35 killed, 1 recorded equivalent) are in the plan's PR-5 block.
-7. [ ] At M6, extract `CET_C6` to `@cas/gpu` and rewire Contour Integration.
+7. [x] **M6 done: `CET_C6` extracted to `@cas/gpu/cet`** (byte-identical, FNV-1a pinned) and Contour
+   Integration rewired; Egan's hue is its second consumer. Decision 6's two extractions are both made.
+   M6 also corrected the plan's example symmetry readout — reversal holds for every alphabet, so it is
+   never the line that says no — and found that a mirror can hold where conjugation fails
+   (`conj A = c·A`), which the readout now reports and the reduction deliberately does not use.
 8. [x] `eslint.config.js`'s `APP_NAMES` brought current: it was stale by four apps
    (`2d-electrostatics`, `2d-hydrodynamics`, `hele-shaw-flow`, `potential-theory`), so the
    no-cross-app-imports lint rule had silently stopped covering a third of the suite. The graph-level

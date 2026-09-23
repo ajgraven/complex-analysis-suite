@@ -6,7 +6,7 @@
 // the counts on every recompute rather than written once and left to drift.
 import { attachCanvasA11y, createComputeClient, runWithFatalBoundary } from "@cas/ui";
 import type { CanvasKeyAction } from "@cas/ui";
-import { compileAlphabet, formatCx } from "./engine/alphabet.js";
+import { compileAlphabet, formatCx, symmetryReadout } from "./engine/alphabet.js";
 import type { Alphabet, AlphabetSpec, Cx } from "./engine/alphabet.js";
 import { orbitSpace } from "./engine/orbits.js";
 import { defaultPoolSize, RootPool } from "./engine/pool.js";
@@ -199,6 +199,8 @@ function main(): void {
   const customInput = el("input", { class: "control", type: "text", id: "pr-custom", placeholder: "1, -1, i, -i" });
   const customRow = labelled("Values", customInput);
   const alphabetNote = el("p", { class: "note" });
+  const symmetryList = el("ul", { class: "note symmetries" });
+  symmetryList.setAttribute("aria-label", "Symmetries of this alphabet");
 
   const minDegree = el("input", { class: "control", type: "range", min: "1", max: String(MAX_DEGREE), step: "1", id: "pr-dmin" });
   const maxDegree = el("input", { class: "control", type: "range", min: "1", max: String(MAX_DEGREE), step: "1", id: "pr-dmax" });
@@ -261,6 +263,7 @@ function main(): void {
     nRow,
     customRow,
     alphabetNote,
+    symmetryList,
     boundsRow,
     boundsNote,
     el("h2", {}, "Engine"),
@@ -969,6 +972,21 @@ function main(): void {
       ].filter((s): s is string => s !== null);
       alphabetNote.textContent = `${a.label} — ${a.values.map(formatCx).join(", ")}. Symmetries used: ${syms.join(", ")}.`;
       alphabetNote.className = "note";
+    }
+    // The custom alphabet's readout: each candidate symmetry decided, with the value that breaks it when
+    // it fails. Presets keep the one-line summary above; a typed alphabet is where a reader does not
+    // already know the answer.
+    const readout = alphabet !== null && state.alphabet.preset === "custom" ? symmetryReadout(alphabet) : null;
+    symmetryList.hidden = readout === null;
+    if (readout !== null) {
+      symmetryList.replaceChildren(
+        ...readout.lines.map((l) =>
+          el("li", { className: l.holds ? "holds" : "fails", textContent: `${l.holds ? "✓" : "✗"} ${l.text}` }),
+        ),
+        el("li", {
+          textContent: `Together: each polynomial solved stands for up to ${readout.fold} — fewer only for one a symmetry fixes, which is weighted to match.`,
+        }),
+      );
     }
 
     const chosen = handover();

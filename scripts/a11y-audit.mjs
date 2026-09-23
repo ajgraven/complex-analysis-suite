@@ -332,6 +332,15 @@ const PAGES = [
     expect: '.controls[data-colour="egan"]',
   },
   {
+    // M6.3: the custom alphabet's symmetry readout — a list that exists only for a typed alphabet.
+    id: "polynomial-roots-custom",
+    mount: "polynomial-roots",
+    dist: "apps/polynomial-roots/dist",
+    file: "index.html",
+    hash: viewState("pr", { preset: "custom", custom: "1, i, -1", dmax: 10 }),
+    expect: '.controls[data-alphabet="custom"] ul.symmetries:not([hidden])',
+  },
+  {
     id: "correspondences",
     mount: "correspondences",
     dist: "apps/correspondences/dist",
