@@ -177,6 +177,22 @@ export const PLACES: readonly Place[] = [
     ),
   },
   {
+    id: "dragon-inset",
+    title: "The dragon itself, at Baez's point",
+    seen: "The inset beside the picture is not a second drawing of the cloud — it is the SET OF VALUES of every power series over the alphabet at the pinned point, which is the attractor of the maps x ↦ ±1 + zx. The cross in the middle is the origin, and whether it falls inside the cloud is the same question the stage is answering at that pixel.",
+    fact: "For |q| < 1, q lies in the closure of the Littlewood root set if and only if 0 ∈ D_q, and then D_q is connected.",
+    source: "Bousch, Paires de similitudes (1988); the coordinates are Baez, Christensen & Derbyshire's slide deck.",
+    state: at(0.375453, 0.544825, 0.06, { maxDegree: 18, lamp: { re: 0.375453, im: 0.544825 } }),
+  },
+  {
+    id: "dragon-theorem",
+    title: "The theorem, drawn: Michelen–Yakir at a probed root",
+    seen: "A deep view on an exact root α of one Littlewood polynomial, with the inset showing the prediction: every extension of that prefix has a root near α, and magnifying those roots by 1/α^(n+1) lays them over the predicted set −D_α/P′(α). The two are PAIRED — each extension's tail names one point in each — so what the panel reports is the largest distance between a prediction and its own root, not a Hausdorff distance a rotated overlay could still pass.",
+    fact: "For a Littlewood series P with a root α in the open disk and |P′(α)| bounded below, the roots of its degree-n extensions, magnified about α by α^(−(n+1)), converge in Hausdorff distance to P′(α)^(−1)·D_α.",
+    source: "Michelen & Yakir, Dragon curves in Littlewood roots (2026), Theorem 1.",
+    state: at(0.375453, 0.544825, 1e-3, { engine: "deep", theorem: true, extend: 8 }),
+  },
+  {
     id: "cube-roots",
     title: "Cube roots of unity: three-fold symmetry",
     seen: "An alphabet with no negation but three units. The cloud picks up the alphabet's own three-fold rotational symmetry.",

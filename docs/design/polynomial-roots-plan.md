@@ -613,10 +613,79 @@ pass where the stage changed. Sizes: *S* / *M* / *L*.
   > polynomial is the constant `a₀`, so `original.length` is 1 and `solve`'s loop condition
   > `working.length > 1` is false before anything is computed.
 
-- **PR-4 — the dragons · *M*.** Hover inset from the un-pruned tree; theorem mode on a probed root
-  with the `n`-scrubber and the Hausdorff-distance readout; the honest label when `|P′(α)|` is
+- **PR-4 — the dragons · *M*. DONE.** Hover inset from the un-pruned tree; theorem mode on a probed
+  root with the extension scrubber and the paired-distance readout; the honest label when `|P′(α)|` is
   small. Gate: at Baez's `0.375453 + 0.544825i` the overlay lands on the roots to within the inset
   pixel for `n ≥ 24`, measured, and the number is in the test.
+
+  > **DONE.** `src/engine/dragon.ts` + `src/stage/inset.ts`, a pinned `lamp` and a `theorem` mode in the
+  > state and the permalink, two new places and a fourth a11y roster entry for the app. The gate is met
+  > with room: at a degree-30 prefix through Baez's point the worst PAIRED distance is **1.2e-5 in a
+  > picture of radius 0.542** — 2.2e-5 of it, and 0.002 of an inset pixel.
+  >
+  > **THE INSET IS THE LIMIT ENGINE'S OWN QUESTION, DRAWN.** Bousch's theorem is `q ∈ D̄ ⟺ 0 ∈ D_q`, so
+  > the cloud beside the picture is not a second view of it: the picture is a map of where that cloud
+  > swallows the origin. The two are the same predicate computed in opposite directions — one keeps the
+  > values and takes a minimum, the other throws them away and keeps a depth — and the suite requires
+  > them to AGREE rather than to correlate: **1,352 of 1,352 points, no disagreements.**
+  >
+  > **And the first falsification of that was measuring the wrong thing.** Perturbing the tail at a
+  > realistic pixel broke 4 of 1,352 — which read as a weak test and was in fact a measurement of
+  > FOSTER'S FUDGE: at a pixel radius of 0.01 the fudge is ~0.04 where the depth-12 tail is ~2e-4, so
+  > `ε` decides every point and halving, quartering or deleting the tail all give the same 4. At
+  > `ε = 0` the tail is the whole criterion and the response is proportional: **0 broken at the true
+  > tail, 60 at half, 144 at a quarter, 288 — every in-set point there is — at zero.**
+  >
+  > **An alphabet containing 0 holds the origin for free**, so the membership question is asked of the
+  > PROPER set and the second enumeration is not an optimisation to remove: the all-zero prefix is a
+  > value of the full attractor at every depth and every point, so reading membership off the drawn
+  > cloud would call the whole plane in-set for `{0, 1}` and `{−1, 0, 1}`. Littlewood has no zero
+  > coefficient, which is exactly why the trap survives unnoticed on the flagship alphabet.
+  >
+  > **THE PAIRING SEES WHAT A HAUSDORFF DISTANCE CANNOT.** Michelen–Yakir state convergence in Hausdorff
+  > distance; the extensions' tails INDEX both sides (`R` ranges over the same `|A|^m` truncations), so
+  > every predicted point has a named partner and the number reported is the largest distance between
+  > partners. That is not a convenience. The derivation gives `T(w) → −R(α)/P′(α)`, and the paper can
+  > drop the minus because it is about Littlewood, where `−A = A` makes the predicted SET its own
+  > negation — measured, exactly — so a Hausdorff reading is blind to the sign on the very alphabet the
+  > theorem is stated for. The pairing is not: **6.8e-3 honest against 1.09 with the sign dropped, 159×**.
+  > Over `{0, 1}` the sign moves the set too (1.2e-2 against 8.8e-1), so neither reading could miss it
+  > there.
+  >
+  > **The convergence is a U, and the far side is float64 rather than the theorem.** `P·(1 + z^{d+1})`
+  > keeps `α` a root and doubles the prefix degree exactly, so one root can be read at 16, 33, 67 and
+  > 135 with no search. The theorem's error falls as `|α|^{n+1}`; the magnification's own noise,
+  > `1e-16/|α|^{n+1}`, rises the same way:
+  >
+  > | degree | 16 | 33 | 67 | 135 |
+  > | --- | --- | --- | --- | --- |
+  > | worst | 6.83e-3 | 1.21e-5 | 1.80e-4 | 5.42e-1 |
+  > | float64 noise | 1.12e-13 | 1.25e-10 | 1.57e-4 | 2.47e+8 |
+  >
+  > So a deep probe's HIGHEST-degree polynomials are the worst prefixes to illustrate the theorem with,
+  > not the best. The mode refuses past `MAGNIFIED_NOISE_FLOOR` of the overlay's own radius and names
+  > the repair ("a lower-degree prefix through the same root"), and because the prediction is cheap and
+  > the `|A|^m` Newton solves are not, the refusal is decided before them and costs nothing.
+  >
+  > **`putImageData` REPLACES, it does not composite** — alpha included — so the first draft's painted
+  > background was obliterated by the cloud's own buffer and every unlit pixel came back transparent
+  > black. Found by the browser suite reading two distinct colours where the count ramp should give
+  > several. The background is written into the buffer now. **And the test that found it was itself
+  > wrong**: it asked for "> 20 distinct colours", which is a threshold a flat fill can pass. The frame
+  > carries exactly one colour per distinct per-pixel count plus the background — measured, 16,384 values
+  > over 6,179 lit pixels with a busiest pixel of 9, so **ten** — and that is what is asserted, because
+  > nothing but the ramp produces that number.
+  >
+  > **Near `|z| = 1` the dragon is not slow to draw, it is beyond drawing.** A depth-`D` enumeration is
+  > `|A|^{D+1}` points and pins the attractor to its own tail: at `|z| = 0.66` a fifth of a percent takes
+  > depth 15 (65,536 values); at `|z| = 0.91` it takes depth ~50, which is 2⁵¹. The plan says `capped`
+  > rather than drawing a coarse blob that looks finished — the annulus again, arriving in the third
+  > engine.
+  >
+  > **The seed is refined before anything is decided**, so "the root is outside the disk" is a statement
+  > about the root and not about where the reader clicked: seeding at `3` on a prefix whose roots are
+  > inside is not an error, because Newton walks in. The refusal needs a polynomial whose root really is
+  > out, which is what the test uses.
 - **PR-5 — the gallery and the statistics · *M*.** Captioned entries (§2.3, all four groups), the
   zoom story as a scrubbable entry, the `{0, 1}` and `{−1, 0, 1}` bounds drawn as overlays, the
   statistics panel, two gallery permalinks in the a11y roster. Gate: every entry's state decodes,

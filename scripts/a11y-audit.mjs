@@ -289,6 +289,17 @@ const PAGES = [
     expect: '.controls[data-engine="deep"]',
   },
   {
+    // The dragon inset, PINNED. A hover is not state, so the only way the roster can reach the inset at
+    // all is through a link that carries a lamp — which is the M7.4 lesson (a panel nothing opens is
+    // never audited) arriving as a reason for the field to be in the permalink in the first place.
+    id: "polynomial-roots-dragon",
+    mount: "polynomial-roots",
+    dist: "apps/polynomial-roots/dist",
+    file: "index.html",
+    hash: viewState("pr", { cx: "0.375453", cy: "0.544825", h: 0.06, dmax: 18, lamp: [0.375453, 0.544825] }),
+    expect: '.panel.dragon[data-pinned="yes"]',
+  },
+  {
     id: "correspondences",
     mount: "correspondences",
     dist: "apps/correspondences/dist",

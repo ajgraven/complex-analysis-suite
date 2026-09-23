@@ -202,3 +202,23 @@ input[type="checkbox"].control { width: auto; justify-self: start; }
   .grid { grid-template-columns: minmax(0, 1fr); height: auto; }
   .stage { height: 60vh; }
 }
+
+/* The dragon inset.
+ *
+ * A square canvas at the rail's width, with `aspect-ratio` rather than a fixed height so the drawing
+ * code can size its backing store from `clientWidth` and get a square either way. `.row.check` is the
+ * checkbox row: `.row` is a two-column grid built for `label → control`, and a checkbox wants its box
+ * FIRST and its text beside it, which is the one place that grid is the wrong shape. */
+.inset {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 4px;
+  background: #0b0d12;
+}
+
+.row.check {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 8px;
+}

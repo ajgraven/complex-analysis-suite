@@ -15,11 +15,11 @@
 // Ranges are not validated here beyond what `clampState` does; the shell's controls clamp, and a link
 // from a future version with a wider slider should open at this version's limit rather than refuse.
 import { decodeViewState, encodeViewState } from "@cas/interchange";
-import type { AlphabetSpec } from "./engine/alphabet.js";
+import type { AlphabetSpec, Cx } from "./engine/alphabet.js";
 import { compileAlphabet } from "./engine/alphabet.js";
 import { MAX_DEPTH as WALK_MAX_DEPTH, MIN_DEPTH as WALK_MIN_DEPTH } from "./engine/limit/walk.js";
 import { ddFromString } from "./engine/deep/dd.js";
-import { clampState, DEFAULT_STATE, MAX_DEGREE } from "./state.js";
+import { clampState, DEFAULT_STATE, MAX_DEGREE, MAX_EXTEND } from "./state.js";
 import type { AppState } from "./state.js";
 
 const APP = "pr";
@@ -56,6 +56,12 @@ export function encodeState(state: AppState): string {
   if (s.engine !== d.engine) payload.engine = s.engine;
   if (s.depth !== d.depth) payload.depth = s.depth;
   if (s.annulus !== d.annulus) payload.annulus = s.annulus;
+  // The lamp rides as a two-element array of rounded doubles. Nine significant figures is far past what
+  // an inset can show, and unlike the CENTRE it is not a coordinate the camera has to land on exactly:
+  // the attractor moves continuously with the lamp.
+  if (s.lamp !== null) payload.lamp = [round(s.lamp.re), round(s.lamp.im)];
+  if (s.theorem !== d.theorem) payload.theorem = s.theorem;
+  if (s.extend !== d.extend) payload.extend = s.extend;
   return encodeViewState(APP, payload);
 }
 
@@ -111,6 +117,20 @@ export function decodeState(hashOrLink: string): DecodeResult {
   if (s.annulus !== undefined && typeof s.annulus !== "boolean") {
     return { refused: `this link carries an unreadable value for "annulus"` };
   }
+  if (s.theorem !== undefined && typeof s.theorem !== "boolean") {
+    return { refused: `this link carries an unreadable value for "theorem"` };
+  }
+  if (isNum(s.extend) && (s.extend < 0 || s.extend > MAX_EXTEND)) {
+    return { refused: `this link asks for ${s.extend} extension digits, outside the range 0–${MAX_EXTEND} this app enumerates` };
+  }
+  let lamp: Cx | null = null;
+  if (s.lamp !== undefined) {
+    const raw = s.lamp;
+    if (!Array.isArray(raw) || raw.length !== 2 || !isNum(raw[0]) || !isNum(raw[1])) {
+      return { refused: `this link carries an unreadable dragon point` };
+    }
+    lamp = { re: raw[0], im: raw[1] };
+  }
   for (const key of ["cx", "cy"] as const) {
     // Numbers are accepted too: every link minted before the centre became a string carries them, and
     // a double is a perfectly good centre for the views those links can express.
@@ -142,6 +162,9 @@ export function decodeState(hashOrLink: string): DecodeResult {
       engine: ENGINES.includes(String(s.engine)) ? (s.engine as AppState["engine"]) : "auto",
       depth: isNum(s.depth) ? s.depth : DEFAULT_STATE.depth,
       annulus: s.annulus === true,
+      lamp,
+      theorem: s.theorem === true,
+      extend: isNum(s.extend) ? s.extend : DEFAULT_STATE.extend,
     }),
   };
 }

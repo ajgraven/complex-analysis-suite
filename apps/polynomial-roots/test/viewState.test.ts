@@ -29,6 +29,9 @@ const A: AppState = clampState({
   engine: "auto",
   depth: 28,
   annulus: false,
+  lamp: null,
+  theorem: false,
+  extend: 8,
 });
 const B: AppState = clampState({
   alphabet: { preset: "custom", custom: "1, -1, i, -i" },
@@ -44,6 +47,9 @@ const B: AppState = clampState({
   engine: "limit",
   depth: 41,
   annulus: true,
+  lamp: { re: -0.372368, im: 0.517839 },
+  theorem: true,
+  extend: 11,
 });
 
 describe("the permalink round trip", () => {
@@ -203,5 +209,31 @@ describe("a link that cannot be honoured refuses BY NAME", () => {
     expect(r).not.toBeNull();
     expect(r !== null && "state" in r && r.state.minDegree).toBe(4);
     expect(r !== null && "state" in r && r.state.maxDegree).toBe(9);
+  });
+});
+
+describe("the dragon rides the link", () => {
+  it("carries a pinned lamp, and refuses one it cannot read", () => {
+    // A hover is not state; a PIN is, and it is the only way the a11y roster can reach the inset at all
+    // (Contour Integration M7.4: a panel nothing opens is never audited).
+    const pinned = clampState({ ...A, lamp: { re: 0.375453, im: 0.544825 } });
+    const back = settled(pinned).state;
+    expect(back.lamp?.re).toBeCloseTo(0.375453, 9);
+    expect(back.lamp?.im).toBeCloseTo(0.544825, 9);
+    expect(settled(A).state.lamp).toBeNull();
+    for (const lamp of [0.5, [0.5], ["a", 1], [1, 2, 3], null]) {
+      const r = decodeState(encodeViewState("pr", { lamp }));
+      expect(r !== null && "refused" in r && r.refused, JSON.stringify(lamp)).toContain("dragon point");
+    }
+  });
+
+  it("carries theorem mode and its extension count, and refuses a count it cannot enumerate", () => {
+    const s = settled(clampState({ ...A, theorem: true, extend: 11 })).state;
+    expect(s.theorem).toBe(true);
+    expect(s.extend).toBe(11);
+    const r = decodeState(encodeViewState("pr", { extend: 40 }));
+    expect(r !== null && "refused" in r && r.refused).toContain("extension digits");
+    const t = decodeState(encodeViewState("pr", { theorem: 1 }));
+    expect(t !== null && "refused" in t && t.refused).toContain("theorem");
   });
 });

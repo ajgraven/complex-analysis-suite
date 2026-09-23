@@ -4,7 +4,7 @@
 // thing, and so "what the reader is looking at" has exactly one representation. Every field here is
 // something a permalink must carry; anything derived — the loaded degrees, the statistics, the tone
 // ramp — is computed from it and deliberately absent.
-import type { AlphabetSpec } from "./engine/alphabet.js";
+import type { AlphabetSpec, Cx } from "./engine/alphabet.js";
 import { ddAdd, ddFromString, ddMul, ddToNumber, ddToString } from "./engine/deep/dd.js";
 import type { DD } from "./engine/deep/dd.js";
 import type { EngineMode } from "./engine/limit/handover.js";
@@ -44,7 +44,30 @@ export interface AppState {
   readonly depth: number;
   /** Walk inside the excluded band around `|z| = 1`, under the node budget. */
   readonly annulus: boolean;
+  /**
+   * The dragon's pinned point, or null for none.
+   *
+   * A HOVER is not state — it is where the mouse happens to be — so the inset follows the cursor
+   * without touching this, and pinning is the explicit act that makes a dragon shareable. The field is
+   * a plain pair of doubles rather than the centre's decimal strings: the attractor at `z` and at
+   * `z + 1e-17` are the same picture to every pixel of an inset, so the precision the camera needs
+   * buys nothing here.
+   */
+  readonly lamp: Cx | null;
+  /**
+   * Draw the probed root's Michelen–Yakir overlay instead of the plain attractor.
+   *
+   * Only the deep engine has a probed root, so the mode is inert elsewhere; it is in the state rather
+   * than in the shell because a rung of an argument nothing can link to is a rung nothing audits
+   * (Contour Integration M7.4), and the a11y roster opens the overlay through its own permalink.
+   */
+  readonly theorem: boolean;
+  /** Extension digits the overlay enumerates: `|A|^extend` paired points. */
+  readonly extend: number;
 }
+
+/** Most extension digits the overlay will enumerate. `2^14` is 16,384 Newton solves, about 0.4 s. */
+export const MAX_EXTEND = 14;
 
 /** Highest degree the app will sweep without being asked twice (ADR-0046: live to 20). */
 export const LIVE_DEGREE_CAP = 20;
@@ -72,6 +95,9 @@ export const DEFAULT_STATE: AppState = {
   engine: "auto",
   depth: 28,
   annulus: false,
+  lamp: null,
+  theorem: false,
+  extend: 8,
 };
 
 /** Clamp a state into what the engine and the stage can actually do. Pure; the codec relies on it. */
@@ -92,6 +118,9 @@ export function clampState(s: AppState): AppState {
     engine: s.engine === "roots" || s.engine === "limit" || s.engine === "deep" ? s.engine : "auto",
     depth: Math.round(clampNum(s.depth, WALK_MIN_DEPTH, WALK_MAX_DEPTH, DEFAULT_STATE.depth)),
     annulus: s.annulus === true,
+    lamp: clampLamp(s.lamp),
+    theorem: s.theorem === true,
+    extend: Math.round(clampNum(s.extend, 0, MAX_EXTEND, DEFAULT_STATE.extend)),
   };
 }
 
@@ -106,6 +135,14 @@ export function clampState(s: AppState): AppState {
  * pan smoothly across is not a view, so the floor is here and not at the walk's own limit.
  */
 export const MIN_HALF_HEIGHT = 1e-30;
+
+/** A lamp the inset can draw at, or none. A non-finite pair is no lamp rather than a lamp at NaN. */
+function clampLamp(lamp: Cx | null | undefined): Cx | null {
+  if (lamp === null || lamp === undefined) return null;
+  if (!Number.isFinite(lamp.re) || !Number.isFinite(lamp.im)) return null;
+  if (Math.abs(lamp.re) > 1e6 || Math.abs(lamp.im) > 1e6) return null;
+  return { re: lamp.re, im: lamp.im };
+}
 
 /** A coordinate string the walk can read, or the default. Never silently truncates one that parses. */
 function clampCoordinate(text: string): string {

@@ -7,7 +7,7 @@
 import { attachCanvasA11y, createComputeClient, runWithFatalBoundary } from "@cas/ui";
 import type { CanvasKeyAction } from "@cas/ui";
 import { compileAlphabet, formatCx } from "./engine/alphabet.js";
-import type { Alphabet, AlphabetSpec } from "./engine/alphabet.js";
+import type { Alphabet, AlphabetSpec, Cx } from "./engine/alphabet.js";
 import { orbitSpace } from "./engine/orbits.js";
 import { defaultPoolSize, RootPool } from "./engine/pool.js";
 import { GlStage, StageUnavailable } from "./stage/glStage.js";
@@ -17,6 +17,8 @@ import type { EngineMode, Handover } from "./engine/limit/handover.js";
 import { epsFor, MAX_DEPTH as WALK_MAX_DEPTH, MIN_DEPTH as WALK_MIN_DEPTH, NODE_BUDGET } from "./engine/limit/walk.js";
 import { clampDepth } from "./engine/limit/walkGlsl.js";
 import { DeepPass } from "./stage/deepPass.js";
+import { dragonBounds, dragonPlan, dragonSet, maxAbsOf, nearestToOrigin, theoremOverlay } from "./engine/dragon.js";
+import { drawInset, drawTheorem, insetDescription, insetLayout, theoremDescription } from "./stage/inset.js";
 import { centreOnRoot, coefficientString, emptyFrame, nearestRoot, packFrame, rootAt, runReference } from "./engine/deep/reference.js";
 import type { ReferenceFrame, ReferenceRequest } from "./engine/deep/reference.js";
 import { buildToneMap } from "./stage/tone.js";
@@ -27,6 +29,7 @@ import {
   DEFAULT_STATE,
   LIVE_DEGREE_CAP,
   MAX_DEGREE,
+  MAX_EXTEND,
   MIN_HALF_HEIGHT,
   offsetAtPixel,
   shiftCentre,
@@ -106,8 +109,10 @@ function main(): void {
   const statsPanel = el("section", { class: "panel stats" });
   const probePanel = el("section", { class: "panel probe" });
   probePanel.hidden = true;
+  const dragonPanel = el("section", { class: "panel dragon" });
+  dragonPanel.hidden = true;
   const placesPanel = el("section", { class: "panel places" });
-  const rail = el("aside", { class: "rail" }, controls, statsPanel, probePanel, placesPanel);
+  const rail = el("aside", { class: "rail" }, controls, statsPanel, probePanel, dragonPanel, placesPanel);
 
   const errorBox = el("div", { class: "error", role: "alert" });
   errorBox.hidden = true;
@@ -324,6 +329,8 @@ function main(): void {
         draw();
         syncStats();
         syncProbe();
+        syncDragonControls();
+        scheduleInset();
       },
     );
   }
@@ -553,6 +560,8 @@ function main(): void {
     syncControls();
     syncStats();
     syncProbe();
+    syncDragonControls();
+    scheduleInset();
   }
 
   function showError(message: string | null): void {
@@ -647,6 +656,153 @@ function main(): void {
       ),
     );
   }
+
+  // --- the dragon -------------------------------------------------------------------------------
+  /**
+   * The inset, and the third reading of the one coefficient tree.
+   *
+   * The lamp is the PINNED point when there is one and the cursor otherwise, because a hover is not
+   * state: it is where the mouse happens to be, and a permalink carrying it would open somewhere the
+   * sharer never chose. Pinning is the explicit act, and it is what the a11y roster audits.
+   *
+   * **The resolution asked for is scale-free.** The attractor fits inside `max|a|/(1−|z|)` whatever the
+   * alphabet, so asking for that spread over the inset's half-width turns the depth rule into
+   * `|z|^{D+1} < 1/halfWidthPx` — no bounding box is needed before the enumeration that produces it, and
+   * the cost follows the picture rather than a constant.
+   */
+  const insetCanvas = el("canvas", { class: "inset" }) as HTMLCanvasElement;
+  const insetNote = el("p", { class: "note" });
+  const pinButton = el("button", { class: "button", type: "button", textContent: "Pin this dragon" });
+  const theoremToggle = el("input", { type: "checkbox", id: "pr-theorem" }) as HTMLInputElement;
+  const theoremRow = el(
+    "label",
+    { class: "row check" },
+    theoremToggle,
+    el("span", { textContent: "Theorem mode (Michelen–Yakir)" }),
+  );
+  const extendInput = el("input", {
+    type: "range",
+    class: "control",
+    id: "pr-extend",
+    min: "2",
+    max: String(MAX_EXTEND),
+    step: "1",
+  }) as HTMLInputElement;
+  const extendRow = el("label", { class: "row" }, el("span", { textContent: "Extension digits" }), extendInput);
+  let hoverLamp: Cx | null = null;
+  let insetTimer = 0;
+
+  function lampOf(): Cx | null {
+    return state.lamp ?? hoverLamp;
+  }
+
+  function scheduleInset(): void {
+    if (insetTimer !== 0) return;
+    insetTimer = window.requestAnimationFrame(() => {
+      insetTimer = 0;
+      syncDragon();
+    });
+  }
+
+  function syncDragon(): void {
+    const lamp = lampOf();
+    const a = alphabet;
+    dragonPanel.hidden = lamp === null || a === null;
+    if (lamp === null || a === null) return;
+    const size = Math.max(64, Math.min(320, Math.round(insetCanvas.clientWidth || 220)));
+    insetCanvas.width = size;
+    insetCanvas.height = size;
+    const ctx = insetCanvas.getContext("2d");
+    const probed = state.theorem ? rootAt(deepFrame, probeIndex >= 0 ? probeIndex : 0) : null;
+
+    if (probed !== null && handover().engine === "deep") {
+      const centre = centreNumbers(state);
+      const overlay = theoremOverlay(a, {
+        digits: probed.digits,
+        alpha: { re: centre.cx + probed.dx, im: centre.cy + probed.dy },
+        extend: state.extend,
+      });
+      if ("error" in overlay) {
+        insetNote.textContent = `⚠ ${overlay.error}`;
+        insetCanvas.setAttribute("aria-label", `No theorem overlay: ${overlay.error}`);
+        if (ctx !== null) ctx.clearRect(0, 0, size, size);
+        return;
+      }
+      const both = new Float64Array(overlay.predicted.length + overlay.actual.length);
+      both.set(overlay.predicted, 0);
+      both.set(overlay.actual, overlay.predicted.length);
+      const layout = insetLayout(dragonBounds(both), size, size);
+      const insetPixel = layout.scale > 0 ? 1 / layout.scale : Infinity;
+      if (ctx !== null) drawTheorem(ctx, overlay, layout);
+      const text = theoremDescription(overlay, insetPixel);
+      insetNote.textContent = text;
+      insetCanvas.setAttribute("aria-label", text);
+      return;
+    }
+
+    const spread = maxAbsOf(a) / Math.max(1e-9, 1 - Math.hypot(lamp.re, lamp.im));
+    const plan = dragonPlan(a, lamp, spread / (size / 2));
+    if (!plan.contracts) {
+      const text = insetDescription(lamp, plan, null);
+      insetNote.textContent = text;
+      insetCanvas.setAttribute("aria-label", text);
+      if (ctx !== null) ctx.clearRect(0, 0, size, size);
+      return;
+    }
+    const points = dragonSet(a, lamp, plan.depth);
+    const layout = insetLayout(dragonBounds(points), size, size);
+    if (ctx !== null) drawInset(ctx, points, layout, true);
+    // Bousch: the lamp is in the limit set exactly when the origin is inside the cloud. Asked at the
+    // SAME depth as the picture, so the sentence is about the cloud the reader can see — and of the
+    // PROPER set, which is the second enumeration and not an optimisation to remove. Over an alphabet
+    // containing 0 the full attractor's enumeration holds the origin at every depth for free, by the
+    // all-zero prefix, so asking it of the drawn cloud would call every point in the set. That is the
+    // same restriction the limit walk makes when it takes `a_0` from `alphabet.leading`.
+    const eps = epsFor(state.halfHeight / Math.max(1, gl.height), Math.hypot(lamp.re, lamp.im), maxAbsOf(a));
+    const inSet = nearestToOrigin(dragonSet(a, lamp, plan.depth, true)) <= plan.tail + eps;
+    const text = insetDescription(lamp, plan, inSet);
+    insetNote.textContent = text;
+    insetCanvas.setAttribute("aria-label", text);
+  }
+
+  /**
+   * The panel's shape, updated in place.
+   *
+   * **Never `replaceChildren` here.** This runs on every pointer move while nothing is pinned, and
+   * rebuilding the card would remove the focused element from the document — a reader who has tabbed to
+   * "Pin this dragon" would lose focus the moment the mouse crossed the stage. Contour Integration M7.2
+   * found exactly this, on exactly this kind of card; the fix is that the children are built once.
+   */
+  function syncDragonControls(): void {
+    dragonPanel.hidden = lampOf() === null;
+    dragonPanel.dataset.pinned = state.lamp === null ? "no" : "yes";
+    pinButton.textContent = state.lamp === null ? "Pin this dragon" : "Unpin";
+    pinButton.disabled = state.lamp === null && hoverLamp === null;
+    theoremRow.hidden = handover().engine !== "deep";
+    extendRow.hidden = !state.theorem || handover().engine !== "deep";
+    theoremToggle.checked = state.theorem;
+    extendInput.value = String(state.extend);
+  }
+
+  dragonPanel.append(
+    el("h2", {}, "The dragon"),
+    insetCanvas,
+    insetNote,
+    theoremRow,
+    extendRow,
+    el("div", { class: "buttons" }, pinButton),
+  );
+
+  insetCanvas.setAttribute("role", "img");
+  pinButton.addEventListener("click", () => {
+    apply({ ...state, lamp: state.lamp === null ? (hoverLamp ?? null) : null });
+  });
+  theoremToggle.addEventListener("change", () => {
+    apply({ ...state, theorem: theoremToggle.checked });
+  });
+  extendInput.addEventListener("input", () => {
+    apply({ ...state, extend: Number(extendInput.value) });
+  });
 
   // --- sync -------------------------------------------------------------------------------------
   function syncControls(): void {
@@ -816,6 +972,8 @@ function main(): void {
       syncStats();
       syncProbe();
     }
+    syncDragonControls();
+    scheduleInset();
     if (handover().engine === "deep") requestDeep();
     draw();
     syncHash();
@@ -843,6 +1001,15 @@ function main(): void {
   });
   gl.addEventListener("pointermove", (e) => {
     if (dragging === null) {
+      // The hover lamp is NOT state (see `syncDragon`), so it moves the inset without touching the
+      // permalink or the history — and it is ignored the moment a dragon is pinned.
+      const centre = centreNumbers(state);
+      const where = offsetOf(e.clientX, e.clientY);
+      hoverLamp = { re: centre.cx + where.dx, im: centre.cy + where.dy };
+      if (state.lamp === null) {
+        scheduleInset();
+        syncDragonControls();
+      }
       if (handover().engine === "deep" && deepFrame.count > 0) {
         const at = offsetOf(e.clientX, e.clientY);
         const i = nearestRoot(deepFrame, at.dx, at.dy);

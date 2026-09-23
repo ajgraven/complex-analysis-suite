@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { clampState, DEFAULT_STATE, LIVE_DEGREE_CAP, MAX_DEGREE } from "../src/state";
+import { clampState, DEFAULT_STATE, LIVE_DEGREE_CAP, MAX_DEGREE, MAX_EXTEND } from "../src/state";
 import type { AppState } from "../src/state";
 
 const base = (over: Partial<AppState> = {}): AppState => ({ ...DEFAULT_STATE, ...over });
@@ -58,5 +58,25 @@ describe("clampState", () => {
 
   it("the default state is already clamped", () => {
     expect(clampState(DEFAULT_STATE)).toEqual(DEFAULT_STATE);
+  });
+});
+
+describe("the dragon's fields", () => {
+  it("a lamp is a POINT or nothing — never a lamp at NaN", () => {
+    // The hover lamp is not state, so everything that reaches this field came from a link or a place;
+    // a non-finite pair has no nearest legal value and would put NaN through the whole enumeration.
+    expect(clampState(base({ lamp: { re: 0.4, im: -0.5 } })).lamp).toEqual({ re: 0.4, im: -0.5 });
+    expect(clampState(base({ lamp: null })).lamp).toBeNull();
+    for (const lamp of [{ re: NaN, im: 0 }, { re: 0, im: Infinity }, { re: 1e9, im: 0 }]) {
+      expect(clampState(base({ lamp })).lamp, JSON.stringify(lamp)).toBeNull();
+    }
+  });
+
+  it("clamps the extension count into what the overlay will enumerate", () => {
+    expect(clampState(base({ extend: 40 })).extend).toBe(MAX_EXTEND);
+    expect(clampState(base({ extend: -3 })).extend).toBe(0);
+    expect(clampState(base({ extend: 7.4 })).extend).toBe(7);
+    expect(clampState(base({ extend: NaN })).extend).toBe(DEFAULT_STATE.extend);
+    expect(clampState(base({ theorem: "yes" as never })).theorem).toBe(false);
   });
 });

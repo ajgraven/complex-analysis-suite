@@ -4470,9 +4470,26 @@ DF64 reused where it buys depth and not paid for where it does not.
    cancellation the reference point exists to avoid — so the camera is `centre + a small increment` in
    double-double and the dependency is pruned. The consequences' package list above reads six; it is
    `@cas/ui`, `@cas/gpu`, `@cas/core`, `@cas/interchange` and `@cas/export`.
-5. [ ] PR-4 and PR-5 as staged above, each with its gate, sweep and browser pass.
-6. [ ] At M6, extract `CET_C6` to `@cas/gpu` and rewire Contour Integration.
-7. [x] `eslint.config.js`'s `APP_NAMES` brought current: it was stale by four apps
+5. [x] **PR-4 done, and it found the theorem's own statement is weaker than what the app can check.**
+   Michelen–Yakir state convergence in HAUSDORFF distance, and their derivation gives
+   `T(w) → −R(α)/P′(α)` — but the extensions' tails index both sides, so every predicted point has a
+   named partner and the app reports the largest distance between PARTNERS instead. The difference is
+   not presentational: over Littlewood `−A = A` makes the predicted set its own negation exactly, so a
+   Hausdorff reading cannot see the sign on the very alphabet the theorem is stated for, while the
+   pairing separates them by 159× (6.8e-3 against 1.09). Decision 7's honest labelling holds
+   throughout — the overlay says "an illustration of Theorem 1, not a certificate", and even `κ` is
+   printed `≈`. Two further findings are recorded in the plan with their measurements: the convergence
+   is a **U**, whose far side is float64's own magnification noise rather than the theorem (worst
+   6.83e-3 → 1.21e-5 → 1.80e-4 → 5.42e-1 at prefix degrees 16, 33, 67, 135, against a noise floor of
+   1.12e-13 → 1.25e-10 → 1.57e-4 → 2.47e+8), so the mode refuses past a measured floor and names a
+   lower-degree prefix as the repair; and the inset's membership question must be asked of the PROPER
+   set, because an alphabet containing 0 puts the origin in the full attractor's enumeration for free
+   at every depth and every point. Decision 1 gains its third reader of the one coefficient tree, as
+   it always said it would, and Bousch's `q ∈ D̄ ⟺ 0 ∈ D_q` makes the inset and the limit engine the
+   same predicate computed in opposite directions — checked, 1,352 of 1,352 with no disagreements.
+6. [ ] PR-5 as staged above, with its gate, sweep and browser pass.
+7. [ ] At M6, extract `CET_C6` to `@cas/gpu` and rewire Contour Integration.
+8. [x] `eslint.config.js`'s `APP_NAMES` brought current: it was stale by four apps
    (`2d-electrostatics`, `2d-hydrodynamics`, `hele-shaw-flow`, `potential-theory`), so the
    no-cross-app-imports lint rule had silently stopped covering a third of the suite. The graph-level
    rule in `.dependency-cruiser.cjs` is generic and did cover them, which is why nothing broke.
