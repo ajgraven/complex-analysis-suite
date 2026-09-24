@@ -5,8 +5,8 @@ import {
   lassoLoop,
   enclosingLoop,
   commonBasePoint,
-} from "../src/riemann/generatorLoop.js";
-import { windingNumber } from "../src/riemann/winding.js";
+} from "../src/generatorLoop.js";
+import { windingNumber } from "../src/winding.js";
 import type { Complex } from "@cas/expr/complex";
 
 describe("generatorLoopAround", () => {

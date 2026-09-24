@@ -39,23 +39,23 @@ import {
 import { makeComplexFn } from "@cas/expr/evaluate";
 import { differentiate } from "@cas/expr/derivative";
 import type { Complex } from "@cas/expr/complex";
-import { windingNumber } from "./riemann/winding.js";
 import {
+  windingNumber,
   generatorLoopAround,
   generatorRadius,
   lassoLoop,
   enclosingLoop,
   commonBasePoint,
-} from "./riemann/generatorLoop.js";
-import {
   cycles,
   cycleCount,
   generatedGroup,
   riemannHurwitzGenus,
   namedGroup,
   type Perm,
-} from "./riemann/permGroup.js";
-import { drawPermDiagram, permDiagramWidth, DIAGRAM_HEIGHT } from "./riemann/permDiagram.js";
+  drawPermDiagram,
+  permDiagramWidth,
+  DIAGRAM_HEIGHT,
+} from "@cas/monodromy";
 import { Plot } from "./render/plot.js";
 import { COLORMAPS } from "./render/colormaps.js";
 import { PRESETS } from "./presets.js";

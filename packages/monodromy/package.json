@@ -1,0 +1,32 @@
+{
+  "name": "@cas/monodromy",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Monodromy of the roots (or sheets) of a family over a loop: finite permutation groups (compose, cycles, generated group, commutators, derived series, Sₙ/Aₙ recognition), π₁ generator loops (lassos, winding numbers), the plotter's nearest-match continuation (≈, never certified) and the CERTIFIED root tracker (Smith discs in exact arithmetic, bisection, refusal by name). Extracted from the Complex Function Plotter's src/riemann/ when Polynomial Root Analysis became its second consumer (ADR-0007, ADR-0047). Consumed via SOURCE by the suite's Vite/Vitest bundlers (no dist build).",
+  "license": "MIT",
+  "author": "Andrew Graven <andrew@graven.com>",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src test"
+  },
+  "dependencies": {
+    "@cas/exact": "workspace:*",
+    "@cas/expr": "workspace:*"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "eslint": "^9.17.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.0",
+    "vitest": "^2.1.4"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

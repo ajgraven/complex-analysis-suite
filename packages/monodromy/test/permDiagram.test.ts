@@ -4,8 +4,8 @@ import {
   permDiagramWidth,
   drawPermDiagram,
   DIAGRAM_HEIGHT,
-} from "../src/riemann/permDiagram.js";
-import type { Perm } from "../src/riemann/permGroup.js";
+} from "../src/permDiagram.js";
+import type { Perm } from "../src/permGroup.js";
 
 function mockCtx() {
   const calls = { arc: 0, fill: 0, stroke: 0, quadraticCurveTo: 0, save: 0, restore: 0 };

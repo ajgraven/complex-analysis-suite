@@ -47,6 +47,7 @@ const PROJECTS = [
   { name: 'ui', match: '/packages/ui/', floor: 1 },
   { name: 'flow', match: '/packages/flow/', floor: 1 },
   { name: 'rigor', match: '/packages/rigor/', floor: 1 },
+  { name: 'monodromy', match: '/packages/monodromy/', floor: 1 },
   { name: 'complex-dynamics', match: '/apps/complex-dynamics/', floor: 1 },
   { name: 'complex-function-plotter', match: '/apps/complex-function-plotter/', floor: 1 },
   { name: 'correspondences', match: '/apps/correspondences/', floor: 1 },

@@ -39,7 +39,7 @@ import {
   distinctSheets,
   nearest,
   type MonodromyResult,
-} from "../riemann/monodromy.js";
+} from "@cas/monodromy";
 import { findBranchPoints } from "../riemann/branchPoints.js";
 import {
   type Vec3,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { windingNumber } from "../src/riemann/winding.js";
+import { windingNumber } from "../src/winding.js";
 import type { Complex } from "@cas/expr/complex";
 
 /** A regular `n`-gon (closed polyline) of radius `r` about `c`, traced counter-clockwise (dir = +1) or CW. */

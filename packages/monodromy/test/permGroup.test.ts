@@ -11,7 +11,7 @@ import {
   riemannHurwitzGenus,
   namedGroup,
   type Perm,
-} from "../src/riemann/permGroup.js";
+} from "../src/permGroup.js";
 
 describe("permutation basics", () => {
   it("composes, inverts, and identifies the identity", () => {
