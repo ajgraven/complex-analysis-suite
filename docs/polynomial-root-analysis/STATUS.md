@@ -28,7 +28,8 @@ ladder's shader), which joins the root `test:browser` chain.
   predicted bound, bit-exact root form, exact discs, Yun-decided multiplicities); `a₀` round a circle
   returns every root to its own label and round a branch point swaps exactly two; the two-state
   `applyState` test in both directions; sweep 34 mutants, 32 killed, 2 equivalent; a11y roster
-  `polynomial-root-analysis` + `-overlay` clean. GATE_PLACEHOLDER
+  `polynomial-root-analysis` + `-overlay` clean. Gate **627 files / 7223 tests** (623 / 7116 before PRA-1); `pnpm a11y --strict`
+  **1150 interactive nodes across 31 pages, 0 unnamed**.
 - 2026-09-24 — **PRA-1.2, the engine.** `src/engine/`: the dual-form `Polynomial` with its ring
   invariants, the typed-polynomial reader, Aberth (moved into `@cas/core`) + exact refinement, Smith
   discs, Yun-decided multiplicities, conditioning, ℚ-mode snapping; the 30-case corpus.
