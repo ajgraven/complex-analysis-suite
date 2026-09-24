@@ -382,6 +382,17 @@ const PAGES = [
     hash: viewState("pra", { r: "Q", t: "(z-1)*(z-2)*(z-3)*(z-4)*(z-5)*(z-6)", d: 1, o: 0, cr: 1, j: 1, tr: 1, pz: -4, rc: [3.5, 0, 3], cc: [0, 0, 2000] }),
     expect: ".pz .regions li",
   },
+  {
+    // PRA-3's Monodromy card with a loop open, by permalink: the commutator of two lassos round branch
+    // points of a₀ — the word tree, its certified permutation, and the braid strip it draws. `expect`
+    // keys on the word tree, which only a loop in the link renders.
+    id: "polynomial-root-analysis-loop",
+    mount: "polynomial-root-analysis",
+    dist: "apps/polynomial-root-analysis/dist",
+    file: "index.html",
+    hash: viewState("pra", { r: "Q", t: "z^5 - z - 1", d: 1, o: 0, cr: 1, j: 0, lp: [3, [0, 0, 1], [0, 2, 1]], rc: [0, 0, 1.6], cc: [0, 0, 1.6] }),
+    expect: ".word-tree",
+  },
 ];
 
 // The WCAG 2.0/2.1 A + AA conformance set plus axe's best-practice pack (landmarks/regions, valid

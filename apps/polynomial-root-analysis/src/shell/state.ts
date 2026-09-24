@@ -16,6 +16,8 @@ import { conditioning, type Conditioning } from "../engine/roots/conditioning.js
 import { rootDiscs, type DiscReport } from "../engine/roots/discs.js";
 import { rootGroups, type GroupReport } from "../engine/roots/multiplicity.js";
 import { analyse, type Analysis } from "../engine/analysis/analyse.js";
+import type { Loop, LoopContext } from "../engine/loops/loop.js";
+import { loopContext, runLoop, type LoopRun } from "../engine/loops/run.js";
 
 /** A pane's camera: the world point at the centre and the half-HEIGHT of the view. */
 export interface Cam {
@@ -44,6 +46,8 @@ export interface ShellState {
   readonly trails: boolean;
   /** log₁₀ ε of the pseudozero set drawn and certified, or null for none. */
   readonly pseudozero: number | null;
+  /** The loop word in the selected coefficient's plane (PRA-3), carried as the word, never samples. */
+  readonly loop: Loop | null;
   readonly rootCam: Cam;
   readonly coeffCam: Cam;
 }
@@ -57,6 +61,7 @@ export const DEFAULT_STATE: ShellState = {
   coefficient: 0,
   trails: false,
   pseudozero: null,
+  loop: null,
   rootCam: { cx: 0, cy: 0, half: 1.6 },
   coeffCam: { cx: 0, cy: 0, half: 1.6 },
 };
@@ -69,6 +74,10 @@ export interface Resolution {
   readonly groups: GroupReport | null;
   readonly conditioning: readonly Conditioning[] | null;
   readonly analysis: Analysis | null;
+  /** Where loops in the selected coefficient's plane start and what they go round. */
+  readonly loopContext: LoopContext | null;
+  /** The state's loop, run through the certified tracker — on a commit, never a drag frame. */
+  readonly loopRun: LoopRun | null;
 }
 
 /** Build the polynomial a state names, continuing root labels from `prev` when given. */
@@ -104,6 +113,8 @@ export function resolveState(s: ShellState, prev?: Continuation): Resolution {
       groups: null,
       conditioning: null,
       analysis: null,
+      loopContext: null,
+      loopRun: null,
     };
   }
   return resolvePolynomial(built.poly, s, false);
@@ -122,19 +133,45 @@ export function resolvePolynomial(
   drag: boolean,
 ): Resolution {
   const discs = rootDiscs(poly);
+  const analysis = analyse(poly, discs, {
+    coefficient: s.coefficient,
+    pseudozero: s.pseudozero,
+    range: rootRange(s),
+    drag,
+  });
+  const j = s.coefficient;
+  const ctx =
+    j !== null && j < poly.degree && !drag ? loopContext(poly, j, analysis.branch) : null;
   return {
     poly,
     refusal: null,
     discs,
     groups: rootGroups(poly, discs),
     conditioning: conditioning(poly),
-    analysis: analyse(poly, discs, {
-      coefficient: s.coefficient,
-      pseudozero: s.pseudozero,
-      range: rootRange(s),
-      drag,
-    }),
+    analysis,
+    loopContext: ctx,
+    loopRun: ctx && s.loop ? memoRun(poly, s.loop, ctx) : null,
   };
+}
+
+// A run costs up to ~2 s at degree 24 (PRA-3's measurement) and every render re-resolves the state, so
+// runs are memoised on exactly what decides them: the roots the tracker starts from, the coefficients,
+// the coefficient moved and the word.
+const RUNS = new Map<string, LoopRun>();
+export function memoRun(poly: Polynomial, loop: Loop, ctx: LoopContext): LoopRun {
+  const key = JSON.stringify([
+    poly.coeffs,
+    poly.roots,
+    poly.labels,
+    ctx.coefficient,
+    loop,
+  ]);
+  const hit = RUNS.get(key);
+  if (hit) return hit;
+  const r = runLoop(poly, loop, ctx);
+  if (RUNS.size >= 32) RUNS.delete(RUNS.keys().next().value as string);
+  RUNS.set(key, r);
+  return r;
 }
 
 /** The spec that carries `p` as its own truth: exact text when there is an exact layer. */

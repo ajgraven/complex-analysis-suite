@@ -5,7 +5,7 @@
 // simply does not draw), so everything else here is ordinary DOM.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mountApp, type App } from "../src/shell/app.js";
-import type { Polynomial } from "../src/engine/polynomial.js";
+import type { Cx, Polynomial } from "../src/engine/polynomial.js";
 import { DEFAULT_STATE, type ShellState } from "../src/shell/state.js";
 import { decodeShell, encodeShell, NAMESPACE } from "../src/shell/viewState.js";
 import { verdictLine } from "../src/shell/figure.js";
@@ -273,6 +273,7 @@ describe("applyState restores a state the app is NOT in (M6.1's test, not the fi
     coefficient: 0,
     trails: false,
     pseudozero: null,
+    loop: null,
     rootCam: { cx: 0.25, cy: -0.5, half: 2 },
     coeffCam: { cx: 1, cy: 0, half: 3 },
   };
@@ -293,6 +294,7 @@ describe("applyState restores a state the app is NOT in (M6.1's test, not the fi
     coefficient: 2,
     trails: true,
     pseudozero: -8,
+    loop: { kind: "lasso", point: 1, sign: -1 },
     rootCam: { cx: -1, cy: 2, half: 0.75 },
     coeffCam: { cx: 0, cy: 0, half: 1.5 },
   };
@@ -584,5 +586,171 @@ describe("the gain matrix as a heat row", () => {
       /moves most per unit of a\S+ \(≈ /,
     );
     expect(document.querySelectorAll('.gain-cell[data-selected="true"]')).toHaveLength(0);
+  });
+});
+
+describe("the Monodromy card (PRA-3)", () => {
+  const card = (): HTMLElement => q('section[aria-labelledby="card-monodromy"]');
+  const sigma = (): string => card().querySelector(".claim")?.textContent ?? "";
+
+  it("offers one lasso per branch point of the selected coefficient, and nothing without one", () => {
+    const { app } = mount();
+    expect(card().querySelectorAll(".lasso-chips button")).toHaveLength(4);
+    app.actions().setCoefficient(null);
+    expect(card().textContent).toMatch(/Select a coefficient below the leading one/);
+    app.actions().setCoefficient(5);
+    expect(card().querySelectorAll(".lasso-chips button")).toHaveLength(0);
+  });
+
+  it("a lasso prints a proved swap, carries it in the link, and the two roots trade labels", () => {
+    const { app } = mount();
+    const before = [...(app.live().poly?.labels ?? [])];
+    app.actions().lasso(3);
+    expect(card().querySelector(".claim .level")?.getAttribute("data-level")).toBe("=");
+    expect(sigma()).toMatch(/σ = \(\d \d\)$/);
+    expect(app.currentState().loop).toEqual({ kind: "lasso", point: 3, sign: 1 });
+    const after = app.live().poly?.labels ?? [];
+    expect(after.filter((l, i) => l !== before[i])).toHaveLength(2);
+    const d = decodeShell(encodeShell(app.currentState()));
+    expect(d?.ok && d.state.loop).toEqual({ kind: "lasso", point: 3, sign: 1 });
+    // Re-resolving (an unrelated commit) neither re-runs the swap on the labels nor changes σ.
+    const s = sigma();
+    app.actions().setDiscs(false);
+    expect(app.live().poly?.labels).toEqual(after);
+    expect(sigma()).toBe(s);
+  });
+
+  it("builds a word and makes a commutator of its last two parts: a 3-cycle", () => {
+    const { app } = mount();
+    // Two lassos whose swaps share exactly one root, found by running each alone.
+    const swaps = [0, 1, 2, 3].map((k) => {
+      app.actions().setLoop({ kind: "lasso", point: k, sign: 1 });
+      const r = app.live().loopRun;
+      if (!r?.ok) throw new Error("a lasso was refused");
+      return r.perm;
+    });
+    let pair: [number, number] | null = null;
+    for (let a = 0; a < 4 && !pair; a++)
+      for (let b = a + 1; b < 4 && !pair; b++)
+        if (swaps[a].filter((x, i) => x !== i && swaps[b][i] !== i).length === 1)
+          pair = [a, b];
+    if (!pair) throw new Error("no two lassos share a root");
+    app.actions().setLoop(null);
+    app.actions().setBuilding(true);
+    app.actions().lasso(pair[0]);
+    app.actions().lasso(pair[1]);
+    expect(card().querySelector(".word-tree")?.textContent).toMatch(/γ\S+·γ\S+/);
+    app.actions().commute();
+    expect(app.currentState().loop?.kind).toBe("commutator");
+    expect(sigma()).toMatch(/σ = \(\d \d \d\)$/);
+  });
+
+  it("a drawn loop through a branch point refuses by name, and no σ is printed", () => {
+    const { app } = mount();
+    const b = app.live().loopContext?.branchPoints[0] ?? [0, 0];
+    app.actions().pen();
+    for (const z of [
+      [-1, 0],
+      [b[0], b[1]],
+      [b[0], b[1] - 0.4],
+      [-1, -0.4],
+    ] as Cx[])
+      app.actions().penAt(z);
+    app.actions().pen();
+    expect(card().querySelector(".claim .level")?.getAttribute("data-level")).toBe("⚠");
+    expect(sigma()).toMatch(/no permutation: the loop passes through branch point #1/);
+    expect(sigma()).not.toMatch(/σ =/);
+  });
+
+  it("plays σ on the roots, drawing a braid; names the group of every lasso", () => {
+    const { app } = mount();
+    expect(app.braid()).toBeNull();
+    app.actions().lasso(0);
+    expect(app.braid()?.strands).toBe(5);
+    app.actions().play();
+    expect(card().textContent).toMatch(/coefficients trace a closed loop/);
+    expect(q("canvas.braid-canvas").getAttribute("aria-label")).toMatch(
+      /Braid of the last motion: 5 strands, \d+ crossings?\./,
+    );
+    app.actions().group();
+    expect(card().textContent).toMatch(/the symmetric group S₅, order 120\./);
+  });
+
+  it("a new polynomial or coefficient clears the loop", () => {
+    const { app } = mount();
+    app.actions().lasso(0);
+    app.actions().setCoefficient(1);
+    expect(app.currentState().loop).toBeNull();
+    app.actions().lasso(0);
+    app.actions().type("z^3 - 2");
+    expect(app.currentState().loop).toBeNull();
+  });
+
+  it("refuses a link whose loop it cannot honour, by name", () => {
+    const enc = (lp: unknown, extra: Record<string, unknown> = {}) =>
+      encodeViewState(NAMESPACE, {
+        r: "Q",
+        t: "z^5 - z - 1",
+        d: 1,
+        o: 0,
+        j: 0,
+        lp,
+        rc: [0, 0, 1],
+        cc: [0, 0, 1],
+        ...extra,
+      });
+    const cases: [string, RegExp][] = [
+      [enc([0, 8, 1]), /goes round branch point #9 of a0, which has 4/],
+      [enc([0, 1, 2]), /a lasso in the loop is malformed/],
+      [enc([7]), /unknown kind 7/],
+      [enc([4, 1, 2]), /at least three finite points/],
+      [enc([0, 1, 1], { j: null }), /no coefficient below the leading one/],
+      [enc([1]), /word in the loop is empty/],
+    ];
+    for (const [hash, why] of cases) {
+      const d = decodeShell(hash);
+      expect(d && !d.ok && d.reason, hash).toMatch(why);
+    }
+    // And every kind of node round-trips.
+    const loop = {
+      kind: "word",
+      parts: [
+        {
+          kind: "commutator",
+          a: { kind: "lasso", point: 0, sign: 1 },
+          b: { kind: "lasso", point: 1, sign: -1 },
+        },
+        {
+          kind: "inverse",
+          of: {
+            kind: "drawn",
+            vertices: [
+              [-1, 0],
+              [0, 0.5],
+              [0.5, -0.5],
+            ],
+          },
+        },
+      ],
+    } as const;
+    const s = { ...DEFAULT_STATE, loop } as unknown as ShellState;
+    const d = decodeShell(encodeShell(s));
+    expect(d?.ok && d.state.loop).toEqual(loop);
+  });
+
+  it("never carries a house name, and the monodromy card never says Galois", () => {
+    const { app } = mount();
+    app.actions().setBuilding(true);
+    app.actions().lasso(0);
+    app.actions().lasso(2);
+    app.actions().commute();
+    app.actions().play();
+    app.actions().group();
+    const labels = [...document.querySelectorAll("[aria-label]")]
+      .map((e) => e.getAttribute("aria-label"))
+      .join("\n");
+    for (const bad of DENYLIST)
+      expect(`${document.body.textContent}\n${labels}`).not.toMatch(bad);
+    expect(card().textContent).not.toMatch(/Galois/);
   });
 });

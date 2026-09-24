@@ -306,3 +306,121 @@ export function subscript(k: number): string {
     .map((d) => SUB[Number(d)])
     .join("");
 }
+
+export const LOOP_INK = "#ffd24a";
+
+/** A loop in the coefficient plane: the polyline, an arrow every so often, and its base point. */
+export function drawLoopPath(
+  ctx: CanvasRenderingContext2D,
+  cam: Cam,
+  vp: Viewport,
+  path: readonly Cx[],
+  opts: { dashed?: boolean; closed?: boolean } = {},
+): void {
+  if (path.length < 2) return;
+  const pts = path.map((z) => toScreen(cam, vp, z));
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = LOOP_INK;
+  ctx.setLineDash(opts.dashed ? [5, 4] : []);
+  ctx.beginPath();
+  pts.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
+  if (opts.closed) ctx.closePath();
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // Arrowheads along the way, spaced by screen length, so the direction of travel reads.
+  let since = 0;
+  ctx.fillStyle = LOOP_INK;
+  for (let i = 1; i < pts.length; i++) {
+    const [ax, ay] = pts[i - 1];
+    const [bx, by] = pts[i];
+    const len = Math.hypot(bx - ax, by - ay);
+    since += len;
+    if (since < 60 || len < 1) continue;
+    since = 0;
+    const ang = Math.atan2(by - ay, bx - ax);
+    const mx = (ax + bx) / 2;
+    const my = (ay + by) / 2;
+    ctx.beginPath();
+    ctx.moveTo(mx + 6 * Math.cos(ang), my + 6 * Math.sin(ang));
+    ctx.lineTo(
+      mx - 4 * Math.cos(ang) - 4 * Math.sin(ang),
+      my - 4 * Math.sin(ang) + 4 * Math.cos(ang),
+    );
+    ctx.lineTo(
+      mx - 4 * Math.cos(ang) + 4 * Math.sin(ang),
+      my - 4 * Math.sin(ang) - 4 * Math.cos(ang),
+    );
+    ctx.closePath();
+    ctx.fill();
+  }
+  const [x0, y0] = pts[0];
+  ctx.beginPath();
+  ctx.arc(x0, y0, 3.5, 0, 2 * Math.PI);
+  ctx.fill();
+}
+
+/** The branch points' numbers, beside their ✕, matching the lasso chips γ₁, γ₂, …. */
+export function drawBranchNumbers(
+  ctx: CanvasRenderingContext2D,
+  cam: Cam,
+  vp: Viewport,
+  points: readonly Cx[],
+): void {
+  ctx.font = "600 10px ui-sans-serif, system-ui, sans-serif";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "bottom";
+  ctx.fillStyle = LOOP_INK;
+  points.forEach((z, k) => {
+    const [x, y] = toScreen(cam, vp, z);
+    ctx.fillText(String(k + 1), x + BRANCH_HALF + 2, y - 2);
+  });
+}
+
+/**
+ * The braid: time left to right, real part bottom to top, one strand per root in its label's colour.
+ * At each crossing the strand passing UNDER is broken, so the diagram reads as a braid.
+ */
+export function drawBraid(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  frames: readonly (readonly Cx[])[],
+  labels: readonly number[],
+  under: readonly { frame: number; strand: number }[],
+): void {
+  ctx.fillStyle = INK.ground;
+  ctx.fillRect(0, 0, width, height);
+  if (frames.length < 2) return;
+  const n = labels.length;
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const f of frames)
+    for (const z of f) {
+      lo = Math.min(lo, z[0]);
+      hi = Math.max(hi, z[0]);
+    }
+  const pad = 10;
+  const span = hi - lo || 1;
+  const X = (f: number): number => pad + ((width - 2 * pad) * f) / (frames.length - 1);
+  const Y = (re: number): number =>
+    height - pad - ((height - 2 * pad) * (re - lo)) / span;
+  const broken = new Set(under.map((u) => `${u.frame}:${u.strand}`));
+  ctx.lineWidth = 2;
+  for (let i = 0; i < n; i++) {
+    ctx.strokeStyle = labelColour(labels[i], n);
+    ctx.beginPath();
+    let pen = false;
+    for (let f = 0; f < frames.length; f++) {
+      const x = X(f);
+      const y = Y(frames[f][i][0]);
+      if (broken.has(`${f}:${i}`) || broken.has(`${f - 1}:${i}`)) {
+        pen = false;
+        continue;
+      }
+      if (!pen) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+      pen = true;
+    }
+    ctx.stroke();
+  }
+}

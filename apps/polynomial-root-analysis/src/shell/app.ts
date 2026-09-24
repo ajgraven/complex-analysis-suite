@@ -16,7 +16,14 @@ import {
 } from "../engine/polynomial.js";
 import { parsePolynomial } from "../engine/parse.js";
 import { snapRational } from "../engine/rational.js";
-import { APP_NAME, PANE } from "../engine/vocabulary.js";
+import { APP_NAME, MONODROMY, PANE } from "../engine/vocabulary.js";
+import type { Loop } from "../engine/loops/loop.js";
+import { motion as makeMotion, FRAMES_PER_MOVE } from "../engine/loops/motion.js";
+import { crossings, pathsAsFrames } from "../engine/loops/braid.js";
+import { loopPath } from "../engine/loops/loop.js";
+import { lassoGroup } from "../engine/loops/group.js";
+import { monodromyGroupCert } from "../engine/certify.js";
+import { commuteLastTwo, inverted, withLasso } from "./loopEdit.js";
 import {
   scaleOf,
   toScreen,
@@ -37,6 +44,9 @@ import {
   drawRegionOutlines,
   drawRoots,
   drawTrails,
+  drawLoopPath,
+  drawBranchNumbers,
+  drawBraid,
 } from "../ui/ink.js";
 import { Portrait } from "../ui/portrait.js";
 import { figureBytes } from "./figure.js";
@@ -45,6 +55,7 @@ import { leftRail, rightRail } from "./rails.js";
 import {
   DEFAULT_STATE,
   frame,
+  memoRun,
   resolvePolynomial,
   resolveState,
   specOf,
@@ -89,7 +100,20 @@ export interface App {
     undo(): void;
     redo(): void;
     nudge(dx: number, dy: number, pane: PaneId): void;
+    setCoefficient(j: number | null): void;
+    setLoop(loop: Loop | null): void;
+    lasso(k: number): void;
+    setBuilding(on: boolean): void;
+    invert(): void;
+    commute(): void;
+    /** The pen: start (or finish) drawing, and place a vertex at a world point. */
+    pen(): void;
+    penAt(z: Cx): void;
+    play(): void;
+    group(): void;
   };
+  /** What the braid strip is showing: strand count and crossings. */
+  braid(): { strands: number; crossings: number } | null;
   refusal(): string | null;
 }
 
@@ -133,6 +157,19 @@ export function mountApp(host: HTMLElement): App {
     roots: buildPane("roots", true),
     coefficients: buildPane("coefficients", false),
   };
+
+  // ── The braid strip (PLAN §4.3): below the panes, the last loop's or motion's strands over time.
+  const braidSection = el(doc, "section", {
+    class: "braid",
+    "aria-labelledby": "braid-title",
+  });
+  const braidTitle = el(doc, "h2", { id: "braid-title" });
+  braidTitle.textContent = "Braid";
+  const braidCanvas = el(doc, "canvas", { class: "braid-canvas", role: "img" });
+  const braidLegend = el(doc, "p", { class: "pane-legend" });
+  braidLegend.textContent = MONODROMY.braid;
+  braidSection.append(braidTitle, braidCanvas, braidLegend);
+  stage.append(braidSection);
 
   function buildPane(id: PaneId, withGl: boolean): Pane {
     const section = el(doc, "section", {
@@ -193,6 +230,25 @@ export function mountApp(host: HTMLElement): App {
   let pendingText: string | null = null;
   /** Root trails by LABEL, for the drag in progress (and kept after it when `state.trails`). */
   const trails = new Map<number, Cx[]>();
+  // Loop authoring and playback — session state, never in the permalink (the WORD is; these are how it
+  // is being edited or shown).
+  let building = false;
+  let pen: Cx[] | null = null;
+  let group: {
+    cert: ReturnType<typeof monodromyGroupCert>;
+    order: number | null;
+  } | null = null;
+  let motionInfo: { fallback: boolean; lenses: number } | null = null;
+  /** The braid strip's strands (frames × roots) and their labels. */
+  let braid: { frames: Cx[][]; labels: readonly number[] } | null = null;
+  /** An animation in progress: roots (and, for a motion, coefficients) per frame. */
+  let anim: {
+    roots: Cx[][];
+    coeffs: Cx[][] | null;
+    f: number;
+    labels: readonly number[];
+  } | null = null;
+  let animHandle: number | null = null;
 
   const initial = decodeShell(win?.location.hash ?? "");
   if (initial?.ok) {
@@ -226,11 +282,79 @@ export function mountApp(host: HTMLElement): App {
       if (undoStack.length > HISTORY) undoStack.shift();
       redoStack.length = 0;
     }
+    const before = sessionKey(state, resolution);
     state = next;
     resolution = res;
     live = res;
+    if (sessionKey(state, res) !== before) resetSession();
+    adoptRun();
     render();
     syncHash();
+  }
+
+  /** What the loop session belongs to: the polynomial and the coefficient that moves. */
+  function sessionKey(s: ShellState, r: Resolution): string {
+    return JSON.stringify([r.poly?.coeffs ?? null, s.coefficient]);
+  }
+  function resetSession(): void {
+    group = null;
+    motionInfo = null;
+    braid = null;
+    pen = null;
+    stopAnim();
+  }
+  /**
+   * A NEWLY set loop, certified: its paths become the braid and are played on the roots, and the roots
+   * take the labels the proof gives them — the root that started as 2 is now where 4 was, so it is
+   * drawn there in 2's colour. Adopted once per loop, not on every re-resolve: a later commit continues
+   * the relabelled roots, and σ conjugated by itself is σ, so the card does not change under it.
+   */
+  let adopted = "";
+  function adoptRun(): void {
+    const run = resolution.loopRun;
+    const key = JSON.stringify([sessionKey(state, resolution), state.loop]);
+    if (key === adopted) return;
+    adopted = key;
+    motionInfo = null;
+    const p = resolution.poly;
+    if (!run || !run.ok || !p) return;
+    const frames = pathsAsFrames(run.paths);
+    braid = { frames, labels: p.labels };
+    startAnim({ roots: frames, coeffs: null, f: 0, labels: p.labels });
+    relabel(run.labelsAfter);
+  }
+  function relabel(labels: readonly number[]): void {
+    const p = resolution.poly;
+    if (!p) return;
+    resolution = { ...resolution, poly: { ...p, labels } };
+    live = resolution;
+  }
+  function stopAnim(): void {
+    if (animHandle !== null && win) win.cancelAnimationFrame(animHandle);
+    animHandle = null;
+    anim = null;
+  }
+  function startAnim(a: NonNullable<typeof anim>): void {
+    stopAnim();
+    // No animation where there is no frame clock (jsdom, a background tab): the end state is the point.
+    if (!win || typeof win.requestAnimationFrame !== "function" || a.roots.length < 2)
+      return;
+    anim = a;
+    const perFrame = Math.max(1, Math.round(a.roots.length / 90));
+    const tick = (): void => {
+      if (!anim) return;
+      anim.f += perFrame;
+      if (anim.f >= anim.roots.length - 1) {
+        anim = null;
+        animHandle = null;
+        render();
+        return;
+      }
+      drawPane(panes.roots);
+      if (!state.overlay) drawPane(panes.coefficients);
+      animHandle = win.requestAnimationFrame(tick);
+    };
+    animHandle = win.requestAnimationFrame(tick);
   }
 
   // ── Viewports and hit testing.
@@ -359,13 +483,14 @@ export function mountApp(host: HTMLElement): App {
         {
           ...state,
           coefficient,
+          loop: null,
           poly: { kind: "text", text: renderQiPolyText(exact, "z") },
         },
         p,
       );
       return;
     }
-    commit({ ...state, coefficient, poly: specOf(p) }, p);
+    commit({ ...state, coefficient, loop: null, poly: specOf(p) }, p);
   }
 
   // ── Pointer: drag a point, or pan the pane; the wheel zooms about the cursor.
@@ -377,6 +502,20 @@ export function mountApp(host: HTMLElement): App {
     };
     pane.ink.addEventListener("pointerdown", (e) => {
       const [x, y] = local(e);
+      if (pen !== null && pane.id === (state.overlay ? "roots" : "coefficients")) {
+        // The pen: a click places a vertex; the first snaps to the coefficient itself when close, so a
+        // drawn loop starts where the coefficient is rather than being tethered to it.
+        const cam = camOf(pane.id);
+        const vp = viewport(pane);
+        let z = toWorld(cam, vp, x, y);
+        const base = live.loopContext?.base;
+        if (pen.length === 0 && base) {
+          const [bx, by] = toScreen(cam, vp, base);
+          if (Math.hypot(bx - x, by - y) <= COEFF_HALF + 6) z = base;
+        }
+        penAt(z);
+        return;
+      }
       const t = hit(pane.id, x, y);
       pane.ink.setPointerCapture?.(e.pointerId);
       if (t) {
@@ -488,14 +627,82 @@ export function mountApp(host: HTMLElement): App {
         setCam(pane.id, zoomAbout(camOf(pane.id), vp, vp.width / 2, vp.height / 2, f));
         break;
       }
+      case "Enter":
+        if (pen === null) return;
+        togglePen();
+        break;
       case "Escape":
         selected = null;
+        pen = null;
         render();
         break;
       default:
         return;
     }
     e.preventDefault();
+  }
+
+  // ── Loops (PLAN §5.2 rules 4–6).
+  function setCoefficient(j: number | null): void {
+    commit({ ...state, coefficient: j, loop: null });
+  }
+  function setLoop(loop: Loop | null): void {
+    commit({ ...state, loop });
+  }
+  function lasso(k: number): void {
+    setLoop(withLasso(state.loop, k, building));
+  }
+  function togglePen(): void {
+    if (pen === null) {
+      pen = [];
+      render();
+      return;
+    }
+    const vs = pen;
+    pen = null;
+    if (vs.length >= 3) setLoop({ kind: "drawn", vertices: vs });
+    else render();
+  }
+  function penAt(z: Cx): void {
+    if (pen === null) return;
+    pen.push([z[0], z[1]]);
+    render();
+  }
+  function play(): void {
+    const run = resolution.loopRun;
+    const p = resolution.poly;
+    if (!run || !run.ok || !p) return;
+    const m = makeMotion(p.roots, run.perm, p.lead);
+    motionInfo = {
+      fallback: m.fallback,
+      lenses: Math.round((m.frames.length - 1) / FRAMES_PER_MOVE),
+    };
+    braid = { frames: m.frames.map((f) => [...f]), labels: p.labels };
+    startAnim({
+      roots: m.frames.map((f) => [...f]),
+      coeffs: m.coeffFrames.map((f) => [...f]),
+      f: 0,
+      labels: p.labels,
+    });
+    // The root that started at i ends where perm[i]'s did, and keeps its label.
+    const after = new Array<number>(p.degree);
+    run.perm.forEach((k, i) => (after[k] = p.labels[i]));
+    relabel(after);
+    render();
+  }
+  function computeGroup(): void {
+    const p = resolution.poly;
+    const ctx = resolution.loopContext;
+    if (!p || !ctx) return;
+    const runs = ctx.branchPoints.map((_, k) =>
+      memoRun(p, { kind: "lasso", point: k, sign: 1 }, ctx),
+    );
+    const g = lassoGroup(runs, p.degree);
+    group = {
+      cert: monodromyGroupCert(g.recognition, g.missing, p.degree),
+      order: g.order,
+    };
+    render();
   }
 
   // ── Actions from the rails.
@@ -520,7 +727,12 @@ export function mountApp(host: HTMLElement): App {
     // A new polynomial gets a camera that shows it; a reader's own framing survives everything else.
     selected = null;
     commit(
-      { ...next, rootCam: frame(res.poly.roots), coeffCam: frame(res.poly.coeffs) },
+      {
+        ...next,
+        loop: null,
+        rootCam: frame(res.poly.roots),
+        coeffCam: frame(res.poly.coeffs),
+      },
       null,
     );
   }
@@ -528,7 +740,7 @@ export function mountApp(host: HTMLElement): App {
   function setRing(ring: Ring): void {
     ringRefusal = null;
     const p = live.poly;
-    let next: ShellState = { ...state, ring };
+    let next: ShellState = { ...state, ring, loop: null };
     if (ring === "Q" && p && !p.exact) {
       // Leaving the floats: each coefficient becomes the simplest rational within 1e-9 of it, relative.
       const bad = p.coeffs.findIndex((c) => c[1] !== 0);
@@ -576,6 +788,8 @@ export function mountApp(host: HTMLElement): App {
     textRefusal = null;
     ringRefusal = null;
     pendingText = null;
+    resetSession();
+    adoptRun();
     render();
     syncHash();
   }
@@ -654,7 +868,7 @@ export function mountApp(host: HTMLElement): App {
           onOverlay: (on) => commit({ ...state, overlay: on }),
           onDiscs: (on) => commit({ ...state, discs: on }),
           onCritical: (on) => commit({ ...state, critical: on }),
-          onCoefficient: (j) => commit({ ...state, coefficient: j }),
+          onCoefficient: setCoefficient,
           onTrails: (on) => {
             if (!on) trails.clear();
             commit({ ...state, trails: on });
@@ -669,14 +883,42 @@ export function mountApp(host: HTMLElement): App {
     );
     patch(
       right,
-      rightRail({
-        ...live,
-        selectedRoot: selected?.kind === "root" ? selected.index : null,
-        coefficient: state.coefficient,
-        critical: state.critical,
-        pseudozero: state.pseudozero,
-      }),
+      rightRail(
+        {
+          ...live,
+          selectedRoot: selected?.kind === "root" ? selected.index : null,
+          coefficient: state.coefficient,
+          critical: state.critical,
+          pseudozero: state.pseudozero,
+        },
+        {
+          model: {
+            context: live.loopContext,
+            loop: state.loop,
+            run: live.loopRun,
+            building,
+            pen: pen === null ? null : pen.length,
+            group,
+            motion: motionInfo,
+          },
+          on: {
+            onLasso: lasso,
+            onBuild: (on) => {
+              building = on;
+              render();
+            },
+            onInvert: () => state.loop && setLoop(inverted(state.loop)),
+            onCommute: () => state.loop && setLoop(commuteLastTwo(state.loop)),
+            onPen: togglePen,
+            onClear: () => setLoop(null),
+            onRunNode: setLoop,
+            onPlay: play,
+            onGroup: computeGroup,
+          },
+        },
+      ),
     );
+    drawBraidStrip();
     stage.dataset.overlay = state.overlay ? "true" : "false";
     panes.coefficients.section.hidden = state.overlay;
     panes.roots.heading.textContent = state.overlay ? PANE.overlay : PANE.roots;
@@ -735,10 +977,39 @@ export function mountApp(host: HTMLElement): App {
     if (!p) return;
     const sel = (kind: Target["kind"]): number | null =>
       selected && selected.kind === kind ? selected.index : null;
-    // Branch points live in the plane of the coefficient they belong to.
-    const branch = (): void => {
-      if (state.coefficient !== null && a?.branch)
+    // During an animation the points are drawn where the frame has them; everything proved is drawn
+    // where it is.
+    const rootsNow = anim ? anim.roots[anim.f] : p.roots;
+    const coeffsNow = anim?.coeffs ? anim.coeffs[anim.f] : p.coeffs;
+    const run = live.loopRun;
+    // Branch points, their numbers, and the loop live in the plane of the coefficient they belong to.
+    const coefficientLayer = (): void => {
+      if (state.coefficient !== null && a?.branch) {
         drawBranchPoints(ctx, cam, vp, a.branch.points);
+        if (live.loopContext) drawBranchNumbers(ctx, cam, vp, a.branch.points);
+      }
+      const ctxL = live.loopContext;
+      if (ctxL && state.loop) {
+        const path =
+          run?.path ??
+          (() => {
+            const r = loopPath(state.loop, ctxL);
+            return r.ok ? r.path : null;
+          })();
+        if (path) drawLoopPath(ctx, cam, vp, path, { dashed: !(run && run.ok) });
+      }
+      if (pen && pen.length) drawLoopPath(ctx, cam, vp, pen, { dashed: true });
+      if (anim?.coeffs) {
+        // A motion: each coefficient's closed loop, traced in full.
+        for (let k = 0; k < p.degree; k++)
+          drawLoopPath(
+            ctx,
+            cam,
+            vp,
+            anim.coeffs.map((c) => c[k]),
+            { dashed: true },
+          );
+      }
     };
     if (pane.id === "roots") {
       if (a?.pseudozero)
@@ -746,16 +1017,53 @@ export function mountApp(host: HTMLElement): App {
       if (state.critical && a?.critical) drawHull(ctx, cam, vp, a.critical.hull.vertices);
       if (state.discs && live.discs?.ok) drawDiscs(ctx, cam, vp, live.discs.discs);
       drawTrails(ctx, cam, vp, trails, p.degree);
-      if (state.critical && a?.critical) drawCritical(ctx, cam, vp, a.critical.points);
-      drawRoots(ctx, cam, vp, p.roots, p.labels, sel("root"));
+      if (run && run.paths.length)
+        drawTrails(
+          ctx,
+          cam,
+          vp,
+          new Map(run.paths.map((q, i) => [p.labels[i], q])),
+          p.degree,
+        );
+      if (state.critical && a?.critical && !anim)
+        drawCritical(ctx, cam, vp, a.critical.points);
+      drawRoots(ctx, cam, vp, rootsNow, anim ? anim.labels : p.labels, sel("root"));
       if (state.overlay) {
-        branch();
-        drawCoeffs(ctx, cam, vp, p.coeffs, sel("coeff"));
+        coefficientLayer();
+        drawCoeffs(ctx, cam, vp, coeffsNow, sel("coeff"));
       }
     } else {
-      branch();
-      drawCoeffs(ctx, cam, vp, p.coeffs, sel("coeff"));
+      coefficientLayer();
+      drawCoeffs(ctx, cam, vp, coeffsNow, sel("coeff"));
     }
+  }
+
+  function drawBraidStrip(): void {
+    const w = Math.max(1, Math.round(braidSection.getBoundingClientRect().width || 480));
+    const hgt = 120;
+    const dpr = win?.devicePixelRatio ?? 1;
+    braidCanvas.width = Math.round(w * dpr);
+    braidCanvas.height = Math.round(hgt * dpr);
+    braidCanvas.style.height = `${hgt}px`;
+    const cs = braid ? crossings(braid.frames) : [];
+    braidSection.hidden = braid === null;
+    braidCanvas.setAttribute(
+      "aria-label",
+      braid
+        ? `Braid of the last ${motionInfo ? "motion" : "loop"}: ${braid.labels.length} strands, ${cs.length} crossing${cs.length === 1 ? "" : "s"}.`
+        : "No loop has been run.",
+    );
+    const ctx = braidCanvas.getContext("2d");
+    if (!ctx || !braid) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawBraid(
+      ctx,
+      w,
+      hgt,
+      braid.frames,
+      braid.labels,
+      cs.map((c) => ({ frame: c.frame, strand: c.over === c.a ? c.b : c.a })),
+    );
   }
 
   /** The canvases' names are GENERATED from what is drawn, refreshed on every render. */
@@ -848,6 +1156,23 @@ export function mountApp(host: HTMLElement): App {
       undo,
       redo,
       nudge,
+      setCoefficient,
+      setLoop,
+      lasso,
+      setBuilding: (on) => {
+        building = on;
+        render();
+      },
+      invert: () => state.loop && setLoop(inverted(state.loop)),
+      commute: () => state.loop && setLoop(commuteLastTwo(state.loop)),
+      pen: togglePen,
+      penAt,
+      play,
+      group: computeGroup,
     }),
+    braid: () =>
+      braid
+        ? { strands: braid.labels.length, crossings: crossings(braid.frames).length }
+        : null,
   };
 }

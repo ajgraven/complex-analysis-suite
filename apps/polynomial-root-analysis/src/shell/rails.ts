@@ -13,6 +13,11 @@ import { subscript } from "../ui/ink.js";
 import { formatCx, formatGauss } from "./format.js";
 import type { Analysis } from "../engine/analysis/analyse.js";
 import { analysisCard } from "./analysisCard.js";
+import {
+  monodromyCard,
+  type MonodromyHandlers,
+  type MonodromyModel,
+} from "./monodromyCard.js";
 import { level } from "./level.js";
 
 /** The gain matrix's shared log scale, so one root's row can be read against another's. */
@@ -349,7 +354,10 @@ function summary(p: Polynomial, discs: DiscReport): Desc {
   return h("p", { key: "sum", class: "summary" }, level(discCerts(discs)[0], "lv"), text);
 }
 
-export function rightRail(m: RightModel): Child[] {
+export function rightRail(
+  m: RightModel,
+  mono?: { readonly model: MonodromyModel; readonly on: MonodromyHandlers },
+): Child[] {
   if (!m.poly || !m.discs || !m.groups) {
     return [
       card(
@@ -444,5 +452,6 @@ export function rightRail(m: RightModel): Child[] {
       critical: m.critical,
       pseudozero: m.pseudozero,
     }),
+    mono ? monodromyCard(mono.model, mono.on) : null,
   ];
 }

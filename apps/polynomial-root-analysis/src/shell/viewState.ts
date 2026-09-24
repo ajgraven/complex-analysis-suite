@@ -13,6 +13,8 @@ import {
   type PolySpec,
   type ShellState,
 } from "./state.js";
+import type { Loop } from "../engine/loops/loop.js";
+import { branchPoints } from "../engine/analysis/discriminant.js";
 
 export const NAMESPACE = "pra";
 
@@ -29,6 +31,8 @@ interface Wire {
   j?: number | null;
   tr?: 0 | 1;
   pz?: number | null;
+  /** Added at PRA-3: the loop word as a compact tree (see `loopOut`). */
+  lp?: unknown;
   rc: [number, number, number];
   cc: [number, number, number];
   [k: string]: unknown;
@@ -46,6 +50,7 @@ export function encodeShell(s: ShellState): string {
     j: s.coefficient,
     tr: s.trails ? 1 : 0,
     pz: s.pseudozero,
+    ...(s.loop ? { lp: loopOut(s.loop) } : {}),
     rc: cam(s.rootCam),
     cc: cam(s.coeffCam),
   };
@@ -56,6 +61,95 @@ export function encodeShell(s: ShellState): string {
     w.l = [s.poly.lead[0], s.poly.lead[1]];
   }
   return encodeViewState(NAMESPACE, w);
+}
+
+/**
+ * A loop word on the wire: `[0, k, ±1]` a lasso round branch point k, `[1, …parts]` a word, `[2, x]` an
+ * inverse, `[3, a, b]` a commutator, `[4, x₀, y₀, x₁, y₁, …]` a drawn polygon. Semantics, not samples:
+ * a lasso is carried as the branch point it goes round, and rebuilt against the polynomial it opens on.
+ */
+export function loopOut(l: Loop): unknown {
+  switch (l.kind) {
+    case "lasso":
+      return [0, l.point, l.sign];
+    case "word":
+      return [1, ...l.parts.map(loopOut)];
+    case "inverse":
+      return [2, loopOut(l.of)];
+    case "commutator":
+      return [3, loopOut(l.a), loopOut(l.b)];
+    case "drawn":
+      return [4, ...l.vertices.flatMap((v) => [v[0], v[1]])];
+  }
+}
+
+const MAX_LOOP_NODES = 256;
+
+/** The loop a wire tree names, or why it names none. */
+export function loopIn(w: unknown, budget = { nodes: 0 }, depth = 0): Loop | string {
+  if (++budget.nodes > MAX_LOOP_NODES || depth > 32) return "the loop is too large";
+  if (!Array.isArray(w) || w.length === 0 || typeof w[0] !== "number")
+    return "the loop is not a word this app writes";
+  switch (w[0]) {
+    case 0:
+      if (
+        w.length === 3 &&
+        Number.isInteger(w[1]) &&
+        w[1] >= 0 &&
+        (w[2] === 1 || w[2] === -1)
+      )
+        return { kind: "lasso", point: w[1] as number, sign: w[2] as 1 | -1 };
+      return "a lasso in the loop is malformed";
+    case 1: {
+      if (w.length < 2) return "a word in the loop is empty";
+      const parts: Loop[] = [];
+      for (const x of w.slice(1)) {
+        const r = loopIn(x, budget, depth + 1);
+        if (typeof r === "string") return r;
+        parts.push(r);
+      }
+      return { kind: "word", parts };
+    }
+    case 2: {
+      if (w.length !== 2) return "an inverse in the loop is malformed";
+      const r = loopIn(w[1], budget, depth + 1);
+      return typeof r === "string" ? r : { kind: "inverse", of: r };
+    }
+    case 3: {
+      if (w.length !== 3) return "a commutator in the loop is malformed";
+      const a = loopIn(w[1], budget, depth + 1);
+      if (typeof a === "string") return a;
+      const b = loopIn(w[2], budget, depth + 1);
+      return typeof b === "string" ? b : { kind: "commutator", a, b };
+    }
+    case 4: {
+      const xs = w.slice(1);
+      if (xs.length < 6 || xs.length % 2 !== 0 || !xs.every(finite))
+        return "the drawn loop is not a list of at least three finite points";
+      const vertices: [number, number][] = [];
+      for (let i = 0; i < xs.length; i += 2)
+        vertices.push([xs[i] as number, xs[i + 1] as number]);
+      return { kind: "drawn", vertices };
+    }
+    default:
+      return `the loop has a node of unknown kind ${String(w[0])}`;
+  }
+}
+
+/** The highest branch point a loop word goes round (−1 for none). */
+function maxLasso(l: Loop): number {
+  switch (l.kind) {
+    case "lasso":
+      return l.point;
+    case "word":
+      return Math.max(-1, ...l.parts.map(maxLasso));
+    case "inverse":
+      return maxLasso(l.of);
+    case "commutator":
+      return Math.max(maxLasso(l.a), maxLasso(l.b));
+    case "drawn":
+      return -1;
+  }
 }
 
 export type Decoded =
@@ -130,6 +224,12 @@ export function decodeShell(hash: string): Decoded | null {
       reason: `the pseudozero level ε = 10^${String(pz)} is outside 10⁻¹⁷ … 1`,
     };
   }
+  let loop: Loop | null = null;
+  if (w.lp !== undefined && w.lp !== null) {
+    const r = loopIn(w.lp);
+    if (typeof r === "string") return { ok: false, reason: r };
+    loop = r;
+  }
   const state: ShellState = {
     ring,
     poly,
@@ -139,6 +239,7 @@ export function decodeShell(hash: string): Decoded | null {
     coefficient: j as number | null,
     trails: w.tr === 1,
     pseudozero: pz as number | null,
+    loop,
     rootCam: rc,
     coeffCam: cc,
   };
@@ -150,6 +251,23 @@ export function decodeShell(hash: string): Decoded | null {
       ok: false,
       reason: `the link selects a${j} of a degree-${built.poly.degree} polynomial`,
     };
+  }
+  if (loop) {
+    if (j === null || j >= built.poly.degree)
+      return {
+        ok: false,
+        reason:
+          "the link carries a loop but no coefficient below the leading one to move",
+      };
+    const top = maxLasso(loop);
+    if (top >= 0) {
+      const count = branchPoints(built.poly, j).points.length;
+      if (top >= count)
+        return {
+          ok: false,
+          reason: `the link's loop goes round branch point #${top + 1} of a${j}, which has ${count}`,
+        };
+    }
   }
   return { ok: true, state };
 }

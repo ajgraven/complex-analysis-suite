@@ -306,3 +306,53 @@ canvas:focus-visible {
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/* ── Monodromy (PRA-3) ─────────────────────────────────────────────────────────────── */
+.lasso-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 6px 0;
+  padding: 0;
+}
+.chip {
+  min-width: 2.4em;
+  font-weight: 600;
+}
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin: 6px 0;
+}
+.toolbar .check {
+  flex-basis: 100%;
+}
+.word-tree {
+  list-style: none;
+  margin: 6px 0;
+  padding: 0;
+}
+.word-tree .node {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.braid {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.braid[hidden] {
+  display: none;
+}
+.braid h2 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.braid-canvas {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--line);
+}
