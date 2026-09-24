@@ -9,12 +9,20 @@ not silently changed.
 
 ## Current
 
-**PRA-2 — analysis overlays, wave 1** (PLAN §7), awaiting the owner's go-ahead. It brings KaTeX
-(the discriminant is the first typeset formula) and the app's first browser suite (the pseudozero
-ladder's shader), which joins the root `test:browser` chain.
+**PRA-3 — `@cas/monodromy` and loops** (PLAN §7), awaiting the owner's go-ahead. PRA-2 is complete.
 
 ## Done
 
+- 2026-09-24 — **PRA-2 complete (2.1–2.4): analysis overlays, wave 1.** The engine (2.1): exact
+  convex hull and Gauss–Lucas test, certified critical points, the exact discriminant and aⱼ's branch
+  points by two routes compared, certified pseudozero regions (Rouché on grid-cell boundaries,
+  falsified by 40 extreme perturbations). The card (2.2): KaTeX `git mv`'d from Contour Integration
+  into `@cas/ui/math` (second consumer), four new `ShellState` fields carried by `#vs=` as optional
+  keys. The stage (2.3): the pseudozero ladder in GLSL with a probe mode, hull, critical points,
+  trails, ✕ branch points, the certified cells outlined; the app's first browser suite. The rest
+  (2.4): the gain matrix as a heat row, time-faded trails. Sweep **37 mutants (32 node, 5 GLSL),
+  37 killed**, 23 on the first pass (`an-approx-sign` was replaced by `an-approx-square` when the line it mutated was deleted as the bug below). Gate **629 files / 7285 tests** (627 / 7223 before PRA-2); browser
+  suite 1 file / 3 tests; `pnpm a11y --strict` **1196 interactive nodes across 32 pages, 0 unnamed** (roster entry `polynomial-root-analysis-analysis` new: every layer on, by permalink); Contour Integration's browser suite 22 / 232 green through the KaTeX move.
 - 2026-09-23 — **PRA-1.1, the lifts.** `cauchyBound` + `polishRoot(s)` into `@cas/core` from
   `@cas/faber` and Contour Integration (both shown **bit-identical** by fingerprinting
   `polynomialRoots` and `findPoles` before and after); `toExactRational`/`simplestRational` moved
@@ -49,6 +57,41 @@ ladder's shader), which joins the root `test:browser` chain.
   `docs/design/future-app-ideas.md` as ▶ 8. No code touched.
 
 ## Findings (things learned while executing; each names its step)
+
+- _(PRA-2.4)_ **The ≈ discriminant had the wrong sign at half of all degrees.** `discFromRoots`
+  multiplied `aₙ^{2n−2}∏_{i<j}(rᵢ − rⱼ)²` by `(−1)^{n(n−1)/2}`, which belongs to the `∏_{i≠j}` form;
+  z⁵ − z − 1 (n(n−1)/2 = 10) hid it. The Analysis card showed a drag frame's Δ with the wrong sign at
+  degrees 2, 3, 6, 7, 10, 11, …. Found because the sweep's `an-approx-*` survivors bought a test against
+  the exact Δ on non-monic polynomials of both parities.
+- _(PRA-2.4)_ **The gate caught a cycle the app's own checks could not**: the Analysis card imported
+  the level glyph from `rails.ts`, which builds the card. `tsc`, ESLint and Vitest were all green; only
+  dependency-cruiser's `no-circular` (inside `pnpm lint`) sees it. `level()` now lives in `shell/level.ts`.
+  Same lesson as PRA-1.2's `polynomial.ts ↔ solve.ts`: run the whole gate before a push, not the app's.
+- _(PRA-2.4)_ **Two survivors were unreachable from the shell, and pinned anyway.** A drag frame never
+  carries an exact layer, so `analyse`'s "no exact discriminant, numeric branch points while dragging"
+  was equivalent through the app; it is a contract about COST (seconds on a dyadic layer), so it is
+  now asserted on `analyse` directly with an exact polynomial.
+- _(PRA-2.3)_ **An unclamped `fwidth` stroked the ε-edge one pixel from every root.** A quad holding a
+  root sees f = log₁₀(|p|/w) fall by tens of decades, so `|f − log ε|/fwidth(f)` drops under the stroke
+  width whatever ε is: 3 of 40 deep-inside pixels came out dark. Clamping the gradient at 0.25 decades a
+  pixel removes it; the browser test that found it keeps the pixels next to a root in its sample.
+- _(PRA-2.3)_ **Lightening does not read on CET-C6**, whose colours are already light: at ε = 10⁻¹² on
+  Wilkinson the shaded set was barely distinguishable. The inside is greyed as well (luminance up,
+  chroma under half), and the doubling bands give way to the ladder's decade lines while it is on —
+  one family of level curves of |p| at a time.
+- _(PRA-2.3)_ **The shader's f agrees with float64 to 7.6e-4** (the probe's own 16-bit quantisation of a
+  50-decade range) on z⁵ − z − 1 and on Wilkinson — against the exact root form for the latter, since
+  Horner on its coefficients is noise — and the inside flag agrees everywhere off a 5e-3 band.
+- _(PRA-2.3)_ **A fresh solve was labelled in the solver's order** — Wilkinson read r₂ ≈ 3, r₄ ≈ 6, and
+  the Roots card listed groups in the order Yun's factors were solved. Fresh solves (no continuation,
+  or a degree change) now label in reading order; a continued polynomial keeps its labels.
+- _(PRA-2.3)_ **The ink overlays have no automated test**: jsdom has no 2D context and the browser suite
+  compiles the shader only. Hull, diamonds, trails, ✕ and the certified-cell outlines were checked in
+  Chromium screenshots (a drag of a₀ through a branch point: two trails meet and part at the ✕'s
+  image). Recorded rather than papered over; PRA-3's motions give the ink its first browser test.
+- _(PRA-2.2)_ **KaTeX moved rather than being added twice.** Contour Integration's `shell/math.ts` is
+  `git mv`'d to `@cas/ui/math` (a subpath export, so an app that never typesets never bundles `katex`); its
+  28 importers were repointed and its tests stayed green.
 
 - _(PRA-2.1)_ **The exact discriminant is only affordable on an exact layer.** disc(p) in t = aⱼ by
   Bareiss costs 0.1–0.3 s at degree 15–24 on rational coefficients, but 1.1 s at degree 8 and 21 s at

@@ -174,7 +174,9 @@ pads; the glossary framework; share-link serialization and reproducibility-metad
 theming. **Status: the PNG-metadata half shipped** — as **`@cas/export`** (ADR-0016), when three
 apps each carried a byte-equivalent copy — and the a11y / fatal-boundary / compute / nav-header primitives
 now live in **`@cas/ui`** (ADR-0032), joined by Contour Integration's keyed DOM builder (`h`/`patch`,
-ADR-0047). The KaTeX / inspector / theming UI helpers remain app-local;
+ADR-0047), and by its KaTeX helper (`math()` + cache, the `@cas/ui/math` subpath export — ADR-0047's
+PRA-2, when Polynomial Root Analysis typeset its first formula). The inspector / theming UI helpers
+remain app-local;
 the versioned `#vs=` **view-state codec** is shared into `@cas/interchange`.
 
 ### `@cas/export` — figure-export primitives *(built — ADR-0016)*
@@ -361,7 +363,8 @@ tools:
   on the Quadrature app's limit sets, by depending on the `quadrature` package.
 - Every tool shares the versioned `#vs=` **view-state codec** (`@cas/interchange`) for linkable
   views, and reproducibility-metadata **PNG embedding is now shared via `@cas/export`** (ADR-0016, §3);
-  the `@cas/ui` package that would also have carried the KaTeX / theming UI helpers was never extracted.
+  the KaTeX helper has since joined `@cas/ui` (`@cas/ui/math`, ADR-0047 PRA-2); the theming helpers were
+  never extracted.
 
 ## 8. Build & deployment model
 

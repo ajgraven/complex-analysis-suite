@@ -101,8 +101,8 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **627 test files / 7223 tests**
-*(623 / 7116 before ADR-0047's PRA-1 — the two-pane sandbox, and the lifts into `@cas/core`, `@cas/exact` and `@cas/ui` — added 4 files / 107 tests; 622 / 7111 before its PRA-0 — the Polynomial Root Analysis scaffold — added 1 file / 5 tests; 621 / 7085 before ADR-0046's M6 — Egan's hue, the CET-C6 extraction and the symmetry readout — added 1 file / 26 tests; 620 / 7067 before its PR-5 — the gallery — added 1 file / 18 tests; 618 / 7035 before its PR-4 — the dragons — added 2 files / 32 tests; 615 / 6997 before its PR-3 — deep zoom by reference — added 3 files / 38 tests; 610 / 6949 before its PR-2 — the limit-set engine — added 5 files / 48 tests; 599 / 6818 before
+Green is **629 test files / 7285 tests**
+*(627 / 7223 before ADR-0047's PRA-2 — the analysis overlays, and KaTeX lifted into `@cas/ui/math` — added 2 files / 62 tests; 623 / 7116 before ADR-0047's PRA-1 — the two-pane sandbox, and the lifts into `@cas/core`, `@cas/exact` and `@cas/ui` — added 4 files / 107 tests; 622 / 7111 before its PRA-0 — the Polynomial Root Analysis scaffold — added 1 file / 5 tests; 621 / 7085 before ADR-0046's M6 — Egan's hue, the CET-C6 extraction and the symmetry readout — added 1 file / 26 tests; 620 / 7067 before its PR-5 — the gallery — added 1 file / 18 tests; 618 / 7035 before its PR-4 — the dragons — added 2 files / 32 tests; 615 / 6997 before its PR-3 — deep zoom by reference — added 3 files / 38 tests; 610 / 6949 before its PR-2 — the limit-set engine — added 5 files / 48 tests; 599 / 6818 before
 Polynomial Roots itself added 10 files / 122 tests and its `@cas/gpu` extraction 1 / 9; 592 / 6643 before the 2026-09-20 remediation)* with lint and typecheck
 silent. `pnpm lint` includes `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the
 `packages/*` dists first, so a clean clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as
@@ -130,11 +130,11 @@ gives four configurations against twelve tool apps.)*
 
 **The browser suites are NOT in `pnpm test`** and must be run deliberately — `pnpm test:browser` in
 the app that has one (contour-integration, complex-dynamics, complex-function-plotter, quadrature-domains,
-polynomial-roots, `packages/gpu`, `packages/schwarz`). They compile real GLSL and need a Chromium, and Playwright pins an
+polynomial-roots, polynomial-root-analysis, `packages/gpu`, `packages/schwarz`). They compile real GLSL and need a Chromium, and Playwright pins an
 exact build that `pnpm install` does not fetch, so a container holding one under a different version
-cannot launch the provider at all. Four of the six configs say so: contour-integration,
-complex-dynamics and `packages/gpu` take `CAS_CHROMIUM_EXECUTABLE ?? /opt/pw-browsers/chromium` — both,
-in that order — and quadrature-domains probes `/opt/pw-browsers/chromium` only. **complex-function-plotter
+cannot launch the provider at all. Six of the eight configs say so: contour-integration,
+complex-dynamics, polynomial-roots, polynomial-root-analysis and `packages/gpu` take `CAS_CHROMIUM_EXECUTABLE ?? /opt/pw-browsers/chromium` — both,
+in that order — and quadrature-domains probes `/opt/pw-browsers/chromium` only *(re-measured 2026-09-24 by grepping all eight)*. **complex-function-plotter
 and `packages/schwarz` still take neither, so their suites cannot run in such a container** — unify them
 when one is next touched. *(Corrected 2026-09-20: the split was written as one-env / one-probe / two-both;
 grepping all six configs gives three-both / one-probe / two-neither — contour-integration's line, which
@@ -1283,13 +1283,18 @@ Roots and coefficients of one polynomial as two draggable point sets over a phas
 group over ℚ in three honest tiers (`=` Sₙ/Aₙ at any degree, `=` to degree 7 by Stauduhar descent, `≈`
 8–15 by statistics); loop monodromy by *certified* continuation (Smith discs in exact arithmetic on the
 dyadic floats, refused by name when a segment cannot be certified); Arnold's Abel–Ruffini proof as
-executed commutator loops. **PRA-0 and PRA-1 have landed**: `apps/polynomial-root-analysis` (port 5185,
+executed commutator loops. **PRA-0, PRA-1 and PRA-2 have landed**: `apps/polynomial-root-analysis` (port 5185,
 namespace `pra`, built but not published until PRA-5) is the two-pane sandbox — typed or dragged
 polynomials over ℂ/ℝ/ℚ, roots and coefficients each draggable, every root in a Smith disc certified in
 exact arithmetic, multiplicities decided by Yun in exact arithmetic, a root-form phase portrait, permalink,
 undo, figure export. PRA-1 moved Aberth into `@cas/core`, `toExactRational` + Smith discs into
 `@cas/exact` and the keyed builder into `@cas/ui`; the gate's findings (Durand–Kerner failing Wilkinson,
 exact refinement of an ill-conditioned polynomial's roots, a stale-`dist/` timing retracted) are in STATUS.
+PRA-2 added the Analysis card and overlays — exact Gauss–Lucas hull and certified critical points, the
+exact discriminant and aⱼ's branch points by two compared routes, certified pseudozero counts (Rouché on
+grid-cell boundaries, falsified by extreme perturbations) over a GLSL pseudozero ladder, trails and the
+gain matrix — lifted KaTeX into `@cas/ui/math`, and brought the app's first browser suite; its sweep's
+test found the ≈ discriminant's sign wrong at half of all degrees.
 Read
 [`docs/polynomial-root-analysis/STATUS.md`](docs/polynomial-root-analysis/STATUS.md) first, then
 [`PLAN.md`](docs/polynomial-root-analysis/PLAN.md) and [`DESIGN.md`](docs/polynomial-root-analysis/DESIGN.md).
