@@ -365,6 +365,15 @@ describe("the permalink", () => {
       },
       overlay: true,
     },
+    // Every PRA-2 field away from its default.
+    {
+      ...DEFAULT_STATE,
+      critical: false,
+      coefficient: 3,
+      trails: true,
+      pseudozero: -9.5,
+    },
+    { ...DEFAULT_STATE, coefficient: null },
   ];
 
   it("round-trips every form of the polynomial exactly", () => {
@@ -406,6 +415,10 @@ describe("the permalink", () => {
       [enc({ ...base, t: "sin(z)" }), /not a rational function/],
       [enc({ ...base, rc: [0, 0, -1] }), /root camera/],
       [enc({ ...base, t: "z^2 + i" }), /not real/],
+      [enc({ ...base, j: 3 }), /selects a3 of a degree-2 polynomial/],
+      [enc({ ...base, j: 1.5 }), /'1.5' does not name a coefficient/],
+      [enc({ ...base, pz: 1 }), /outside 10⁻¹⁷ … 1/],
+      [enc({ ...base, pz: -18 }), /outside 10⁻¹⁷ … 1/],
     ];
     for (const [hash, why] of cases) {
       const d = decodeShell(hash);
@@ -525,5 +538,51 @@ describe("the Analysis card", () => {
       .join("\n");
     for (const bad of DENYLIST)
       expect(`${document.body.textContent}\n${labels}`).not.toMatch(bad);
+  });
+});
+
+describe("the gain matrix as a heat row", () => {
+  const light = (e: Element): number =>
+    Number(/(\d+)%\)$/.exec(e.getAttribute("style") ?? "")?.[1] ?? NaN);
+
+  it("gives each root one cell per draggable coefficient, on ONE shared scale, the selected one outlined", () => {
+    const { app } = mount();
+    const rows = [...document.querySelectorAll(".rail-right .root .gain-row")];
+    expect(rows).toHaveLength(5);
+    const cond = app.live().conditioning ?? [];
+    const all = cond.flatMap((c) => c.gains);
+    let brightest = -1;
+    rows.forEach((row, i) => {
+      const cells = [...row.querySelectorAll(".gain-cell")];
+      expect(cells).toHaveLength(5);
+      expect(cells.filter((c) => c.getAttribute("data-selected") === "true")).toEqual([
+        cells[0],
+      ]);
+      // Brighter moves more: the order of the cells' lightness is the order of the gains.
+      const ls = cells.map(light);
+      const gs = cond[i].gains;
+      for (let a = 0; a < gs.length; a++)
+        for (let b = 0; b < gs.length; b++)
+          if (gs[a] < gs[b]) expect(ls[a]).toBeLessThanOrEqual(ls[b]);
+      brightest = Math.max(brightest, ...ls);
+    });
+    // Shared scale: the largest gain in the MATRIX, not in each row, reaches the top.
+    expect(brightest).toBe(72);
+    expect(Math.max(...all)).toBeGreaterThan(0);
+    const dim = rows.flatMap((r) => [...r.querySelectorAll(".gain-cell")].map(light));
+    // (A conjugate pair shares its gains, so the top is reached once per root at the matrix maximum.)
+    const top = Math.max(...all);
+    expect(dim.filter((l) => l === 72)).toHaveLength(
+      all.filter((g) => g > top * (1 - 1e-12)).length,
+    );
+  });
+
+  it("names the coefficient that moves a root most when none is selected", () => {
+    const { app } = mount();
+    app.applyState({ ...DEFAULT_STATE, coefficient: null });
+    expect(q(".rail-right .root .root-gain").textContent).toMatch(
+      /moves most per unit of a\S+ \(≈ /,
+    );
+    expect(document.querySelectorAll('.gain-cell[data-selected="true"]')).toHaveLength(0);
   });
 });

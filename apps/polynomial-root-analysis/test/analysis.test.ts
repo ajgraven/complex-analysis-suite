@@ -22,6 +22,8 @@ import {
   segmentClear,
 } from "../src/engine/analysis/pseudozero.js";
 import { frame } from "../src/shell/state.js";
+import { analyse } from "../src/engine/analysis/analyse.js";
+import { branchCert, hullCert } from "../src/engine/certify.js";
 import { evalAt } from "../src/engine/polynomial.js";
 
 function build(text: string, ring: Polynomial["ring"] = "Q"): Polynomial {
@@ -255,5 +257,159 @@ describe("pseudozero regions (PLAN §7 PRA-2 gate, restated in STATUS)", () => {
     expect(segmentClear(e, 1e-3, 0.9, 0, 1.1, 0)).toBe(false);
     // At ε large enough the whole plane is in the set, so nothing is clear.
     expect(segmentClear(e, 2, 0, 0.5, 0, 1)).toBe(false);
+  });
+});
+
+describe("the PRA-2 sweep's survivors, each closed by the property it exposed", () => {
+  const range = [-3, 3, -3, 3] as const;
+
+  it("the closed segment hull holds BOTH its endpoints (hull-seg-end)", () => {
+    const h = convexHull([
+      [-1, 0],
+      [2, 0],
+    ]);
+    expect(inHull(h, [-1, 0])).toBe(true);
+    expect(inHull(h, [2, 0])).toBe(true);
+    expect(inHull(h, [2 + 2 ** -40, 0])).toBe(false);
+  });
+
+  it("one critical point outside the plotted hull is enough to refuse (crit-some)", () => {
+    // z³ − z: roots −1, 0, 1, critical points ±1/√3. Plot the roots WRONG — 1 drawn at ½ — and one
+    // critical point leaves the hull while the other stays: the claim is about EVERY one.
+    const p = build("z^3 - z");
+    const wrong: Polynomial = {
+      ...p,
+      roots: p.roots.map((r): Cx => (r[0] > 0.9 ? [0.5, 0] : r)),
+    };
+    const c = criticalPoints(wrong);
+    expect(c?.points.some((z) => inHull(c.hull, z))).toBe(true);
+    expect(c?.inHull).toBe(false);
+    const a = analyse(wrong, rootDiscs(wrong), {
+      coefficient: null,
+      pseudozero: null,
+      range,
+      drag: false,
+    });
+    expect(hullCert(a)?.level).toBe("⚠");
+  });
+
+  it("analyse keeps the exact routes for a commit: a drag frame gets neither, even on an exact layer (an-drag-*)", () => {
+    // Unreachable from the shell today — a drag frame never carries an exact layer — so pinned here:
+    // the exact discriminant costs seconds on a dyadic layer (STATUS, PRA-2.1) and has no place in a frame.
+    const p = build("z^5 - z - 1");
+    const opts = { coefficient: 0, pseudozero: -6, range, drag: true };
+    const a = analyse(p, rootDiscs(p), opts);
+    expect(a.discriminant).toBeNull();
+    expect(a.branch?.route).toBe("numeric");
+    expect(a.pseudozero).toBeNull();
+    const b = analyse(p, rootDiscs(p), { ...opts, drag: false });
+    expect(b.discriminant?.re.toNumber()).toBe(2869);
+    expect(b.branch?.route).toBe("exact");
+  });
+
+  it("the LEADING coefficient has branch points too (an-j-top)", () => {
+    // disc(t·z² + z + 1) = 1 − 4t: one branch point, t = 1/4.
+    const p = build("z^2 + z + 1");
+    const a = analyse(p, rootDiscs(p), {
+      coefficient: 2,
+      pseudozero: null,
+      range,
+      drag: false,
+    });
+    expect(a.branch?.points).toHaveLength(1);
+    expect(dist(a.branch?.points[0] ?? [9, 9], [0.25, 0])).toBeLessThan(1e-14);
+  });
+
+  it("the ≈ discriminant from the roots agrees with the exact one, lead and sign included (an-approx-*)", () => {
+    // Non-monic, and degrees whose n(n−1)/2 is both odd and even, so neither the aₙ^{2n−2} nor the
+    // (−1)^{n(n−1)/2} can be wrong unseen.
+    for (const text of [
+      "3z^2 + z + 1",
+      "2z^3 - z + 5",
+      "5z^4 - 2z - 1",
+      "2z^5 + 3z - 7",
+      "z^6 - 2",
+    ]) {
+      const p = build(text);
+      const a = analyse(p, rootDiscs(p), {
+        coefficient: null,
+        pseudozero: null,
+        range,
+        drag: false,
+      });
+      const exact = a.discriminant?.re.toNumber() ?? NaN;
+      expect(
+        Math.abs(a.discriminantApprox[0] - exact) / Math.abs(exact),
+        text,
+      ).toBeLessThan(1e-9);
+      expect(Math.abs(a.discriminantApprox[1]) / Math.abs(exact), text).toBeLessThan(
+        1e-9,
+      );
+    }
+  });
+
+  it("keeps the a priori rounding margin: refuses when |p|/w is within ~30u of ε, even where it is true (pz-no-err)", () => {
+    // p = z + 4 on the degenerate segment at z = 1: |p| = w = 5 exactly, so |p| > ε·w holds for every
+    // ε < 1 — but the certificate may not lean on the last few units of the float computation.
+    const p = fromCoeffs(
+      [
+        [4, 0],
+        [1, 0],
+      ],
+      "C",
+    );
+    if (!p.ok) throw new Error(p.reason);
+    const e = pseudozeroEvaluator(p.poly);
+    const u = 2 ** -53;
+    expect(segmentClear(e, 1 - 64 * u, 1, 0, 1, 0)).toBe(true);
+    expect(segmentClear(e, 1 - 16 * u, 1, 0, 1, 0)).toBe(false);
+  });
+
+  it("a region is not counted when one disc of its Smith component crosses into another (pz-straddle)", () => {
+    // Two discs in ONE Smith component, one small inside the region about −1, the other inflated
+    // across the region about +1's boundary: neither region may take the component's count.
+    const p = build("z^2 - 1");
+    const d = rootDiscs(p);
+    if (!d.ok) throw new Error(d.reason);
+    const merged = d.discs.map((x) => ({
+      ...x,
+      component: 0,
+      radius: x.centre[0] > 0 ? 0.3 : x.radius,
+    }));
+    const rep = pseudozeroRegions(p, merged, 1e-3, range);
+    const left = rep.regions.find(
+      (g) => g.cells.length && g.roots.length === 0 && !g.certified,
+    );
+    expect(rep.regions.filter((g) => g.certified && g.count > 0)).toEqual([]);
+    expect(left?.reason).toMatch(/disc crosses its boundary/);
+  });
+
+  it("a branch point whose disc holds two is not isolated (cert-branch-iso)", () => {
+    const p = build("z^5 - z - 1");
+    const a = analyse(p, rootDiscs(p), {
+      coefficient: 0,
+      pseudozero: null,
+      range,
+      drag: false,
+    });
+    expect(branchCert(a)?.level).toBe("=");
+    if (a.branch?.route !== "exact") throw new Error("expected the exact route");
+    const d0 = a.branch.discs[0];
+    if (!d0.ok) throw new Error("expected discs");
+    const two = {
+      ...d0,
+      discs: d0.discs.map((x, i) => (i === 0 ? { ...x, count: 2 } : x)),
+    };
+    const b = { ...a, branch: { ...a.branch, discs: [two, ...a.branch.discs.slice(1)] } };
+    expect(branchCert(b)?.level).toBe("≈");
+  });
+
+  it("a fresh solve after a DEGREE change is in reading order too (label-newdeg)", () => {
+    const five = build("z^5 - z - 1");
+    const r = parsePolynomial("(z-3)*(z-1)*(z-2)", "Q");
+    if (!r.ok) throw new Error(r.reason);
+    const b = fromExact(r.exact, "Q", five);
+    if (!b.ok) throw new Error(b.reason);
+    expect(b.poly.roots.map(([x]) => Math.round(x))).toEqual([1, 2, 3]);
   });
 });

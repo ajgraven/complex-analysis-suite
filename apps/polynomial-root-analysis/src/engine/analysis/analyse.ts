@@ -50,8 +50,10 @@ function discFromRoots(p: Polynomial): Cx {
       const dy = p.roots[i][1] - p.roots[j][1];
       mul(dx * dx - dy * dy, 2 * dx * dy);
     }
-  const sign = ((p.degree * (p.degree - 1)) / 2) % 2 === 0 ? 1 : -1;
-  return [sign * re, sign * im];
+  // No sign: (−1)^{n(n−1)/2} belongs to the ∏_{i≠j} form (the resultant of p and p′), not to this
+  // one over i < j squared. The first draft carried it, and the ≈ Δ shown during every drag had the
+  // wrong sign at degrees 2, 3, 6, 7, 10, 11, … — found by the sweep's test against the exact Δ.
+  return [re, im];
 }
 
 export function analyse(

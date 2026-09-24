@@ -15,24 +15,55 @@ import { formatCx, formatGauss } from "./format.js";
 import type { Analysis } from "../engine/analysis/analyse.js";
 import { analysisCard } from "./analysisCard.js";
 
-/** How far a root moves per unit of aⱼ — the gauge a drag of aⱼ is read against (≈). */
-function gainRow(gain: number | undefined, j: number): Desc | null {
-  if (gain === undefined) return null;
-  const shown = Number.isFinite(gain) ? gain.toPrecision(3) : "∞";
-  // A bar on a log scale: 1 at a tenth of the width, 10⁶ and beyond full.
-  const w = Number.isFinite(gain)
-    ? Math.max(2, Math.min(100, 10 + 15 * Math.log10(Math.max(gain, 1e-3))))
-    : 100;
+/** The gain matrix's shared log scale, so one root's row can be read against another's. */
+function gainScale(c: readonly Conditioning[] | null): [number, number] {
+  const logs = (c ?? []).flatMap((r) =>
+    r.gains.filter((g) => Number.isFinite(g) && g > 0).map((g) => Math.log10(g)),
+  );
+  if (!logs.length) return [0, 1];
+  const lo = Math.min(...logs);
+  const hi = Math.max(...logs);
+  return hi - lo < 1e-9 ? [lo - 0.5, hi + 0.5] : [lo, hi];
+}
+
+/**
+ * How far a root moves per unit of each aₖ — the drag gain matrix's row for this root, as a heat row
+ * on the shared log scale (brighter moves more), the selected coefficient's cell outlined and its gain
+ * spelled out. `≈`: an explanation of the picture, not a claim.
+ */
+function gainRow(
+  gains: readonly number[] | undefined,
+  j: number | null,
+  scale: [number, number],
+): Desc | null {
+  if (!gains || gains.length === 0) return null;
+  const [lo, hi] = scale;
+  const cells = gains.map((g, k) => {
+    const t = Number.isFinite(g) ? (g > 0 ? (Math.log10(g) - lo) / (hi - lo) : 0) : 1;
+    const light = 10 + 62 * Math.max(0, Math.min(1, t));
+    return h("span", {
+      key: `k${k}`,
+      class: "gain-cell",
+      "data-selected": k === j ? "true" : undefined,
+      style: `background:hsl(42 95% ${light.toFixed(0)}%)`,
+    });
+  });
+  const shown = (g: number): string => (Number.isFinite(g) ? g.toPrecision(3) : "∞");
+  const text =
+    j !== null && j < gains.length
+      ? `moves ≈ ${shown(gains[j])} per unit of a${subscript(j)}`
+      : (() => {
+          let k = 0;
+          gains.forEach((g, i) => {
+            if (!(g <= gains[k])) k = i;
+          });
+          return `moves most per unit of a${subscript(k)} (≈ ${shown(gains[k])})`;
+        })();
   return h(
     "span",
     { key: "gain", class: "root-gain" },
-    h("span", {
-      key: "bar",
-      class: "gain-bar",
-      style: `width:${w.toFixed(0)}%`,
-      "aria-hidden": "true",
-    }),
-    `moves ≈ ${shown} per unit of a${subscript(j)}`,
+    h("span", { key: "row", class: "gain-row", "aria-hidden": "true" }, ...cells),
+    text,
   );
 }
 
@@ -341,6 +372,7 @@ export function rightRail(m: RightModel): Child[] {
   const p = m.poly;
   const discs = m.discs;
   const groups: Child[] = [];
+  const scale = gainScale(m.conditioning);
   if (m.groups.ok) {
     m.groups.groups.forEach((g, gi) => {
       const cert = groupCert(g);
@@ -386,9 +418,7 @@ export function rightRail(m: RightModel): Child[] {
                       `κ ≈ ${Number.isFinite(kappa) ? kappa.toPrecision(3) : "∞"}`,
                     )
                   : null,
-                m.coefficient !== null && m.coefficient < p.degree
-                  ? gainRow(m.conditioning?.[i]?.gains[m.coefficient], m.coefficient)
-                  : null,
+                gainRow(m.conditioning?.[i]?.gains, m.coefficient, scale),
               );
             }),
           ),

@@ -199,7 +199,10 @@ export function drawCritical(
   }
 }
 
-/** Each root's path over a drag, in its label's colour, under the markers. */
+/**
+ * Each root's path over a drag — the root locus — in its label's colour (so a swap reads as two
+ * colours trading places) and faded by TIME, oldest faintest, so the direction of travel shows.
+ */
 export function drawTrails(
   ctx: CanvasRenderingContext2D,
   cam: Cam,
@@ -212,14 +215,19 @@ export function drawTrails(
   for (const [label, path] of trails) {
     if (path.length < 2) continue;
     ctx.strokeStyle = labelColour(label, n);
-    ctx.beginPath();
-    path.forEach((z, i) => {
-      const [px, py] = toScreen(cam, vp, z);
-      if (i === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    });
-    ctx.stroke();
+    let [ax, ay] = toScreen(cam, vp, path[0]);
+    for (let i = 1; i < path.length; i++) {
+      const [bx, by] = toScreen(cam, vp, path[i]);
+      ctx.globalAlpha = 0.2 + (0.8 * i) / (path.length - 1);
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(bx, by);
+      ctx.stroke();
+      ax = bx;
+      ay = by;
+    }
   }
+  ctx.globalAlpha = 1;
 }
 
 export const BRANCH_HALF = 5;

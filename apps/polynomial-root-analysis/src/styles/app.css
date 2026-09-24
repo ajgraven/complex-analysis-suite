@@ -266,13 +266,19 @@ canvas:focus-visible {
   align-items: center;
   gap: 6px;
 }
-.gain-bar {
-  display: inline-block;
+.gain-row {
+  display: inline-flex;
   flex: none;
-  max-width: 40%;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--accent);
+  gap: 1px;
+}
+.gain-cell {
+  display: inline-block;
+  width: 6px;
+  height: 8px;
+}
+.gain-cell[data-selected="true"] {
+  outline: 1px solid #ffffff;
+  outline-offset: 0;
 }
 .level {
   font-weight: 700;
