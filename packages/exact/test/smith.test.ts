@@ -9,6 +9,7 @@ import {
   gaussOfDoubles,
   inDisc,
   smithDiscs,
+  smithDiscsEnvelope,
   sqrtUpperBound,
 } from "../src/index.js";
 
@@ -266,8 +267,17 @@ describe("SmithDisc.radiusUpper", () => {
   it("is never below the exact radius, and within 1e-11 of it", () => {
     const rnd = lcg(3);
     for (let t = 0; t < 30; t++) {
-      const roots = [g(rnd() * 4 - 2, rnd() * 4 - 2), g(rnd() * 4 - 2, rnd()), g(-rnd(), rnd() * 3)];
-      const res = smithDiscs(fromRoots(roots), roots.map((r) => g(r.toTuple()[0] + (rnd() - 0.5) * 10 ** (-3 - 6 * rnd()), r.toTuple()[1])));
+      const roots = [
+        g(rnd() * 4 - 2, rnd() * 4 - 2),
+        g(rnd() * 4 - 2, rnd()),
+        g(-rnd(), rnd() * 3),
+      ];
+      const res = smithDiscs(
+        fromRoots(roots),
+        roots.map((r) =>
+          g(r.toTuple()[0] + (rnd() - 0.5) * 10 ** (-3 - 6 * rnd()), r.toTuple()[1]),
+        ),
+      );
       if (!res.ok) continue;
       for (const d of res.discs) {
         const up = d.radiusUpper();
@@ -278,5 +288,48 @@ describe("SmithDisc.radiusUpper", () => {
     }
     const zero = smithDiscs(fromRoots([g(1), g(2)]), [g(1), g(2)]);
     expect(zero.ok && zero.discs[0].radiusUpper()).toBe(0);
+  });
+});
+
+describe("smithDiscsEnvelope (the certified tracker's segment test, @cas/monodromy)", () => {
+  const a = fromRoots([g(1), g(2), g(3)]);
+  // The same cubic with its constant term moved: z³ − 6z² + 11z − 6.5.
+  const b = a.map((c, k) => (k === 0 ? c.sub(new Gauss(Frac.of(1n, 2n), Frac.ZERO)) : c));
+  // p_a(3.2) = 0.528 while p_b(3.2) = 0.028, and the other way round near 1: the maxima come from both.
+  const z = [g(1.001), g(2, 1e-9), g(3.2)];
+
+  it("is smithDiscs for one polynomial", () => {
+    const e = smithDiscsEnvelope([a], z);
+    const s = smithDiscs(a, z);
+    if (!e.ok || !s.ok) throw new Error("refused");
+    e.discs.forEach((d, i) => expect(d.radiusSq.equals(s.discs[i].radiusSq)).toBe(true));
+    expect(e.components).toBe(s.components);
+  });
+
+  it("carries the LARGER radius disc by disc, in either order of the set", () => {
+    const sa = smithDiscs(a, z);
+    const sb = smithDiscs(b, z);
+    if (!sa.ok || !sb.ok) throw new Error("refused");
+    for (const set of [
+      [a, b],
+      [b, a],
+    ]) {
+      const e = smithDiscsEnvelope(set, z);
+      if (!e.ok) throw new Error(e.reason);
+      e.discs.forEach((d, i) => {
+        const m = compareFrac(sa.discs[i].radiusSq, sb.discs[i].radiusSq) >= 0 ? sa : sb;
+        expect(d.radiusSq.equals(m.discs[i].radiusSq)).toBe(true);
+      });
+    }
+    // And the maximum is not always from the same polynomial here — so the test decides something.
+    const fromA = sa.discs.map(
+      (d, i) => compareFrac(d.radiusSq, sb.discs[i].radiusSq) >= 0,
+    );
+    expect(new Set(fromA).size).toBe(2);
+  });
+
+  it("refuses polynomials of different degrees, by name", () => {
+    const r = smithDiscsEnvelope([a, a.slice(0, 3)], z);
+    expect(!r.ok && r.reason).toMatch(/same degree/);
   });
 });

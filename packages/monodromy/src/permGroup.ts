@@ -159,3 +159,236 @@ function factorial(n: number): number {
   for (let i = 2; i <= n; i++) f *= i;
   return f;
 }
+
+// ── Added for Polynomial Root Analysis (ADR-0047 PRA-3): loop words, commutators, the derived series and
+// Sₙ / Aₙ recognition. Everything below is exact finite combinatorics on the permutations it is given;
+// whether those permutations are themselves certified is the caller's (the certified tracker's) claim.
+
+/**
+ * `a` THEN `b` (named `andThen`: a module exporting `then` is a THENABLE, and `await import()` of it
+ * calls the export — measured, every suite importing the package failed to load): the permutation of a loop that runs `a`'s loop and then `b`'s. With the monodromy
+ * convention used throughout (`σ[i]` is where the root that STARTED at `i` ends), travelling `a` takes
+ * `i` to `a[i]` and `b` then takes that to `b[a[i]]` — so this is `compose(b, a)`, and a word is read
+ * left to right in the order the loops are travelled.
+ */
+export function andThen(a: Perm, b: Perm): Perm {
+  return compose(b, a);
+}
+
+/** The permutation of a word of loops travelled left to right (the identity for an empty word). */
+export function wordPerm(parts: readonly Perm[], n: number): Perm {
+  return parts.reduce<Perm>((acc, p) => andThen(acc, p), identityPerm(n));
+}
+
+/** The commutator of two LOOPS, `[α, β] = α β α⁻¹ β⁻¹` travelled left to right. */
+export function loopCommutator(a: Perm, b: Perm): Perm {
+  return wordPerm([a, b, inverse(a), inverse(b)], a.length);
+}
+
+/** +1 for an even permutation, −1 for an odd one. */
+export function sign(p: Perm): 1 | -1 {
+  let parity = 0;
+  for (const c of cycles(p)) parity += c.length - 1;
+  return parity % 2 === 0 ? 1 : -1;
+}
+
+/** The lengths of the non-trivial cycles, longest first (`[]` for the identity; `[2]` a transposition). */
+export function cycleType(p: Perm): number[] {
+  return cycles(p)
+    .map((c) => c.length)
+    .filter((l) => l > 1)
+    .sort((x, y) => y - x);
+}
+
+/** The permutation of `{0,…,n−1}` with the given disjoint cycles (0-based). */
+export function fromCycles(n: number, cs: readonly (readonly number[])[]): Perm {
+  const p = identityPerm(n);
+  for (const c of cs) for (let k = 0; k < c.length; k++) p[c[k]] = c[(k + 1) % c.length];
+  return p;
+}
+
+/** Cycle notation, 1-based by default: `(1 2 3)(4 5)`, and `()` for the identity. */
+export function formatCycles(p: Perm, base = 1): string {
+  const cs = cycles(p).filter((c) => c.length > 1);
+  if (cs.length === 0) return "()";
+  return cs.map((c) => `(${c.map((i) => i + base).join(" ")})`).join("");
+}
+
+/** Every element of `⟨gens⟩`, by closure, or `capped` when there are more than `cap`. */
+export function groupElements(
+  gens: readonly Perm[],
+  n: number,
+  cap = 100_000,
+): { elements: Perm[]; capped: boolean } {
+  const key = (p: Perm): string => p.join(",");
+  const id = identityPerm(n);
+  const seen = new Map<string, Perm>([[key(id), id]]);
+  const frontier: Perm[] = [id];
+  while (frontier.length) {
+    const p = frontier.pop() as Perm;
+    for (const g of gens) {
+      const q = compose(g, p);
+      const k = key(q);
+      if (seen.has(k)) continue;
+      if (seen.size >= cap) return { elements: [...seen.values()], capped: true };
+      seen.set(k, q);
+      frontier.push(q);
+    }
+  }
+  return { elements: [...seen.values()], capped: false };
+}
+
+/**
+ * Is the transitive group `⟨gens⟩` PRIMITIVE — no block system but the trivial ones? For each `j ≠ 0`
+ * the smallest block containing `{0, j}` is found by union–find closed under the generators (Atkinson's
+ * algorithm); the group is primitive iff every such block is everything. Exact; no enumeration.
+ */
+export function isPrimitive(gens: readonly Perm[], n: number): boolean {
+  if (!isTransitive([...gens], n)) return false;
+  if (n <= 2) return true;
+  for (let j = 1; j < n; j++) {
+    const parent = identityPerm(n);
+    const find = (x: number): number => {
+      while (parent[x] !== x) x = parent[x] = parent[parent[x]];
+      return x;
+    };
+    const queue: [number, number][] = [[0, j]];
+    parent[find(j)] = find(0);
+    while (queue.length) {
+      const [a, b] = queue.pop() as [number, number];
+      for (const g of gens) {
+        const ra = find(g[a]);
+        const rb = find(g[b]);
+        if (ra !== rb) {
+          parent[rb] = ra;
+          queue.push([g[a], g[b]]);
+        }
+      }
+    }
+    const root = find(0);
+    let size = 0;
+    for (let x = 0; x < n; x++) if (find(x) === root) size++;
+    if (size < n) return false;
+  }
+  return true;
+}
+
+export interface Recognition {
+  /** "S": the group is Sₙ; "A": it is Aₙ; null: neither was established. */
+  readonly name: "S" | "A" | null;
+  /** How it was decided — each route a theorem, stated so the reader can check it. */
+  readonly how: "transpositions" | "jordan" | "enumerated" | null;
+  /** The order, when the group was enumerated. */
+  readonly order: number | null;
+}
+
+/**
+ * Recognise `⟨gens⟩` as Sₙ or Aₙ without enumerating it where a theorem allows:
+ * - transpositions whose graph on `{0,…,n−1}` is connected generate Sₙ;
+ * - Jordan: a primitive group containing a transposition is Sₙ, one containing a 3-cycle contains Aₙ
+ *   (and is Sₙ or Aₙ by the generators' parity);
+ * - otherwise, when `n! ≤ cap`, by enumeration against `n!` and `n!/2`.
+ */
+export function recogniseSymmetric(
+  gens: readonly Perm[],
+  n: number,
+  cap = 100_000,
+): Recognition {
+  if (n <= 1) return { name: "S", how: "enumerated", order: 1 };
+  const types = gens.map(cycleType);
+  if (
+    gens.length > 0 &&
+    types.every((t) => t.length === 1 && t[0] === 2) &&
+    isTransitive([...gens], n)
+  )
+    return { name: "S", how: "transpositions", order: null };
+  if (isPrimitive(gens, n)) {
+    if (types.some((t) => t.length === 1 && t[0] === 2))
+      return { name: "S", how: "jordan", order: null };
+    if (types.some((t) => t.length === 1 && t[0] === 3))
+      return {
+        name: gens.some((g) => sign(g) === -1) ? "S" : "A",
+        how: "jordan",
+        order: null,
+      };
+  }
+  let fact = 1;
+  for (let i = 2; i <= n; i++) fact *= i;
+  if (fact > cap) return { name: null, how: null, order: null };
+  const { elements } = groupElements(gens, n, cap);
+  const order = elements.length;
+  if (order === fact) return { name: "S", how: "enumerated", order };
+  if (n >= 2 && order === fact / 2 && gens.every((g) => sign(g) === 1))
+    return { name: "A", how: "enumerated", order };
+  return { name: null, how: "enumerated", order };
+}
+
+export interface DerivedLevel {
+  /** Generators of this term of the series (the first term is `⟨gens⟩` itself). */
+  readonly generators: readonly Perm[];
+  readonly order: number;
+  readonly capped: boolean;
+}
+
+/**
+ * The derived subgroup `G′` of `G = ⟨gens⟩`: the normal closure in `G` of the commutators of pairs of
+ * generators (which generates `G′`, a standard fact), closed by conjugating by `G`'s generators until
+ * nothing new appears. Exact under the cap; `capped` when an intermediate group outgrew it.
+ */
+export function derivedSubgroup(
+  gens: readonly Perm[],
+  n: number,
+  cap = 100_000,
+): { generators: Perm[]; order: number; capped: boolean } {
+  const key = (p: Perm): string => p.join(",");
+  const S: Perm[] = [];
+  const push = (p: Perm): void => {
+    if (!isIdentity(p) && !S.some((q) => key(q) === key(p))) S.push(p);
+  };
+  for (const a of gens)
+    for (const b of gens) push(compose(inverse(a), compose(inverse(b), compose(a, b))));
+  for (;;) {
+    const { elements, capped } = groupElements(S, n, cap);
+    if (capped) return { generators: S, order: elements.length, capped: true };
+    const inH = new Set(elements.map(key));
+    let grew = false;
+    for (const g of gens) {
+      for (const s of [...S]) {
+        const c = compose(inverse(g), compose(s, g));
+        if (!inH.has(key(c))) {
+          push(c);
+          grew = true;
+        }
+      }
+    }
+    if (!grew) return { generators: S, order: elements.length, capped: false };
+  }
+}
+
+/**
+ * The derived series `G ⊵ G′ ⊵ G″ ⊵ …`, until it reaches the trivial group (G is SOLVABLE) or stops
+ * shrinking (G is not — Sₙ for n ≥ 5 stops at Aₙ, which is perfect). The last level says which.
+ */
+export function derivedSeries(
+  gens: readonly Perm[],
+  n: number,
+  cap = 100_000,
+): { levels: DerivedLevel[]; solvable: boolean | null } {
+  const first = groupElements(gens, n, cap);
+  const levels: DerivedLevel[] = [
+    { generators: [...gens], order: first.elements.length, capped: first.capped },
+  ];
+  if (first.capped) return { levels, solvable: null };
+  for (;;) {
+    const last = levels[levels.length - 1];
+    if (last.order === 1) return { levels, solvable: true };
+    const d = derivedSubgroup(last.generators, n, cap);
+    if (d.capped) {
+      levels.push({ generators: d.generators, order: d.order, capped: true });
+      return { levels, solvable: null };
+    }
+    const order = d.generators.length === 0 ? 1 : d.order;
+    levels.push({ generators: d.generators, order, capped: false });
+    if (order === last.order) return { levels, solvable: false };
+  }
+}

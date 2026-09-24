@@ -932,6 +932,9 @@ importers:
         specifier: workspace:*
         version: link:../expr
     devDependencies:
+      '@cas/core':
+        specifier: workspace:*
+        version: link:../core
       '@eslint/js':
         specifier: ^9.17.0
         version: 9.39.4

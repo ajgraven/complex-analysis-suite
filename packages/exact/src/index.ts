@@ -57,6 +57,7 @@ export {
   gaussOfDoubles,
   inDisc,
   smithDiscs,
+  smithDiscsEnvelope,
   SmithDisc,
   sqrtUpperBound,
   type SmithResult,

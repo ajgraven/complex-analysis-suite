@@ -219,10 +219,34 @@ export function smithDiscs(
   coeffs: readonly Gauss[],
   approx: readonly Gauss[],
 ): SmithResult {
-  const n = coeffs.length - 1;
+  return smithDiscsEnvelope([coeffs], approx);
+}
+
+/**
+ * Smith's discs about ONE set of approximations for SEVERAL polynomials of the same degree, each disc
+ * carrying the LARGEST of its radii over the set. With one polynomial this is `smithDiscs`.
+ *
+ * Why a monodromy tracker wants it (`@cas/monodromy`, ADR-0047 PRA-3): on a segment where the
+ * coefficients move LINEARLY in `t` with the leading one fixed, each `Wᵢ(t)` is linear in `t`, so `|Wᵢ|`
+ * is convex and its maximum over the segment is at an endpoint. The envelope of the two endpoints'
+ * discs therefore contains every `p_t`'s disc for every `t` in between, and if the envelope's discs
+ * are pairwise disjoint then for EVERY such `t` each disc holds exactly one root — the certificate
+ * that no two roots meet anywhere on the segment. The convexity is the caller's to justify; this
+ * function only takes the maximum.
+ */
+export function smithDiscsEnvelope(
+  coeffSets: readonly (readonly Gauss[])[],
+  approx: readonly Gauss[],
+): SmithResult {
+  if (coeffSets.length === 0) return { ok: false, reason: "no polynomial was given" };
+  const n = coeffSets[0].length - 1;
   if (n < 1)
     return { ok: false, reason: "a constant polynomial has no roots to enclose" };
-  if (coeffs[n].isZero()) return { ok: false, reason: "the leading coefficient is zero" };
+  for (const coeffs of coeffSets) {
+    if (coeffs.length - 1 !== n)
+      return { ok: false, reason: "the polynomials do not all have the same degree" };
+    if (coeffs[n].isZero()) return { ok: false, reason: "the leading coefficient is zero" };
+  }
   if (approx.length !== n) {
     return {
       ok: false,
@@ -230,9 +254,7 @@ export function smithDiscs(
     };
   }
 
-  const D = lcm(coeffs.flatMap((c) => [c.re.d, c.im.d]));
   const S = lcm(approx.flatMap((z) => [z.re.d, z.im.d]));
-  const C = coeffs.map((c) => [(c.re.n * D) / c.re.d, (c.im.n * D) / c.im.d] as const);
   const Z = approx.map((z) => [(z.re.n * S) / z.re.d, (z.im.n * S) / z.im.d] as const);
   const sPow: bigint[] = [1n];
   for (let m = 1; m <= n; m++) sPow.push(sPow[m - 1] * S);
@@ -254,24 +276,36 @@ export function smithDiscs(
       N[j][i] = v;
     }
   }
-
-  const leadNorm = C[n][0] * C[n][0] + C[n][1] * C[n][1];
-  const nSq = BigInt(n * n);
-  const rNum: bigint[] = [];
-  const rDen: bigint[] = [];
-  for (let i = 0; i < n; i++) {
-    const [x, y] = Z[i];
-    let re = C[n][0];
-    let im = C[n][1];
-    for (let k = n - 1; k >= 0; k--) {
-      const nr = re * x - im * y + C[k][0] * sPow[n - k];
-      im = re * y + im * x + C[k][1] * sPow[n - k];
-      re = nr;
-    }
-    let den = S * S * leadNorm;
+  const prodN = Array.from({ length: n }, (_, i) => {
+    let den = 1n;
     for (let j = 0; j < n; j++) if (j !== i) den *= N[i][j];
-    rNum.push(nSq * (re * re + im * im));
-    rDen.push(den);
+    return den;
+  });
+
+  const nSq = BigInt(n * n);
+  const rNum: bigint[] = new Array<bigint>(n).fill(-1n);
+  const rDen: bigint[] = new Array<bigint>(n).fill(1n);
+  for (const coeffs of coeffSets) {
+    const D = lcm(coeffs.flatMap((c) => [c.re.d, c.im.d]));
+    const C = coeffs.map((c) => [(c.re.n * D) / c.re.d, (c.im.n * D) / c.im.d] as const);
+    const leadNorm = C[n][0] * C[n][0] + C[n][1] * C[n][1];
+    for (let i = 0; i < n; i++) {
+      const [x, y] = Z[i];
+      let re = C[n][0];
+      let im = C[n][1];
+      for (let k = n - 1; k >= 0; k--) {
+        const nr = re * x - im * y + C[k][0] * sPow[n - k];
+        im = re * y + im * x + C[k][1] * sPow[n - k];
+        re = nr;
+      }
+      const num = nSq * (re * re + im * im);
+      const den = S * S * leadNorm * prodN[i];
+      // Keep the larger of num/den and rNum/rDen (both denominators positive).
+      if (rNum[i] < 0n || num * rDen[i] > rNum[i] * den) {
+        rNum[i] = num;
+        rDen[i] = den;
+      }
+    }
   }
 
   // Components of the union: union–find over the pairs that are NOT provably disjoint. Most pairs are
