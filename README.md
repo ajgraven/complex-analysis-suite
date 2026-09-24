@@ -10,7 +10,7 @@ visualization tools** that share common underlying packages and can hand data of
 another. The organizing goal — the **north star** — is that **each new tool added to the
 suite requires building fewer primitives from scratch than the last**.
 
-It currently hosts **fourteen** applications — twelve published, Correspondences and Polynomial Root Analysis built but not yet published — riding **thirteen** shared `@cas/*` packages:
+It currently hosts **fourteen** applications — twelve published, Correspondences and Polynomial Root Analysis built but not yet published — riding **fourteen** shared `@cas/*` packages:
 
 | App                                                | What it does                                                                                                                                                                                                                                                                                                  | Stack                   |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
@@ -27,7 +27,7 @@ It currently hosts **fourteen** applications — twelve published, Correspondenc
 | **Potential Theory** (`apps/potential-theory`)     | A compact set `K` as a grounded conductor: equilibrium charge, logarithmic capacity, and Green's-function equipotentials from the exterior conformal map, with Faber-polynomial zeros and Fekete/Leja points as two more roads to the equilibrium measure (exact `=` for SC polygons + closed forms, log-lightning `≈` for smooth blobs) | Vite + TypeScript |
 | **Contour Integration** (`apps/contour-integration`) | Contour integration and the residue theorem: a sandbox — drag the contour across a pole and watch `∮` jump by `2πi·Res` — and a **28-integral worked-example gallery**, each solved in closed form from `2πi Σ n(γ,aₖ)·Res` with exactly-decided windings, exact residues, certified arc bounds, and a **Closing Ledger** that answers *does this argument close?* — presented as two rails around the stage with every formula typeset, a front door of eight classics over an eight-group taxonomy, and a faded drill | Vite + TypeScript |
 | **Polynomial Roots** (`apps/polynomial-roots`)     | Every root of every polynomial whose coefficients come from a small finite alphabet, painted by density — the fractal root clouds of Baez, Christensen & Derbyshire's *The Beauty of Roots*. Littlewood `{−1, +1}`, Newman `{0, 1}`, `{−1, 0, 1}`, integer ranges, roots of unity and a custom alphabet, with the symmetry reduction DERIVED per alphabet; a degree scrub over per-degree float-texture layers, histogram-equalised density and colour-by-degree, and — handing over as you zoom — a per-pixel LIMIT-SET engine that prunes the coefficient tree in a generated shader and paints the escape depth, so the picture keeps resolving past any degree, and below a float32 texel a DEEP engine that walks the tree once per frame at the view's own centre in double-double and splats each survivor's root as a float32 OFFSET, reaching `1e-30`; a probe that names the polynomial under the cursor with its residual; `#vs=` permalinks + PNG export, and a gallery of the named places from the literature | Vite + TypeScript |
-| **Polynomial Root Analysis** (`apps/polynomial-root-analysis`) | *In construction — built, not yet published (ADR-0047).* One polynomial and what acts on its roots: roots and coefficients as two linked draggable point sets with exact Smith inclusion discs, the Galois group over ℚ in three honest tiers, loop monodromy by certified continuation, and Arnold's topological proof of Abel–Ruffini as commutator loops. PRA-1 (the two-pane sandbox: drag roots or coefficients over ℂ/ℝ/ℚ, every root in an exactly certified disc) and PRA-2 (critical points against Gauss–Lucas, the exact discriminant and branch points, certified pseudozero counts) have landed; see [`docs/polynomial-root-analysis/STATUS.md`](docs/polynomial-root-analysis/STATUS.md) | Vite + TypeScript |
+| **Polynomial Root Analysis** (`apps/polynomial-root-analysis`) | *In construction — built, not yet published (ADR-0047).* One polynomial and what acts on its roots: roots and coefficients as two linked draggable point sets with exact Smith inclusion discs, the Galois group over ℚ in three honest tiers, loop monodromy by certified continuation, and Arnold's topological proof of Abel–Ruffini as commutator loops. PRA-1 (the two-pane sandbox: drag roots or coefficients over ℂ/ℝ/ℚ, every root in an exactly certified disc) and PRA-2 (critical points against Gauss–Lucas, the exact discriminant and branch points, certified pseudozero counts) and PRA-3 (certified loop monodromy: lassos, commutators, the group they generate, root-side motions, the braid) have landed; see [`docs/polynomial-root-analysis/STATUS.md`](docs/polynomial-root-analysis/STATUS.md) | Vite + TypeScript |
 
 The Correspondences tool was the **forcing function** for the whole suite: its
 requirements deliberately drove which shared packages got extracted, and in what order.
@@ -130,7 +130,8 @@ complex-analysis-suite/
 │   ├── faber/                ← @cas/faber       the exterior Faber-transform engine: Faber-polynomial recurrence, exact rational images, exterior-map Laurent jets (Quadrature Domains + Faber Transform + Potential Theory)
 │   ├── ui/                   ← @cas/ui          the shared browser shell: accessible canvas, fatal-error boundary, off-thread compute, direction ticks
 │   ├── flow/                 ← @cas/flow        the conformal-transplant kernel: reference flows + flow-net + interior/exterior SC glue + closed-form exterior-map gallery + Net2D line-art (2D Electrostatics + 2D Hydrodynamics + Hele-Shaw Flow + Potential Theory)
-│   └── rigor/                ← @cas/rigor       the honest-labelling vocabulary: branded `Certificate` / `Verdict` values and their `meet`, so `=` cannot be written by hand (Contour Integration; QD keeps its own, ADR-0040)
+│   ├── rigor/                ← @cas/rigor       the honest-labelling vocabulary: branded `Certificate` / `Verdict` values and their `meet`, so `=` cannot be written by hand (Contour Integration; QD keeps its own, ADR-0040)
+│   └── monodromy/            ← @cas/monodromy   permutation groups, π₁ generator loops, the plotter's ≈ continuation and the CERTIFIED root tracker (Complex Function Plotter, Polynomial Root Analysis; ADR-0047)
 └── apps/                     ← thin applications; each a Vite build that consumes packages
     ├── launcher/             ← the unified menu: a static landing page linking to each app
     ├── complex-dynamics/
@@ -149,8 +150,8 @@ complex-analysis-suite/
     └── polynomial-root-analysis/ ← one polynomial: roots ↔ coefficients, Galois group, monodromy, Abel–Ruffini (in construction)
 ```
 
-> **The thirteen packages that exist** are `@cas/core`, `@cas/gpu`, `@cas/expr`,
-> `@cas/interchange`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, `@cas/export`, `@cas/conformal`, `@cas/faber`, `@cas/ui`, `@cas/flow`, and `@cas/rigor`.
+> **The fourteen packages that exist** are `@cas/core`, `@cas/gpu`, `@cas/expr`,
+> `@cas/interchange`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, `@cas/export`, `@cas/conformal`, `@cas/faber`, `@cas/ui`, `@cas/flow`, `@cas/rigor`, and `@cas/monodromy`.
 > Packages were extracted **only as a second consumer proved it needed them**
 > ([ADR-0007](docs/DECISIONS.md#adr-0007-incremental-extraction-driven-by-real-need)) — which is why the
 > `quadrature` package that [ARCHITECTURE.md](docs/ARCHITECTURE.md) sketches as a target never
@@ -172,7 +173,9 @@ complex-analysis-suite/
 > ~6,000 lines of Quadrature-Domains `.mjs` that each later app reimplemented, and its branded
 > `Certificate` / `Verdict` types make `=` a compile error to write by hand. Contour Integration is
 > its consumer; QD is deliberately **not** migrated onto it, so the suite carries two rigor
-> vocabularies on purpose.
+> vocabularies on purpose. The **fourteenth**, `@cas/monodromy`, is the Complex Function Plotter's
+> monodromy stack (`git mv`, ADR-0047 PRA-3) when Polynomial Root Analysis became its second consumer,
+> plus the certified root tracker the second consumer needed.
 
 > **Unified menu, not a unified shell.** The suite ships **separate apps that hand off to
 > each other**, fronted by a lightweight **launcher** (`apps/launcher`) — deliberately

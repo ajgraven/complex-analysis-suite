@@ -583,7 +583,10 @@ async function auditPage(context, baseUrl, page) {
     // fallback to the landing state would keep reporting "clean" about something else entirely.
     if (page.expect !== undefined) {
       try {
-        await tab.waitForSelector(page.expect, { timeout: 5000 });
+        // 20 s, not 5: `polynomial-roots-place` opens a degree-14 trinary sweep whose start can hold the
+        // main thread, and at 5 s it failed 1 run in 3 with the link honoured (measured at ADR-0047
+        // PRA-3). A state that is never reached still fails by name; a slow one is no longer read as one.
+        await tab.waitForSelector(page.expect, { timeout: 20000 });
       } catch {
         throw new Error(
           `${page.id}: '${page.expect}' never appeared — the state this entry audits was not reached ` +

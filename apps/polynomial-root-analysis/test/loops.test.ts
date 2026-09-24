@@ -18,6 +18,7 @@ import { loopName, loopPath, type Loop } from "../src/engine/loops/loop.js";
 import { loopContext, runLoop } from "../src/engine/loops/run.js";
 import { motion } from "../src/engine/loops/motion.js";
 import { crossings } from "../src/engine/loops/braid.js";
+import { lassoGroup } from "../src/engine/loops/group.js";
 
 function build(text: string, ring: Polynomial["ring"] = "Q"): Polynomial {
   const r = parsePolynomial(text, ring);
@@ -215,5 +216,80 @@ describe("the braid strip", () => {
     expect(cs).toHaveLength(word.length);
     // Over/under is decided by the imaginary part, and a lens puts one root on each side.
     expect(cs.every((c) => c.over === c.a || c.over === c.b)).toBe(true);
+  });
+});
+
+describe("the PRA-3 sweep's survivors, each closed by the property it exposed", () => {
+  it("an inverse runs the loop BACKWARDS: the inverse of a commutator is the inverse 3-cycle (app-inverse)", () => {
+    // A lasso's swap is its own inverse, so only a loop with an ORIENTED answer can tell.
+    const com: Loop = { kind: "commutator", a: lasso(0), b: lasso(1) };
+    const c = run(com);
+    expect(cycleType(c)).toEqual([3]);
+    expect(run({ kind: "inverse", of: com })).toEqual(inverse(c));
+  });
+
+  it("labels are carried by the proof, not by position (app-labelperm, app-labelsafter)", () => {
+    // Labels NOT in index order, so a mix-up between index and label shows.
+    // A 3-cycle, not a swap: for an involution the two mappings coincide and a mix-up is invisible.
+    const p: Polynomial = { ...quintic, labels: [3, 5, 1, 2, 4] };
+    const r = runLoop(
+      p,
+      { kind: "commutator", a: lasso(0), b: lasso(1) },
+      loopContext(p, 0, branchPoints(p, 0)),
+    );
+    if (!r.ok) throw new Error(r.reason);
+    r.perm.forEach((k, i) => {
+      expect(r.labelPerm[p.labels[i] - 1]).toBe(p.labels[k] - 1);
+      expect(r.labelsAfter[k]).toBe(p.labels[i]);
+    });
+    expect(r.perm.some((k, i) => k !== i)).toBe(true);
+  });
+
+  it("the group of the lassos is not claimed when one of them was refused, and names it (grp-missing)", () => {
+    const ok = runLoop(quintic, lasso(0), ctx0);
+    const bad = runLoop(
+      quintic,
+      { kind: "drawn", vertices: [[-1, 0], ctx0.branchPoints[1], [0, -1]] },
+      ctx0,
+    );
+    const g = lassoGroup([ok, bad], 5);
+    expect(g.missing).toMatch(/branch point #2 was not proved/);
+    expect(g.generators).toEqual([]);
+  });
+});
+
+describe("the braid's counting rules (braid-zero, braid-over)", () => {
+  it("two strands that START level and part without passing do not cross", () => {
+    const frames: Cx[][] = [
+      [
+        [0, 1],
+        [0, -1],
+      ],
+      [
+        [-0.5, 1],
+        [0.5, -1],
+      ],
+      [
+        [-1, 1],
+        [1, -1],
+      ],
+    ];
+    expect(crossings(frames)).toHaveLength(0);
+  });
+
+  it("the strand with the larger imaginary part passes over", () => {
+    const frames: Cx[][] = [
+      [
+        [-1, 0.5],
+        [1, -0.5],
+      ],
+      [
+        [1, 0.5],
+        [-1, -0.5],
+      ],
+    ];
+    expect(crossings(frames)).toEqual([{ frame: 0, a: 0, b: 1, over: 0 }]);
+    const flipped: Cx[][] = frames.map((f) => [f[0], [f[1][0], 2]]);
+    expect(crossings(flipped)[0].over).toBe(1);
   });
 });

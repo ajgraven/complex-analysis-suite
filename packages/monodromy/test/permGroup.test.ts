@@ -47,7 +47,13 @@ describe("generatedGroup + transitivity", () => {
   });
 
   it("two transpositions (0 1),(1 2) → S3, transitive", () => {
-    const g = generatedGroup([[1, 0, 2], [0, 2, 1]], 3);
+    const g = generatedGroup(
+      [
+        [1, 0, 2],
+        [0, 2, 1],
+      ],
+      3,
+    );
     expect(g.order).toBe(6);
     expect(g.transitive).toBe(true);
   });
@@ -58,7 +64,14 @@ describe("generatedGroup + transitivity", () => {
   });
 
   it("respects the element cap and reports it as a lower bound", () => {
-    const g = generatedGroup([[1, 2, 0], [1, 0, 2]], 3, 3); // would be S3 (6) but capped at 3
+    const g = generatedGroup(
+      [
+        [1, 2, 0],
+        [1, 0, 2],
+      ],
+      3,
+      3,
+    ); // would be S3 (6) but capped at 3
     expect(g.capped).toBe(true);
     expect(g.order).toBeLessThanOrEqual(3 + 3); // near the cap, not the full 6
   });

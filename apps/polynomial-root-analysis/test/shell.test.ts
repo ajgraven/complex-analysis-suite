@@ -701,6 +701,7 @@ describe("the Monodromy card (PRA-3)", () => {
       });
     const cases: [string, RegExp][] = [
       [enc([0, 8, 1]), /goes round branch point #9 of a0, which has 4/],
+      [enc([0, 4, 1]), /goes round branch point #5 of a0, which has 4/],
       [enc([0, 1, 2]), /a lasso in the loop is malformed/],
       [enc([7]), /unknown kind 7/],
       [enc([4, 1, 2]), /at least three finite points/],

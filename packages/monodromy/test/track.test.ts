@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { aberth, makeWorkspace } from "@cas/core";
-import { Gauss, gaussOfDoubles } from "@cas/exact";
+import { Gauss, SmithDisc, gaussOfDoubles } from "@cas/exact";
 import {
   formatCycles,
+  certifySegment,
+  matchDiscs,
   recogniseSymmetric,
   trackCoefficientPath,
   type Cx,
@@ -244,5 +246,113 @@ describe("x⁵ − x − 1 in the a₀-plane (PLAN §7 PRA-3's gate, at the pack
       how: "transpositions",
       order: null,
     });
+  });
+});
+
+describe("the sweep's survivors: the CLAIM is tested, not only the answer", () => {
+  it("every certified step's discs each hold exactly one root of p_t at every sampled t (falsification)", () => {
+    // The certificate says: for EVERY t on the step, each disc holds exactly one root. Removing the
+    // disjointness test changed no permutation in the suite (PRA-3's sweep), because the answers were
+    // still right — so the claim itself is checked, at nine interior points of every step, against an
+    // independent solve from scratch.
+    const cases: { float: Cx[]; path: Gauss[] }[] = [
+      {
+        float: [
+          [1, 0],
+          [0, 0],
+          [0, 0],
+          [1, 0],
+        ],
+        path: around([0, 0], 1, 0),
+      },
+      {
+        float: [
+          [-1, 0],
+          [-1, 0],
+          [0, 0],
+          [0, 0],
+          [0, 0],
+          [1, 0],
+        ],
+        path: [
+          G(-1),
+          ...around([-((256 / 3125) ** 0.25), 0], 0.15, Math.PI).slice(1, -1),
+          G(-1),
+        ],
+      },
+    ];
+    let checked = 0;
+    for (const { float, path } of cases) {
+      const p = setup(float);
+      const steps: {
+        from: Gauss;
+        to: Gauss;
+        centres: readonly Cx[];
+        radii: readonly number[];
+      }[] = [];
+      const r = trackCoefficientPath({
+        ...p,
+        coefficient: 0,
+        path,
+        solve,
+        onStep: (s) => steps.push(s),
+      });
+      if (!r.ok) throw new Error(r.reason);
+      for (const st of steps) {
+        const [fx, fy] = st.from.toTuple();
+        const [tx, ty] = st.to.toTuple();
+        for (let q = 1; q <= 9; q++) {
+          const s = q / 10;
+          const c = float.map((v, k): Cx =>
+            k === 0 ? [fx + s * (tx - fx), fy + s * (ty - fy)] : v,
+          );
+          const roots = rootsOf(c);
+          st.centres.forEach((z, i) => {
+            const inside = roots.filter(
+              (w) => Math.hypot(w[0] - z[0], w[1] - z[1]) <= st.radii[i],
+            );
+            expect(inside.length, `step ${checked}, t = ${s}, disc ${i}`).toBe(1);
+          });
+          checked++;
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(300);
+  });
+
+  it("the label rule: a new disc meeting two old ones, or two new ones meeting one old one, is refused", () => {
+    const disc = (x: number, r: number) =>
+      new SmithDisc(G(x), BigInt(Math.round(r * r * 1e6)), 1_000_000n, 0, 1);
+    const olds = [disc(0, 1), disc(3, 1)];
+    expect(matchDiscs([disc(3.2, 0.1), disc(0.1, 0.1)], olds)).toEqual([1, 0]);
+    expect(matchDiscs([disc(1.5, 0.6), disc(3, 0.1)], olds)).toBeNull(); // the first meets both
+    expect(matchDiscs([disc(0.2, 0.1), disc(-0.2, 0.1)], olds)).toBeNull(); // both meet the first
+    expect(matchDiscs([disc(10, 0.1), disc(3, 0.1)], olds)).toBeNull(); // one meets none
+  });
+});
+
+describe("certifySegment — the one exact decision a step rests on", () => {
+  // z² + a₀ with the fixed points z = ±1, the roots at a₀ = −1. Moving a₀ by δ, each disc's radius is
+  // 2·|δ|/2 = |δ| against a spacing of 2: disjoint for |δ| < 1, overlapping beyond — and between 1 and
+  // 1.5 the float pre-check lets it through, so THIS is what must refuse.
+  const at = (a0: number): Gauss[] => [G(a0), G(0), G(1)];
+  const z: Cx[] = [
+    [1, 0],
+    [-1, 0],
+  ];
+
+  it("certifies a step whose discs are disjoint, and refuses one whose discs overlap by 20%", () => {
+    expect(certifySegment(at(-1), at(-1.8), z)).not.toBeNull();
+    expect(certifySegment(at(-1), at(-2.2), z)).toBeNull();
+  });
+
+  it("takes BOTH ends: discs disjoint at the end but overlapping at the start are refused", () => {
+    // The points are exact roots at the END (a₀ = −1), not at the start: only the start's radius is large.
+    expect(certifySegment(at(-2.2), at(-1), z)).toBeNull();
+    expect(certifySegment(at(-1), at(-1), z)).not.toBeNull();
+  });
+
+  it("refuses exactly at touching, where two roots could meet on the boundary", () => {
+    expect(certifySegment(at(-1), at(-2), z)).toBeNull();
   });
 });

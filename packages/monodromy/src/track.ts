@@ -53,6 +53,17 @@ export interface TrackInput {
   readonly floor?: number;
   /** Certified steps allowed in all (default 20 000). */
   readonly maxSteps?: number;
+  /**
+   * Called with every CERTIFIED step's evidence: the segment, the fixed points and each disc's radius
+   * (an upper bound, for checking). The claim is that for every t in [from, to] each disc holds exactly
+   * one root of p_t — which a test can falsify by sampling t, and does.
+   */
+  readonly onStep?: (step: {
+    readonly from: Gauss;
+    readonly to: Gauss;
+    readonly centres: readonly Cx[];
+    readonly radii: readonly number[];
+  }) => void;
 }
 
 export interface TrackEvidence {
@@ -142,8 +153,15 @@ function plainlyOverlapping(
   return false;
 }
 
-/** For each new disc, the ONE old disc it meets — or null if any meets none, several, or twice. */
-function match(news: readonly SmithDisc[], olds: readonly SmithDisc[]): number[] | null {
+/**
+ * The label rule: for each new disc, the ONE old disc it meets — or null if any new disc meets none or
+ * several, or two meet the same one. With the old discs pairwise disjoint and each holding one root,
+ * a new disc meeting only Dₖ holds Dₖ's root, which is the whole argument for carrying the label.
+ */
+export function matchDiscs(
+  news: readonly SmithDisc[],
+  olds: readonly SmithDisc[],
+): number[] | null {
   const out: number[] = [];
   const taken = new Set<number>();
   for (const s of news) {
@@ -158,6 +176,21 @@ function match(news: readonly SmithDisc[], olds: readonly SmithDisc[]): number[]
     out.push(hit);
   }
   return out;
+}
+
+/**
+ * THE certificate for one segment: Smith's discs about the fixed points `z` for the polynomials at both
+ * ends (`ca`, `cb`), each carrying the larger radius — returned only if they are pairwise DISJOINT, in
+ * exact arithmetic. By the convexity argument in the header, every p_t on the segment then has exactly
+ * one root in each. (The float pre-check in the loop only skips cases this would plainly refuse.)
+ */
+export function certifySegment(
+  ca: readonly Gauss[],
+  cb: readonly Gauss[],
+  z: readonly Cx[],
+): readonly SmithDisc[] | null {
+  const env = smithDiscsEnvelope([ca, cb], z.map(exactOf));
+  return env.ok && env.components === z.length ? env.discs : null;
 }
 
 export function trackCoefficientPath(input: TrackInput): TrackResult {
@@ -225,17 +258,16 @@ export function trackCoefficientPath(input: TrackInput): TrackResult {
         ]);
       const ca = coeffsAt(a);
       const cb = coeffsAt(b);
-      const zG = z.map(exactOf);
       let next: Cx[] | null = null;
       const env = plainlyOverlapping(floats(ca), floats(cb), z)
         ? null
-        : smithDiscsEnvelope([ca, cb], zG);
-      if (env && env.ok && env.components === n) {
+        : certifySegment(ca, cb, z);
+      if (env) {
         const solved = solve(floats(cb), cb, z);
         if (solved.length === n) {
           const at = smithDiscs(cb, solved.map(exactOf));
           if (at.ok && at.components === n) {
-            const m = match(at.discs, env.discs);
+            const m = matchDiscs(at.discs, env);
             if (m) {
               next = new Array<Cx>(n);
               solved.forEach((r, i) => ((next as Cx[])[m[i]] = [r[0], r[1]]));
@@ -244,6 +276,13 @@ export function trackCoefficientPath(input: TrackInput): TrackResult {
         }
       }
       if (next) {
+        if (input.onStep && env)
+          input.onStep({
+            from: a,
+            to: b,
+            centres: z,
+            radii: env.map((d) => d.radiusUpper()),
+          });
         z = next;
         z.forEach((r, i) => paths[i].push(r));
         a = b;
@@ -280,7 +319,7 @@ export function trackCoefficientPath(input: TrackInput): TrackResult {
       path.length - 2,
       null,
     );
-  const m = match(fin.discs, start.discs);
+  const m = matchDiscs(fin.discs, start.discs);
   if (!m)
     return refuse(
       "the roots at the end of the loop could not be matched to the roots at its start",

@@ -9,10 +9,25 @@ not silently changed.
 
 ## Current
 
-**PRA-3 — `@cas/monodromy` and loops** (PLAN §7), awaiting the owner's go-ahead. PRA-2 is complete.
+**PRA-4 — the Galois group, tiers 0 and 1** (PLAN §7), awaiting the owner's go-ahead. PRA-3 is complete.
 
 ## Done
 
+- 2026-09-24 — **PRA-3 complete (3.1–3.4): `@cas/monodromy` and loops.** 3.1: the plotter's
+  `monodromy.ts`, `permGroup.ts`, `generatorLoop.ts`, `permDiagram.ts` and `winding.ts` moved byte for
+  byte into `packages/monodromy` (the fourteenth package, source-exported) with their tests; the plotter
+  imports them and keeps the one test that drives them through its own curve enumerator. 3.2: the
+  CERTIFIED tracker (`track.ts`, DESIGN §4.4) on `@cas/exact`'s new `smithDiscsEnvelope`; loop words,
+  commutators, the derived series, primitivity and Sₙ/Aₙ recognition; in the app, loop words → exact
+  polylines, the run in labels, root-side motions, braid crossings. 3.3: the Monodromy card (lassos,
+  word builder, pen, runnable word tree, σ with its certificate or refusal, play on the roots, the group of
+  every lasso), loops in `#vs=` as the word, the braid strip. Gate clauses: x⁵ − x − 1's four a₀ lassos each
+  certify a transposition and generate S₅ (order 120, listed); the commutator of two lassos sharing a root
+  certifies the package's composed 3-cycle; a drawn loop through a branch point refuses by name with no σ;
+  the motion (1 2 3 4 5) lands every root on its image and closes every coefficient loop to 1e-12; a word
+  of four x-adjacent lenses crosses four times. Sweep **34 mutants, 33 killed, 1 recorded equivalent**
+  (19 on the first pass). Gate **634 files / 7341 tests** (629 / 7285 before PRA-3); browser suite
+  1 / 3; `pnpm a11y --strict` **1264 interactive nodes across 33 pages, 0 unnamed**.
 - 2026-09-24 — **PRA-2 complete (2.1–2.4): analysis overlays, wave 1.** The engine (2.1): exact
   convex hull and Gauss–Lucas test, certified critical points, the exact discriminant and aⱼ's branch
   points by two routes compared, certified pseudozero regions (Rouché on grid-cell boundaries,
@@ -57,6 +72,39 @@ not silently changed.
   `docs/design/future-app-ideas.md` as ▶ 8. No code touched.
 
 ## Findings (things learned while executing; each names its step)
+
+- _(PRA-3.4)_ **Removing the certificate changed no answer — so the claim is tested now, not only the
+  answer.** On the first sweep, `trk-no-disjoint` (drop the disjointness test) survived: every
+  permutation in the suite stayed right, because the float pre-check already rejects every envelope that
+  overlaps by more than 1.5× touching and the label match does the rest. Only the band between 1× and
+  1.5× needs the exact test, and nothing reached it. The decision is now `certifySegment`, tested on that
+  band directly (20% overlap refused, touching refused, a start-only overlap refused), and a falsification
+  test samples nine interior t on every certified step of two loops (> 300 points) and requires each disc
+  to hold exactly one root of p_t from an independent solve.
+- _(PRA-3.4)_ **An involution hides a label mix-up.** `labelPerm[L[i]] = L[σ(i)]` and its transpose agree
+  whenever σ² = 1, so every lasso test passed both; the label tests run a commutator (a 3-cycle) on
+  permuted labels. The same fact hid a no-op `inverse` (a swap undone by itself).
+- _(PRA-3.4)_ **One recorded equivalent**, `trk-at-isolated`: the new roots' own discs need not be
+  checked for isolation at the step's end, because the NEXT step's certificate starts from exactly those
+  discs and the path's end re-checks them; the check stays for a clearer refusal one step sooner.
+- _(PRA-3.4)_ **The a11y audit's state wait was too short for a heavy link, and flaked 1 in 3.**
+  `polynomial-roots-place` (a degree-14 trinary sweep) failed to show its state within 5 s about one
+  run in three with the link honoured and Polynomial Roots untouched; at 20 s, 4 of 4 clean and the full
+  roster clean. A state never reached still fails by name.
+- _(PRA-3.2)_ **Exporting `then` makes a module a thenable.** `await import()` of `@cas/monodromy` called
+  the export and every suite that imported the package failed to load; it is `andThen`.
+- _(PRA-3.2)_ **The tracker's cost, measured, and the floor decided.** zⁿ − z − 1 with a₀ round a small
+  circle: 28 / 161 / 457 / 778 / 1662 ms at n = 5 / 10 / 15 / 20 / 24 (8.4 s and 22.9 s at 20 and 24 before
+  a float pre-check skipped plainly failing exact envelopes and the matcher stopped reducing fractions).
+  DESIGN's `⚠ decide at PRA-3` floor is 20 halvings of each polyline edge; the loops the card builds
+  never needed more than 5. Runs are synchronous and memoised; a worker is left until a loop is slow
+  enough at a degree someone uses to need one.
+- _(PRA-3.3)_ **A loop has to move the colours.** After a loop the roots were drawn with their old
+  labels, so the root the proof says is now where 4 was jumped back to 2's place on screen. The roots take
+  the proof's labels once per loop (re-resolving is stable because σ conjugated by itself is σ).
+- _(PRA-3.2)_ **A lasso's tether must be routed.** x⁵ − x − 1's branch points ±β lie on the real axis with
+  a₀ = −1, so the straight tether to +β runs through −β; the lasso bends through a waypoint, the first of
+  six candidates that keeps clear of every other branch point.
 
 - _(PRA-2.4)_ **The ≈ discriminant had the wrong sign at half of all degrees.** `discFromRoots`
   multiplied `aₙ^{2n−2}∏_{i<j}(rᵢ − rⱼ)²` by `(−1)^{n(n−1)/2}`, which belongs to the `∏_{i≠j}` form;

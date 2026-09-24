@@ -93,6 +93,21 @@ describe("Sₙ / Aₙ recognition, each route a theorem", () => {
     });
   });
 
+  it("Jordan needs PRIMITIVE, not just transitive: D₄ on four points holds a swap and is not S₄", () => {
+    const d4 = [
+      t(4, 0, 1),
+      fromCycles(4, [
+        [0, 2],
+        [1, 3],
+      ]),
+    ];
+    expect(recogniseSymmetric(d4, 4)).toEqual({
+      name: null,
+      how: "enumerated",
+      order: 8,
+    });
+  });
+
   it("falls back to enumeration, and names nothing it cannot", () => {
     const d5 = [
       fromCycles(5, [[0, 1, 2, 3, 4]]),

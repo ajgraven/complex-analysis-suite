@@ -151,8 +151,8 @@ instead of an ad-hoc JSON blob.
 > **`@cas/dynamics` reached genesis**: its inverse-Böttcher core was extracted when the Riemann-map app
 > became a second consumer ([ADR-0014](DECISIONS.md#adr-0014-extract-casdynamics-on-the-second-consumer-rule-riemann-map)),
 > though that app has since **shed** it (ADR-0017), leaving Complex Dynamics the sole consumer.
-> The suite now ships **thirteen** packages: `@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`,
-> `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, `@cas/export`, `@cas/conformal`, `@cas/faber`, `@cas/ui`, and `@cas/flow` (`@cas/exact`
+> The suite now ships **fourteen** packages: `@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`,
+> `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, `@cas/export`, `@cas/conformal`, `@cas/faber`, `@cas/ui`, `@cas/flow`, `@cas/rigor` and `@cas/monodromy` (the last extracted from the plotter's `src/riemann/` at ADR-0047's PRA-3; `@cas/exact`
 > through `@cas/export` extracted later than the phase plan on the ADR-0007 second-consumer rule; `@cas/conformal`
 > extracted *ahead* of demand, [ADR-0018](DECISIONS.md#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore);
 > `@cas/faber` is the exterior Faber-transform engine behind the Faber Transform app, [ADR-0024](DECISIONS.md#adr-0024-faber-transform-app--casfaber--polygonal-k-via-the-exterior-sc-engine);

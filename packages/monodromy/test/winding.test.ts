@@ -45,7 +45,15 @@ describe("windingNumber", () => {
   });
 
   it("returns 0 for a degenerate loop or a point on the loop's center vertex", () => {
-    expect(windingNumber([[0, 0], [1, 0]], [5, 5])).toBe(0); // < 3 points
+    expect(
+      windingNumber(
+        [
+          [0, 0],
+          [1, 0],
+        ],
+        [5, 5],
+      ),
+    ).toBe(0); // < 3 points
     expect(windingNumber(circle([0, 0], 1, 8), [1, 0])).toBe(0); // center coincides with a vertex
   });
 });

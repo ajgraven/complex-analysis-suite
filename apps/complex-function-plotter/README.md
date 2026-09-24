@@ -12,8 +12,12 @@ reimplementing them:
   compile/link, colormap LUTs.
 - **`@cas/interchange`** — share-links (`#vs=`) and suite hand-off (import a Schwarz reflection from
   Quadrature Domains, export a view to Complex Dynamics).
+- **`@cas/monodromy`** — the monodromy explorer's continuation engine, permutation groups and π₁
+  generator loops, moved out of `src/riemann/` (`git mv`) when Polynomial Root Analysis became their second
+  consumer (ADR-0047 PRA-3). The `≈` nearest-match continuation is unchanged; the certified tracker beside
+  it is the other app's.
 
-The app rides those **three** shared packages. The zero/pole finder's root-finding (Newton + the
+The app rides those shared packages. The zero/pole finder's root-finding (Newton + the
 argument principle) is small and app-local — built on `@cas/expr`'s `Complex` and symbolic `f'`, not on
 `@cas/core` (a future extraction target if a second consumer needs it, per ADR-0007).
 

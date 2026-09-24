@@ -14,7 +14,7 @@ Complex Function Plotter, Riemann Map, Argument Principle, Faber Transform, 2D
 Electrostatics, 2D Hydrodynamics, Hele-Shaw Flow, Potential Theory, Contour Integration, and
 Polynomial Roots, plus two built but not yet published — the anti-holomorphic Correspondences tool and
 Polynomial Root Analysis (ADR-0047, in construction) — riding
-thirteen shared `@cas/*` packages.
+fourteen shared `@cas/*` packages.
 
 Read the docs in this order before making changes: [`docs/VISION.md`](docs/VISION.md) →
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) → [`docs/DECISIONS.md`](docs/DECISIONS.md)
@@ -101,8 +101,8 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **629 test files / 7285 tests**
-*(627 / 7223 before ADR-0047's PRA-2 — the analysis overlays, and KaTeX lifted into `@cas/ui/math` — added 2 files / 62 tests; 623 / 7116 before ADR-0047's PRA-1 — the two-pane sandbox, and the lifts into `@cas/core`, `@cas/exact` and `@cas/ui` — added 4 files / 107 tests; 622 / 7111 before its PRA-0 — the Polynomial Root Analysis scaffold — added 1 file / 5 tests; 621 / 7085 before ADR-0046's M6 — Egan's hue, the CET-C6 extraction and the symmetry readout — added 1 file / 26 tests; 620 / 7067 before its PR-5 — the gallery — added 1 file / 18 tests; 618 / 7035 before its PR-4 — the dragons — added 2 files / 32 tests; 615 / 6997 before its PR-3 — deep zoom by reference — added 3 files / 38 tests; 610 / 6949 before its PR-2 — the limit-set engine — added 5 files / 48 tests; 599 / 6818 before
+Green is **634 test files / 7341 tests**
+*(629 / 7285 before ADR-0047's PRA-3 — `@cas/monodromy`, the certified tracker, loops and motions — added 5 files / 56 tests; 627 / 7223 before ADR-0047's PRA-2 — the analysis overlays, and KaTeX lifted into `@cas/ui/math` — added 2 files / 62 tests; 623 / 7116 before ADR-0047's PRA-1 — the two-pane sandbox, and the lifts into `@cas/core`, `@cas/exact` and `@cas/ui` — added 4 files / 107 tests; 622 / 7111 before its PRA-0 — the Polynomial Root Analysis scaffold — added 1 file / 5 tests; 621 / 7085 before ADR-0046's M6 — Egan's hue, the CET-C6 extraction and the symmetry readout — added 1 file / 26 tests; 620 / 7067 before its PR-5 — the gallery — added 1 file / 18 tests; 618 / 7035 before its PR-4 — the dragons — added 2 files / 32 tests; 615 / 6997 before its PR-3 — deep zoom by reference — added 3 files / 38 tests; 610 / 6949 before its PR-2 — the limit-set engine — added 5 files / 48 tests; 599 / 6818 before
 Polynomial Roots itself added 10 files / 122 tests and its `@cas/gpu` extraction 1 / 9; 592 / 6643 before the 2026-09-20 remediation)* with lint and typecheck
 silent. `pnpm lint` includes `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the
 `packages/*` dists first, so a clean clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as
@@ -185,9 +185,10 @@ blobs; riding `@cas/flow`, `@cas/faber`, `@cas/core`, and `@cas/ui`; and the ele
 ADR-0037 — the hydrodynamic twin of 2D Electrostatics: ideal flow past a body as flow past 𝔻* through a
 conformal map ψ: 𝔻* → ext(B), the Joukowski/Kármán–Trefftz airfoil (Kutta condition + lift) plus a
 closed-form transplant gallery (flat plate / ellipse / deltoid / astroid / star), the airfoil promoted out
-of 2D Electrostatics; riding `@cas/flow`, `@cas/gpu`, `@cas/export`, `@cas/interchange`, and `@cas/ui`) ride the thirteen shared `@cas/*` packages
+of 2D Electrostatics; riding `@cas/flow`, `@cas/gpu`, `@cas/export`, `@cas/interchange`, and `@cas/ui`) ride the fourteen shared `@cas/*` packages
 (`@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`,
-`@cas/export`, `@cas/conformal`, `@cas/faber`, `@cas/ui`, `@cas/flow`, `@cas/rigor`) — `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, and `@cas/export` were all extracted later
+`@cas/export`, `@cas/conformal`, `@cas/faber`, `@cas/ui`, `@cas/flow`, `@cas/rigor`, `@cas/monodromy` — the last
+extracted from the plotter at ADR-0047's PRA-3) — `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, and `@cas/export` were all extracted later
 than the phase plan, on the ADR-0007 second-consumer rule; `@cas/exact` and `@cas/schwarz` are each used by
 Complex-Dynamics and Correspondences, `@cas/dynamics` (Böttcher exterior maps + external rays) by
 Complex-Dynamics (its original second consumer, the Riemann-map studio, shed it — see below), and
@@ -1283,7 +1284,7 @@ Roots and coefficients of one polynomial as two draggable point sets over a phas
 group over ℚ in three honest tiers (`=` Sₙ/Aₙ at any degree, `=` to degree 7 by Stauduhar descent, `≈`
 8–15 by statistics); loop monodromy by *certified* continuation (Smith discs in exact arithmetic on the
 dyadic floats, refused by name when a segment cannot be certified); Arnold's Abel–Ruffini proof as
-executed commutator loops. **PRA-0, PRA-1 and PRA-2 have landed**: `apps/polynomial-root-analysis` (port 5185,
+executed commutator loops. **PRA-0 to PRA-3 have landed**: `apps/polynomial-root-analysis` (port 5185,
 namespace `pra`, built but not published until PRA-5) is the two-pane sandbox — typed or dragged
 polynomials over ℂ/ℝ/ℚ, roots and coefficients each draggable, every root in a Smith disc certified in
 exact arithmetic, multiplicities decided by Yun in exact arithmetic, a root-form phase portrait, permalink,
@@ -1294,12 +1295,17 @@ PRA-2 added the Analysis card and overlays — exact Gauss–Lucas hull and cert
 exact discriminant and aⱼ's branch points by two compared routes, certified pseudozero counts (Rouché on
 grid-cell boundaries, falsified by extreme perturbations) over a GLSL pseudozero ladder, trails and the
 gain matrix — lifted KaTeX into `@cas/ui/math`, and brought the app's first browser suite; its sweep's
-test found the ≈ discriminant's sign wrong at half of all degrees.
+test found the ≈ discriminant's sign wrong at half of all degrees. PRA-3 extracted the plotter's monodromy
+stack as **`@cas/monodromy`** (the fourteenth package, `git mv`) and added the CERTIFIED root tracker —
+Smith discs over each segment's two ends, disjoint in exact arithmetic, bisected and refused by name — plus
+loop words, commutators, the derived series and Sₙ/Aₙ recognition; the app's Monodromy card runs lassos,
+words and drawn loops, plays a permutation on the roots, and draws the braid. x⁵ − x − 1's four a₀ lassos
+certify transpositions generating S₅ (order 120, listed).
 Read
 [`docs/polynomial-root-analysis/STATUS.md`](docs/polynomial-root-analysis/STATUS.md) first, then
 [`PLAN.md`](docs/polynomial-root-analysis/PLAN.md) and [`DESIGN.md`](docs/polynomial-root-analysis/DESIGN.md).
 It widens `@cas/exact`
-(factorisation over ℤ, `𝔽ₚ[x]`, Smith discs) and extracts the plotter's monodromy stack into
+(factorisation over ℤ, `𝔽ₚ[x]`, Smith discs) and extracted the plotter's monodromy stack into
 `@cas/monodromy` (ADR-0007, second consumer).
 
 Deferred / exploratory (not started): further correspondence families (circle-and-cardioid → cubic
