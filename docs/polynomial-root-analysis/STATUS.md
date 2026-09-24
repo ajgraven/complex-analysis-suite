@@ -50,6 +50,26 @@ ladder's shader), which joins the root `test:browser` chain.
 
 ## Findings (things learned while executing; each names its step)
 
+- _(PRA-2.1)_ **The exact discriminant is only affordable on an exact layer.** disc(p) in t = aⱼ by
+  Bareiss costs 0.1–0.3 s at degree 15–24 on rational coefficients, but 1.1 s at degree 8 and 21 s at
+  degree 12 on DYADIC ones (a dragged float polynomial). So the exact route runs on the ℚ / typed layer
+  once per commit, and a float polynomial or a drag frame gets the numeric route (`z·q′ − j·q`, `≈`).
+- _(PRA-2.1)_ **The two routes found two defects in each other.** The numeric route stripped z = 0
+  from `z·q′` for every j, dropping z⁴ − 4z² + t's branch point t = 0 (for j = 0 the condition is q′
+  itself). And the exact route solved the whole discriminant, whose DOUBLE roots (z and −z reach the
+  same a₂ on z⁴ − 4z² + 1/3) converged only to √ε — 8.6e-9 against the numeric route; it now solves
+  per squarefree factor, so every branch point is isolated and carries its multiplicity (the number of
+  collisions meeting there).
+- _(PRA-2.1)_ **PLAN's pseudozero gate case does not hold, and is restated.** Under Mosier's
+  COMPONENTWISE relative perturbations (|Δaₖ| ≤ ε|aₖ|, the definition the certificate proves),
+  Wilkinson at ε = 1e-7 does not isolate roots 10–19: one region holds roots 2–20 and runs past the
+  framed view (so it is refused, "reaches the edge of the view"), with root 1 alone. The certified
+  picture is at ε = 1e-12: roots 1–5 each alone, and 6–20 in one region, `= 15`. The certificate is
+  Rouché on the boundary of a union of grid cells — a Taylor lower bound on |p| along each cell edge
+  with an a priori rounding term — and it is FALSIFIED in the suite: 40 polynomials at the extreme of
+  the allowed set, each with exactly the certified number of roots in each certified region. 15–20 ms
+  a view, so it runs on commit, not per drag frame.
+
 - _(PRA-1.1)_ **`smithDiscs` in `Frac` arithmetic took 8.2 s at degree 24**, three orders over the
   8 ms budget: `Frac.of` reduces by gcd on every operation. Rewritten over scaled Gaussian integers
   (one common denominator per side, homogenised Horner, no reduction inside the loops) it took
