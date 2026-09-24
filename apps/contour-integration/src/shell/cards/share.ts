@@ -19,7 +19,7 @@ import { encodeShell } from "../../shell/viewState.js";
 import { shareRefusal } from "../errors.js";
 import { fmtNum } from "../format.js";
 import { h, type Child, type Desc } from "@cas/ui";
-import { mathText } from "../math.js";
+import { mathText } from "@cas/ui/math";
 import { card, type Card, type CardContext } from "./card.js";
 
 /** `=` / `≤` / `≈` / `⚠` as the square stamp `theme.css` draws. `result.ts`'s helper, same shape. */

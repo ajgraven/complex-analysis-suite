@@ -24,7 +24,7 @@ import { loadFamilies } from "../src/families/index.js";
 import { argumentOf } from "../src/shell/argument.js";
 import { DRILL_TASKS } from "../src/shell/drill.js";
 import { defaultState, resolveState } from "../src/shell/state.js";
-import { math, mathSpoken, mathText } from "../src/shell/math.js";
+import { math, mathSpoken, mathText } from "@cas/ui/math";
 import { patch } from "@cas/ui";
 import { TEMPLATES } from "../src/shell/templates.js";
 

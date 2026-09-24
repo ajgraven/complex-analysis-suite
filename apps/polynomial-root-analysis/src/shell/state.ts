@@ -15,6 +15,7 @@ import {
 import { conditioning, type Conditioning } from "../engine/roots/conditioning.js";
 import { rootDiscs, type DiscReport } from "../engine/roots/discs.js";
 import { rootGroups, type GroupReport } from "../engine/roots/multiplicity.js";
+import { analyse, type Analysis } from "../engine/analysis/analyse.js";
 
 /** A pane's camera: the world point at the centre and the half-HEIGHT of the view. */
 export interface Cam {
@@ -35,6 +36,14 @@ export interface ShellState {
   readonly discs: boolean;
   /** Draw the coefficients on the root plane rather than in their own pane. */
   readonly overlay: boolean;
+  /** Critical points and the roots' convex hull (Gauss–Lucas). */
+  readonly critical: boolean;
+  /** The coefficient whose branch points the coefficient pane shows (aⱼ), or null. */
+  readonly coefficient: number | null;
+  /** Keep the roots' trails after a drag is released. */
+  readonly trails: boolean;
+  /** log₁₀ ε of the pseudozero set drawn and certified, or null for none. */
+  readonly pseudozero: number | null;
   readonly rootCam: Cam;
   readonly coeffCam: Cam;
 }
@@ -44,6 +53,10 @@ export const DEFAULT_STATE: ShellState = {
   poly: { kind: "text", text: "z^5 - z - 1" },
   discs: true,
   overlay: false,
+  critical: true,
+  coefficient: 0,
+  trails: false,
+  pseudozero: null,
   rootCam: { cx: 0, cy: 0, half: 1.6 },
   coeffCam: { cx: 0, cy: 0, half: 1.6 },
 };
@@ -55,6 +68,7 @@ export interface Resolution {
   readonly discs: DiscReport | null;
   readonly groups: GroupReport | null;
   readonly conditioning: readonly Conditioning[] | null;
+  readonly analysis: Analysis | null;
 }
 
 /** Build the polynomial a state names, continuing root labels from `prev` when given. */
@@ -82,15 +96,31 @@ export function buildPolynomial(
 
 export function resolveState(s: ShellState, prev?: Continuation): Resolution {
   const built = buildPolynomial(s, prev);
-  if (!built.ok)
+  if (!built.ok) {
     return {
       poly: null,
       refusal: built.reason,
       discs: null,
       groups: null,
       conditioning: null,
+      analysis: null,
     };
-  const poly = built.poly;
+  }
+  return resolvePolynomial(built.poly, s, false);
+}
+
+/** The pseudozero certificate is made over the root pane's (square) view. */
+export function rootRange(s: ShellState): [number, number, number, number] {
+  const c = s.rootCam;
+  return [c.cx - c.half, c.cx + c.half, c.cy - c.half, c.cy + c.half];
+}
+
+/** Everything computed about a polynomial the state (or a drag frame, `drag`) holds. */
+export function resolvePolynomial(
+  poly: Polynomial,
+  s: ShellState,
+  drag: boolean,
+): Resolution {
   const discs = rootDiscs(poly);
   return {
     poly,
@@ -98,6 +128,12 @@ export function resolveState(s: ShellState, prev?: Continuation): Resolution {
     discs,
     groups: rootGroups(poly, discs),
     conditioning: conditioning(poly),
+    analysis: analyse(poly, discs, {
+      coefficient: s.coefficient,
+      pseudozero: s.pseudozero,
+      range: rootRange(s),
+      drag,
+    }),
   };
 }
 

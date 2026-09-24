@@ -24,7 +24,17 @@ export const PANE = {
 export const CARD = {
   polynomial: "Polynomial",
   roots: "Roots",
+  analysis: "Analysis",
   view: "View",
+} as const;
+
+export const ANALYSIS = {
+  critical:
+    "The critical points — the zeros of p′ — are where the field of unit charges at the roots vanishes: p′/p = Σ 1/(z − rᵢ) = 0. Gauss–Lucas: they lie in the convex hull of the roots.",
+  branch: (j: number): string =>
+    `Moving a${j} alone, two roots collide exactly where the discriminant vanishes; a loop around one of these points swaps two roots.`,
+  pseudozero:
+    "The shaded set holds every root of every polynomial whose coefficients are within ε of these, coefficient by coefficient (|Δaₖ| ≤ ε|aₖ|).",
 } as const;
 
 /** The claim a certified disc component makes, worded for a reader. */
@@ -58,6 +68,14 @@ export const METHOD = {
   multiplicityExact: "decided in exact arithmetic on the rational coefficients",
   cluster: "read off the inclusion discs, which cannot separate the roots inside them",
   kappa: "how far this root moves per relative change in the coefficients",
+  discriminantExact: "computed exactly from the rational coefficients",
+  discriminantApprox: "the product of the squared root differences, in floating point",
+  branchExact:
+    "each proved in exact arithmetic to hold exactly one zero of the discriminant",
+  branchNumeric: "numerical — the coefficient-plane condition z·q′ − j·q = 0",
+  hullCheck: "checked exactly on the plotted points",
+  pseudozero:
+    "proved on the region's boundary, where every such polynomial stays away from zero",
 } as const;
 
 /** Words the screen must never carry — the house names of the methods behind it. */
@@ -74,4 +92,8 @@ export const DENYLIST: readonly RegExp[] = [
   /\bdyadic\b/i,
   /\bBigInt\b/,
   /\btier\b/i,
+  /\bRouch[eé]\b/,
+  /\bMosier\b/,
+  /\bBareiss\b/,
+  /\bTaylor\b/,
 ];

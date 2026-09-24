@@ -27,7 +27,7 @@ import {
   type ShellState,
 } from "../src/shell/state.js";
 import { patch } from "@cas/ui";
-import { mathSpoken } from "../src/shell/math.js";
+import { mathSpoken } from "@cas/ui/math";
 import { fmt } from "../src/kernel/decimal.js";
 import { render } from "../src/shell/render.js";
 import { defaultSession } from "../src/shell/session.js";

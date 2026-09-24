@@ -17,7 +17,7 @@ import { TAXONOMY_SECTIONS } from "../src/families/schema.js";
 import { createFrontDoor, frontDoorState, FRONT_DOOR_GROUPS, FRONT_ROW, type FrontDoorDialog } from "../src/shell/frontDoor.js";
 import { defaultState, resolveState, type ShellState } from "../src/shell/state.js";
 import { circleTemplate } from "../src/engine/contour/templates.js";
-import { mathPlain, splitMath } from "../src/shell/math.js";
+import { mathPlain, splitMath } from "@cas/ui/math";
 import { DRILL_TASKS, type DrillTask } from "../src/shell/drill.js";
 import { PROGRESS_KEY, stageFor, type DrillProgress, type KeyStore } from "../src/shell/drillProgress.js";
 

@@ -503,6 +503,9 @@ importers:
       '@cas/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      katex:
+        specifier: ^0.17.0
+        version: 0.17.0
     devDependencies:
       '@eslint/js':
         specifier: ^9.17.0
@@ -955,6 +958,10 @@ importers:
         version: 2.1.9(@types/node@26.1.1)(@vitest/browser@2.1.9)(jsdom@26.1.0)(msw@2.15.0(@types/node@26.1.1)(typescript@5.9.3))(terser@5.48.0)
 
   packages/ui:
+    dependencies:
+      katex:
+        specifier: ^0.17.0
+        version: 0.17.0
     devDependencies:
       '@eslint/js':
         specifier: ^9.17.0

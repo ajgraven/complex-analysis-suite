@@ -19,7 +19,7 @@ import type { ShellState } from "./state.js";
 import { h, patch, type Child, type Desc } from "@cas/ui";
 import { DRILL_TASKS, type DrillTask } from "./drill.js";
 import { LAST_STAGE, isComplete, readProgress, stageFor, type KeyStore } from "./drillProgress.js";
-import { math, mathSpoken, mathText } from "./math.js";
+import { math, mathSpoken, mathText } from "@cas/ui/math";
 import { createModal } from "./modal.js";
 
 /**

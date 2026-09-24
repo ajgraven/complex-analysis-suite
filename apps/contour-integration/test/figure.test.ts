@@ -10,7 +10,7 @@ import { FIGURE_THEMES, figureCaption, figureLayout, figureMetadata } from "../s
 import { compile, defaultState, offeredCorpus, resolveState, type ShellState } from "../src/shell/state.js";
 import { ledgerHeadline, type LedgerResult } from "../src/engine/ledger.js";
 import { HEADLINES } from "../src/engine/vocabulary.js";
-import { mathSpoken } from "../src/shell/math.js";
+import { mathSpoken } from "@cas/ui/math";
 import { TEMPLATES } from "../src/shell/templates.js";
 import { decodeShell, encodeShell } from "../src/shell/viewState.js";
 import type { ContourIntegral } from "../src/engine/contour/integrate.js";

@@ -55,7 +55,7 @@ import {
 import { type TemplateId } from "./templates.js";
 import { constraintLabel, disposalLabel, templateLabel } from "../engine/vocabulary.js";
 import { h, type Child, type Desc } from "@cas/ui";
-import { mathPlain, mathSpoken, mathText } from "./math.js";
+import { mathPlain, mathSpoken, mathText } from "@cas/ui/math";
 import type { Session } from "./session.js";
 import { card, type CardContext } from "./cards/card.js";
 

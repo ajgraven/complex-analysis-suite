@@ -25,7 +25,7 @@ import { findPoles } from "../src/kernel/poles.js";
 import { pointAt } from "../src/kernel/geom.js";
 import { translateContour } from "../src/engine/contour/edit.js";
 import { STAGE_MODES } from "../src/ui/stage/mode.js";
-import { math, mathPlain, mathText, renderedCount } from "../src/shell/math.js";
+import { math, mathPlain, mathText, renderedCount } from "@cas/ui/math";
 import { mountShell2 } from "../src/shell/app.js";
 import { createStageController } from "../src/shell/stageController.js";
 import { createStageView } from "../src/shell/stageView.js";

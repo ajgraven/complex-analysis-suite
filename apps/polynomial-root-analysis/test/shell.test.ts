@@ -269,6 +269,10 @@ describe("applyState restores a state the app is NOT in (M6.1's test, not the fi
     poly: { kind: "text", text: "z^4 - 2" },
     discs: true,
     overlay: false,
+    critical: true,
+    coefficient: 0,
+    trails: false,
+    pseudozero: null,
     rootCam: { cx: 0.25, cy: -0.5, half: 2 },
     coeffCam: { cx: 1, cy: 0, half: 3 },
   };
@@ -285,6 +289,10 @@ describe("applyState restores a state the app is NOT in (M6.1's test, not the fi
     },
     discs: false,
     overlay: true,
+    critical: false,
+    coefficient: 2,
+    trails: true,
+    pseudozero: -8,
     rootCam: { cx: -1, cy: 2, half: 0.75 },
     coeffCam: { cx: 0, cy: 0, half: 1.5 },
   };
@@ -306,7 +314,16 @@ describe("applyState restores a state the app is NOT in (M6.1's test, not the fi
           '.rail-left input[type="checkbox"]',
         ),
       ];
-      expect(boxes.map((b) => b.checked)).toEqual([to.overlay, to.discs]);
+      expect(boxes.map((b) => b.checked)).toEqual([
+        to.overlay,
+        to.discs,
+        to.critical,
+        to.trails,
+        to.pseudozero !== null,
+      ]);
+      expect(q<HTMLSelectElement>(".rail-left select").value).toBe(
+        to.coefficient === null ? "none" : String(to.coefficient),
+      );
       expect(q<HTMLInputElement>(`.rail-left input[value="${to.ring}"]`).checked).toBe(
         true,
       );
@@ -447,5 +464,66 @@ describe("the figure caption wraps rather than being cut off", () => {
     expect(lines.length).toBeGreaterThan(1);
     for (const l of lines) expect(7 * l.length).toBeLessThanOrEqual(200);
     expect(lines.join(" ")).toBe(text);
+  });
+});
+
+describe("the Analysis card", () => {
+  const card = (): HTMLElement => q('section[aria-labelledby="card-analysis"]');
+
+  it("states the discriminant exactly, the critical points against the hull, and aⱼ's branch points", () => {
+    mount();
+    // disc(z⁵ + az + b) = 5⁵b⁴ + 4⁴a⁵; at a = −1, b = −1 that is 3125 − 256.
+    const disc = card().querySelector(".claim");
+    expect(disc?.querySelector(".level")?.getAttribute("data-level")).toBe("=");
+    expect(disc?.querySelector("[aria-label]")?.getAttribute("aria-label")).toBe(
+      "discriminant 2869",
+    );
+    expect(card().textContent).toMatch(/4 critical points, all inside the convex hull/);
+    // As a polynomial in a₀: Δ(a₀) = 3125a₀⁴ − 256 — four branch points.
+    expect(card().textContent).toMatch(/4 branch points of a₀/);
+    expect(card().querySelectorAll(".branch-list li")).toHaveLength(4);
+    expect(
+      card().querySelector(".formula [aria-label]")?.getAttribute("aria-label"),
+    ).toBe("the discriminant as a polynomial in a0");
+  });
+
+  it("is honest during a drag: no exact Δ, no pseudozero count, until release", () => {
+    const { app } = mount();
+    app.applyState({ ...DEFAULT_STATE, pseudozero: -8 });
+    expect(card().querySelectorAll(".regions li").length).toBeGreaterThan(0);
+    app.actions().moveTo({ kind: "root", index: 0 }, [1.3, 0.05]);
+    expect(card().querySelector(".claim")?.textContent).toMatch(/Δ ≈/);
+    expect(card().textContent).toMatch(/Certified when the drag is released/);
+    app.actions().release();
+    expect(card().querySelectorAll(".regions li").length).toBeGreaterThan(0);
+  });
+
+  it("counts every root inside a certified pseudozero region, and the counts add to the degree", () => {
+    const { app } = mount();
+    app.applyState({ ...DEFAULT_STATE, pseudozero: -8 });
+    const a = app.live().analysis;
+    const regions = a?.pseudozero?.regions ?? [];
+    expect(regions.length).toBe(5);
+    expect(regions.every((g) => g.certified && g.count === 1)).toBe(true);
+    const items = [...card().querySelectorAll(".regions li")];
+    for (const li of items)
+      expect(li.querySelector(".level")?.getAttribute("data-level")).toBe("=");
+  });
+
+  it("drops the branch points when no coefficient is selected, and the critical row when unticked", () => {
+    const { app } = mount();
+    app.applyState({ ...DEFAULT_STATE, coefficient: null, critical: false });
+    expect(card().querySelector(".branch")).toBeNull();
+    expect(card().textContent).not.toMatch(/critical point/);
+  });
+
+  it("never carries a house name, with every analysis layer on", () => {
+    const { app } = mount();
+    app.applyState({ ...DEFAULT_STATE, pseudozero: -4, coefficient: 2, trails: true });
+    const labels = [...document.querySelectorAll("[aria-label]")]
+      .map((e) => e.getAttribute("aria-label"))
+      .join("\n");
+    for (const bad of DENYLIST)
+      expect(`${document.body.textContent}\n${labels}`).not.toMatch(bad);
   });
 });

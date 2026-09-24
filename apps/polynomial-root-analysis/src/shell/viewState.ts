@@ -6,7 +6,13 @@
 // else: `null` means "no link", a string means "a link, and why it cannot be opened".
 import { decodeViewState, encodeViewState } from "@cas/interchange";
 import { MAX_DEGREE, type Cx, type Ring } from "../engine/polynomial.js";
-import { buildPolynomial, type Cam, type PolySpec, type ShellState } from "./state.js";
+import {
+  DEFAULT_STATE,
+  buildPolynomial,
+  type Cam,
+  type PolySpec,
+  type ShellState,
+} from "./state.js";
 
 export const NAMESPACE = "pra";
 
@@ -18,6 +24,11 @@ interface Wire {
   l?: [number, number];
   d: 0 | 1;
   o: 0 | 1;
+  /** Added at PRA-2; a PRA-1 link carries none of these and opens on the defaults. */
+  cr?: 0 | 1;
+  j?: number | null;
+  tr?: 0 | 1;
+  pz?: number | null;
   rc: [number, number, number];
   cc: [number, number, number];
   [k: string]: unknown;
@@ -31,6 +42,10 @@ export function encodeShell(s: ShellState): string {
     r: s.ring,
     d: s.discs ? 1 : 0,
     o: s.overlay ? 1 : 0,
+    cr: s.critical ? 1 : 0,
+    j: s.coefficient,
+    tr: s.trails ? 1 : 0,
+    pz: s.pseudozero,
     rc: cam(s.rootCam),
     cc: cam(s.coeffCam),
   };
@@ -101,16 +116,40 @@ export function decodeShell(hash: string): Decoded | null {
   if (typeof rc === "string") return { ok: false, reason: rc };
   const cc = camOf(w.cc, "coefficient");
   if (typeof cc === "string") return { ok: false, reason: cc };
+  const j = w.j === undefined ? DEFAULT_STATE.coefficient : w.j;
+  if (
+    j !== null &&
+    (typeof j !== "number" || !Number.isInteger(j) || j < 0 || j > MAX_DEGREE)
+  ) {
+    return { ok: false, reason: `'${String(j)}' does not name a coefficient` };
+  }
+  const pz = w.pz === undefined ? DEFAULT_STATE.pseudozero : w.pz;
+  if (pz !== null && (!finite(pz) || pz < -17 || pz > 0)) {
+    return {
+      ok: false,
+      reason: `the pseudozero level ε = 10^${String(pz)} is outside 10⁻¹⁷ … 1`,
+    };
+  }
   const state: ShellState = {
     ring,
     poly,
     discs: w.d !== 0,
     overlay: w.o === 1,
+    critical: w.cr === undefined ? DEFAULT_STATE.critical : w.cr !== 0,
+    coefficient: j as number | null,
+    trails: w.tr === 1,
+    pseudozero: pz as number | null,
     rootCam: rc,
     coeffCam: cc,
   };
   // A link naming a polynomial this app would refuse is refused here, with the same reason.
   const built = buildPolynomial(state);
   if (!built.ok) return { ok: false, reason: built.reason };
+  if (j !== null && j > built.poly.degree) {
+    return {
+      ok: false,
+      reason: `the link selects a${j} of a degree-${built.poly.degree} polynomial`,
+    };
+  }
   return { ok: true, state };
 }

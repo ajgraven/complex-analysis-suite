@@ -14,7 +14,7 @@ import { declaredOrder } from "../../shell/state.js";
 import type { ContourIntegral } from "../../engine/contour/integrate.js";
 import { tagLabel } from "../../engine/vocabulary.js";
 import { h, type Desc } from "@cas/ui";
-import { math, mathText } from "../math.js";
+import { math, mathText } from "@cas/ui/math";
 import { card, nothing, type Card } from "./card.js";
 import { drillMask } from "../drillPanel.js";
 

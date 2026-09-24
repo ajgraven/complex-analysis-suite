@@ -24,7 +24,7 @@ import { shellMode, type ShellMode } from "./state.js";
 import { STAGE_MODE_LABELS, STAGE_MODES } from "../ui/stage/mode.js";
 import type { CardContext } from "./cards/card.js";
 import { h, type Desc } from "@cas/ui";
-import { math } from "./math.js";
+import { math } from "@cas/ui/math";
 
 /** The three positions, in the order they fade: the app as it is, then with its argument shown, then masked. */
 const MODES: readonly { readonly id: ShellMode; readonly label: string; readonly hint: string }[] = [

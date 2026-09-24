@@ -33,7 +33,7 @@ import type { ContourIntegral } from "../../engine/contour/integrate.js";
 import type { LedgerResult, LedgerRow } from "../../engine/ledger.js";
 import type { LemmaId, Piece, PieceRole } from "../../engine/contour/model.js";
 import { h, type Child } from "@cas/ui";
-import { mathSpoken, mathText } from "../math.js";
+import { mathSpoken, mathText } from "@cas/ui/math";
 import { card, nothing, type Card } from "./card.js";
 
 /**

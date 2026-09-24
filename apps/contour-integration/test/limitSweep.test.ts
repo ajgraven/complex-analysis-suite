@@ -19,7 +19,7 @@ import { argumentOf, stepIndex } from "../src/shell/argument.js";
 import { defaultSession, type Session, type SweepRow } from "../src/shell/session.js";
 import { planSweep } from "../src/shell/sweep.js";
 import type { ShellActions } from "../src/shell/cards/card.js";
-import { mathSpoken } from "../src/shell/math.js";
+import { mathSpoken } from "@cas/ui/math";
 
 function spyActions(): ShellActions & { calls: string[] } {
   const calls: string[] = [];

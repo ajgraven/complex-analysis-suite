@@ -29,7 +29,7 @@ import { h, type Child, type Desc } from "@cas/ui";
 import { scrub } from "../scrub.js";
 import { planSweep } from "../sweep.js";
 import type { Param } from "../../engine/contour/model.js";
-import { math, mathSpoken, mathText } from "../math.js";
+import { math, mathSpoken, mathText } from "@cas/ui/math";
 import { card, disclosure, nothing, type Card, type CardContext } from "./card.js";
 
 /** `=` / `≤` / `≈` / `⚠` as the square stamp `theme.css` draws. The Result card's own helper. */

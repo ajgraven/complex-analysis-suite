@@ -18,7 +18,7 @@ import { arcThroughBulge, bulgeFromApex, penContour } from "../engine/contour/pe
 import { clampView, panBy, scale, screenToPlot, zoomAt, type View, type Viewport } from "../kernel/camera.js";
 import { isOriginCentred, pointAt, type Cx, type Resolved } from "../kernel/geom.js";
 import type { PoleReport } from "../kernel/poles.js";
-import { mathSpoken } from "./math.js";
+import { mathSpoken } from "@cas/ui/math";
 import { drawnContour } from "./state.js";
 import type { ShellState, StateResolution } from "./state.js";
 import { NO_HOVER } from "./session.js";

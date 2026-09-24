@@ -38,7 +38,7 @@ import { degrees, stepDetail } from "./stepDetail.js";
 import type { ShellState, StateResolution } from "./state.js";
 import { fmtApprox, fmtNum } from "./format.js";
 import { fmtCx } from "../kernel/decimal.js";
-import { mathText } from "./math.js";
+import { mathText } from "@cas/ui/math";
 import type { Session } from "./session.js";
 
 /** Everything the strip needs that it cannot read off the state. */

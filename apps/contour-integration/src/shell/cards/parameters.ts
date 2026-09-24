@@ -20,7 +20,7 @@ import { fmt } from "../../kernel/decimal.js";
 import { paramChannel } from "../../shell/state.js";
 import type { Param } from "../../engine/contour/model.js";
 import { limitTag, paramSymbol, tagLabel } from "../../engine/vocabulary.js";
-import { mathSpoken, mathText } from "../math.js";
+import { mathSpoken, mathText } from "@cas/ui/math";
 import { h, type Desc } from "@cas/ui";
 import { card, nothing, type Card } from "./card.js";
 

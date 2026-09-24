@@ -1,5 +1,9 @@
 // Typeset mathematics as builder descriptions, rendered once per distinct formula.
 //
+// Moved from Contour Integration's M8 shell into @cas/ui (subpath `@cas/ui/math`, so an app that
+// typesets nothing never loads KaTeX) when Polynomial Root Analysis became its second consumer
+// (ADR-0047). "Step" references below are Contour Integration's M8 plan.
+//
 // M8 step 1.1, plan §4.0. The old shell calls `mathFragment` and builds a `DocumentFragment` every
 // time a card is drawn, which means KaTeX parses `\oint_\gamma f(z)\,dz` again on every frame of a
 // contour drag. Here a formula is a keyed description whose `html` is looked up in a cache, so a
@@ -12,7 +16,7 @@
 // stray dollar swallows the rest of a sentence.
 import katex from "katex";
 
-import { h, type Desc } from "@cas/ui";
+import { h, type Desc } from "./dom.js";
 
 /**
  * LaTeX source → KaTeX's HTML, **bounded**.
@@ -71,7 +75,14 @@ function render(latex: string, display: boolean): string {
  *
  * `role="math"` names what it is without claiming an image.
  */
-export function math(latex: string, opts: { readonly display?: boolean; readonly key?: string; readonly label?: string } = {}): Desc {
+export function math(
+  latex: string,
+  opts: {
+    readonly display?: boolean;
+    readonly key?: string;
+    readonly label?: string;
+  } = {},
+): Desc {
   const display = opts.display ?? false;
   return h("span", {
     ...(opts.key === undefined ? {} : { key: opts.key }),
@@ -99,7 +110,13 @@ export function mathText(sentence: string, keyPrefix = "m"): readonly Desc[] {
   const out: Desc[] = [];
   parts.forEach((part, i) => {
     if (i % 2 === 0) {
-      if (part !== "") out.push({ tag: "#text", key: `${keyPrefix}t${i}`, props: { nodeValue: part }, children: [] });
+      if (part !== "")
+        out.push({
+          tag: "#text",
+          key: `${keyPrefix}t${i}`,
+          props: { nodeValue: part },
+          children: [],
+        });
       return;
     }
     // **No label.** A `$…$` fragment of a sentence has no text twin — that is what distinguishes
@@ -201,19 +218,21 @@ const SPOKEN: Readonly<Record<string, string>> = {
  * `test/spoken.test.ts`'s corpus sweep instead of vanishing into a name that reads almost right.
  */
 export function mathSpoken(text: string): string {
-  return mathPlain(text)
-    // **A spacing macro is a space.** `\,` `\;` `\:` `\!` are not `\word`s, so the map below cannot
-    // see them; the sandbox headline's `f(z)\,dz` came out with its backslash still in it.
-    .replace(/\\[,;:!]/g, " ")
-    // An operator name is its own word: `\operatorname{Im} z` is *Im z*.
-    .replace(/\\(?:operatorname|mathrm|mathbf|mathbb|text)\s*\{([^{}]*)\}/g, "$1")
-    // A bare superscript sign is a direction of approach, and only where nothing follows it —
-    // `2\pi^-` is a limit from below, where `z^{-1}` is an exponent and must be left alone.
-    .replace(/\^\{?\+\}?(?![\w])/g, " from above")
-    .replace(/\^\{?-\}?(?![\w])/g, " from below")
-    .replace(/\\[a-zA-Z]+/g, (m) => SPOKEN[m] ?? m)
-    .replace(/\s+/g, " ")
-    .trim();
+  return (
+    mathPlain(text)
+      // **A spacing macro is a space.** `\,` `\;` `\:` `\!` are not `\word`s, so the map below cannot
+      // see them; the sandbox headline's `f(z)\,dz` came out with its backslash still in it.
+      .replace(/\\[,;:!]/g, " ")
+      // An operator name is its own word: `\operatorname{Im} z` is *Im z*.
+      .replace(/\\(?:operatorname|mathrm|mathbf|mathbb|text)\s*\{([^{}]*)\}/g, "$1")
+      // A bare superscript sign is a direction of approach, and only where nothing follows it —
+      // `2\pi^-` is a limit from below, where `z^{-1}` is an exponent and must be left alone.
+      .replace(/\^\{?\+\}?(?![\w])/g, " from above")
+      .replace(/\^\{?-\}?(?![\w])/g, " from below")
+      .replace(/\\[a-zA-Z]+/g, (m) => SPOKEN[m] ?? m)
+      .replace(/\s+/g, " ")
+      .trim()
+  );
 }
 
 /** How many distinct formulas have been typeset. For the test that proves the cache is a cache. */

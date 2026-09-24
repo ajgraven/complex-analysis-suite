@@ -24,7 +24,7 @@ import { ledgerHeadline, valueRefusal, type LedgerResult } from "../engine/ledge
 import type { ContourIntegral } from "../engine/contour/integrate.js";
 import type { ResidueTheoremResult } from "../engine/residueTheorem.js";
 import type { SolvedValue } from "../families/solveTarget.js";
-import { mathSpoken } from "./math.js";
+import { mathSpoken } from "@cas/ui/math";
 import type { FigurePlate } from "./stageView.js";
 
 /** Where each piece of the plate goes, in device pixels. */

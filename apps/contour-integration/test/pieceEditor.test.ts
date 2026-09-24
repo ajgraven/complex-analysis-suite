@@ -16,7 +16,7 @@ import { semicircleTemplate } from "../src/engine/contour/templates.js";
 import { splitPieceAt, translateContour } from "../src/engine/contour/edit.js";
 import type { Cx } from "../src/kernel/geom.js";
 import { sameShape } from "../src/engine/contour/pen.js";
-import { mathSpoken } from "../src/shell/math.js";
+import { mathSpoken } from "@cas/ui/math";
 import { decodeShell, encodeShell } from "../src/shell/viewState.js";
 import { compile, defaultState, resolveState, type ShellState } from "../src/shell/state.js";
 

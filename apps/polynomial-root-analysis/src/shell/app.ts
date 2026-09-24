@@ -16,9 +16,6 @@ import {
 } from "../engine/polynomial.js";
 import { parsePolynomial } from "../engine/parse.js";
 import { snapRational } from "../engine/rational.js";
-import { conditioning } from "../engine/roots/conditioning.js";
-import { rootDiscs } from "../engine/roots/discs.js";
-import { rootGroups } from "../engine/roots/multiplicity.js";
 import { APP_NAME, PANE } from "../engine/vocabulary.js";
 import {
   scaleOf,
@@ -43,6 +40,7 @@ import { leftRail, rightRail } from "./rails.js";
 import {
   DEFAULT_STATE,
   frame,
+  resolvePolynomial,
   resolveState,
   specOf,
   type Cam,
@@ -188,6 +186,8 @@ export function mountApp(host: HTMLElement): App {
   let ringRefusal: string | null = null;
   let copyStatus = "";
   let pendingText: string | null = null;
+  /** Root trails by LABEL, for the drag in progress (and kept after it when `state.trails`). */
+  const trails = new Map<number, Cx[]>();
 
   const initial = decodeShell(win?.location.hash ?? "");
   if (initial?.ok) {
@@ -310,14 +310,14 @@ export function mountApp(host: HTMLElement): App {
     }
     if (!built.ok) return;
     const poly = built.poly;
-    const discs = rootDiscs(poly);
-    live = {
-      poly,
-      refusal: null,
-      discs,
-      groups: rootGroups(poly, discs),
-      conditioning: conditioning(poly),
-    };
+    live = resolvePolynomial(poly, state, true);
+    // The root locus: each label's positions over this drag (DESIGN §4.2), cleared on release unless
+    // the reader keeps them. Seeded with where the root started, so the first frame draws a segment.
+    if (trails.size === 0 && p) p.roots.forEach((r, i) => trails.set(p.labels[i], [r]));
+    poly.roots.forEach((r, i) => {
+      const t0 = trails.get(poly.labels[i]);
+      if (t0 && t0.length < 4000) t0.push(r);
+    });
     dragging = t;
     render();
   }
@@ -333,6 +333,9 @@ export function mountApp(host: HTMLElement): App {
     dragging = null;
     const p = live.poly;
     if (!t || !p) return;
+    if (!state.trails) trails.clear();
+    // Dragging a coefficient is choosing it: its branch points are what the drag is moving through.
+    const coefficient = t.kind === "coeff" ? t.index : state.coefficient;
     if (state.ring === "Q") {
       // Snap: a coefficient drag snaps the one coefficient that moved; a root drag moved them all.
       const prevExact = resolution.poly?.exact ?? null;
@@ -347,10 +350,17 @@ export function mountApp(host: HTMLElement): App {
         render();
         return;
       }
-      commit({ ...state, poly: { kind: "text", text: renderQiPolyText(exact, "z") } }, p);
+      commit(
+        {
+          ...state,
+          coefficient,
+          poly: { kind: "text", text: renderQiPolyText(exact, "z") },
+        },
+        p,
+      );
       return;
     }
-    commit({ ...state, poly: specOf(p) }, p);
+    commit({ ...state, coefficient, poly: specOf(p) }, p);
   }
 
   // ── Pointer: drag a point, or pan the pane; the wheel zooms about the cursor.
@@ -625,6 +635,10 @@ export function mountApp(host: HTMLElement): App {
           poly: p,
           overlay: state.overlay,
           discs: state.discs,
+          critical: state.critical,
+          coefficient: state.coefficient,
+          trails: state.trails,
+          pseudozero: state.pseudozero,
           canUndo: undoStack.length > 0,
           canRedo: redoStack.length > 0,
           copyStatus,
@@ -634,6 +648,13 @@ export function mountApp(host: HTMLElement): App {
           onRing: setRing,
           onOverlay: (on) => commit({ ...state, overlay: on }),
           onDiscs: (on) => commit({ ...state, discs: on }),
+          onCritical: (on) => commit({ ...state, critical: on }),
+          onCoefficient: (j) => commit({ ...state, coefficient: j }),
+          onTrails: (on) => {
+            if (!on) trails.clear();
+            commit({ ...state, trails: on });
+          },
+          onPseudozero: (lv) => commit({ ...state, pseudozero: lv }),
           onUndo: undo,
           onRedo: redo,
           onCopyLink: () => void copyLink(),
@@ -646,6 +667,9 @@ export function mountApp(host: HTMLElement): App {
       rightRail({
         ...live,
         selectedRoot: selected?.kind === "root" ? selected.index : null,
+        coefficient: state.coefficient,
+        critical: state.critical,
+        pseudozero: state.pseudozero,
       }),
     );
     stage.dataset.overlay = state.overlay ? "true" : "false";

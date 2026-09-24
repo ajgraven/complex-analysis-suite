@@ -15,7 +15,7 @@
 // where a hit and a miss are indistinguishable by size alone.
 import { describe, expect, it } from "vitest";
 
-import { math, renderCacheHolds, renderCacheLimit, renderedCount } from "../src/shell/math.js";
+import { math, renderCacheHolds, renderCacheLimit, renderedCount } from "@cas/ui/math";
 
 describe("the KaTeX cache", () => {
   it("stays under its ceiling, and evicts what was not asked for again", () => {

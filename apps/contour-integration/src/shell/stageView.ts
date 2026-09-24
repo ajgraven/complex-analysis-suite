@@ -40,7 +40,7 @@ import { drawnContour } from "./state.js";
 import type { ShellState, StateResolution } from "./state.js";
 import { h, patch } from "@cas/ui";
 import { readout } from "./readout.js";
-import { mathSpoken, mathText } from "./math.js";
+import { mathSpoken, mathText } from "@cas/ui/math";
 import type { Session } from "./session.js";
 import { stableKey } from "./stableKey.js";
 import { argumentOf, stepIndex } from "./argument.js";

@@ -3,6 +3,8 @@
 import { estimate, exact, refuse, type Certificate } from "@cas/rigor";
 import type { DiscReport } from "./roots/discs.js";
 import type { GroupReport, RootGroup } from "./roots/multiplicity.js";
+import type { Analysis } from "./analysis/analyse.js";
+import type { PseudozeroRegion } from "./analysis/pseudozero.js";
 import { METHOD, discClaim, multiplicityClaim } from "./vocabulary.js";
 
 export function coordinateCert(): Certificate {
@@ -40,4 +42,44 @@ export function groupCerts(report: GroupReport): Certificate[] {
 
 export function kappaCert(): Certificate {
   return estimate("condition number", METHOD.kappa);
+}
+
+export function discriminantCert(a: Analysis): Certificate {
+  return a.discriminant
+    ? exact("the discriminant", METHOD.discriminantExact)
+    : estimate("the discriminant", METHOD.discriminantApprox);
+}
+
+export function branchCert(a: Analysis): Certificate | null {
+  if (!a.branch) return null;
+  if (a.branch.route === "numeric")
+    return estimate("the branch points", METHOD.branchNumeric);
+  const allIsolated = a.branch.discs.every(
+    (d) => d.ok && d.discs.every((x) => x.count === 1),
+  );
+  return allIsolated
+    ? exact("each branch point in its disc", METHOD.branchExact)
+    : estimate("the branch points", "their discs could not be separated");
+}
+
+export function hullCert(a: Analysis): Certificate | null {
+  if (!a.critical) return null;
+  return a.critical.inHull
+    ? exact(
+        "every plotted critical point is in the hull of the plotted roots",
+        METHOD.hullCheck,
+      )
+    : refuse(
+        "every plotted critical point is in the hull of the plotted roots",
+        "a plotted critical point lies OUTSIDE it, so the plotted points are not accurate enough",
+      );
+}
+
+export function regionCert(g: PseudozeroRegion): Certificate {
+  return g.certified
+    ? exact(
+        `every polynomial within ε has exactly ${g.count} root${g.count === 1 ? "" : "s"} here`,
+        METHOD.pseudozero,
+      )
+    : refuse("a count for this region", g.reason ?? "not shown");
 }

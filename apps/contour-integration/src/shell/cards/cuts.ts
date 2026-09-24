@@ -34,7 +34,7 @@ import { effectiveBranch } from "../../kernel/branch/model.js";
 import { isoShown } from "../../ui/stage/mode.js";
 import { h, type Child } from "@cas/ui";
 import { drawnBranch } from "../stageView.js";
-import { mathSpoken, mathText } from "../math.js";
+import { mathSpoken, mathText } from "@cas/ui/math";
 import { card, type Card } from "./card.js";
 
 /** The two windows the sandbox offers. Both appear in the tier-D gallery. */

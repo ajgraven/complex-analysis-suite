@@ -13,7 +13,7 @@ import { describe, expect, it } from "vitest";
 import katex from "katex";
 
 import { loadFamilies } from "../src/families/index.js";
-import { splitMath } from "../src/shell/math.js";
+import { splitMath } from "@cas/ui/math";
 
 const FAMILIES = [...loadFamilies().families.values()];
 const METHODS = FAMILIES.flatMap((f) =>

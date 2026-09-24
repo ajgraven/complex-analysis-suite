@@ -12,6 +12,29 @@ import { CARD, RING_HINT, RING_LABEL } from "../engine/vocabulary.js";
 import { labelColour } from "../ui/camera.js";
 import { subscript } from "../ui/ink.js";
 import { formatCx, formatGauss } from "./format.js";
+import type { Analysis } from "../engine/analysis/analyse.js";
+import { analysisCard } from "./analysisCard.js";
+
+/** How far a root moves per unit of aⱼ — the gauge a drag of aⱼ is read against (≈). */
+function gainRow(gain: number | undefined, j: number): Desc | null {
+  if (gain === undefined) return null;
+  const shown = Number.isFinite(gain) ? gain.toPrecision(3) : "∞";
+  // A bar on a log scale: 1 at a tenth of the width, 10⁶ and beyond full.
+  const w = Number.isFinite(gain)
+    ? Math.max(2, Math.min(100, 10 + 15 * Math.log10(Math.max(gain, 1e-3))))
+    : 100;
+  return h(
+    "span",
+    { key: "gain", class: "root-gain" },
+    h("span", {
+      key: "bar",
+      class: "gain-bar",
+      style: `width:${w.toFixed(0)}%`,
+      "aria-hidden": "true",
+    }),
+    `moves ≈ ${shown} per unit of a${subscript(j)}`,
+  );
+}
 
 export interface LeftModel {
   readonly text: string;
@@ -21,6 +44,10 @@ export interface LeftModel {
   readonly poly: Polynomial | null;
   readonly overlay: boolean;
   readonly discs: boolean;
+  readonly critical: boolean;
+  readonly coefficient: number | null;
+  readonly trails: boolean;
+  readonly pseudozero: number | null;
   readonly canUndo: boolean;
   readonly canRedo: boolean;
   readonly copyStatus: string;
@@ -31,6 +58,10 @@ export interface LeftHandlers {
   readonly onRing: (ring: Ring) => void;
   readonly onOverlay: (on: boolean) => void;
   readonly onDiscs: (on: boolean) => void;
+  readonly onCritical: (on: boolean) => void;
+  readonly onCoefficient: (j: number | null) => void;
+  readonly onTrails: (on: boolean) => void;
+  readonly onPseudozero: (log10eps: number | null) => void;
   readonly onUndo: () => void;
   readonly onRedo: () => void;
   readonly onCopyLink: () => void;
@@ -168,6 +199,81 @@ export function leftRail(m: LeftModel, on: LeftHandlers): Desc[] {
         " Show the inclusion discs",
       ),
       h(
+        "label",
+        { key: "cr", class: "check" },
+        h("input", {
+          key: "i",
+          type: "checkbox",
+          checked: m.critical,
+          onChange: (e: Event) => on.onCritical((e.target as HTMLInputElement).checked),
+        }),
+        " Show the critical points and the roots' convex hull",
+      ),
+      h(
+        "label",
+        { key: "tr", class: "check" },
+        h("input", {
+          key: "i",
+          type: "checkbox",
+          checked: m.trails,
+          onChange: (e: Event) => on.onTrails((e.target as HTMLInputElement).checked),
+        }),
+        " Keep the roots' trails after a drag",
+      ),
+      h(
+        "label",
+        { key: "coef", class: "field" },
+        h("span", { key: "t" }, "Branch points of"),
+        h(
+          "select",
+          {
+            key: "s",
+            value: m.coefficient === null ? "none" : String(m.coefficient),
+            onChange: (e: Event) => {
+              const v = (e.target as HTMLSelectElement).value;
+              on.onCoefficient(v === "none" ? null : Number(v));
+            },
+          },
+          h("option", { key: "none", value: "none" }, "none"),
+          ...Array.from({ length: (m.poly?.degree ?? 0) + 1 }, (_, k) =>
+            h("option", { key: `a${k}`, value: String(k) }, `a${subscript(k)}`),
+          ),
+        ),
+      ),
+      h(
+        "label",
+        { key: "pzOn", class: "check" },
+        h("input", {
+          key: "i",
+          type: "checkbox",
+          checked: m.pseudozero !== null,
+          onChange: (e: Event) =>
+            on.onPseudozero(
+              (e.target as HTMLInputElement).checked ? Math.log10(2 ** -53) : null,
+            ),
+        }),
+        " Show the pseudozero set",
+      ),
+      m.pseudozero !== null
+        ? h(
+            "label",
+            { key: "pzLevel", class: "field" },
+            h("span", { key: "t" }, "log₁₀ ε"),
+            h("input", {
+              key: "r",
+              type: "range",
+              min: "-16",
+              max: "-1",
+              step: "0.5",
+              value: String(m.pseudozero),
+              "aria-valuetext": `ε = 10 to the ${Math.round(m.pseudozero * 100) / 100}`,
+              onChange: (e: Event) =>
+                on.onPseudozero(Number((e.target as HTMLInputElement).value)),
+            }),
+            h("output", { key: "o" }, (Math.round(m.pseudozero * 10) / 10).toFixed(1)),
+          )
+        : null,
+      h(
         "div",
         { key: "btns", class: "buttons" },
         h(
@@ -198,6 +304,10 @@ export interface RightModel {
   readonly groups: GroupReport | null;
   readonly conditioning: readonly Conditioning[] | null;
   readonly selectedRoot: number | null;
+  readonly analysis: Analysis | null;
+  readonly coefficient: number | null;
+  readonly critical: boolean;
+  readonly pseudozero: number | null;
 }
 
 function summary(p: Polynomial, discs: DiscReport): Desc {
@@ -218,7 +328,7 @@ function summary(p: Polynomial, discs: DiscReport): Desc {
   return h("p", { key: "sum", class: "summary" }, level(discCerts(discs)[0], "lv"), text);
 }
 
-export function rightRail(m: RightModel): Desc[] {
+export function rightRail(m: RightModel): Child[] {
   if (!m.poly || !m.discs || !m.groups) {
     return [
       card(
@@ -276,6 +386,9 @@ export function rightRail(m: RightModel): Desc[] {
                       `κ ≈ ${Number.isFinite(kappa) ? kappa.toPrecision(3) : "∞"}`,
                     )
                   : null,
+                m.coefficient !== null && m.coefficient < p.degree
+                  ? gainRow(m.conditioning?.[i]?.gains[m.coefficient], m.coefficient)
+                  : null,
               );
             }),
           ),
@@ -304,5 +417,12 @@ export function rightRail(m: RightModel): Desc[] {
         "Coordinates are estimates. Each disc is proved to hold the stated number of roots of the polynomial whose coefficients are listed; κ is how far a root moves per relative change in the coefficients.",
       ),
     ),
+    analysisCard({
+      poly: m.poly,
+      analysis: m.analysis,
+      coefficient: m.coefficient,
+      critical: m.critical,
+      pseudozero: m.pseudozero,
+    }),
   ];
 }

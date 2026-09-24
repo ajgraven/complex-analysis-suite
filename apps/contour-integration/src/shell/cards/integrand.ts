@@ -15,7 +15,7 @@ import { declaredOrder } from "../../shell/state.js";
 import { PRESETS } from "../../shell/presets.js";
 import { contourIntegrandLatex } from "../../families/latex.js";
 import { h } from "@cas/ui";
-import { math, mathText } from "../math.js";
+import { math, mathText } from "@cas/ui/math";
 import { card, type Card } from "./card.js";
 import { integrandEmpty } from "../errors.js";
 
