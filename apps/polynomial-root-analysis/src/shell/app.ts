@@ -305,7 +305,6 @@ export function mountApp(host: HTMLElement): App {
       const coeffs = [...p.coeffs];
       const k = t.index;
       const next: Cx = ring === "C" ? to : [to[0], 0];
-      if (k === p.degree && next[0] === 0 && next[1] === 0) return; // the degree cannot drop mid-drag
       coeffs[k] = next;
       built = fromCoeffs(coeffs, ring, p);
     }

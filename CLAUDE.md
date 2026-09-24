@@ -1283,10 +1283,14 @@ Roots and coefficients of one polynomial as two draggable point sets over a phas
 group over ℚ in three honest tiers (`=` Sₙ/Aₙ at any degree, `=` to degree 7 by Stauduhar descent, `≈`
 8–15 by statistics); loop monodromy by *certified* continuation (Smith discs in exact arithmetic on the
 dyadic floats, refused by name when a segment cannot be certified); Arnold's Abel–Ruffini proof as
-executed commutator loops. **PRA-0 (the scaffold) has landed**: `apps/polynomial-root-analysis` (port 5185,
-namespace `pra`) mounts two empty, named panes inside the fatal boundary, is wired into the workspace, the
-test census, `APP_NAMES`, the a11y roster and `.claude/launch.json`, and shows on the launcher as *Coming
-soon*; it is built but not published until PRA-5. Read
+executed commutator loops. **PRA-0 and PRA-1 have landed**: `apps/polynomial-root-analysis` (port 5185,
+namespace `pra`, built but not published until PRA-5) is the two-pane sandbox — typed or dragged
+polynomials over ℂ/ℝ/ℚ, roots and coefficients each draggable, every root in a Smith disc certified in
+exact arithmetic, multiplicities decided by Yun in exact arithmetic, a root-form phase portrait, permalink,
+undo, figure export. PRA-1 moved Aberth into `@cas/core`, `toExactRational` + Smith discs into
+`@cas/exact` and the keyed builder into `@cas/ui`; the gate's findings (Durand–Kerner failing Wilkinson,
+exact refinement of an ill-conditioned polynomial's roots, a stale-`dist/` timing retracted) are in STATUS.
+Read
 [`docs/polynomial-root-analysis/STATUS.md`](docs/polynomial-root-analysis/STATUS.md) first, then
 [`PLAN.md`](docs/polynomial-root-analysis/PLAN.md) and [`DESIGN.md`](docs/polynomial-root-analysis/DESIGN.md).
 It widens `@cas/exact`
@@ -1419,7 +1423,8 @@ consumes `@cas/ui`, `@cas/gpu`, `@cas/core`, `@cas/flow`, `@cas/interchange` and
 two second-consumer extractions into `@cas/gpu` — Complex Dynamics' histogram-equalisation arithmetic as
 `equalizedCdfLut` (`@cas/gpu/histogram`, PR-1), with CD keeping the decode half alone, and Contour
 Integration's CET-C6 table as `@cas/gpu/cet` (M6). PR-1 shipped the scaffold,
-the root engine (an app-local Aberth–Ehrlich in a worker pool, pinned against `@cas/core`'s Durand–Kerner),
+the root engine (an Aberth–Ehrlich in a worker pool, pinned against `@cas/core`'s Durand–Kerner — app-local
+until ADR-0047 moved it into `@cas/core` for its second consumer),
 the per-degree float-texture density stage, the `#vs=` permalink, PNG export, fourteen named places, and
 the launcher + Pages wiring. PR-2…PR-5 (the limit-set engine, deep zoom by reference, the dragons, the
 gallery) and M6 (Egan's hue, the `CET_C6` extraction, the symmetry readout) follow below. Plan: [`docs/design/polynomial-roots-plan.md`](docs/design/polynomial-roots-plan.md).

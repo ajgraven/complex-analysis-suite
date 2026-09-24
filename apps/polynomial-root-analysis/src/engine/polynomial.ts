@@ -12,8 +12,8 @@
 //       conjugate, a real root stays on the real axis, and a coefficient moves along the real axis.
 //   Q — R, and the coefficients are rational: the EXACT layer `exact` is the truth whenever it is
 //       present, and a released drag snaps to it (`snapRational`), after which the roots are re-solved.
-import { QiPoly, gaussOfDoubles, yunSquarefree } from "@cas/exact";
-import { solveAndRefine } from "./roots/solve.js";
+import { QiPoly, gaussOfDoubles } from "@cas/exact";
+import { separate, solveAndRefine } from "./roots/solve.js";
 
 import type { Cx, Ring } from "./types.js";
 export type { Cx, Ring } from "./types.js";
@@ -134,18 +134,16 @@ export function fromCoeffs(
     return { ok: false, reason: "ℚ mode needs exact rational coefficients" };
 
   const seeds = prev && prev.roots.length === n ? prev.roots : undefined;
-  // With an exact layer, Yun says whether p has a multiple root; without one the float polynomial's
-  // roots are simple except on a set of measure zero, and `solveAndRefine` guards that case itself.
-  const squarefree =
-    exact === null || yunSquarefree(exact).every((f) => f.multiplicity === 1);
   const exactCoeffs = exact
     ? Array.from({ length: n + 1 }, (_, k) => exact.coeff(k))
     : null;
-  const solved = solveAndRefine(coeffs, exactCoeffs, seeds, squarefree);
+  const solved = solveAndRefine(coeffs, exactCoeffs, seeds);
   let roots = solved.roots;
   let labels = ident(n);
   if (prev) ({ roots, labels } = continueLabels(prev, roots));
-  if (ring !== "C") roots = conjugateClose(roots);
+  // `separate` again after the pairing: `conjugateClose` averages pairs and flattens unpaired roots
+  // onto the axis, which can land two approximations on one point.
+  if (ring !== "C") roots = separate(conjugateClose(roots));
   return {
     ok: true,
     poly: {

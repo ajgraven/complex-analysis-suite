@@ -15,8 +15,9 @@ const floorFrac = (f: Frac): bigint => {
 /** The rational with the smallest denominator (then numerator) in `[lo, hi]`, `lo ≤ hi`. Exact. */
 export function simplestBetween(lo: Frac, hi: Frac): Frac {
   if (compareFrac(lo, hi) > 0) throw new Error("simplestBetween: empty interval");
+  // Zero is the simplest rational of all; the descent below would otherwise stop at an integer lo < 0.
+  // (A negative interval needs no mirroring: `floor` handles it, which a mutation sweep showed.)
   if (lo.n <= 0n && hi.n >= 0n) return Frac.ZERO;
-  if (hi.n < 0n) return simplestBetween(hi.neg(), lo.neg()).neg();
   const n = floorFrac(lo);
   const nF = Frac.of(n);
   if (nF.equals(lo)) return lo;

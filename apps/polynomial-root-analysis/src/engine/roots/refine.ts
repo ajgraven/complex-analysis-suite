@@ -150,10 +150,11 @@ export function refineExactly(
 
 /**
  * A component below one ulp of the root's modulus is set to zero. It is not information — the double
- * cannot hold the root that finely — and it is expensive: exact Newton drives a real root's imaginary
- * part to ~1e-300 rather than to 0, and that one number's dyadic denominator (2¹⁰⁵⁰) became the common
- * scale of every Smith disc, which measured 2.5 s for z²⁴ − 1 and 19.5 s for a random degree-24
- * polynomial where 1–2 ms was the budget.
+ * cannot hold the root that finely — and it is a false readout: without this, exact refinement leaves
+ * Wilkinson's root 3 at 3 + 4.7e-38i in ℂ mode, and the Roots card would print that imaginary part
+ * (measured over the sandbox corpus: 10 such components). *(An earlier draft of this comment blamed
+ * such components for 2.5 s Smith discs; that measurement was taken against a stale @cas/exact build,
+ * and with a current one the discs cost the same either way.)*
  */
 function flush([x, y]: [number, number]): Cx {
   const tiny = EPS * Math.hypot(x, y);

@@ -9,9 +9,9 @@ not silently changed.
 
 ## Current
 
-**PRA-1 — the two panes** (PLAN §7), awaiting the owner's go-ahead. Start by re-reading the
-Findings below that name PRA-1 (the `polishRoots`/`cauchyBound` lift is a factoring-out, not a move;
-the Aberth question is decided by measurement there).
+**PRA-2 — analysis overlays, wave 1** (PLAN §7), awaiting the owner's go-ahead. It brings KaTeX
+(the discriminant is the first typeset formula) and the app's first browser suite (the pseudozero
+ladder's shader), which joins the root `test:browser` chain.
 
 ## Done
 
@@ -20,6 +20,15 @@ the Aberth question is decided by measurement there).
   `polynomialRoots` and `findPoles` before and after); `toExactRational`/`simplestRational` moved
   (`git mv`) into `@cas/exact`; `smithDiscs` + exact disc tests new in `@cas/exact`; the keyed
   builder moved (`git mv`) into `@cas/ui` with its eleven tests.
+- 2026-09-24 — **PRA-1 complete (1.1–1.4).** PRA-1.3 the shell: two panes over one `ShellState`,
+  root and coefficient drags with ring invariants (ℝ drags a conjugate pair, ℚ snaps on release to the
+  simplest rational within half a pixel), keyboard parity, the `#vs=` permalink with refusals by name,
+  undo/redo, the figure (verdict in the caption and the PNG text), the root-form phase portrait on
+  CET-C6. PRA-1.4 the gate: 30-case corpus (per-root backward error ≤ 16ε, forward error within Vieta's
+  predicted bound, bit-exact root form, exact discs, Yun-decided multiplicities); `a₀` round a circle
+  returns every root to its own label and round a branch point swaps exactly two; the two-state
+  `applyState` test in both directions; sweep 34 mutants, 32 killed, 2 equivalent; a11y roster
+  `polynomial-root-analysis` + `-overlay` clean. GATE_PLACEHOLDER
 - 2026-09-24 — **PRA-1.2, the engine.** `src/engine/`: the dual-form `Polynomial` with its ring
   invariants, the typed-polynomial reader, Aberth (moved into `@cas/core`) + exact refinement, Smith
   discs, Yun-decided multiplicities, conditioning, ℚ-mode snapping; the 30-case corpus.
@@ -70,14 +79,16 @@ the Aberth question is decided by measurement there).
   then reads 20 isolated discs of radius **0** (the refined roots are the integers exactly). It is
   skipped for a polynomial Yun says is not squarefree (it would collapse a multiple root's
   approximations onto one point, where Smith's hypotheses fail) and undone if it collapses a pair anyway.
-- _(PRA-1.2)_ **Two costs found by measuring the whole frame rather than the kernel.** Exact Newton
-  leaves a real root's imaginary part at ~1e-300, not 0, and that one dyadic denominator became every
-  disc's common scale — Smith took 2.5 s (z²⁴ − 1) and 19.5 s (a random degree 24); a component below
-  one ulp of the root's modulus is now flushed to zero. And reading a disc's reduced `radiusSq` to DRAW
-  it cost 18 ms a frame (a gcd on thousands of bits) against Smith's own 0.9 ms; `SmithDisc.radiusUpper()`
-  draws from the top 64 bits instead and the exact `Frac` is reduced only when read. **A drag frame at
-  degree 20–24 now costs 1.1–2.6 ms median, 4.4 ms worst** (seeded Aberth + exact refinement + discs +
-  groups), inside the 8 ms budget with no deferral to release.
+- _(PRA-1.2, corrected at PRA-1.4)_ **One cost found by measuring the whole frame rather than the
+  kernel.** Reading a disc's reduced `radiusSq` to DRAW it cost 18 ms a frame (a gcd on thousands of
+  bits) against Smith's own 0.9 ms; `SmithDisc.radiusUpper()` draws from the top 64 bits instead and the
+  exact `Frac` is reduced only when read. **A drag frame at degree 20–24 costs 1.1–2.6 ms median,
+  4.4 ms worst** (seeded Aberth + exact refinement + discs + groups), inside the 8 ms budget with no
+  deferral to release. *This entry first also claimed that exact Newton's ~1e-300 imaginary parts made
+  Smith take 2.5 s and 19.5 s; that was measured against a STALE `@cas/exact` build (the app imports
+  its `dist/`), and re-measured against a current one the discs cost the same with or without them.
+  The flush of sub-ulp components stays, for the reason the sweep found: without it ℂ mode reads
+  Wilkinson's root 3 as 3 + 4.7e-38i. Lesson: rebuild the package dists before timing anything.*
 - _(PRA-1.2)_ **The gate's "round-trips root → coeff → root to 1e-12" is replaced by what is true.**
   Wilkinson's re-solved roots cannot come back to 1e-12 — the rounding in forming its coefficients
   moves root 15 by ~1e-3, which is its conditioning, not a defect. The corpus test asserts instead:
@@ -90,6 +101,35 @@ the Aberth question is decided by measurement there).
 - _(PRA-1.2)_ **ℚ-mode snapping is the simplest rational within half a pixel**, not
   `simplestRational`, which returns the rational that reproduces a double exactly — a 16-digit fraction
   for any dragged value. `rational.ts` does the Stern–Brocot descent in exact arithmetic.
+- _(PRA-1.4)_ **The sweep (34 mutants, 32 killed, 2 equivalent) bought seven tests and deleted three
+  pieces of code.** First pass 16/34, and the survivors were real: ℝ's reality check accepted a
+  NEGATIVE imaginary part; the degree cap was checked only on text; the quadratic's anti-cancellation
+  choice and the solver's unit-circle fallback were masked by the exact refinement and by seeds that
+  always worked (real seeds on `z⁴ + 1` cannot leave the axis, which is the case that needs the
+  fallback); a ℚ coefficient drag re-snapped the coefficients it did not move, invisible on integer
+  coefficients (`0.123z²` has 1/8 within half a pixel); a no-op edit pushed an undo step. And three
+  pieces of code were shown to do nothing: a mirror branch for negative intervals in the rational snap
+  (`floor` already handles them), a collision guard after exact refinement (it leaves a multiple
+  root's copies an ulp apart, never equal — measured), and a leading-coefficient guard in the drag
+  (the engine refuses first). What the guard was FOR was real, though: the closed form returns a
+  quadratic's double root as two identical points and Smith refused, so `separate()` spreads exact
+  coincidences along the real direction — the first version spread on a circle, and `conjugateClose`
+  folded two of (z + 2)³'s copies back onto one point. **Equivalent:** a vertical spread certifies the
+  same as a horizontal one (both keep conjugates conjugate; horizontal is chosen so a real multiple root
+  is drawn on the axis), and the snap's closed-interval test at `n + 1 = hi` (the recursion returns the
+  same `n + 1`).
+- _(PRA-1.3)_ **Two landmarks named "Roots"** — the root pane and the Roots card — failed axe's
+  `landmark-unique`; the panes are "Root plane" and "Coefficient plane".
+- _(PRA-1.3)_ **The phase portrait is drawn from the ROOT form**, `arg aₙ + Σ arg(z − rᵢ)` and
+  `log|aₙ| + Σ log|z − rᵢ|`: stable in float32 at every degree allowed, where Horner on Wilkinson's
+  coefficients in float32 is noise. It is therefore a picture of `aₙ∏(z − r̃ᵢ)`, within each certified
+  disc of p, and the legend says `≈` once.
+- _(PRA-1.3)_ **KaTeX is deferred to the first typeset formula** (PRA-2's discriminant): PRA-1 shows
+  the typed polynomial in its input and the coefficients as exact text, and a typesetting dependency
+  with nothing to typeset would be carried for nothing.
+- _(PRA-1.3)_ **Root labels are not in the permalink.** A link carries the polynomial's one true form;
+  labels are session state (the preview tracker's), so a reopened coefficient-form link numbers its
+  roots from a fresh solve. PRA-3, where a label names a permutation, decides whether they travel.
 - _(PRA-1.1)_ **The `animate.ts` lift is deferred to PRA-3**, where this app first animates
   (running a loop, playing a motion). Nothing in PRA-1 moves on its own, so lifting it now would be
   extraction ahead of a consumer, which the owner's approval did not ask for.

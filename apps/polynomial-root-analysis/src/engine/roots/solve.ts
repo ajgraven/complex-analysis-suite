@@ -98,29 +98,52 @@ export function solveRoots(coeffs: readonly Cx[], seeds?: readonly Cx[]): Solved
 }
 
 /**
+ * Coincident approximations spread ALONG THE REAL DIRECTION, `r = 2⁻²⁶·max(1, |z|)` apart — the scale
+ * at which a multiple root's approximations naturally sit. Smith's theorem needs the points DISTINCT
+ * and nothing else, so this costs no certainty: the discs about the spread points are proved like any
+ * others and come out as one component (a cluster). Needed because the closed form returns a
+ * quadratic's double root as two identical points, where Smith refused outright.
+ *
+ * Along a line, not round a circle: the first version spread on a circle, and `conjugateClose` then
+ * folded two copies of (z + 2)³'s root back onto one point. Any spread parallel to an axis keeps
+ * conjugate copies conjugate (a mutation sweep showed the vertical one certifies the same); the
+ * horizontal one is chosen so a real multiple root's approximations are DRAWN on the real axis.
+ */
+export function separate(roots: readonly Cx[]): Cx[] {
+  const out: Cx[] = roots.map(([x, y]) => [x, y]);
+  const groups = new Map<string, number[]>();
+  out.forEach(([x, y], i) => {
+    const key = `${x},${y}`;
+    groups.set(key, [...(groups.get(key) ?? []), i]);
+  });
+  for (const idx of groups.values()) {
+    if (idx.length < 2) continue;
+    const [x, y] = out[idx[0]];
+    const r = 2 ** -26 * Math.max(1, Math.hypot(x, y));
+    idx.forEach((i, k) => {
+      out[i] = [x + r * (k - (idx.length - 1) / 2), y];
+    });
+  }
+  return out;
+}
+
+/**
  * {@link solveRoots}, then Aberth with EXACT evaluation (`refine.ts`) against `exact` — the typed
- * polynomial's own coefficients, or the doubles' dyadic values when there is no exact layer. Skipped
- * when the caller knows p has a multiple root (exact refinement would collapse its approximations onto
- * one point, where Smith's theorem has nothing to say), and undone if it collapses any pair anyway.
+ * polynomial's own coefficients, or the doubles' dyadic values when there is no exact layer — then
+ * {@link separate}. At a multiple root the refinement converges linearly and leaves the cluster's
+ * approximations an ulp or two apart (measured: (z − 1)²(z + 2) → 1 ± 2⁻⁵²), which Smith certifies as
+ * one component; the closed form's identical points are what `separate` is for.
  */
 export function solveAndRefine(
   coeffs: readonly Cx[],
   exact: readonly Gauss[] | null,
   seeds?: readonly Cx[],
-  squarefree = true,
 ): Solved {
   const solved = solveRoots(coeffs, seeds);
-  if (!squarefree || coeffs.length - 1 < 1) return solved;
   const c = exact ?? coeffs.map(([re, im]) => gaussOfDoubles(re, im));
   const r = refineExactly(c, solved.roots);
-  const seen = new Set<string>();
-  for (const [x, y] of r.roots) {
-    const key = `${x},${y}`;
-    if (seen.has(key) || !Number.isFinite(x) || !Number.isFinite(y)) return solved;
-    seen.add(key);
-  }
   return {
-    roots: r.roots,
+    roots: separate(r.roots),
     converged: solved.converged || r.converged,
     refined: r.converged,
   };

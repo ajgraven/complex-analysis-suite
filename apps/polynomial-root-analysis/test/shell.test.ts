@@ -91,6 +91,10 @@ describe("typing a polynomial", () => {
     app.actions().type("(z-1)^2*(z+2)");
     expect(app.currentState().poly).toEqual({ kind: "text", text: "(z-1)^2*(z+2)" });
     expect(app.currentState().rootCam.half).toBeGreaterThan(1.2);
+    // A polynomial whose roots are far from the default view is framed, not left off screen.
+    app.actions().type("(z-10)(z-11)(z-12)");
+    expect(app.currentState().rootCam.cx).toBeCloseTo(11, 10);
+    app.actions().undo();
     const claims = [...document.querySelectorAll(".rail-right .claim")].map(
       (c) => c.textContent,
     );
@@ -164,11 +168,14 @@ describe("dragging", () => {
 
   it("in ℚ, a release snaps to rationals, and a coefficient drag moves only that coefficient", () => {
     const { app } = mount();
+    // 123/1000 has a simpler neighbour (1/8) within half a pixel: only a coefficient that MOVED may snap.
+    app.actions().type("z^5 + 0.123z^2 - z - 1");
+    const committed = app.currentState();
     const before = livePoly(app).exact as NonNullable<Polynomial["exact"]>;
     app.actions().moveTo({ kind: "coeff", index: 1 }, [-0.7, 0.4]);
     // Mid-drag: real (the imaginary part is ignored in ℚ) and not yet committed.
     expect(livePoly(app).coeffs[1]).toEqual([-0.7, 0]);
-    expect(app.currentState()).toEqual(DEFAULT_STATE);
+    expect(app.currentState()).toEqual(committed);
     app.actions().release();
     const after = livePoly(app).exact as NonNullable<Polynomial["exact"]>;
     expect(after.coeff(1).re.d).toBeLessThan(1000n); // snapped to a simple rational
@@ -223,6 +230,26 @@ describe("the keyboard", () => {
     expect(app.currentState().coeffCam.cy).toBeGreaterThan(cam.cy);
     ink.dispatchEvent(new KeyboardEvent("keydown", { key: "+", bubbles: true }));
     expect(app.currentState().coeffCam.half).toBeLessThan(cam.half);
+  });
+});
+
+describe("undo", () => {
+  it("does not record an edit that changed nothing", () => {
+    const { app } = mount();
+    app.actions().setDiscs(true); // already on
+    expect(q<HTMLButtonElement>(".buttons button").disabled).toBe(true);
+    app.actions().setDiscs(false);
+    expect(q<HTMLButtonElement>(".buttons button").disabled).toBe(false);
+  });
+});
+
+describe("a cluster is reported as groups, in the card and in the figure", () => {
+  it("says how many SEPARATE groups there are when a component holds more than one root", () => {
+    const { app } = mount();
+    app.actions().setRing("C");
+    app.actions().type("(z-1)^2*(z+2)");
+    expect(q(".rail-right .summary").textContent).toMatch(/2 separate groups of discs/);
+    expect(verdictLine(app.live())).toMatch(/2 separate groups of discs/);
   });
 });
 

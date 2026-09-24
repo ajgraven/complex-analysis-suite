@@ -114,7 +114,10 @@ and rational algebra; **Durand–Kerner** simultaneous root-finding (today dupli
 `render/critical.ts` — this package ends that duplication); Newton iteration with
 line search and Brown–Gearhart deflation; `mat4`/camera helpers for the 3-D views.
 **No DOM, no WebGL, no mathematical conventions.** Ships with a consolidated
-golden-value test corpus.
+golden-value test corpus. *(As built, ADR-0047 added the allocation-free **Aberth–Ehrlich** solver,
+moved from Polynomial Roots, and a Newton `polishRoot` + `cauchyBound` factored out of `@cas/faber` and
+Contour Integration; `@cas/exact` gained `toExactRational` and exact Smith inclusion discs, and
+`@cas/ui` gained Contour Integration's keyed DOM builder `h`/`patch`.)*
 
 ### `@cas/gpu` — the WebGL2 substrate
 Context creation and loss recovery; the escape-time program scaffold that takes a
@@ -170,7 +173,8 @@ Would hold KaTeX typesetting helpers; the inspector/readout card framework; comp
 pads; the glossary framework; share-link serialization and reproducibility-metadata PNG embedding;
 theming. **Status: the PNG-metadata half shipped** — as **`@cas/export`** (ADR-0016), when three
 apps each carried a byte-equivalent copy — and the a11y / fatal-boundary / compute / nav-header primitives
-now live in **`@cas/ui`** (ADR-0032). The KaTeX / inspector / theming UI helpers remain app-local;
+now live in **`@cas/ui`** (ADR-0032), joined by Contour Integration's keyed DOM builder (`h`/`patch`,
+ADR-0047). The KaTeX / inspector / theming UI helpers remain app-local;
 the versioned `#vs=` **view-state codec** is shared into `@cas/interchange`.
 
 ### `@cas/export` — figure-export primitives *(built — ADR-0016)*

@@ -94,7 +94,13 @@ because the two diverged on rank-deficiency policy.
 
 ## What is _not_ here
 
-By design (and per the kernel's own header comment): **no** Newton/deflation, **no**
+**Two root-finding additions since (ADR-0047):** `aberth` (allocation-free Aberth–Ehrlich over
+caller-owned buffers, residual-certified — Polynomial Roots' engine, moved here when Polynomial Root
+Analysis measured Durand–Kerner failing on Wilkinson's polynomial, with a `seedFromWorkspace` option so a
+drag continues each root), and `cauchyBound` + `polishRoot(s)` (a Newton polish, factored out of the
+copies in `@cas/faber` and Contour Integration, both reproduced bit for bit).
+
+By design (and per the kernel's own header comment): **no** deflation, **no**
 `mat4`/camera helpers, **no** series `exp`/`log`/`compose`. The migration plan sketched
 these for `core`, but no second consumer ever forced their extraction, so they stayed in
 their originating apps — exactly the demand-driven rule of

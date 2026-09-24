@@ -27,6 +27,9 @@ import {
   BiPoly,                       // ./biPoly  — exact bivariate (outer var over QiPoly coeffs)
   bareissDet, discriminant, integerPrimitive, primitivePoly, resultant,   // ./resultant
   renderBiPolyText, renderGaussMag, renderQiPolyText,                     // ./render
+  simplestRational, toExactRational,                                      // ./exactRational
+  smithDiscs, SmithDisc, discsDisjoint, inDisc, fracOfDouble, gaussOfDoubles,
+  compareFrac, sqrtUpperBound,                                            // ./smith
 } from "@cas/exact";
 ```
 
@@ -48,12 +51,26 @@ the correspondence cusp locus, and CD's multiplier specialization.
 **`render`** (`./render`) — shared coefficient/polynomial string formatting, so the two apps
 display the same polynomial the same way.
 
+**`exactRational`** (`./exactRational`, moved from Contour Integration by ADR-0047) — an `@cas/expr`
+AST read **exactly** as `num/den` over ℚ(i), or refused with a reason; `simplestRational` is the
+simplest rational a double literal could have come from (`0.1 ↦ 1/10`). The one module here that reads
+an AST, hence the package's single dependency, a type-only `@cas/expr` edge.
+
+**`smith`** (`./smith`, ADR-0047) — Smith's (1970) inclusion discs computed **exactly** on dyadic
+approximations: every root of p lies in `∪ D(zᵢ, n|Wᵢ|)` and a connected component of k discs holds
+exactly k roots. Scaled-integer arithmetic with no reduction in the loops, an exact and tight
+disjointness test, and a rigorous log-bracket prefilter: ~1 ms at degree 24 (the `Frac` draft took
+8.2 s). A squared radius is carried unreduced; `radiusSq` reduces on read and `radiusUpper()` draws.
+
 ## Consumers
 
 - **Complex Dynamics** — `src/combinatorics/dynatomic.ts` (Gleason polynomials, dynatomic
   Φ<sub>n</sub>), surfaced in the UI via `src/main.ts`.
 - **Correspondences** — `src/exact/correspondenceCurve.ts` (the exact deltoid correspondence
   curve and its cusps).
+- **Contour Integration** — `toExactRational` / `simplestRational` throughout its kernel.
+- **Polynomial Root Analysis** — typed polynomials (`toExactRational`), Smith discs, Yun
+  multiplicities (ADR-0047).
 
 The Quadrature-Domains app's **runtime** does not use this package. Its Algebra module has its
 own exact engine (`app/sym-core.mjs` — ℚ(i), `MPoly`, Gröbner/FGLM, Hermite, the factorizer),

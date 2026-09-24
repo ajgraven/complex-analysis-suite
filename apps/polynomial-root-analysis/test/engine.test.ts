@@ -16,6 +16,8 @@ import { formatRadiusUpper, rootDiscs } from "../src/engine/roots/discs.js";
 import { rootGroups } from "../src/engine/roots/multiplicity.js";
 import { conditioning } from "../src/engine/roots/conditioning.js";
 import { simplestBetween, snapRational } from "../src/engine/rational.js";
+import { separate, solveRoots } from "../src/engine/roots/solve.js";
+import { specOf } from "../src/shell/state.js";
 
 function build(text: string, ring: Polynomial["ring"]): Polynomial {
   const read = parsePolynomial(text, ring);
@@ -92,6 +94,8 @@ describe("the corpus (PLAN §7 PRA-1 gate)", () => {
         expect(groups.groups.every((g) => g.exact)).toBe(true);
         expect(mults.sort((a, b) => b - a)).toEqual([...c.multiplicities]);
       }
+      // Counted with multiplicity, the groups hold every root exactly once.
+      expect(groups.groups.reduce((a, g) => a + g.count, 0)).toBe(p.degree);
       // Every plotted root is accounted for exactly once.
       expect(groups.groups.flatMap((g) => g.members).sort((a, b) => a - b)).toEqual(
         p.roots.map((_, i) => i),
@@ -320,7 +324,157 @@ describe("the dual form's constructors", () => {
   });
 });
 
+describe("the sweep's survivors, each closed by the property it exposed", () => {
+  it("ℝ refuses a coefficient with a NEGATIVE imaginary part too", () => {
+    const b = fromCoeffs(
+      [
+        [1, -1],
+        [0, 0],
+        [1, 0],
+      ],
+      "R",
+    );
+    expect(b.ok ? "" : b.reason).toMatch(/a0 is not real/);
+  });
+
+  it("refuses degree 25 from coefficients, not only from text", () => {
+    const b = fromCoeffs(
+      Array.from({ length: 26 }, () => [1, 0] as Cx),
+      "C",
+    );
+    expect(b.ok ? "" : b.reason).toMatch(/cap of 24/);
+  });
+
+  it("solves a quadratic without the textbook formula's cancellation", () => {
+    // z² − 10⁸z + 1: the small root is 10⁻⁸ to 16 digits; b − √Δ cancels it to ~1e-9 relative.
+    const { roots } = solveRoots([
+      [1, 0],
+      [-1e8, 0],
+      [1, 0],
+    ]);
+    const small = roots.reduce((a, b) => (Math.abs(a[0]) < Math.abs(b[0]) ? a : b));
+    // The true small root is 1e-8·(1 + 1e-16); the textbook formula loses ~7 digits of it.
+    expect(Math.abs(small[0] - 1e-8) / 1e-8).toBeLessThan(1e-15);
+  });
+
+  it("recovers when the seeds cannot reach the roots — real seeds, complex roots", () => {
+    // A real polynomial iterated from real seeds stays real for ever: z⁴ + 1 has no real root.
+    const s = solveRoots(
+      [
+        [1, 0],
+        [0, 0],
+        [0, 0],
+        [0, 0],
+        [1, 0],
+      ],
+      [
+        [-2, 0],
+        [-1, 0],
+        [1, 0],
+        [2, 0],
+      ],
+    );
+    expect(s.converged).toBe(true);
+    for (const r of s.roots)
+      expect(Math.abs(Math.hypot(r[0], r[1]) - 1)).toBeLessThan(1e-14);
+    expect(s.roots.every((r) => Math.abs(r[1]) > 0.5)).toBe(true);
+  });
+
+  it("refines Wilkinson's roots to the integers themselves: every disc of radius exactly 0", () => {
+    const w = build(Array.from({ length: 20 }, (_, i) => `(z-${i + 1})`).join("*"), "Q");
+    const d = rootDiscs(w);
+    expect(d.ok).toBe(true);
+    if (d.ok) for (const x of d.discs) expect(x.radiusSq.isZero()).toBe(true);
+    expect(w.roots.map((r) => r[0]).sort((a, b) => a - b)).toEqual(
+      Array.from({ length: 20 }, (_, i) => i + 1),
+    );
+  });
+
+  it("flushes a sub-ulp component to zero: Wilkinson's roots read as real in ℂ", () => {
+    // Without the flush, exact refinement leaves root 3 at 3 + 4.7e-38i (measured over the corpus:
+    // 10 such components, Wilkinson and Littlewood among them), which the Roots card would print.
+    const p = build(Array.from({ length: 20 }, (_, i) => `(z-${i + 1})`).join("*"), "C");
+    expect(p.roots.every((r) => r[1] === 0)).toBe(true);
+  });
+
+  it("certifies a double root that the closed form returns as two IDENTICAL points", () => {
+    const floats = fromCoeffs(
+      [
+        [1, 0],
+        [-2, 0],
+        [1, 0],
+      ],
+      "C",
+    );
+    if (!floats.ok) throw new Error(floats.reason);
+    for (const [ring, p] of [
+      ["C", floats.poly],
+      ["Q", build("(z-1)^2", "Q")],
+    ] as const) {
+      const d = rootDiscs(p);
+      expect(d.ok, ring).toBe(true);
+      if (!d.ok) continue;
+      expect(d.discs.map((x) => x.count)).toEqual([2, 2]);
+      const g = rootGroups(p, d);
+      expect(g.ok && g.groups.map((x) => [x.count, x.multiplicity, x.exact])).toEqual([
+        [2, 2, ring === "Q"],
+      ]);
+    }
+    expect(
+      separate([
+        [1, 0],
+        [1, 0],
+        [2, 0],
+      ]).every((r, i, a) => a.findIndex((s) => s[0] === r[0] && s[1] === r[1]) === i),
+    ).toBe(true);
+  });
+
+  it("carries a polynomial as its own truth", () => {
+    expect(specOf(build("z^2 - 1/3", "Q"))).toEqual({ kind: "text", text: "z^2 - 1/3" });
+    const r = fromRoots(
+      [
+        [1, 0],
+        [2, 0],
+      ],
+      [1, 0],
+      "C",
+    );
+    expect(r.ok && specOf(r.poly)).toEqual({
+      kind: "roots",
+      roots: [
+        [1, 0],
+        [2, 0],
+      ],
+      lead: [1, 0],
+    });
+    const c = fromCoeffs(
+      [
+        [1, 0],
+        [0, 0],
+        [1, 0],
+      ],
+      "C",
+    );
+    expect(c.ok && specOf(c.poly).kind).toBe("coeffs");
+  });
+});
+
 describe("conditioning", () => {
+  it("is exactly the ratio it names on z² − 1 at 1: (1 + 1)/|p′(1)| = 1", () => {
+    const p = fromRoots(
+      [
+        [1, 0],
+        [-1, 0],
+      ],
+      [1, 0],
+      "C",
+    );
+    if (!p.ok) throw new Error(p.reason);
+    const k = conditioning(p.poly);
+    k.forEach((x) => expect(x.kappa).toBe(1));
+    expect(k[0].gains).toEqual([0.5, 0.5]);
+  });
+
   it("is large where Wilkinson is fragile, and infinite at a float double root", () => {
     const w = build(Array.from({ length: 20 }, (_, i) => `(z-${i + 1})`).join("*"), "Q");
     const k = conditioning(w);
