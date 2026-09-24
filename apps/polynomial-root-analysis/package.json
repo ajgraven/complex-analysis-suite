@@ -23,6 +23,7 @@
     "@cas/expr": "workspace:*",
     "@cas/gpu": "workspace:*",
     "@cas/interchange": "workspace:*",
+    "@cas/monodromy": "workspace:*",
     "@cas/rigor": "workspace:*",
     "@cas/ui": "workspace:*",
     "katex": "^0.17.0"

@@ -500,6 +500,9 @@ importers:
       '@cas/interchange':
         specifier: workspace:*
         version: link:../../packages/interchange
+      '@cas/monodromy':
+        specifier: workspace:*
+        version: link:../../packages/monodromy
       '@cas/rigor':
         specifier: workspace:*
         version: link:../../packages/rigor
