@@ -20,6 +20,9 @@ the Aberth question is decided by measurement there).
   `polynomialRoots` and `findPoles` before and after); `toExactRational`/`simplestRational` moved
   (`git mv`) into `@cas/exact`; `smithDiscs` + exact disc tests new in `@cas/exact`; the keyed
   builder moved (`git mv`) into `@cas/ui` with its eleven tests.
+- 2026-09-24 — **PRA-1.2, the engine.** `src/engine/`: the dual-form `Polynomial` with its ring
+  invariants, the typed-polynomial reader, Aberth (moved into `@cas/core`) + exact refinement, Smith
+  discs, Yun-decided multiplicities, conditioning, ℚ-mode snapping; the 30-case corpus.
 
 - 2026-09-23 — **PRA-0.** Owner accepted ADR-0047 and the three PLAN §12 decisions. The app
   (`apps/polynomial-root-analysis`, port 5185, `@cas/ui` only) mounts a header, a notice and two empty
@@ -52,6 +55,41 @@ the Aberth question is decided by measurement there).
   √1.01 are disjoint, which AM–GM cannot see).
 - _(PRA-1.1)_ **`@cas/exact` gains its first package edge, a type-only `@cas/expr`**, because
   `toExactRational` reads an AST. `@cas/expr` has no `@cas` dependencies, so the DAG stays acyclic.
+- _(PRA-1.2)_ **Aberth, not Durand–Kerner + polish, decided by measurement** (PLAN §6's open row):
+  `@cas/core`'s DK diverged on Wilkinson 20 from its spiral seeds and, circle-seeded, had not
+  converged after 2000 iterations (backward error 8e-4); Aberth converged in 32 sweeps (4.9 ms). So
+  Polynomial Roots' `aberth.ts` moved (`git mv`, with its test) into `@cas/core`, gaining one option,
+  `seedFromWorkspace`, so a drag continues each root from where it was; its default path is unchanged
+  and Polynomial Roots' suites are green through the move.
+- _(PRA-1.2)_ **A residual-converged root set is not a root set of THIS polynomial when p is
+  ill-conditioned.** On Wilkinson every Aberth root met the 8ε residual rule, yet the set was not even
+  conjugate-closed (11.23 − 0.15i, 11.66 − 0.03i, …) and Smith's discs about it, with the exact integer
+  coefficients, had radii up to 338 in one component of 20: the ε-pseudozero set is a region, and any
+  point of it passes. Floating-point evaluation cannot do better, so `refine.ts` runs Aberth with p/p′
+  evaluated EXACTLY (scaled BigInts, dyadic iterates — every coefficient is rational or dyadic): Wilkinson
+  then reads 20 isolated discs of radius **0** (the refined roots are the integers exactly). It is
+  skipped for a polynomial Yun says is not squarefree (it would collapse a multiple root's
+  approximations onto one point, where Smith's hypotheses fail) and undone if it collapses a pair anyway.
+- _(PRA-1.2)_ **Two costs found by measuring the whole frame rather than the kernel.** Exact Newton
+  leaves a real root's imaginary part at ~1e-300, not 0, and that one dyadic denominator became every
+  disc's common scale — Smith took 2.5 s (z²⁴ − 1) and 19.5 s (a random degree 24); a component below
+  one ulp of the root's modulus is now flushed to zero. And reading a disc's reduced `radiusSq` to DRAW
+  it cost 18 ms a frame (a gcd on thousands of bits) against Smith's own 0.9 ms; `SmithDisc.radiusUpper()`
+  draws from the top 64 bits instead and the exact `Frac` is reduced only when read. **A drag frame at
+  degree 20–24 now costs 1.1–2.6 ms median, 4.4 ms worst** (seeded Aberth + exact refinement + discs +
+  groups), inside the 8 ms budget with no deferral to release.
+- _(PRA-1.2)_ **The gate's "round-trips root → coeff → root to 1e-12" is replaced by what is true.**
+  Wilkinson's re-solved roots cannot come back to 1e-12 — the rounding in forming its coefficients
+  moves root 15 by ~1e-3, which is its conditioning, not a defect. The corpus test asserts instead:
+  root form keeps the roots bit for bit; every solved root has residual ≤ 16ε·Σ|aₖ||r|ᵏ; and every
+  re-solved simple root lies within 4× the forward error Vieta's own rounding predicts
+  (`n·ε·ΣEₖ|r|ᵏ/|p′(r)|`, `Eₖ` the coefficients of `∏(z + |rⱼ|)`).
+- _(PRA-1.2)_ **`@cas/expr` has no implicit multiplication and no unary plus** (`20z`, `2(z+1)`,
+  `(z+1)(z−1)`, `+z` are all syntax errors there). `parse.ts` inserts them at the token level before
+  parsing; the parser itself is left alone (its other consumers compile to GLSL).
+- _(PRA-1.2)_ **ℚ-mode snapping is the simplest rational within half a pixel**, not
+  `simplestRational`, which returns the rational that reproduces a double exactly — a 16-digit fraction
+  for any dragged value. `rational.ts` does the Stern–Brocot descent in exact arithmetic.
 - _(PRA-1.1)_ **The `animate.ts` lift is deferred to PRA-3**, where this app first animates
   (running a loop, playing a motion). Nothing in PRA-1 moves on its own, so lifting it now would be
   extraction ahead of a consumer, which the owner's approval did not ask for.

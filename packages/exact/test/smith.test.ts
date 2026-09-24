@@ -261,3 +261,22 @@ describe("smithDiscs", () => {
     }
   });
 });
+
+describe("SmithDisc.radiusUpper", () => {
+  it("is never below the exact radius, and within 1e-11 of it", () => {
+    const rnd = lcg(3);
+    for (let t = 0; t < 30; t++) {
+      const roots = [g(rnd() * 4 - 2, rnd() * 4 - 2), g(rnd() * 4 - 2, rnd()), g(-rnd(), rnd() * 3)];
+      const res = smithDiscs(fromRoots(roots), roots.map((r) => g(r.toTuple()[0] + (rnd() - 0.5) * 10 ** (-3 - 6 * rnd()), r.toTuple()[1])));
+      if (!res.ok) continue;
+      for (const d of res.discs) {
+        const up = d.radiusUpper();
+        const upF = fracOfDouble(up);
+        expect(compareFrac(upF.mul(upF), d.radiusSq)).toBeGreaterThanOrEqual(0);
+        expect(up / Math.sqrt(d.radiusSq.toNumber()) - 1).toBeLessThan(1e-11);
+      }
+    }
+    const zero = smithDiscs(fromRoots([g(1), g(2)]), [g(1), g(2)]);
+    expect(zero.ok && zero.discs[0].radiusUpper()).toBe(0);
+  });
+});

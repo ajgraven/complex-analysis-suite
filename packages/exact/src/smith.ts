@@ -147,10 +147,27 @@ export class SmithDisc {
     readonly count: number,
   ) {}
 
-  /** `n²·|Wᵢ|²`, the squared radius, in lowest terms. */
+  /** `n²·|Wᵢ|²`, the squared radius, in lowest terms. Reduced on first read — a gcd on thousands of bits. */
   get radiusSq(): Frac {
     this.reduced ??= Frac.of(this.rNum, this.rDen);
     return this.reduced;
+  }
+
+  /**
+   * A double that is ≥ the radius, for DRAWING the disc: `√(rNum/rDen)` from the top 64 bits of each
+   * side, bumped by a relative 1e-12 that dwarfs the few roundings on the way. Costs no gcd, which is
+   * the point — reading `radiusSq` to draw it took 18 ms a frame at degree 24 against Smith's own 0.9.
+   */
+  radiusUpper(): number {
+    if (this.rNum === 0n) return 0;
+    const bits = (x: bigint): number => x.toString(16).length * 4;
+    const sn = Math.max(0, bits(this.rNum) - 64);
+    const sd = Math.max(0, bits(this.rDen) - 64);
+    // Both shifted parts are at most one unit below their true values, so round the quotient UP.
+    const num = Number(this.rNum >> BigInt(sn)) + 1;
+    const den = Number(this.rDen >> BigInt(sd));
+    const log2 = Math.log2(num) - Math.log2(den) + (sn - sd);
+    return 2 ** (log2 / 2) * (1 + 1e-12);
   }
 }
 

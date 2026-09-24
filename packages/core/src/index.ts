@@ -25,6 +25,9 @@
 //                      around makeDurandKerner (ADR-0007). Residual policy stays caller-side. Also
 //                      cauchyBound + the Newton polishRoot(s), lifted from @cas/faber and Contour
 //                      Integration when Polynomial Root Analysis became the third copy (ADR-0047).
+//   - aberth         : allocation-free Aberth–Ehrlich over caller-owned buffers, residual-certified
+//                      (Adams/Igarashi) — Polynomial Roots' engine, moved here when Polynomial Root
+//                      Analysis became its second consumer (ADR-0047).
 //   - dft            : the discrete Fourier transform of a ring of samples → analytic coefficients, the
 //                      shared step under Faber-Transform's Taylor extraction (`taylorViaFFT`) and 2D
 //                      Electrostatics' interior Hele-Shaw velocity solve (ADR-0007). Scaling stays
@@ -55,3 +58,5 @@ export {
 } from "./rootsMonic.js";
 export type { PolishOptions } from "./rootsMonic.js";
 export { dftOnCircle } from "./dft.js";
+export { aberth, makeWorkspace, residual } from "./aberth.js";
+export type { AberthOptions, AberthResult, AberthWorkspace } from "./aberth.js";

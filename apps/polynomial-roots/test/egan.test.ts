@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { compileAlphabet, mapRoot } from "../src/engine/alphabet";
 import type { Alphabet, AlphabetSpec } from "../src/engine/alphabet";
-import { aberth, makeWorkspace } from "../src/engine/aberth";
+import { aberth, makeWorkspace } from "@cas/core";
 import { hueClasses, hueOf, imageHues } from "../src/engine/egan";
 import { applySymmetry, decodeDigits, orbitSpace } from "../src/engine/orbits";
 import type { OrbitSpace } from "../src/engine/orbits";

@@ -1,14 +1,20 @@
 // Aberth–Ehrlich: all roots of one polynomial at once.
 //
-// **Why not `@cas/core`'s `rootsMonic`.** The package's Durand–Kerner is the suite's general-purpose
-// root finder and it is this one's ORACLE (`test/aberth.test.ts` pins every root of thousands of
-// polynomials against it). It is not the engine here, for one reason: this app solves a quarter of a
-// million polynomials per frame, and `rootsMonic` allocates — a `ComplexTuple[]` per call plus a
-// residual pass per root — where the same work at 16 µs per degree-20 polynomial has to be
-// allocation-free to stay inside a frame budget. This solver writes into caller-owned buffers, runs
-// Gauss–Seidel (each root sees its neighbours' updates immediately, so it converges in roughly half the
-// sweeps of the Jacobi form), and never touches the heap. Two consumers would make it a package
-// (ADR-0007); one makes it app-local, pinned.
+// **Moved from Polynomial Roots (ADR-0046) into @cas/core by ADR-0047**, when Polynomial Root Analysis
+// became its second consumer by measurement (PLAN §6's open row): @cas/core's Durand–Kerner, seeded on
+// the spiral, DIVERGED on Wilkinson's degree-20 polynomial and, circle-seeded, had not converged after
+// 2000 iterations (backward error 8e-4), where this converges in 32 sweeps and 4.9 ms. The second
+// consumer also needed one addition, `seedFromWorkspace`: a drag continues each root from where it
+// was, so the seeds are the previous roots rather than the unit circle. The default path is unchanged.
+//
+// **Why not `rootsMonic` (Polynomial Roots' reasoning, kept).** `@cas/core`'s Durand–Kerner is the
+// suite's general-purpose root finder and it is this one's ORACLE (`test/aberth.test.ts` pins every root
+// of thousands of polynomials against it). Polynomial Roots solves a quarter of a million polynomials
+// per frame, and `rootsMonic` allocates — a `ComplexTuple[]` per call plus a residual pass per root —
+// where the same work at 16 µs per degree-20 polynomial has to be allocation-free to stay inside a frame
+// budget. This solver writes into caller-owned buffers, runs Gauss–Seidel (each root sees its
+// neighbours' updates immediately, so it converges in roughly half the sweeps of the Jacobi form), and
+// never touches the heap.
 //
 // The iteration is Aberth's correction to Newton — subtract the pull of the other roots before
 // stepping, so the roots repel rather than collapsing onto the same one:
@@ -99,26 +105,41 @@ const EPS = 2.220446049250313e-16;
  * both be zero. Returns whether every root settled; a caller that cares counts the failures rather than
  * dropping them silently, because "this polynomial did not converge" is a fact about the picture.
  */
+export interface AberthOptions {
+  /**
+   * Start from the roots already in `ws` instead of the unit circle — a drag continues each root from
+   * where it was, which is both faster and what keeps a root's identity (ADR-0047). The seeds must be
+   * pairwise distinct: the repulsion term divides by their differences.
+   */
+  readonly seedFromWorkspace?: boolean;
+  /** Sweeps before giving up (default 60). */
+  readonly maxSweeps?: number;
+}
+
 export function aberth(
   cRe: Float64Array,
   cIm: Float64Array,
   degree: number,
   ws: AberthWorkspace,
+  opts: AberthOptions = {},
 ): AberthResult {
   const n = degree;
   const zr = ws.rootRe;
   const zi = ws.rootIm;
+  const maxSweeps = opts.maxSweeps ?? MAX_SWEEPS;
 
   // Seed: the unit circle, angles offset by a quarter step so no seed sits on the real axis (header).
-  for (let k = 0; k < n; k++) {
-    const t = (2 * Math.PI * (k + 0.25)) / n;
-    zr[k] = Math.cos(t);
-    zi[k] = Math.sin(t);
+  if (!opts.seedFromWorkspace) {
+    for (let k = 0; k < n; k++) {
+      const t = (2 * Math.PI * (k + 0.25)) / n; // convention-ok: seed angles on the circle
+      zr[k] = Math.cos(t);
+      zi[k] = Math.sin(t);
+    }
   }
 
   // Hoisted so the give-up return can still report what the last sweep measured.
   let worstRel = 0;
-  for (let sweep = 1; sweep <= MAX_SWEEPS; sweep++) {
+  for (let sweep = 1; sweep <= maxSweeps; sweep++) {
     let allSettled = true;
     worstRel = 0;
     for (let k = 0; k < n; k++) {
@@ -197,7 +218,7 @@ export function aberth(
     }
     if (allSettled) return { converged: true, iterations: sweep, backwardErrorEps: worstRel };
   }
-  return { converged: false, iterations: MAX_SWEEPS, backwardErrorEps: worstRel };
+  return { converged: false, iterations: maxSweeps, backwardErrorEps: worstRel };
 }
 
 /** `|p(z)|` by Horner — the residual a caller uses to report how well a root is pinned. */

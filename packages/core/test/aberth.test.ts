@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { rootsMonic } from "@cas/core";
-import { aberth, makeWorkspace, residual } from "../src/engine/aberth";
+import { rootsMonic } from "../src/index.js";
+import { aberth, makeWorkspace, residual } from "../src/aberth.js";
 
 // @cas/core's Durand–Kerner is this solver's ORACLE, not its engine (see src/engine/aberth.ts's
 // header): the app solves a quarter of a million polynomials per frame and needs an allocation-free

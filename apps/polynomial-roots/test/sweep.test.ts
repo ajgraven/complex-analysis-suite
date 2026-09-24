@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { compileAlphabet, mapRoot } from "../src/engine/alphabet";
 import type { Alphabet, AlphabetSpec } from "../src/engine/alphabet";
-import { aberth, makeWorkspace } from "../src/engine/aberth";
+import { aberth, makeWorkspace } from "@cas/core";
 import { properCount } from "../src/engine/orbits";
 import { expectedRoots, sweepChunk } from "../src/engine/sweep";
 import type { SweepResult } from "../src/engine/sweep";

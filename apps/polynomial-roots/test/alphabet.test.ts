@@ -11,7 +11,7 @@ import {
   valuesOfSpec,
 } from "../src/engine/alphabet";
 import type { AlphabetSpec, Cx } from "../src/engine/alphabet";
-import { aberth, makeWorkspace } from "../src/engine/aberth";
+import { aberth, makeWorkspace } from "@cas/core";
 
 const ok = <T>(r: T | { error: string }): T => {
   if (typeof r === "object" && r !== null && "error" in r) throw new Error(String(r.error));

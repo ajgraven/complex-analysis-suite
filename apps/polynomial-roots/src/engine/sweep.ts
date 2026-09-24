@@ -13,8 +13,8 @@
 // about the quarter of it that happens to be enumerated.
 import type { Alphabet, AlphabetSpec } from "./alphabet.js";
 import { compileAlphabet, mapRoot } from "./alphabet.js";
-import { aberth, makeWorkspace } from "./aberth.js";
-import type { AberthWorkspace } from "./aberth.js";
+import { aberth, makeWorkspace } from "@cas/core";
+import type { AberthWorkspace } from "@cas/core";
 import { canonicalOf, decodeDigits, orbitSpace, properCount } from "./orbits.js";
 import { imageHues } from "./egan.js";
 import type { OrbitSpace } from "./orbits.js";
