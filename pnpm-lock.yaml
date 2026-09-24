@@ -510,6 +510,9 @@ importers:
       '@eslint/js':
         specifier: ^9.17.0
         version: 9.39.4
+      '@vitest/browser':
+        specifier: ^2.1.4
+        version: 2.1.9(@types/node@26.1.1)(playwright@1.61.1)(typescript@5.9.3)(vite@5.4.21(@types/node@26.1.1)(terser@5.48.0))(vitest@2.1.9)
       eslint:
         specifier: ^9.17.0
         version: 9.39.4
@@ -519,6 +522,9 @@ importers:
       jsdom:
         specifier: ^26.1.0
         version: 26.1.0
+      playwright:
+        specifier: ^1.49.0
+        version: 1.61.1
       typescript:
         specifier: ^5.7.2
         version: 5.9.3

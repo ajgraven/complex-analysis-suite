@@ -199,11 +199,14 @@ export function analysisCard(m: AnalysisModel): Desc | null {
               { key: "regions", class: "regions" },
               ...pz.regions.map((g, i) => {
                 const c = regionCert(g);
+                // Name the region by the roots it holds: five "exactly 1 root here" rows say nothing.
+                const who = g.roots.map((r) => `r${subscript(p.labels[r])}`).join(", ");
                 return h(
                   "li",
                   { key: `g${i}` },
                   level(c, "lv"),
-                  g.certified ? c.claim : `no count: ${g.reason}.`,
+                  who ? `Around ${who}: ` : "A region with no plotted root: ",
+                  g.certified ? c.claim : `no count, ${g.reason}.`,
                 );
               }),
             )

@@ -29,9 +29,14 @@ import {
   COEFF_HALF,
   ROOT_RADIUS,
   drawAxes,
+  drawBranchPoints,
   drawCoeffs,
+  drawCritical,
   drawDiscs,
+  drawHull,
+  drawRegionOutlines,
   drawRoots,
+  drawTrails,
 } from "../ui/ink.js";
 import { Portrait } from "../ui/portrait.js";
 import { figureBytes } from "./figure.js";
@@ -706,9 +711,20 @@ export function mountApp(host: HTMLElement): App {
     const vp = viewport(pane);
     const cam = camOf(pane.id);
     const p = live.poly;
+    const a = live.analysis;
     if (pane.gl && pane.portrait && p) {
       sizeCanvas(pane.gl, vp);
-      pane.portrait.render(worldRange(cam, vp), p.roots, p.lead, true);
+      pane.portrait.render(
+        worldRange(cam, vp),
+        p.roots,
+        p.lead,
+        // With the pseudozero ladder on, its decade lines replace the doubling bands: one set of
+        // level curves of |p| at a time, and the ladder's are the ones that mean something.
+        state.pseudozero === null,
+        state.pseudozero === null
+          ? null
+          : { coeffs: p.coeffs, log10eps: state.pseudozero },
+      );
     }
     const dpr = sizeCanvas(pane.ink, vp);
     const ctx = pane.ink.getContext("2d");
@@ -719,11 +735,27 @@ export function mountApp(host: HTMLElement): App {
     if (!p) return;
     const sel = (kind: Target["kind"]): number | null =>
       selected && selected.kind === kind ? selected.index : null;
+    // Branch points live in the plane of the coefficient they belong to.
+    const branch = (): void => {
+      if (state.coefficient !== null && a?.branch)
+        drawBranchPoints(ctx, cam, vp, a.branch.points);
+    };
     if (pane.id === "roots") {
+      if (a?.pseudozero)
+        drawRegionOutlines(ctx, cam, vp, a.pseudozero.grid, a.pseudozero.regions);
+      if (state.critical && a?.critical) drawHull(ctx, cam, vp, a.critical.hull.vertices);
       if (state.discs && live.discs?.ok) drawDiscs(ctx, cam, vp, live.discs.discs);
+      drawTrails(ctx, cam, vp, trails, p.degree);
+      if (state.critical && a?.critical) drawCritical(ctx, cam, vp, a.critical.points);
       drawRoots(ctx, cam, vp, p.roots, p.labels, sel("root"));
-      if (state.overlay) drawCoeffs(ctx, cam, vp, p.coeffs, sel("coeff"));
-    } else drawCoeffs(ctx, cam, vp, p.coeffs, sel("coeff"));
+      if (state.overlay) {
+        branch();
+        drawCoeffs(ctx, cam, vp, p.coeffs, sel("coeff"));
+      }
+    } else {
+      branch();
+      drawCoeffs(ctx, cam, vp, p.coeffs, sel("coeff"));
+    }
   }
 
   /** The canvases' names are GENERATED from what is drawn, refreshed on every render. */
@@ -751,13 +783,33 @@ export function mountApp(host: HTMLElement): App {
       "aria-label",
       `Coefficient pane: the ${p.degree + 1} coefficients a0 to a${p.degree} as points in the complex plane. ${keys}`,
     );
-    panes.roots.legend.textContent = panes.roots.portrait
-      ? "Colour: the argument of p (≈, drawn from the plotted roots). Dark bands: each doubling of |p|. Rings: the certified discs."
-      : "The phase portrait needs WebGL2, which is unavailable here; the roots and their discs are unaffected.";
-    panes.coefficients.legend.textContent =
+    const layers = [
+      state.critical
+        ? "Diamonds: the critical points; dashed: the roots' convex hull."
+        : "",
+      state.pseudozero !== null
+        ? "Grey: the pseudozero set (≈), one faint line per decade outside it; outlined: the grid cells the Analysis card's count is proved over."
+        : "",
+      state.coefficient !== null && state.overlay
+        ? `✕: where two roots collide as a${state.coefficient} moves.`
+        : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    panes.roots.legend.textContent = `${
+      panes.roots.portrait
+        ? `Colour: the argument of p (≈, drawn from the plotted roots).${state.pseudozero === null ? " Dark bands: each doubling of |p|." : ""} Rings: the certified discs.`
+        : "The phase portrait needs WebGL2, which is unavailable here; the roots and their discs are unaffected."
+    }${layers ? ` ${layers}` : ""}`;
+    panes.coefficients.legend.textContent = `${
       state.ring === "C"
         ? "Each square is a coefficient; drag it anywhere."
-        : "Each square is a coefficient; it moves along the real axis.";
+        : "Each square is a coefficient; it moves along the real axis."
+    }${
+      state.coefficient !== null
+        ? ` ✕: where two roots collide as a${state.coefficient} moves.`
+        : ""
+    }`;
   }
 
   for (const pane of Object.values(panes)) wirePointer(pane);

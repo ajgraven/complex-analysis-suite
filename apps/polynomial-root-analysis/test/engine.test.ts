@@ -189,6 +189,49 @@ describe("parsePolynomial refuses by name", () => {
 });
 
 describe("the dual form's constructors", () => {
+  it("labels a FRESH solve in reading order, and a continued one by continuity", () => {
+    const text = Array.from({ length: 20 }, (_, i) => `(z-${i + 1})`).join("*");
+    const read = parsePolynomial(text, "Q");
+    if (!read.ok) throw new Error(read.reason);
+    const w = fromExact(read.exact, "Q");
+    if (!w.ok) throw new Error(w.reason);
+    // r_k ≈ k: the solver's own order had put 20 second.
+    expect(w.poly.roots.map(([x]) => Math.round(x))).toEqual(w.poly.labels);
+    // And the Roots card lists its groups in that order (the factors' solves have none of their own).
+    const g = rootGroups(w.poly, rootDiscs(w.poly));
+    expect(g.ok && g.groups.map((x) => x.members[0])).toEqual(
+      w.poly.labels.map((_, i) => i),
+    );
+    const z5 = fromCoeffs(
+      [
+        [-1, 0],
+        [-1, 0],
+        [0, 0],
+        [0, 0],
+        [0, 0],
+        [1, 0],
+      ],
+      "R",
+    );
+    if (!z5.ok) throw new Error(z5.reason);
+    const re = z5.poly.roots.map(([x]) => x);
+    expect(re).toEqual([...re].sort((a, b) => a - b));
+    // Of a conjugate pair, the upper one first.
+    expect(z5.poly.roots[0][1]).toBeGreaterThan(0);
+    // Continued, labels follow the roots rather than the reading order.
+    const moved = fromCoeffs(
+      z5.poly.coeffs.map((c, k): Cx => (k === 0 ? [-1.3, 0] : c)),
+      "R",
+      z5.poly,
+    );
+    if (!moved.ok) throw new Error(moved.reason);
+    moved.poly.roots.forEach((r, i) =>
+      expect(
+        Math.hypot(r[0] - z5.poly.roots[i][0], r[1] - z5.poly.roots[i][1]),
+      ).toBeLessThan(0.2),
+    );
+  });
+
   it("refuses what breaks a ring's invariant", () => {
     const bad = (b: ReturnType<typeof fromCoeffs>): string => (b.ok ? "" : b.reason);
     expect(

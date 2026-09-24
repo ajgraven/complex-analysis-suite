@@ -255,10 +255,24 @@ canvas:focus-visible {
   align-self: center;
 }
 .root-disc,
-.root-kappa {
+.root-kappa,
+.root-gain {
   grid-column: 4;
   color: var(--muted);
   font-size: 12px;
+}
+.root-gain {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.gain-bar {
+  display: inline-block;
+  flex: none;
+  max-width: 40%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--accent);
 }
 .level {
   font-weight: 700;

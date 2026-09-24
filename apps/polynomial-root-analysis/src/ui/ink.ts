@@ -152,6 +152,145 @@ export function drawCoeffs(
   }
 }
 
+/** The roots' convex hull, dashed (Gauss–Lucas: the critical points lie inside it). */
+export function drawHull(
+  ctx: CanvasRenderingContext2D,
+  cam: Cam,
+  vp: Viewport,
+  vertices: readonly Cx[],
+): void {
+  if (vertices.length < 2) return;
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.7)";
+  ctx.lineWidth = 1.25;
+  ctx.setLineDash([6, 4]);
+  ctx.beginPath();
+  vertices.forEach((v, i) => {
+    const [px, py] = toScreen(cam, vp, v);
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  });
+  ctx.closePath();
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+export const CRITICAL_HALF = 5;
+
+/** Critical points (zeros of p′) as small white diamonds. */
+export function drawCritical(
+  ctx: CanvasRenderingContext2D,
+  cam: Cam,
+  vp: Viewport,
+  points: readonly Cx[],
+): void {
+  ctx.fillStyle = "#ffffff";
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.85)";
+  ctx.lineWidth = 1.25;
+  for (const z of points) {
+    const [px, py] = toScreen(cam, vp, z);
+    ctx.beginPath();
+    ctx.moveTo(px, py - CRITICAL_HALF);
+    ctx.lineTo(px + CRITICAL_HALF, py);
+    ctx.lineTo(px, py + CRITICAL_HALF);
+    ctx.lineTo(px - CRITICAL_HALF, py);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+}
+
+/** Each root's path over a drag, in its label's colour, under the markers. */
+export function drawTrails(
+  ctx: CanvasRenderingContext2D,
+  cam: Cam,
+  vp: Viewport,
+  trails: ReadonlyMap<number, readonly Cx[]>,
+  n: number,
+): void {
+  ctx.lineWidth = 2;
+  ctx.lineJoin = "round";
+  for (const [label, path] of trails) {
+    if (path.length < 2) continue;
+    ctx.strokeStyle = labelColour(label, n);
+    ctx.beginPath();
+    path.forEach((z, i) => {
+      const [px, py] = toScreen(cam, vp, z);
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+  }
+}
+
+export const BRANCH_HALF = 5;
+
+/** Branch points of the selected coefficient as ✕ in the coefficient's plane. */
+export function drawBranchPoints(
+  ctx: CanvasRenderingContext2D,
+  cam: Cam,
+  vp: Viewport,
+  points: readonly Cx[],
+): void {
+  for (const [stroke, width] of [
+    ["rgba(0, 0, 0, 0.85)", 4],
+    ["#ffd24a", 2],
+  ] as const) {
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    for (const z of points) {
+      const [px, py] = toScreen(cam, vp, z);
+      ctx.moveTo(px - BRANCH_HALF, py - BRANCH_HALF);
+      ctx.lineTo(px + BRANCH_HALF, py + BRANCH_HALF);
+      ctx.moveTo(px + BRANCH_HALF, py - BRANCH_HALF);
+      ctx.lineTo(px - BRANCH_HALF, py + BRANCH_HALF);
+    }
+    ctx.stroke();
+  }
+}
+
+/**
+ * The certified pseudozero regions' outlines — the union of grid cells the Analysis card's claim is
+ * about, which CONTAINS the shaded set. Solid where certified, dashed where the count was refused.
+ */
+export function drawRegionOutlines(
+  ctx: CanvasRenderingContext2D,
+  cam: Cam,
+  vp: Viewport,
+  grid: { nx: number; ny: number; x0: number; y0: number; h: number },
+  regions: readonly { cells: readonly number[]; certified: boolean }[],
+): void {
+  const { nx, x0, y0, h } = grid;
+  for (const g of regions) {
+    const inside = new Set(g.cells);
+    ctx.strokeStyle = g.certified
+      ? "rgba(255, 255, 255, 0.85)"
+      : "rgba(255, 190, 80, 0.9)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash(g.certified ? [] : [3, 3]);
+    ctx.beginPath();
+    for (const c of g.cells) {
+      const i = c % nx;
+      const j = (c - i) / nx;
+      const X0 = x0 + i * h;
+      const Y0 = y0 + j * h;
+      const edge = (open: boolean, a: Cx, b: Cx): void => {
+        if (!open) return;
+        const [ax, ay] = toScreen(cam, vp, a);
+        const [bx, by] = toScreen(cam, vp, b);
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(bx, by);
+      };
+      edge(!inside.has(c + 1) || i === nx - 1, [X0 + h, Y0], [X0 + h, Y0 + h]);
+      edge(!inside.has(c - 1) || i === 0, [X0, Y0], [X0, Y0 + h]);
+      edge(!inside.has(c + nx), [X0, Y0 + h], [X0 + h, Y0 + h]);
+      edge(!inside.has(c - nx), [X0, Y0], [X0 + h, Y0]);
+    }
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+}
+
 const SUB = "₀₁₂₃₄₅₆₇₈₉";
 export function subscript(k: number): string {
   return String(k)

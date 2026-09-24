@@ -78,7 +78,7 @@ export function hullCert(a: Analysis): Certificate | null {
 export function regionCert(g: PseudozeroRegion): Certificate {
   return g.certified
     ? exact(
-        `every polynomial within ε has exactly ${g.count} root${g.count === 1 ? "" : "s"} here`,
+        `every polynomial within ε has exactly ${g.count} root${g.count === 1 ? "" : "s"} in this region`,
         METHOD.pseudozero,
       )
     : refuse("a count for this region", g.reason ?? "not shown");

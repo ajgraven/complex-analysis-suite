@@ -45,19 +45,21 @@ export function rootGroups(p: Polynomial, pDiscs: DiscReport): GroupReport {
     const comps = byComponent(pDiscs);
     return {
       ok: true,
-      groups: comps.map((discs, c) => {
-        const members = pDiscs.discs.flatMap((d, i) => (d.component === c ? [i] : []));
-        // A component of one disc holds exactly one root: a SIMPLE root, and that much is exact.
-        const k = members.length;
-        return {
-          members,
-          count: k,
-          multiplicity: k,
-          exact: k === 1,
-          distinct: k === 1 ? 1 : null,
-          discs,
-        };
-      }),
+      groups: inRootOrder(
+        comps.map((discs, c) => {
+          const members = pDiscs.discs.flatMap((d, i) => (d.component === c ? [i] : []));
+          // A component of one disc holds exactly one root: a SIMPLE root, and that much is exact.
+          const k = members.length;
+          return {
+            members,
+            count: k,
+            multiplicity: k,
+            exact: k === 1,
+            distinct: k === 1 ? 1 : null,
+            discs,
+          };
+        }),
+      ),
     };
   }
 
@@ -99,13 +101,22 @@ export function rootGroups(p: Polynomial, pDiscs: DiscReport): GroupReport {
   });
   return {
     ok: true,
-    groups: groups.map((g, gi) => ({
-      members: members[gi],
-      count: g.discs.length * g.m,
-      multiplicity: g.m,
-      exact: true,
-      distinct: g.discs.length,
-      discs: g.discs,
-    })),
+    groups: inRootOrder(
+      groups.map((g, gi) => ({
+        members: members[gi],
+        count: g.discs.length * g.m,
+        multiplicity: g.m,
+        exact: true,
+        distinct: g.discs.length,
+        discs: g.discs,
+      })),
+    ),
   };
+}
+
+/** Groups listed in the order of the roots they hold — the factors' own solves have no order to keep. */
+function inRootOrder(gs: RootGroup[]): RootGroup[] {
+  const first = (g: RootGroup): number =>
+    g.members.length ? Math.min(...g.members) : Infinity;
+  return gs.sort((a, b) => first(a) - first(b));
 }

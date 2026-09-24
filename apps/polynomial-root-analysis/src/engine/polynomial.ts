@@ -85,6 +85,19 @@ function checkDegree(n: number): string | null {
   return null;
 }
 
+/**
+ * A fresh solve's labels in READING order — left to right, then top to bottom — rather than the
+ * solver's: Wilkinson's roots otherwise read r₂ ≈ 3, r₄ ≈ 6. Only when nothing is being continued; a
+ * continued polynomial keeps its labels wherever its roots have moved (that is what a label is for).
+ */
+function readingOrder(roots: readonly Cx[]): Cx[] {
+  const scale = Math.max(1, ...roots.map(([x, y]) => Math.hypot(x, y)));
+  const tie = 1e-9 * scale;
+  return [...roots].sort((a, b) =>
+    Math.abs(a[0] - b[0]) > tie ? a[0] - b[0] : b[1] - a[1],
+  );
+}
+
 /** Match each new root to a previous label: greedy nearest pairs, closest first. A PREVIEW, never a certificate. */
 function continueLabels(
   prev: Continuation,
@@ -140,7 +153,8 @@ export function fromCoeffs(
   const solved = solveAndRefine(coeffs, exactCoeffs, seeds);
   let roots = solved.roots;
   let labels = ident(n);
-  if (prev) ({ roots, labels } = continueLabels(prev, roots));
+  if (prev && prev.roots.length === n) ({ roots, labels } = continueLabels(prev, roots));
+  else roots = readingOrder(roots);
   // `separate` again after the pairing: `conjugateClose` averages pairs and flattens unpaired roots
   // onto the axis, which can land two approximations on one point.
   if (ring !== "C") roots = separate(conjugateClose(roots));

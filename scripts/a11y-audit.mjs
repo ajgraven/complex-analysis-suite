@@ -371,6 +371,17 @@ const PAGES = [
     hash: viewState("pra", { r: "C", z: [1, 1, -2, 0.5, 0, -1], l: [2, -1], d: 0, o: 1, rc: [0, 0, 2.5], cc: [0, 0, 2] }),
     expect: '.stage[data-overlay="true"]',
   },
+  {
+    // Every PRA-2 analysis layer on, by permalink: the pseudozero set certified at ε = 10⁻⁴ (its region
+    // list, with a level per row), the branch points of a₁ (their list), trails kept. `expect` keys on
+    // the region list, which only a non-null ε renders.
+    id: "polynomial-root-analysis-analysis",
+    mount: "polynomial-root-analysis",
+    dist: "apps/polynomial-root-analysis/dist",
+    file: "index.html",
+    hash: viewState("pra", { r: "Q", t: "(z-1)*(z-2)*(z-3)*(z-4)*(z-5)*(z-6)", d: 1, o: 0, cr: 1, j: 1, tr: 1, pz: -4, rc: [3.5, 0, 3], cc: [0, 0, 2000] }),
+    expect: ".pz .regions li",
+  },
 ];
 
 // The WCAG 2.0/2.1 A + AA conformance set plus axe's best-practice pack (landmarks/regions, valid
