@@ -1,7 +1,6 @@
 // The two rails, described (not built): left — what is being analysed; right — what it proves.
 // Rendered with @cas/ui's keyed builder, so a re-render never replaces a node whose key persists
 // (the input keeps its caret; a focused radio keeps its focus).
-import { describeLevel, type Certificate } from "@cas/rigor";
 import { h, type Child, type Desc } from "@cas/ui";
 import type { Polynomial, Ring } from "../engine/polynomial.js";
 import type { Conditioning } from "../engine/roots/conditioning.js";
@@ -14,6 +13,7 @@ import { subscript } from "../ui/ink.js";
 import { formatCx, formatGauss } from "./format.js";
 import type { Analysis } from "../engine/analysis/analyse.js";
 import { analysisCard } from "./analysisCard.js";
+import { level } from "./level.js";
 
 /** The gain matrix's shared log scale, so one root's row can be read against another's. */
 function gainScale(c: readonly Conditioning[] | null): [number, number] {
@@ -97,16 +97,6 @@ export interface LeftHandlers {
   readonly onRedo: () => void;
   readonly onCopyLink: () => void;
   readonly onSaveFigure: () => void;
-}
-
-/** A level glyph with its meaning spelled out for a screen reader. */
-export function level(cert: Certificate, key: string): Desc {
-  return h(
-    "span",
-    { key, class: "level", "data-level": cert.level },
-    h("span", { key: "g", "aria-hidden": "true" }, cert.level),
-    h("span", { key: "t", class: "sr" }, `${describeLevel(cert.level)}: `),
-  );
 }
 
 function card(key: string, title: string, ...body: Child[]): Desc {

@@ -9,7 +9,7 @@ import type { Polynomial } from "../engine/polynomial.js";
 import { ANALYSIS, CARD } from "../engine/vocabulary.js";
 import { subscript } from "../ui/ink.js";
 import { formatCx } from "./format.js";
-import { level } from "./rails.js";
+import { level } from "./level.js";
 
 const DIGITS_SHOWN = 24;
 
