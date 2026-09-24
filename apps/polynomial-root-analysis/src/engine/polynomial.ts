@@ -15,8 +15,8 @@
 import { QiPoly, gaussOfDoubles, yunSquarefree } from "@cas/exact";
 import { solveAndRefine } from "./roots/solve.js";
 
-export type Ring = "C" | "R" | "Q";
-export type Cx = readonly [re: number, im: number];
+import type { Cx, Ring } from "./types.js";
+export type { Cx, Ring } from "./types.js";
 
 /** The degree cap (PLAN §12, owner round 2 question 11). */
 export const MAX_DEGREE = 24;
@@ -203,6 +203,15 @@ export function fromRoots(
   if (ring === "R") {
     if (lead[1] !== 0)
       return { ok: false, reason: "ℝ mode needs a real leading coefficient" };
+    // The imaginary parts are zeroed only because conjugate pairs make them zero up to rounding;
+    // without the pairs, zeroing them would silently change the polynomial.
+    const unpaired = roots.findIndex((r, i) => r[1] !== 0 && partnerOf(roots, i) === i);
+    if (unpaired >= 0) {
+      return {
+        ok: false,
+        reason: `root ${unpaired + 1} has no conjugate partner, and ℝ mode needs every complex root paired`,
+      };
+    }
     coeffs = coeffs.map(([re]) => [re, 0]);
   }
   return {

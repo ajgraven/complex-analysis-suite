@@ -1,0 +1,424 @@
+// @vitest-environment jsdom
+//
+// The mounted page: structure, the actions a reader takes, the permalink, undo, and the words on
+// screen. jsdom has no canvas context; the stage already copes with not getting one (the ink layer
+// simply does not draw), so everything else here is ordinary DOM.
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { mountApp, type App } from "../src/shell/app.js";
+import type { Polynomial } from "../src/engine/polynomial.js";
+import { DEFAULT_STATE, type ShellState } from "../src/shell/state.js";
+import { decodeShell, encodeShell, NAMESPACE } from "../src/shell/viewState.js";
+import { verdictLine } from "../src/shell/figure.js";
+import { resolveState } from "../src/shell/state.js";
+import { DENYLIST } from "../src/engine/vocabulary.js";
+import { encodeViewState } from "@cas/interchange";
+
+function mount(hash = ""): { root: HTMLElement; app: App } {
+  window.history.replaceState(null, "", `${window.location.pathname}${hash}`);
+  const root = document.createElement("div");
+  root.id = "app";
+  document.body.replaceChildren(root);
+  return { root, app: mountApp(root) };
+}
+
+function livePoly(app: App): Polynomial {
+  const p = app.live().poly;
+  if (!p) throw new Error("no polynomial on screen");
+  return p;
+}
+
+const q = <T extends Element = HTMLElement>(sel: string): T => {
+  const e = document.querySelector<T>(sel);
+  if (!e) throw new Error(`no ${sel}`);
+  return e;
+};
+
+beforeEach(() => {
+  HTMLCanvasElement.prototype.getContext = (() => null) as never;
+});
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+describe("the page's structure", () => {
+  it("names every landmark uniquely", () => {
+    mount();
+    const names = [...document.querySelectorAll("section[aria-labelledby]")].map(
+      (s) =>
+        document.getElementById(s.getAttribute("aria-labelledby") ?? "")?.textContent,
+    );
+    expect(new Set(names).size).toBe(names.length);
+  });
+
+  it("has one <main>, one <h1>, and every canvas named or explicitly hidden", () => {
+    mount();
+    expect(document.querySelectorAll("main")).toHaveLength(1);
+    expect(document.querySelectorAll("h1")).toHaveLength(1);
+    for (const c of document.querySelectorAll("canvas")) {
+      const named = (c.getAttribute("aria-label") ?? "").length > 0;
+      const hidden = c.getAttribute("aria-hidden") === "true";
+      expect(named || hidden).toBe(true);
+    }
+    // The ink layers are the interactive surfaces, focusable, with a generated description.
+    const inks = document.querySelectorAll("canvas.ink");
+    expect(inks).toHaveLength(2);
+    for (const c of inks) {
+      expect(c.getAttribute("role")).toBe("application");
+      expect(c.getAttribute("tabindex")).toBe("0");
+    }
+    expect(q("canvas.ink").getAttribute("aria-label")).toMatch(
+      /5 roots of a degree-5 polynomial/,
+    );
+  });
+
+  it("opens on z⁵ − z − 1 with every root isolated, and says so exactly", () => {
+    mount();
+    expect(q(".rail-right .summary").textContent).toMatch(
+      /5 discs, pairwise disjoint: each holds exactly one root/,
+    );
+    expect(q(".rail-right .summary .level").getAttribute("data-level")).toBe("=");
+    expect(document.querySelectorAll(".rail-right .root")).toHaveLength(5);
+    // Coordinates are estimates, whatever the disc says.
+    for (const r of document.querySelectorAll(".rail-right .root")) {
+      expect(r.querySelector(".level")?.getAttribute("data-level")).toBe("≈");
+    }
+  });
+});
+
+describe("typing a polynomial", () => {
+  it("reads it, reframes the panes, and is one undo step", () => {
+    const { app } = mount();
+    app.actions().type("(z-1)^2*(z+2)");
+    expect(app.currentState().poly).toEqual({ kind: "text", text: "(z-1)^2*(z+2)" });
+    expect(app.currentState().rootCam.half).toBeGreaterThan(1.2);
+    const claims = [...document.querySelectorAll(".rail-right .claim")].map(
+      (c) => c.textContent,
+    );
+    expect(claims.some((c) => /= ?.*a double root/.test(c ?? ""))).toBe(true);
+    app.actions().undo();
+    expect(app.currentState().poly).toEqual(DEFAULT_STATE.poly);
+    app.actions().redo();
+    expect(app.currentState().poly).toEqual({ kind: "text", text: "(z-1)^2*(z+2)" });
+  });
+
+  it("refuses by name, keeps the last polynomial, and does not commit", () => {
+    const { app } = mount();
+    app.actions().type("sin(z)");
+    expect(q(".rail-left .refusal").textContent).toMatch(
+      /Not read: .*not a rational function/,
+    );
+    expect(q(".rail-left .refusal").getAttribute("role")).toBe("alert");
+    expect(app.currentState()).toEqual(DEFAULT_STATE);
+    // The box keeps what the reader typed, so it can be corrected.
+    expect(q<HTMLInputElement>(".poly-input").value).toBe("sin(z)");
+  });
+
+  it("reads through the input's change event", () => {
+    const { app } = mount();
+    const input = q<HTMLInputElement>(".poly-input");
+    input.value = "z^3 - 2";
+    input.dispatchEvent(new Event("change"));
+    expect(app.currentState().poly).toEqual({ kind: "text", text: "z^3 - 2" });
+  });
+});
+
+describe("the coefficient ring", () => {
+  it("refuses ℝ for a Gaussian coefficient, by name, and stays where it was", () => {
+    const { app } = mount();
+    app.actions().setRing("C");
+    app.actions().type("z^2 + i");
+    app.actions().setRing("R");
+    expect(app.currentState().ring).toBe("C");
+    expect(app.refusal()).toMatch(/not real/);
+  });
+
+  it("carries a float polynomial into ℚ by snapping each coefficient, and shows it exactly", () => {
+    const { app } = mount();
+    app.actions().setRing("C");
+    app.actions().moveTo({ kind: "coeff", index: 0 }, [-1.25, 0]);
+    app.actions().release();
+    expect(app.currentState().poly.kind).toBe("coeffs");
+    app.actions().setRing("Q");
+    expect(app.currentState()).toMatchObject({
+      ring: "Q",
+      poly: { kind: "text", text: "z^5 - z - 5/4" },
+    });
+  });
+});
+
+describe("dragging", () => {
+  it("in ℝ, a complex root drags its conjugate and a real root stays on the axis", () => {
+    const { app } = mount();
+    app.actions().setRing("R");
+    const p = livePoly(app);
+    const complex = p.roots.findIndex((r) => r[1] > 0);
+    const real = p.roots.findIndex((r) => r[1] === 0);
+    app.actions().moveTo({ kind: "root", index: complex }, [0.3, 1.2]);
+    const after = livePoly(app);
+    expect(after.roots[complex]).toEqual([0.3, 1.2]);
+    expect(after.roots.some((r) => r[0] === 0.3 && r[1] === -1.2)).toBe(true);
+    expect(after.coeffs.every((c) => c[1] === 0)).toBe(true);
+    app.actions().moveTo({ kind: "root", index: real }, [1.4, 0.7]);
+    expect(livePoly(app).roots[real]).toEqual([1.4, 0]);
+  });
+
+  it("in ℚ, a release snaps to rationals, and a coefficient drag moves only that coefficient", () => {
+    const { app } = mount();
+    const before = livePoly(app).exact as NonNullable<Polynomial["exact"]>;
+    app.actions().moveTo({ kind: "coeff", index: 1 }, [-0.7, 0.4]);
+    // Mid-drag: real (the imaginary part is ignored in ℚ) and not yet committed.
+    expect(livePoly(app).coeffs[1]).toEqual([-0.7, 0]);
+    expect(app.currentState()).toEqual(DEFAULT_STATE);
+    app.actions().release();
+    const after = livePoly(app).exact as NonNullable<Polynomial["exact"]>;
+    expect(after.coeff(1).re.d).toBeLessThan(1000n); // snapped to a simple rational
+    for (const k of [0, 2, 3, 4, 5])
+      expect(after.coeff(k).equals(before.coeff(k))).toBe(true);
+    expect(app.currentState().poly.kind).toBe("text");
+  });
+
+  it("keeps root LABELS through a coefficient drag", () => {
+    const { app } = mount();
+    app.actions().setRing("C");
+    const before = livePoly(app);
+    app.actions().moveTo({ kind: "coeff", index: 0 }, [-1.02, 0.01]);
+    const after = livePoly(app);
+    after.roots.forEach((r, i) =>
+      expect(
+        Math.hypot(r[0] - before.roots[i][0], r[1] - before.roots[i][1]),
+      ).toBeLessThan(0.05),
+    );
+    expect(after.labels).toEqual(before.labels);
+  });
+
+  it("will not let the leading coefficient reach zero", () => {
+    const { app } = mount();
+    app.actions().setRing("C");
+    app.actions().moveTo({ kind: "coeff", index: 5 }, [0, 0]);
+    expect(livePoly(app).degree).toBe(5);
+  });
+});
+
+describe("the keyboard", () => {
+  it("selects with ] and moves the selection with the arrows, one undo step each", () => {
+    const { app } = mount();
+    app.actions().setRing("C");
+    const ink = q<HTMLCanvasElement>('[data-pane="roots"] canvas.ink');
+    const r0 = livePoly(app).roots[0];
+    ink.dispatchEvent(new KeyboardEvent("keydown", { key: "]", bubbles: true }));
+    ink.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    const r1 = livePoly(app).roots[0];
+    expect(r1[0]).toBeGreaterThan(r0[0]);
+    expect(app.currentState().poly.kind).toBe("roots");
+    expect(q('[data-pane="roots"] [role="status"]').textContent).toMatch(/^root 1 at /);
+    app.actions().undo();
+    expect(livePoly(app).roots[0]).toEqual(r0);
+  });
+
+  it("pans with the arrows when nothing is selected, and zooms with + and −", () => {
+    const { app } = mount();
+    const ink = q<HTMLCanvasElement>('[data-pane="coefficients"] canvas.ink');
+    const cam = app.currentState().coeffCam;
+    ink.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+    expect(app.currentState().coeffCam.cy).toBeGreaterThan(cam.cy);
+    ink.dispatchEvent(new KeyboardEvent("keydown", { key: "+", bubbles: true }));
+    expect(app.currentState().coeffCam.half).toBeLessThan(cam.half);
+  });
+});
+
+describe("the view toggles", () => {
+  it("overlay hides the coefficient pane and puts the coefficients on the root plane", () => {
+    const { app } = mount();
+    app.actions().setOverlay(true);
+    expect(q('[data-pane="coefficients"]').hidden).toBe(true);
+    expect(q("#pane-roots").textContent).toBe("Roots and coefficients");
+    expect(q<HTMLInputElement>('.rail-left input[type="checkbox"]').checked).toBe(true);
+  });
+});
+
+describe("applyState restores a state the app is NOT in (M6.1's test, not the fixed point)", () => {
+  const A: ShellState = {
+    ring: "Q",
+    poly: { kind: "text", text: "z^4 - 2" },
+    discs: true,
+    overlay: false,
+    rootCam: { cx: 0.25, cy: -0.5, half: 2 },
+    coeffCam: { cx: 1, cy: 0, half: 3 },
+  };
+  const B: ShellState = {
+    ring: "C",
+    poly: {
+      kind: "roots",
+      roots: [
+        [1, 1],
+        [-2, 0.5],
+        [0, -1],
+      ],
+      lead: [2, -1],
+    },
+    discs: false,
+    overlay: true,
+    rootCam: { cx: -1, cy: 2, half: 0.75 },
+    coeffCam: { cx: 0, cy: 0, half: 1.5 },
+  };
+
+  it("lands on the state applied, in both directions, with every field different", () => {
+    for (const [from, to] of [
+      [A, B],
+      [B, A],
+    ] as const) {
+      const { app } = mount();
+      app.applyState(from);
+      expect(app.currentState()).toEqual(from);
+      app.applyState(to);
+      expect(app.currentState()).toEqual(to);
+      // And the SCREEN follows, not only the object.
+      expect(q('[data-pane="coefficients"]').hidden).toBe(to.overlay);
+      const boxes = [
+        ...document.querySelectorAll<HTMLInputElement>(
+          '.rail-left input[type="checkbox"]',
+        ),
+      ];
+      expect(boxes.map((b) => b.checked)).toEqual([to.overlay, to.discs]);
+      expect(q<HTMLInputElement>(`.rail-left input[value="${to.ring}"]`).checked).toBe(
+        true,
+      );
+      expect(document.querySelectorAll(".rail-right .root")).toHaveLength(
+        to === A ? 4 : 3,
+      );
+    }
+  });
+});
+
+describe("the permalink", () => {
+  const states: ShellState[] = [
+    DEFAULT_STATE,
+    {
+      ...DEFAULT_STATE,
+      ring: "C",
+      poly: {
+        kind: "coeffs",
+        coeffs: [
+          [-1, 0.5],
+          [0, 0],
+          [3.25, -1e-7],
+          [1, 0],
+        ],
+      },
+      discs: false,
+    },
+    {
+      ...DEFAULT_STATE,
+      ring: "R",
+      poly: {
+        kind: "roots",
+        roots: [
+          [1, 2],
+          [1, -2],
+          [0.1, 0],
+        ],
+        lead: [3, 0],
+      },
+      overlay: true,
+    },
+  ];
+
+  it("round-trips every form of the polynomial exactly", () => {
+    for (const s of states) {
+      const d = decodeShell(encodeShell(s));
+      expect(d?.ok && d.state).toEqual(s);
+    }
+    expect(decodeShell("")).toBeNull();
+  });
+
+  it("opens a link on mount, and writes the address bar after a commit", async () => {
+    vi.useFakeTimers();
+    const { app } = mount(encodeShell(states[1]));
+    expect(app.currentState()).toEqual(states[1]);
+    app.actions().setDiscs(true);
+    vi.advanceTimersByTime(300);
+    const d = decodeShell(window.location.hash);
+    expect(d?.ok && d.state.discs).toBe(true);
+  });
+
+  it("refuses a link it cannot honour, by name, and says so on the page", () => {
+    const enc = (state: Record<string, unknown>, app = NAMESPACE) =>
+      encodeViewState(app, state);
+    const base = { r: "Q", t: "z^2+1", d: 1, o: 0, rc: [0, 0, 1], cc: [0, 0, 1] };
+    const cases: [string, RegExp][] = [
+      ["#vs=%%%", /truncated or malformed/],
+      [enc(base, "ci"), /another app \('ci'\)/],
+      [enc({ ...base, r: "Z" }), /unknown coefficient ring 'Z'/],
+      [enc({ ...base, t: undefined }), /carries no polynomial/],
+      [
+        enc({ ...base, t: undefined, r: "C", c: [1, 0, "x", 0] }),
+        /not a list of finite number pairs/,
+      ],
+      [enc({ ...base, t: undefined, r: "C", c: Array(52).fill(1) }), /cap of 24/],
+      [
+        enc({ ...base, t: undefined, r: "R", z: [1, 2, 3, 0], l: [1, 0] }),
+        /no conjugate partner/,
+      ],
+      [enc({ ...base, t: "sin(z)" }), /not a rational function/],
+      [enc({ ...base, rc: [0, 0, -1] }), /root camera/],
+      [enc({ ...base, t: "z^2 + i" }), /not real/],
+    ];
+    for (const [hash, why] of cases) {
+      const d = decodeShell(hash);
+      expect(d && !d.ok && d.reason, hash).toMatch(why);
+    }
+    mount(cases[2][0]);
+    expect(q(".link-refusal").hidden).toBe(false);
+    expect(q(".link-refusal").textContent).toMatch(
+      /could not be opened: unknown coefficient ring 'Z'/,
+    );
+  });
+});
+
+describe("the words on screen", () => {
+  function screenText(): string {
+    const labels = [...document.querySelectorAll("[aria-label]")].map((e) =>
+      e.getAttribute("aria-label"),
+    );
+    return `${document.body.textContent}\n${labels.join("\n")}`;
+  }
+
+  it("never carries a method's house name, across ordinary and refusing states", () => {
+    const { app } = mount();
+    const texts: string[] = [screenText()];
+    app.actions().type("(z-1)^2*(z+2)^3");
+    texts.push(screenText());
+    app.actions().setRing("C");
+    app.actions().moveTo({ kind: "root", index: 0 }, [0.3, 0.3]);
+    texts.push(screenText());
+    app.actions().type("sin(z)");
+    texts.push(screenText());
+    app.actions().setRing("R");
+    texts.push(screenText());
+    for (const t of texts) for (const bad of DENYLIST) expect(t).not.toMatch(bad);
+  });
+
+  it("the figure's caption is the Roots card's verdict, and refuses with the refusal", () => {
+    expect(verdictLine(resolveState(DEFAULT_STATE))).toMatch(
+      /^= degree 5: every root in its own disc/,
+    );
+    expect(
+      verdictLine(
+        resolveState({ ...DEFAULT_STATE, poly: { kind: "text", text: "sin(z)" } }),
+      ),
+    ).toMatch(/^No polynomial: .*not a rational function/);
+  });
+});
+
+describe("the figure caption wraps rather than being cut off", () => {
+  it("breaks at words, every line within the width, nothing lost", async () => {
+    const { wrap } = await import("../src/shell/figure.js");
+    const ctx = { measureText: (t: string) => ({ width: 7 * t.length }) };
+    const text =
+      "= degree 5: every root in its own disc, each holding exactly one root (proved in exact arithmetic); coordinates ≈.";
+    const lines = wrap(ctx, text, 200);
+    expect(lines.length).toBeGreaterThan(1);
+    for (const l of lines) expect(7 * l.length).toBeLessThanOrEqual(200);
+    expect(lines.join(" ")).toBe(text);
+  });
+});

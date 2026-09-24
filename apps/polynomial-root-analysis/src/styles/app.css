@@ -1,10 +1,12 @@
-/* PRA-0: a bar, a notice, and two square panes side by side (stacked at phone width). */
+/* A bar, then one grid: the left rail, the stage (two square panes, or one in overlay), the right rail. */
 :root {
   --bg: #0b0d12;
   --panel: #121520;
   --line: #262b3a;
   --ink: #e6e9f0;
   --muted: #a3acbb;
+  --accent: #ffd24a;
+  --bad: #ff8a80;
 }
 
 * {
@@ -27,12 +29,14 @@ body {
 #boot-loading {
   display: none;
 }
+[hidden] {
+  display: none !important;
+}
 
 .bar {
   padding: 10px 16px;
   border-bottom: 1px solid var(--line);
 }
-
 /* The page's h1 is the brand, so the document has a heading structure; the CSS cancels its size. */
 .brand {
   margin: 0;
@@ -40,33 +44,245 @@ body {
   font-weight: 600;
 }
 
-.stage {
+.shell {
+  display: grid;
+  grid-template-columns: minmax(240px, 20rem) minmax(0, 1fr) minmax(240px, 22rem);
+  gap: 16px;
   padding: 16px;
+  align-items: start;
+}
+.link-refusal {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--bad);
+}
+@media (max-width: 1000px) {
+  .shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
-.notice {
-  margin: 0 0 16px;
-  max-width: 72ch;
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 12px;
+}
+.card h2 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--muted);
 }
 
-.panes {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
-  gap: 16px;
+.field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.poly-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font:
+    14px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+.refusal {
+  color: var(--bad);
+  margin: 6px 0 0;
+}
+.ring {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  margin: 10px 0 0;
+  padding: 6px 10px;
+}
+.ring legend {
+  color: var(--muted);
+  padding: 0 4px;
+}
+.ring-choice,
+.check {
+  display: block;
+  margin: 2px 0;
+}
+.coeffs {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  font:
+    13px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+.coeffs li {
+  display: flex;
+  gap: 6px;
+}
+.coef-name {
+  color: var(--muted);
+  min-width: 2.5em;
+}
+.coef-value {
+  overflow-wrap: anywhere;
+}
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+button {
+  background: var(--bg);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 4px 10px;
+  font: inherit;
+  cursor: pointer;
+}
+button:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+button:focus-visible,
+input:focus-visible,
+canvas:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.status {
+  margin: 6px 0 0;
+  color: var(--muted);
+  min-height: 1.5em;
 }
 
+.stage {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  min-width: 0;
+}
+.stage[data-overlay="true"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (max-width: 700px) {
+  .stage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.pane {
+  min-width: 0;
+}
 .pane h2 {
   margin: 0 0 6px;
   font-size: 13px;
   font-weight: 600;
   color: var(--muted);
 }
-
-.pane canvas {
-  display: block;
+.canvas-stack {
+  position: relative;
   width: 100%;
   aspect-ratio: 1;
   background: var(--panel);
   border: 1px solid var(--line);
+  overflow: hidden;
+}
+.canvas-stack canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.canvas-stack canvas.ink {
+  cursor: crosshair;
+  touch-action: none;
+}
+.pane-legend {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.summary,
+.claim {
+  margin: 0 0 6px;
+}
+.groups,
+.members {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.group {
+  border-top: 1px solid var(--line);
+  padding: 6px 0;
+}
+.root {
+  display: grid;
+  grid-template-columns: 12px auto auto minmax(0, 1fr);
+  column-gap: 6px;
+  align-items: baseline;
+  font:
+    13px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+.root[data-selected="true"] {
+  outline: 1px solid var(--accent);
+}
+.swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  align-self: center;
+}
+.root-disc,
+.root-kappa {
+  grid-column: 4;
+  color: var(--muted);
+  font-size: 12px;
+}
+.level {
+  font-weight: 700;
+  margin-right: 4px;
+}
+.level[data-level="="] {
+  color: #8ee08e;
+}
+.level[data-level="≈"] {
+  color: var(--accent);
+}
+.level[data-level="⚠"] {
+  color: var(--bad);
+}
+.legend {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 8px 0 0;
+}
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }

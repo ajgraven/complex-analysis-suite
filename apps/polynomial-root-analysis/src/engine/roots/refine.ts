@@ -17,7 +17,7 @@
 // decide where the root is.
 import type { Gauss } from "@cas/exact";
 import { bigGcd } from "@cas/exact";
-import type { Cx } from "../polynomial.js";
+import type { Cx } from "../types.js";
 
 const EPS = 2.220446049250313e-16;
 

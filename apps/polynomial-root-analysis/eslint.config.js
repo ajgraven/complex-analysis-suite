@@ -18,6 +18,10 @@ export default tseslint.config(
       eqeqeq: ["error", "always"],
       "no-console": ["error", { allow: ["warn", "info", "error"] }],
       "@typescript-eslint/no-non-null-assertion": "error",
+      // DESIGN §1, from Contour Integration's M5.1 review: a parameter shadowing the module state it
+      // was meant to update is legal TypeScript and was three silent bugs there.
+      "no-shadow": "off",
+      "@typescript-eslint/no-shadow": "error",
     },
   },
   {

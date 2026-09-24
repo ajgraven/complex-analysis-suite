@@ -360,6 +360,17 @@ const PAGES = [
     dist: "apps/polynomial-root-analysis/dist",
     file: "index.html",
   },
+  {
+    // The OVERLAY view in ℂ mode, opened by its permalink: one pane carrying roots AND coefficients, a
+    // root-form polynomial, discs off — every toggle the default page leaves untouched. `expect` keys on
+    // the stage's overlay flag, which only the decoded link sets.
+    id: "polynomial-root-analysis-overlay",
+    mount: "polynomial-root-analysis",
+    dist: "apps/polynomial-root-analysis/dist",
+    file: "index.html",
+    hash: viewState("pra", { r: "C", z: [1, 1, -2, 0.5, 0, -1], l: [2, -1], d: 0, o: 1, rc: [0, 0, 2.5], cc: [0, 0, 2] }),
+    expect: '.stage[data-overlay="true"]',
+  },
 ];
 
 // The WCAG 2.0/2.1 A + AA conformance set plus axe's best-practice pack (landmarks/regions, valid

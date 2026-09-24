@@ -11,7 +11,7 @@
 // otherwise. Every coordinate here is `≈`; what is `=` about them is what `discs.ts` proves.
 import { aberth, makeWorkspace, tupleAlgebra } from "@cas/core";
 import { gaussOfDoubles, type Gauss } from "@cas/exact";
-import type { Cx } from "../polynomial.js";
+import type { Cx } from "../types.js";
 import { refineExactly } from "./refine.js";
 
 export interface Solved {
