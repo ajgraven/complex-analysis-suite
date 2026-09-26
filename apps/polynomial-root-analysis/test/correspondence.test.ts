@@ -114,6 +114,43 @@ describe("the D₅ quintic: the F₂₀ invariant is Dummit's θ = 40 (PLAN §7 
   });
 });
 
+describe("the top node, the overgroups, and the precision they take", () => {
+  it("the whole group's invariant is x₀ itself summed, not a coincidence of e₁ = 0: z³ + z² − 2z − 1 reads −1", () => {
+    // x³ − 2 and the D₅ quintic both have e₁ = e₂ = 0, so any symmetric invariant reads 0 on them.
+    const { c } = setup("z^3 + z^2 - 2z - 1");
+    expect(c.nodes[0].label).toBe("3T1");
+    expect(c.nodes[0].integer).toBe("-1");
+  });
+
+  it("an overgroup is strictly larger: D₅'s list holds F₂₀ and never D₅ itself", () => {
+    const { c, id } = setup("z^5 - 5z + 12");
+    expect(id.label).toBe("5T2");
+    const labels = c.overgroups.map((o) => o.label);
+    expect(labels).toContain("5T3");
+    expect(labels).not.toContain("5T2");
+  });
+
+  it("starting short of the bits the roots need doubles rather than refusing", () => {
+    const { p, f, id } = setup("z^5 - 5z + 12");
+    const c = correspondence(
+      f.coefficients.map(BigInt),
+      p.roots.map(([x, y]) => [x, y] as const),
+      id.generators,
+      4,
+    );
+    if (!c.ok) throw new Error(c.reason);
+    expect(c.bits).toBeGreaterThan(4);
+    expect(c.overgroups.find((o) => o.label === "5T3")?.integer).toBe("40");
+  });
+
+  it("a moved value is read in floating point, so it is ≈; unchanged is a membership test, so =", () => {
+    const gens = [[1, 2, 0]];
+    expect(movedCert([1, 0, 2], gens, [1.5, 0]).level).toBe("≈");
+    expect(movedCert([1, 0, 2], gens, null).level).toBe("=");
+    expect(movedCert([1, 2, 0], gens, [1.5, 0]).level).toBe("=");
+  });
+});
+
 describe("a Galois element fixes the invariants of exactly the subgroups containing it", () => {
   it("x³ − 2: every generator, against every node, in disc arithmetic", () => {
     const { p, c, id } = setup("z^3 - 2");

@@ -9,11 +9,25 @@ not silently changed.
 
 ## Current
 
-**PRA-6 — the Galois correspondence, numerically** (PLAN §7), awaiting the owner's go-ahead. PRA-5 is
-complete, and the app is wired to publish with the next merge to `master`.
+**PRA-7 — Families** (PLAN §7), awaiting the owner's go-ahead. PRA-6 is complete.
 
 ## Done
 
+- 2026-09-26 — **PRA-6 complete: the Galois correspondence, numerically** (and, first, the owner-approved
+  split of the group table: main chunk 741 → 429 kB). `src/engine/galois/correspondence.ts` + its own
+  `lattice.worker.ts`: for a labelled group of degree ≤ 7, every subgroup (degree ≤ 5; one per class past
+  30) or the transitive ones with the derived series (6–7), each with an invariant whose stabiliser is
+  exactly it; at the top an integer, below it the fixed field's polynomial certified from the roots and
+  proved to have distinct roots; and the transitive groups CONTAINING Gal with their integer invariants.
+  Opened on request (`ShellState.lattice`, `#vs=` key `gc`); after a played permutation every invariant
+  says whether it stayed (exact membership) or where it moved (`≈`). Gate clauses: x³ − 2 shows S₃'s six
+  subgroups — S₃ reading the integer 0, A₃'s field T² + 108 (= ℚ(√−3) = ℚ(ω)), each C₂'s T³ − 2 (ℚ(∛2) and
+  its two conjugates), the trivial group's the degree-6 splitting field; the D₅ quintic's F₂₀-invariant
+  reads **= 40**, Dummit's θ; a certified lasso swap applied to its roots moves that invariant off every
+  integer, asserted in disc arithmetic; every Galois generator fixes exactly the invariants of the
+  subgroups containing it (disc-separated otherwise). S₅'s F₂₀ node reproduces research 01's sextic for
+  x⁵ − x − 1 coefficient for coefficient. Sweep **24 mutants, 22 killed, 2 recorded equivalents** (below). Gate **640 files / 7439 tests** (639 / 7417 before PRA-6), browser suite 1 / 3;
+  `pnpm a11y --strict` **1,421 interactive nodes across 37 pages, 0 unnamed** (roster entry `-correspondence` new).
 - 2026-09-26 — **PRA-5 complete (5.1–5.5): Tier 1, the labelled group, Tier 2, and the publish
   wiring.** 5.1: `src/engine/galois/data/transitive.json` — all 1,012 transitive groups of degree 2–15,
   generated from GAP's transgrp by `scripts/generate-transitive-groups.mjs` (counts = OEIS A002106;
@@ -113,6 +127,36 @@ complete, and the app is wired to publish with the next merge to `master`.
   `docs/design/future-app-ideas.md` as ▶ 8. No code touched.
 
 ## Findings (things learned while executing; each names its step)
+
+- _(PRA-6)_ **The gate's "invariants reading = integer at the nodes Conrad lists" is read as the Galois
+  correspondence says it must be:** only the invariant of the whole group (and of any group containing
+  it) is rational. Below the top each node's claim is its fixed field's defining polynomial, exact — x³ − 2's
+  ℚ(∛2) node reads T³ − 2 and its ℚ(ω) node T² + 108 — which is the stronger statement.
+- _(PRA-6)_ **One Sₙ-relative invariant per transitive group serves every node.** Stab_{Sₙ}(F) = H makes
+  Stab_G(F) = H ∩ G = H for every G ⊇ H, so the 25 extra entries in `invariants.json` (searched at build
+  time, 17 s) cover every transitive subgroup and every group containing Gal; only intransitive subgroups
+  (degree ≤ 5) are searched at run time, where the trivial group needs exponents up to n − 1.
+- _(PRA-6)_ **Listing S₇'s transitive subgroups by their elements took 37 s** (512 of them); naming a
+  COPY tKt⁻¹ by the orbit set t·O of K's invariant modulo the normaliser — t·O names a coset, not a copy,
+  which the first draft confused and reported 720 copies of C₇ instead of 120 — takes 0.8 s.
+- _(PRA-6)_ **A node's values can coincide before its Tschirnhaus transformation** (x₀²x₁ on x³ − 2's
+  roots αωᵏ takes three values, not six), so "a Galois element outside H moves H's invariant" is true of
+  the TRANSFORMED values the field polynomial was built from; the card's after-a-motion readout uses them.
+- _(PRA-6)_ **The lattice is computed only when asked for.** At first it rode in the Galois evidence and
+  the shell suite went from 10 s to 33 s: every app the suite mounts ran S₅'s 156-subgroup lattice on the
+  jsdom main thread. It has its own worker and a state flag now, off by default; the lazy degree-8–15
+  table likewise re-asks only when the answer on screen was waiting for it.
+- _(PRA-6)_ **Sweep: six first-pass survivors, and two of them were my test polynomials.** x³ − 2 and the
+  D₅ quintic both have e₁ = e₂ = 0, so replacing the top invariant x₀ with x₀² still read 0 on both; the
+  top node is now also tested on z³ + z² − 2z − 1, which reads −1. The other survivors: overgroups were
+  never tested to exclude the group itself (`<` for `<=`); nothing asserted a moved value is `≈`; a new
+  polynomial did not clear the last motion's readout, so the readout described roots that were gone
+  (fixed). The precision loop also returned `preciseRoots`' refusal at a start too short for the
+  roots instead of doubling; it doubles now (tested from 4 bits). **Recorded equivalents:** `ap-stale`,
+  the client already drops stale results (PRA-4's twin); and `c-over-int` (an uncertified overgroup
+  integer read as 0), because every node's field polynomial needs strictly more bits than any overgroup
+  integer. Measured from start bits 4–64 on five polynomials (C₃, C₄, C₅, D₄, D₅): the nodes are always
+  the ones that bind.
 
 - _(PRA-5)_ **The table is GAP's, not the LMFDB API's.** The API answers every script with a captcha
   gate (measured); the LMFDB's transitive-group data is itself GAP's transgrp (Conway–Hulpke–McKay's

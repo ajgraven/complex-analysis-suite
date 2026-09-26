@@ -310,10 +310,15 @@ export function correspondence(
   entries.sort((x, y) => y.els.length - x.els.length);
   const everySubgroup = entries.length === total;
 
-  // Precision: refine, and double while any disc the claims read is too wide.
+  // Precision: refine, and double while any disc the claims read is too wide — or while the roots
+  // themselves cannot yet be certified at this many bits, which is the same shortage one step earlier.
+  let refusal: string | null = null;
   for (let S = startBits; S <= 4096; S *= 2) {
     const refined = preciseRoots(F, approx, S);
-    if (!refined.ok) return refined;
+    if (!refined.ok) {
+      refusal = refined.reason;
+      continue;
+    }
     const A = new DiscArith(S);
     const z = refined.roots;
     const built = buildNodes(A, z, entries, Gc, order, n, derivedKeys);
@@ -322,7 +327,10 @@ export function correspondence(
     if (over === "precision") continue;
     return { ok: true, nodes: built, everySubgroup, total, overgroups: over, bits: S };
   }
-  return { ok: false, reason: "the invariants could not be certified within 4096 bits" };
+  return {
+    ok: false,
+    reason: refusal ?? "the invariants could not be certified within 4096 bits",
+  };
 }
 
 function invariantFor(

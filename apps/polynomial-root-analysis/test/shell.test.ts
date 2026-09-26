@@ -927,5 +927,11 @@ describe("the Galois correspondence (PRA-6)", () => {
     expect(card().querySelector(".lattice-node .moved")?.textContent).toMatch(
       /unchanged/,
     );
+    // A new polynomial is a new set of roots: a motion of the old ones says nothing about it.
+    app.actions().type("z^5 - z - 1");
+    await settled(app);
+    await vi.waitFor(() => expect(app.lattice()?.kind).toBe("done"), { timeout: 10_000 });
+    expect(card().textContent).not.toMatch(/After the last motion/);
+    expect(card().querySelector(".moved")).toBeNull();
   });
 });
