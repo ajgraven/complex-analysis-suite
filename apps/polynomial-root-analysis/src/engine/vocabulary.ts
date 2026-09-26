@@ -62,6 +62,12 @@ export const GALOIS = {
   refused: (why: string): string => `No Galois group: ${why}.`,
 } as const;
 
+/** "a swap", "a 5-cycle", "an 8-cycle", "an 11-cycle" — the article follows the spoken number. */
+export function aCycle(l: number): string {
+  const an = l === 8 || l === 11 || l === 18 || (l >= 80 && l < 90);
+  return `${an ? "an" : "a"} ${cycleWord(l)}`;
+}
+
 /** "swap", "3-cycle", "5-cycle". */
 export function cycleWord(l: number): string {
   return l === 2 ? "swap" : `${l}-cycle`;
@@ -83,8 +89,8 @@ export function witnessText(w: {
   power: number;
 }): string {
   return w.power === 1
-    ? `a ${cycleWord(w.cycle)} at p = ${w.prime}`
-    : `type ${typeText(w.type)} at p = ${w.prime}, ${powerWord(w.power)} is a ${cycleWord(w.cycle)}`;
+    ? `${aCycle(w.cycle)} at p = ${w.prime}`
+    : `type ${typeText(w.type)} at p = ${w.prime}, ${powerWord(w.power)} is ${aCycle(w.cycle)}`;
 }
 
 /** The claim a certified disc component makes, worded for a reader. */

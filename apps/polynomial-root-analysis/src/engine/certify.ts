@@ -8,7 +8,7 @@ import type { PseudozeroRegion } from "./analysis/pseudozero.js";
 import {
   GALOIS,
   METHOD,
-  cycleWord,
+  aCycle,
   discClaim,
   multiplicityClaim,
   typeText,
@@ -192,7 +192,7 @@ export function galoisCerts(
         : `${l} is a prime greater than ${n}/2`;
     rows.push(
       exact(
-        `contains a ${cycleWord(l)} — ${why}, so no grouping of the roots survives it`,
+        `contains ${aCycle(l)} — ${why}, so no grouping of the roots survives it`,
         witnessText(g.primitive),
       ),
     );

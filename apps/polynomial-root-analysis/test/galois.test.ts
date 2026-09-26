@@ -269,3 +269,31 @@ describe("large degree", () => {
     expect(g.primesUsed).toBe(primesBelow(1000).length - 2);
   });
 });
+
+describe("the PRA-4 sweep's survivors, each closed by the property it exposed", () => {
+  it("a 3-cycle and a discriminant that is not a square name Sₙ when no swap has been seen", () => {
+    // z⁴ − 6z − 3 below p = 10: type (3, 1) at 5 and nothing with a swap in it. The discriminant is
+    // what separates Sₙ from Aₙ here, and it is not a square.
+    const g = factorGalois([-3n, -6n, 0n, 0n, 1n], 10);
+    expect(g.transposition).toBeNull();
+    expect(g.threeCycle).toMatchObject({ prime: 5, type: [3, 1], power: 1 });
+    expect(g.discSquare).toBe(false);
+    expect(g.verdict).toBe("S");
+    const c = galoisCerts(g, 4, true);
+    expect(c.group.claim).toBe("the symmetric group S₄, of order 24");
+    expect(c.rows.map((r) => r.claim)).toContain("contains a 3-cycle");
+    // With every prime below 1000 a swap does turn up, and the answer does not move.
+    expect(factorGalois([-3n, -6n, 0n, 0n, 1n], 1000).verdict).toBe("S");
+  });
+
+  it("an (n − 1)-cycle is a primitivity witness, and the longest one is preferred", () => {
+    // Degree 9: the primes above 9/2 give 5- and 7-cycles, but an 8-cycle is longer.
+    const g = factorGalois([-1n, -1n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 1n], 1000);
+    expect(g.primitive).toMatchObject({ cycle: 8, type: [8, 1], power: 1 });
+    const rows = galoisCerts(g, 9, true).rows;
+    expect(rows[1].method).toBe("an 8-cycle at p = 23");
+    expect(rows[1].claim).toBe(
+      "contains an 8-cycle — one fewer than 9, so no grouping of the roots survives it",
+    );
+  });
+});

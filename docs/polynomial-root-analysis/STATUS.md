@@ -9,10 +9,31 @@ not silently changed.
 
 ## Current
 
-**PRA-4 — the Galois group, tiers 0 and 1** (PLAN §7), awaiting the owner's go-ahead. PRA-3 is complete.
+**PRA-5 — Tier 1 identification and the labelled group** (PLAN §7), awaiting the owner's go-ahead.
+PRA-4 is complete. (This line said "PRA-4 — the Galois group, tiers 0 and 1" until PRA-4 began; PLAN §7
+puts Tier 1 in PRA-5, and PRA-4 was run as PLAN wrote it.)
 
 ## Done
 
+- 2026-09-26 — **PRA-4 complete (4.1–4.4): the exact engine and Galois Tier 0.** 4.1: `@cas/exact`
+  gains `modPoly.ts` (𝔽ₚ[x], p < 2²⁵: arithmetic, gcd, powmod, distinct-degree + Cantor–Zassenhaus,
+  `factorDegreesModP` — Dedekind's cycle type, `null` where the theorem is silent) and `zPoly.ts`
+  (`factorOverZ` by Hensel lifting + Zassenhaus recombination on the monic transform, `rationalRoots`,
+  `isSquare`); QD's new `exact-factor-differential.test.ts` factors 50 random integer products and three
+  hard cases with both engines, agreeing on every factor set. 4.2: `src/engine/galois/tier0.ts` — the
+  factorisation, the exact discriminant, the cycle type at every good prime below 1000 with its first
+  witness and count, the power trick, and one statement of Conrad 2.1/2.2/3.1 (primitive by a prime cycle
+  > n/2 or an (n − 1)-cycle; + a swap ⇒ Sₙ; + a 3-cycle ⇒ ⊇ Aₙ, the discriminant deciding) — run in a
+  worker (`galois.worker.ts`, `createComputeClient`), evidence only. 4.3: the Galois card — the
+  factorisation, the group or "not yet identified", each hypothesis with its witness, the list of cycle
+  types drawn as rings of dots; reducible input per factor. Gate clauses: the 37-entry corpus (35 of the
+  36 transitive groups of degree 2–7) is irreducible and names Sₙ/Aₙ exactly when the group is one;
+  x⁵ − x − 1 reads `= S₅` with "a 5-cycle at p = 3", "type (3, 2) at p = 2, cubed is a swap", "the
+  discriminant 2869 is not a square"; x⁵ + 20x + 16 reads `= A₅`; x⁵ − 5x + 12 reads "Contains the
+  elements below; not yet identified" with no name anywhere on the card. Sweep **32 mutants, 30 killed, 2
+  recorded equivalents** (28 on the first pass). Gate **637 files / 7384 tests** (634 / 7341 before PRA-4); browser suite 1 / 3;
+  `pnpm a11y --strict` **1304 interactive nodes across 34 pages, 0 unnamed** (roster entry `polynomial-root-analysis-galois` new: a reducible
+  polynomial, one factor named and one open).
 - 2026-09-24 — **PRA-3 complete (3.1–3.4): `@cas/monodromy` and loops.** 3.1: the plotter's
   `monodromy.ts`, `permGroup.ts`, `generatorLoop.ts`, `permDiagram.ts` and `winding.ts` moved byte for
   byte into `packages/monodromy` (the fourteenth package, source-exported) with their tests; the plotter
@@ -72,6 +93,42 @@ not silently changed.
   `docs/design/future-app-ideas.md` as ▶ 8. No code touched.
 
 ## Findings (things learned while executing; each names its step)
+
+- _(PRA-4)_ **The gate's "cubed is a transposition" reads "cubed is a swap"** — DESIGN §9's on-screen
+  word for a transposition. The content of the row is the gate's.
+- _(PRA-4)_ **The Klüners–Malle database was not reachable** (the fetch hits a captcha), so the corpus
+  is Cohen's per-group set for degrees 2–6 (as sympy's suite carries it) and, for degree 7, six
+  citable constructions: the ℚ(ζ₂₉) period polynomial (C₇, recomputed from the periods in the suite),
+  the degree-7 subfield of the Hilbert class field of ℚ(√−71) (D₇, disc −71³), z⁷ − 2 (F₄₂), Trinks'
+  z⁷ − 7z + 3, z⁷ − 56z + 48 (A₇ — found by searching z⁷ + az + b for a square discriminant and named by
+  Tier 0 itself) and z⁷ − z − 1 (S₇). **F₂₁ (7T3) is missing** — PRA-5's gate names all 37 groups and
+  has to supply one.
+- _(PRA-4)_ **`Field`/`linear` were not lifted from Contour Integration.** PLAN puts the lift in PRA-4,
+  but nothing in Tier 0 solves a linear system; ADR-0007 says a primitive moves when its consumer
+  exists, so the lift waits for the step that needs it (PRA-5's resolvents, if they do).
+- _(PRA-4)_ **x⁵ − x − 1 closes at ONE prime.** Type (3, 2) at p = 2 is both a swap (cubed) and a
+  3-cycle (squared), and 3 is a prime greater than 5/2 — so p = 2 alone names S₅. The card still shows
+  the 5-cycle at p = 3 because the primitivity row prefers the LONGEST qualifying cycle (an n-cycle for
+  a prime degree reads as the familiar statement); the swap and 3-cycle rows take the first prime.
+- _(PRA-4)_ **Conrad's own example needs p = 311 for a direct swap** (z⁶ + z⁴ + z + 3: type
+  (2, 1, 1, 1, 1) first at 311); the power trick finds one at p = 2, from (3, 2, 1). Pinned.
+- _(PRA-4)_ **The (n − 1)-cycle clause never changes a verdict, only a witness.** A primitive group with
+  a swap or a 3-cycle contains Aₙ, which (Bertrand) contains a p-cycle for a prime n/2 < p ≤ n, so with
+  enough primes the prime clause always fires too; at degree 9 the clause makes the 8-cycle the shown
+  witness. The sweep found it untested and the degree-9 test pins it.
+- _(PRA-4)_ **The discriminant route to Sₙ (3-cycle + non-square, no swap) is unreachable at 1000
+  primes on the whole corpus** — a swap always turns up first — so the sweep's `t0-verdict-disc`
+  survived. It is reached with a lower prime bound (z⁴ − 6z − 3 below 10: a 3-cycle at 5 and no swap)
+  and pinned there; without it, dropping the square test would name A₄ for an S₄ polynomial.
+- _(PRA-4)_ **Cost: degree 16 in 71 ms, degree 24 in ~0.5 s** (z¹⁶ + z + 1, z²⁴ + z + 1: the
+  discriminant and 166 distinct-degree factorisations). That is the worker's case; the sync fallback
+  runs it deferred behind the busy line.
+- _(PRA-4)_ **A browser pass found three wording defects no test had**: "The polynomial is factors over
+  ℚ…" (a sentence template shared by both outcomes), "a 8-cycle" (now `aCycle`, by the spoken number),
+  and a hyphen-minus in "−108". The reducible legend no longer repeats the headline.
+- _(PRA-4)_ **Two recorded equivalent mutants.** `app-stale` — the callback's own key check is redundant
+  with `createComputeClient`'s request id and `cancel()`; kept as defence in depth. `card-open-text` —
+  the group certificate is `=` or `⚠` and nothing else, so `=== "="` and `!== "⚠"` agree.
 
 - _(PRA-3.4)_ **Removing the certificate changed no answer — so the claim is tested now, not only the
   answer.** On the first sweep, `trk-no-disjoint` (drop the disjointness test) survived: every
