@@ -405,6 +405,27 @@ const PAGES = [
     hash: viewState("pra", { r: "Q", t: "(z^5 - 5z + 12)*(z^3 + 2)", d: 1, o: 0, cr: 0, j: 0, rc: [0, 0, 2.2], cc: [0, 0, 60] }),
     expect: ".factor-head",
   },
+  {
+    // PRA-5: a group named by DESCENT — Trinks' septic, PSL(3,2) — with its steps, its solvability and
+    // its generators on the numbered roots, each with a Play button. `expect` keys on the steps list,
+    // which a group named by the Sₙ/Aₙ theorem (the default page) does not render.
+    id: "polynomial-root-analysis-descent",
+    mount: "polynomial-root-analysis",
+    dist: "apps/polynomial-root-analysis/dist",
+    file: "index.html",
+    hash: viewState("pra", { r: "Q", t: "z^7 - 7z + 3", d: 1, o: 0, cr: 0, j: 0, rc: [0, 0, 2], cc: [0, 0, 8] }),
+    expect: '[aria-label="How the group was found"]',
+  },
+  {
+    // PRA-5's Tier 2: a degree-8 polynomial whose group the primes cannot pin (8T10 against 8T11) —
+    // the ranked candidate list and the indistinguishable-pair sentence, all labelled ≈.
+    id: "polynomial-root-analysis-estimate",
+    mount: "polynomial-root-analysis",
+    dist: "apps/polynomial-root-analysis/dist",
+    file: "index.html",
+    hash: viewState("pra", { r: "Q", t: "z^8 - 3z^6 + 4z^4 - 2z^2 + 1", d: 1, o: 0, cr: 0, j: 0, rc: [0, 0, 2], cc: [0, 0, 8] }),
+    expect: ".candidates",
+  },
 ];
 
 // The WCAG 2.0/2.1 A + AA conformance set plus axe's best-practice pack (landmarks/regions, valid

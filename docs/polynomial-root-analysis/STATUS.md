@@ -9,12 +9,32 @@ not silently changed.
 
 ## Current
 
-**PRA-5 — Tier 1 identification and the labelled group** (PLAN §7), awaiting the owner's go-ahead.
-PRA-4 is complete. (This line said "PRA-4 — the Galois group, tiers 0 and 1" until PRA-4 began; PLAN §7
-puts Tier 1 in PRA-5, and PRA-4 was run as PLAN wrote it.)
+**PRA-6 — the Galois correspondence, numerically** (PLAN §7), awaiting the owner's go-ahead. PRA-5 is
+complete, and the app is wired to publish with the next merge to `master`.
 
 ## Done
 
+- 2026-09-26 — **PRA-5 complete (5.1–5.5): Tier 1, the labelled group, Tier 2, and the publish
+  wiring.** 5.1: `src/engine/galois/data/transitive.json` — all 1,012 transitive groups of degree 2–15,
+  generated from GAP's transgrp by `scripts/generate-transitive-groups.mjs` (counts = OEIS A002106;
+  degree ≤ 7 re-derived with `@cas/monodromy`, maximal transitive classes and their conjugators
+  included), and `data/invariants.json`, one relative invariant per maximal pair, searched by
+  `scripts/generate-invariants.ts` and checked where used. 5.2: `refine.ts` (Newton in BigInt fixed
+  point, then Smith discs, exact), `discArith.ts` (complex discs, outward rounding in the radius only).
+  5.3: `descent.ts` — Stauduhar's descent from Sₙ/Aₙ, resolvents rounded to ℤ once every disc is
+  narrower than ½, integer roots tested exactly, Tschirnhaus transformations when a root is multiple; the
+  group is carried as τ∘G∘τ⁻¹ on the reader's numbered roots, its generators shown and playable as
+  motions. 5.4: `tier2.ts` — degrees 8–15 ranked by χ² over the certified types, `≈`, with the
+  indistinguishable sets named. 5.5: the launcher card links, `deploy-pages.yml` copies the app, the
+  SEO blobs and README/ARCHITECTURE/CLAUDE.md say so. Gate clauses: all **36** transitive groups of
+  degree 2–7 read their PARI-checked label `=`; the five quintic families read S₅, A₅, D₅, F₂₀, C₅ with
+  their rows, the last step D₅ → C₅ by the degree-2 resolvent, and Dummit's sextic (research 01 §4)
+  agrees on solvability for every x⁵ + ax + b; the labelled generators fix the last resolvent's certified
+  integer root, checked in disc arithmetic (> 40 generator checks); z⁸ − 3z⁶ + 4z⁴ − 2z² + 1 (8T10 by
+  GAP) and z⁸ − 4z⁶ − 4z⁴ + 4z² + 1 (8T11) both list 8T10 and 8T11 as indistinguishable, `≈`; Trinks'
+  z⁷ − 7z + 3 reads `= PSL(3,2) (7T5), of order 168` and "not solvable". Sweep **31 mutants, 28 killed, 3 recorded equivalents** (15 on the first pass; `ds-holders`, `ds-exact-root` and `tb-alt` unreachable, by the arguments below). Gate
+  **639 files / 7417 tests** (637 / 7384 before PRA-5); `pnpm a11y --strict` **1386 interactive nodes across 36 pages, 0 unnamed** (roster entries
+  `-descent` and `-estimate` new).
 - 2026-09-26 — **PRA-4 complete (4.1–4.4): the exact engine and Galois Tier 0.** 4.1: `@cas/exact`
   gains `modPoly.ts` (𝔽ₚ[x], p < 2²⁵: arithmetic, gcd, powmod, distinct-degree + Cantor–Zassenhaus,
   `factorDegreesModP` — Dedekind's cycle type, `null` where the theorem is silent) and `zPoly.ts`
@@ -93,6 +113,50 @@ puts Tier 1 in PRA-5, and PRA-4 was run as PLAN wrote it.)
   `docs/design/future-app-ideas.md` as ▶ 8. No code touched.
 
 ## Findings (things learned while executing; each names its step)
+
+- _(PRA-5)_ **The table is GAP's, not the LMFDB API's.** The API answers every script with a captcha
+  gate (measured); the LMFDB's transitive-group data is itself GAP's transgrp (Conway–Hulpke–McKay's
+  classification and numbering, also PARI's and Magma's). GAP ran here from the `passagemath-gap` wheels
+  on PyPI with `passagemath-gap-pkg-transgrp-data`, and PARI (`cypari2`, `polgalois` with
+  `new_galois_format`) served as the independent check on every corpus label — neither is a dependency
+  of the repo. Licence: the groups are mathematics; transgrp's arrangement is Artistic-2.0 and the
+  labels follow it, which the JSON says. **Degree 8–15 is the full list with class distributions**
+  (GAP computes them in 19 s for all 1,012 groups), so DESIGN §5.1's "`cycleTypes: null`, unrankable"
+  fallback was never needed.
+- _(PRA-5)_ **"37 groups of degree 3–7" is 35** (A002106: 2 + 5 + 5 + 16 + 7); the 37 counts degrees 1
+  and 2 as well. The gate is run over all 36 of degree 2–7.
+- _(PRA-5)_ **The invariants are stored, because one of them is expensive to FIND.** Orbit sums of a
+  single monomial serve every maximal pair of degree ≤ 7 except the index-2 G ∩ Aₙ (none can: that
+  needs an alternating function, and the discriminant decides it exactly), but S₆ ⊃ PGL(2,5) has none
+  of degree ≤ 5 — proving that takes 5.3 s of search — and its smallest is x₀²x₁²x₂x₄ (orbit 30).
+  Searched once, stored, and verified at use (stabiliser = K, by enumeration).
+- _(PRA-5)_ **Shifts are not enough Tschirnhaus.** With x ↦ x + k only, 15 of the 35 corpus polynomials
+  refused on a repeated integer root (x⁴ − 2, the cyclotomics, every 6T* with a zero coefficient
+  pattern); a general h(x) with small integer coefficients fixes 34, and **x⁷ − 2 needs a dense h of
+  degree ≥ 4**: its roots are αζᵏ, the D₇-invariant x₀x₁ takes 7·Σ_{j+l≡0 (7)} hⱼhₗα^{j+l}ζ^{lc}, and
+  without two exponents of h summing to 7 that is 7h₀² at every coset. Measured cost: 1024 bits, ~2.5 s,
+  the corpus's slowest (the worker's reason to exist). The argument does not need the h(zᵢ) distinct.
+- _(PRA-5)_ **The G ∩ Aₙ step can only ever say "stay".** A square discriminant starts the descent at
+  Aₙ, so every group reached after is even; the in-loop "descend" branch was dead code, and the sweep
+  found it (`ds-parity` could not be killed). Removed.
+- _(PRA-5)_ **A factor of a reducible polynomial claimed the reader's numbering.** The Sₙ/Aₙ path set
+  `labelsHold: true` unconditionally ("any numbering carries the same group" — true of the group, not
+  of the numbering). Found by the sweep; a factor's roots are its own now.
+- _(PRA-5)_ **Two sweep survivors are unreachable, by an argument rather than a measurement.** `ds-holders`
+  (two value discs holding the same integer) and `ds-exact-root` (skipping R(θ) = 0): R(θ) is a
+  non-zero integer when θ is not a root, so a disc of radius ρ holding θ forces the other values'
+  distances to multiply to ≥ 1/ρ — which puts a radius above ½ on the constant coefficient, and the
+  certification refuses first. Both checks stay: the claim should not rest on that inequality. Recorded
+  as equivalent. So is `tb-alt` (Aₙ is the only index-2 subgroup of Sₙ).
+- _(PRA-5)_ **The main chunk grew 399 → 741 kB** (the 347 kB table, needed by the sync fallback as well
+  as the worker). Accepted for now; loading the degree-8–15 half only in the worker is the obvious cut.
+- _(PRA-5)_ **The denylist's `nTj` rule is gone**: DESIGN §9 denies a label "without its name", and the
+  card never prints one without it (degree ≤ 7: "PSL(3,2) (7T5)"; beyond: GAP's name beside it).
+- _(PRA-5)_ **A browser pass found three**: A₇'s two classes of PSL(3,2) read as "inside no copy of
+  PSL(3,2)" then "inside a copy of PSL(3,2)" — each now says which of its two kinds; the Tier 2 list ran
+  to 18 candidates (6 shown, the rest counted); the restriction sentence read "Only so far as…".
+- _(PRA-5)_ **Publishing happens at the merge**, not on this branch: `deploy-pages.yml` runs on
+  `master` only. The launcher card links and the `cp` is in place.
 
 - _(PRA-4)_ **The gate's "cubed is a transposition" reads "cubed is a swap"** — DESIGN §9's on-screen
   word for a transposition. The content of the row is the gate's.

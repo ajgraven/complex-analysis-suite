@@ -106,6 +106,32 @@ export type Tier1 =
     }
   | { readonly ok: false; readonly reason: string };
 
+/**
+ * The stored invariant for G's class `ci`, verified where it is used: its orbit's stabiliser in G must be
+ * exactly K, or the descent refuses by name rather than trusting the table.
+ */
+export function storedInvariant(
+  G: TransitiveGroup,
+  ci: number,
+  table: Readonly<Record<string, readonly number[]>> = INVARIANTS,
+): { ok: true; orbit: Exponents[] } | { ok: false; reason: string } {
+  const m = G.maximalTransitive?.[ci];
+  if (!m) return { ok: false, reason: `${G.label} has no class ${ci}` };
+  const K = groupByLabel(m.label);
+  const monomial = table[`${G.label}/${ci}`];
+  if (!monomial)
+    return { ok: false, reason: `no invariant is stored for ${G.label} ⊃ ${K.label}` };
+  const n = G.degree;
+  const orb = orbit(groupElements([...m.generators], n, 10_000).elements, monomial);
+  const Gstd = groupElements([...G.generators], n, 10_000).elements;
+  if (stabiliserOrder(Gstd, orb) !== K.order)
+    return {
+      ok: false,
+      reason: `the stored invariant for ${G.label} ⊃ ${K.label} is not one`,
+    };
+  return { ok: true, orbit: orb };
+}
+
 function classOf(
   classes: readonly { readonly label: string }[],
   ci: number,
@@ -247,40 +273,24 @@ export function identify(
       const m = classes[ci];
       const K = groupByLabel(m.label);
       if (K.even && !G.even && 2 * K.order === G.order) {
-        const step: DescentStep = {
+        // G ∩ Aₙ. A square discriminant started the descent at Aₙ, so every G reached since is even
+        // and this class only ever meets a discriminant that is NOT a square: Gal is not inside it.
+        steps.push({
           from: G.label,
           to: K.label,
           index: 2,
           via: "discriminant",
-          outcome: discSquare ? "descend" : "stay",
+          outcome: "stay",
           root: null,
           bits: 0,
           transform: TRANSFORMS[0],
           classOf: null,
-        };
-        steps.push(step);
-        if (discSquare) {
-          tau = compose(tau, m.conj);
-          G = K;
-          continue descend;
-        }
+        });
         continue;
       }
-      const monomial = INVARIANTS[`${G.label}/${ci}`];
-      if (!monomial)
-        return {
-          ok: false,
-          reason: `no invariant is stored for ${G.label} ⊃ ${K.label}`,
-        };
-      // Verified where used: Stab_G(F) must be exactly K.
-      const Kstd = groupElements([...m.generators], n, 10_000).elements;
-      const orbStd = orbit(Kstd, monomial);
-      const Gstd = groupElements([...G.generators], n, 10_000).elements;
-      if (stabiliserOrder(Gstd, orbStd) !== K.order)
-        return {
-          ok: false,
-          reason: `the stored invariant for ${G.label} ⊃ ${K.label} is not one`,
-        };
+      const inv = storedInvariant(G, ci);
+      if (!inv.ok) return inv;
+      const orbStd = inv.orbit;
       const orb = orbStd.map((e) => actOn(tau, e));
       const cosets = cosetRepresentatives(Gc, orb);
       let decided: Trial | null = null;

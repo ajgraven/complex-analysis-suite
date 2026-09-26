@@ -90,11 +90,12 @@ export function identifyFactor(
   const n = f.length - 1;
   if (evidence.verdict !== "open" && n <= TABLE_MAX_DEGREE) {
     const g = evidence.verdict === "S" ? symmetricGroup(n) : alternatingGroup(n);
-    // Sₙ and Aₙ are normal in Sₙ: any numbering of the roots carries the same group.
+    // Sₙ and Aₙ are normal in Sₙ: any numbering carries the same group — but the numbering is the
+    // reader's only when these are the reader's roots, i.e. the factor is the whole polynomial.
     if (g)
       return named(g, "theorem", {
         generators: g.generators,
-        labelsHold: true,
+        labelsHold: plotted !== null,
         steps: [],
         witness: null,
         bits: 0,

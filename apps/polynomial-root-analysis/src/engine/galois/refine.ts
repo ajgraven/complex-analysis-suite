@@ -86,7 +86,7 @@ export function preciseRoots(
     for (let i = 0; i < n; i++) {
       const { pr, pi, dr, di } = horner(F, zr[i], zi[i], s);
       const den = dr * dr + di * di;
-      if (den === 0n) break;
+      if (den === 0n) continue; // at a critical point: leave it, and let Smith judge the result
       // p/p′ = p·conj(p′)/|p′|², back at scale S.
       const qr = ((pr * dr + pi * di) << s) / den;
       const qi = ((pi * dr - pr * di) << s) / den;

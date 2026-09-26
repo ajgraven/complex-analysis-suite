@@ -11,9 +11,9 @@ complex-dynamics visualization tools** that share common packages and hand data 
 one another. North-star property: **each new tool builds fewer primitives from scratch
 than the last.** It now unifies fourteen apps — Complex Dynamics, Quadrature Domains,
 Complex Function Plotter, Riemann Map, Argument Principle, Faber Transform, 2D
-Electrostatics, 2D Hydrodynamics, Hele-Shaw Flow, Potential Theory, Contour Integration, and
-Polynomial Roots, plus two built but not yet published — the anti-holomorphic Correspondences tool and
-Polynomial Root Analysis (ADR-0047, in construction) — riding
+Electrostatics, 2D Hydrodynamics, Hele-Shaw Flow, Potential Theory, Contour Integration,
+Polynomial Roots and Polynomial Root Analysis (ADR-0047, published at PRA-5, PRA-6 onward in
+construction), plus one built but not yet published — the anti-holomorphic Correspondences tool — riding
 fourteen shared `@cas/*` packages.
 
 Read the docs in this order before making changes: [`docs/VISION.md`](docs/VISION.md) →
@@ -57,9 +57,9 @@ Read the docs in this order before making changes: [`docs/VISION.md`](docs/VISIO
     combined Pages site** — launcher at the root, `complex-dynamics/`, `quadrature-domains/`,
     `complex-function-plotter/`, `riemann-map/`, `argument-principle/`, `faber-transform/`,
     `2d-electrostatics/`, `2d-hydrodynamics/`, `hele-shaw-flow/`, `potential-theory/`,
-    `contour-integration/`, and `polynomial-roots/` beneath it.
-    `apps/correspondences` and `apps/polynomial-root-analysis` are **built but not published** (the launcher
-    shows both as "Coming soon"; the latter publishes at PRA-5, ADR-0047). There are **two** workflows: `ci.yml` (jobs `build` + `browser` + the non-blocking
+    `contour-integration/`, `polynomial-roots/`, and `polynomial-root-analysis/` beneath it.
+    `apps/correspondences` is **built but not published** (the launcher shows it as "Coming soon").
+    There are **two** workflows: `ci.yml` (jobs `build` + `browser` + the non-blocking
     `a11y`) and `deploy-pages.yml`; the `browser` job is not a publish blocker. *(Corrected
     2026-09-20: this said "the `build` + `browser` gate" — `grep -n '^  [a-z0-9_-]*:'
     .github/workflows/ci.yml` gives `build:` 46, `browser:` 131, `a11y:` 187.)*
@@ -101,8 +101,8 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **637 test files / 7384 tests**
-*(634 / 7341 before ADR-0047's PRA-4 — `𝔽ₚ[x]` and factorisation over ℤ in `@cas/exact`, the QD cross-check, and the Galois card — added 3 files / 43 tests; 629 / 7285 before ADR-0047's PRA-3 — `@cas/monodromy`, the certified tracker, loops and motions — added 5 files / 56 tests; 627 / 7223 before ADR-0047's PRA-2 — the analysis overlays, and KaTeX lifted into `@cas/ui/math` — added 2 files / 62 tests; 623 / 7116 before ADR-0047's PRA-1 — the two-pane sandbox, and the lifts into `@cas/core`, `@cas/exact` and `@cas/ui` — added 4 files / 107 tests; 622 / 7111 before its PRA-0 — the Polynomial Root Analysis scaffold — added 1 file / 5 tests; 621 / 7085 before ADR-0046's M6 — Egan's hue, the CET-C6 extraction and the symmetry readout — added 1 file / 26 tests; 620 / 7067 before its PR-5 — the gallery — added 1 file / 18 tests; 618 / 7035 before its PR-4 — the dragons — added 2 files / 32 tests; 615 / 6997 before its PR-3 — deep zoom by reference — added 3 files / 38 tests; 610 / 6949 before its PR-2 — the limit-set engine — added 5 files / 48 tests; 599 / 6818 before
+Green is **639 test files / 7417 tests**
+*(637 / 7384 before ADR-0047's PRA-5 — the transitive-group table, Tier 1 by descent, the labelled group and Tier 2 — added 2 files / 33 tests; 634 / 7341 before ADR-0047's PRA-4 — `𝔽ₚ[x]` and factorisation over ℤ in `@cas/exact`, the QD cross-check, and the Galois card — added 3 files / 43 tests; 629 / 7285 before ADR-0047's PRA-3 — `@cas/monodromy`, the certified tracker, loops and motions — added 5 files / 56 tests; 627 / 7223 before ADR-0047's PRA-2 — the analysis overlays, and KaTeX lifted into `@cas/ui/math` — added 2 files / 62 tests; 623 / 7116 before ADR-0047's PRA-1 — the two-pane sandbox, and the lifts into `@cas/core`, `@cas/exact` and `@cas/ui` — added 4 files / 107 tests; 622 / 7111 before its PRA-0 — the Polynomial Root Analysis scaffold — added 1 file / 5 tests; 621 / 7085 before ADR-0046's M6 — Egan's hue, the CET-C6 extraction and the symmetry readout — added 1 file / 26 tests; 620 / 7067 before its PR-5 — the gallery — added 1 file / 18 tests; 618 / 7035 before its PR-4 — the dragons — added 2 files / 32 tests; 615 / 6997 before its PR-3 — deep zoom by reference — added 3 files / 38 tests; 610 / 6949 before its PR-2 — the limit-set engine — added 5 files / 48 tests; 599 / 6818 before
 Polynomial Roots itself added 10 files / 122 tests and its `@cas/gpu` extraction 1 / 9; 592 / 6643 before the 2026-09-20 remediation)* with lint and typecheck
 silent. `pnpm lint` includes `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the
 `packages/*` dists first, so a clean clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as
@@ -1284,8 +1284,8 @@ Roots and coefficients of one polynomial as two draggable point sets over a phas
 group over ℚ in three honest tiers (`=` Sₙ/Aₙ at any degree, `=` to degree 7 by Stauduhar descent, `≈`
 8–15 by statistics); loop monodromy by *certified* continuation (Smith discs in exact arithmetic on the
 dyadic floats, refused by name when a segment cannot be certified); Arnold's Abel–Ruffini proof as
-executed commutator loops. **PRA-0 to PRA-4 have landed**: `apps/polynomial-root-analysis` (port 5185,
-namespace `pra`, built but not published until PRA-5) is the two-pane sandbox — typed or dragged
+executed commutator loops. **PRA-0 to PRA-5 have landed, and it is wired to publish**: `apps/polynomial-root-analysis` (port 5185,
+namespace `pra`) is the two-pane sandbox — typed or dragged
 polynomials over ℂ/ℝ/ℚ, roots and coefficients each draggable, every root in a Smith disc certified in
 exact arithmetic, multiplicities decided by Yun in exact arithmetic, a root-form phase portrait, permalink,
 undo, figure export. PRA-1 moved Aberth into `@cas/core`, `toExactRational` + Smith discs into
@@ -1304,7 +1304,11 @@ certify transpositions generating S₅ (order 120, listed). PRA-4 gave `@cas/exa
 factorisation over ℤ (Hensel + Zassenhaus, cross-checked against QD's sym-core over 50 random products)
 and the app its Galois card: the factorisation, the exact discriminant, the cycle type at every good prime
 below 1000 (with the power trick), and `= Sₙ` / `= Aₙ` only when a theorem names the group — x⁵ − x − 1
-reads `= S₅`, x⁵ + 20x + 16 `= A₅`, the D₅ quintic "not yet identified" with no name.
+reads `= S₅`, x⁵ + 20x + 16 `= A₅`, the D₅ quintic "not yet identified" with no name. PRA-5 named every
+group of degree ≤ 7 exactly — Stauduhar's descent with resolvents certified from the roots in disc
+arithmetic and integer roots tested exactly, over a table of all 1,012 transitive groups of degree 2–15
+generated from GAP's transgrp — as permutations of the reader's numbered roots, playable as motions, and
+ranked degrees 8–15 `≈` (8T10/8T11 named indistinguishable); the launcher card links and the deploy copies it.
 Read
 [`docs/polynomial-root-analysis/STATUS.md`](docs/polynomial-root-analysis/STATUS.md) first, then
 [`PLAN.md`](docs/polynomial-root-analysis/PLAN.md) and [`DESIGN.md`](docs/polynomial-root-analysis/DESIGN.md).
