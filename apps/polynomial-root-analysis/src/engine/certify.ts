@@ -496,7 +496,7 @@ export function radicalTheoremCert(level: number, depth: number): Certificate | 
 }
 
 /** The run's verdict. */
-export function ladderVerdict(run: LadderRun, permText: string): Certificate {
+export function ladderVerdict(run: LadderRun, moved: string): Certificate {
   const o = run.outcome;
   if (!run.evaluation.ok)
     return refuse("the formula along this word", run.evaluation.reason);
@@ -514,17 +514,17 @@ export function ladderVerdict(run: LadderRun, permText: string): Certificate {
       );
     case "trivial":
       return exact(
-        `the roots come back to their places (${permText}): this word rules nothing out`,
+        `the roots come back to their places (${moved}): this word rules nothing out`,
         METHOD.composed,
       );
     case "refuted":
       return exact(
-        `every radical closes and the roots undergo ${permText}: no formula with at most ${o.depth} level${o.depth === 1 ? "" : "s"} of radicals can follow a root — depth ${o.depth} is killed by this word, and a formula needs at least ${o.depth + 1}`,
+        `every radical closes and the roots undergo ${moved}: no formula with at most ${o.depth} level${o.depth === 1 ? "" : "s"} of radicals can follow a root — depth ${o.depth} is killed by this word, and a formula needs at least ${o.depth + 1}`,
         METHOD.commutatorTheorem,
       );
     case "refutedMeasured":
       return estimate(
-        `every radical was measured to close while the roots undergo ${permText}: this word rules the formula out`,
+        `every radical was measured to close while the roots undergo ${moved}: this word rules the formula out`,
         METHOD.measuredWinding(run.evaluation.samples, run.evaluation.halvings),
       );
     case "survives":

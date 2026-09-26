@@ -57,7 +57,7 @@ type Sample =
   | { readonly kind: "vanish"; readonly radical: number };
 
 class Stop {
-  constructor(readonly sample: Sample) {}
+  constructor(readonly result: Sample) {}
 }
 
 /** Evaluate the formula at one set of coefficients, continuing `prev`'s branches (or starting them). */
@@ -167,7 +167,7 @@ function sample(
     }
     return { kind: "ok", tracks, value };
   } catch (e) {
-    if (e instanceof Stop) return e.sample;
+    if (e instanceof Stop) return e.result;
     throw e;
   }
 }

@@ -617,6 +617,10 @@ export function mountApp(host: HTMLElement): App {
   }
 
   function moveTo(t: Target, to: Cx): void {
+    // Only what `targetsIn` offers moves — the keyboard and the actions API included: the ladder's
+    // polynomial is its rung's, and a family's is p(t₀, z), which moves only with t₀.
+    if (state.ladder) return;
+    if (familyOpen() && t.kind !== "base") return;
     if (t.kind === "base") {
       const f = state.family;
       if (!f?.open) return;

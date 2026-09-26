@@ -12,7 +12,7 @@ one another. North-star property: **each new tool builds fewer primitives from s
 than the last.** It now unifies fourteen apps — Complex Dynamics, Quadrature Domains,
 Complex Function Plotter, Riemann Map, Argument Principle, Faber Transform, 2D
 Electrostatics, 2D Hydrodynamics, Hele-Shaw Flow, Potential Theory, Contour Integration,
-Polynomial Roots and Polynomial Root Analysis (ADR-0047, published at PRA-5, PRA-8 onward in
+Polynomial Roots and Polynomial Root Analysis (ADR-0047, published at PRA-5, PRA-9 onward in
 construction), plus one built but not yet published — the anti-holomorphic Correspondences tool — riding
 fourteen shared `@cas/*` packages.
 
@@ -101,8 +101,8 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **642 test files / 7479 tests**
-*(640 / 7439 before ADR-0047's PRA-7 — families: `smithDiscsSeries`, the family tracker, the Family card and its sweep — added 2 files / 40 tests; 639 / 7417 before ADR-0047's PRA-6 — the Galois correspondence and its sweep — added 1 file / 22 tests; 637 / 7384 before ADR-0047's PRA-5 — the transitive-group table, Tier 1 by descent, the labelled group and Tier 2 — added 2 files / 33 tests; 634 / 7341 before ADR-0047's PRA-4 — `𝔽ₚ[x]` and factorisation over ℤ in `@cas/exact`, the QD cross-check, and the Galois card — added 3 files / 43 tests; 629 / 7285 before ADR-0047's PRA-3 — `@cas/monodromy`, the certified tracker, loops and motions — added 5 files / 56 tests; 627 / 7223 before ADR-0047's PRA-2 — the analysis overlays, and KaTeX lifted into `@cas/ui/math` — added 2 files / 62 tests; 623 / 7116 before ADR-0047's PRA-1 — the two-pane sandbox, and the lifts into `@cas/core`, `@cas/exact` and `@cas/ui` — added 4 files / 107 tests; 622 / 7111 before its PRA-0 — the Polynomial Root Analysis scaffold — added 1 file / 5 tests; 621 / 7085 before ADR-0046's M6 — Egan's hue, the CET-C6 extraction and the symmetry readout — added 1 file / 26 tests; 620 / 7067 before its PR-5 — the gallery — added 1 file / 18 tests; 618 / 7035 before its PR-4 — the dragons — added 2 files / 32 tests; 615 / 6997 before its PR-3 — deep zoom by reference — added 3 files / 38 tests; 610 / 6949 before its PR-2 — the limit-set engine — added 5 files / 48 tests; 599 / 6818 before
+Green is **643 test files / 7511 tests**
+*(642 / 7479 before ADR-0047's PRA-8 — the Abel–Ruffini ladder and its sweep — added 1 file / 32 tests; 640 / 7439 before ADR-0047's PRA-7 — families: `smithDiscsSeries`, the family tracker, the Family card and its sweep — added 2 files / 40 tests; 639 / 7417 before ADR-0047's PRA-6 — the Galois correspondence and its sweep — added 1 file / 22 tests; 637 / 7384 before ADR-0047's PRA-5 — the transitive-group table, Tier 1 by descent, the labelled group and Tier 2 — added 2 files / 33 tests; 634 / 7341 before ADR-0047's PRA-4 — `𝔽ₚ[x]` and factorisation over ℤ in `@cas/exact`, the QD cross-check, and the Galois card — added 3 files / 43 tests; 629 / 7285 before ADR-0047's PRA-3 — `@cas/monodromy`, the certified tracker, loops and motions — added 5 files / 56 tests; 627 / 7223 before ADR-0047's PRA-2 — the analysis overlays, and KaTeX lifted into `@cas/ui/math` — added 2 files / 62 tests; 623 / 7116 before ADR-0047's PRA-1 — the two-pane sandbox, and the lifts into `@cas/core`, `@cas/exact` and `@cas/ui` — added 4 files / 107 tests; 622 / 7111 before its PRA-0 — the Polynomial Root Analysis scaffold — added 1 file / 5 tests; 621 / 7085 before ADR-0046's M6 — Egan's hue, the CET-C6 extraction and the symmetry readout — added 1 file / 26 tests; 620 / 7067 before its PR-5 — the gallery — added 1 file / 18 tests; 618 / 7035 before its PR-4 — the dragons — added 2 files / 32 tests; 615 / 6997 before its PR-3 — deep zoom by reference — added 3 files / 38 tests; 610 / 6949 before its PR-2 — the limit-set engine — added 5 files / 48 tests; 599 / 6818 before
 Polynomial Roots itself added 10 files / 122 tests and its `@cas/gpu` extraction 1 / 9; 592 / 6643 before the 2026-09-20 remediation)* with lint and typecheck
 silent. `pnpm lint` includes `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the
 `packages/*` dists first, so a clean clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as
@@ -1284,7 +1284,7 @@ Roots and coefficients of one polynomial as two draggable point sets over a phas
 group over ℚ in three honest tiers (`=` Sₙ/Aₙ at any degree, `=` to degree 7 by Stauduhar descent, `≈`
 8–15 by statistics); loop monodromy by *certified* continuation (Smith discs in exact arithmetic on the
 dyadic floats, refused by name when a segment cannot be certified); Arnold's Abel–Ruffini proof as
-executed commutator loops. **PRA-0 to PRA-7 have landed, and it is wired to publish**: `apps/polynomial-root-analysis` (port 5185,
+executed commutator loops. **PRA-0 to PRA-8 have landed, and it is wired to publish**: `apps/polynomial-root-analysis` (port 5185,
 namespace `pra`) is the two-pane sandbox — typed or dragged
 polynomials over ℂ/ℝ/ℚ, roots and coefficients each draggable, every root in a Smith disc certified in
 exact arithmetic, multiplicities decided by Yun in exact arithmetic, a root-form phase portrait, permalink,
@@ -1318,7 +1318,11 @@ base point run through the certified tracker (now following a family — `@cas/m
 `trackFamilyPath`, `@cas/exact` `smithDiscsSeries` when the coefficients are polynomial in t), the
 monodromy group as the Galois group over ℂ(t), the group over ℚ(t) named only when that group and the
 raw discriminant pin it, and a member opened in the sandbox with the bridge kept — x⁵ − x − 1 all of S₅,
-Trinks' x⁷ − 7x + 3 in the thin set of a generically-S₇ family.
+Trinks' x⁷ − 7x + 3 in the thin set of a generically-S₇ family. PRA-8 executed
+Arnold's proof: radical formulas followed along words of root motions, one branch per radical, each
+closure measured (`≈`) beside the commutator theorem's `=`; Cardano fails on the depth-1 word (123),
+Ferrari on the depth-2 word (14)(23), and every quintic candidate of depth N on Ramond's depth-N
+3-cycle word; S₅'s derived series 120 → 60 → 60, enumerated.
 Read
 [`docs/polynomial-root-analysis/STATUS.md`](docs/polynomial-root-analysis/STATUS.md) first, then
 [`PLAN.md`](docs/polynomial-root-analysis/PLAN.md) and [`DESIGN.md`](docs/polynomial-root-analysis/DESIGN.md).

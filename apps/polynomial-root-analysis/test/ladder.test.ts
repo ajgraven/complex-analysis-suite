@@ -8,7 +8,7 @@ import {
   symmetricDerived,
   threeCycleSplit,
 } from "../src/engine/ladder/rungs.js";
-import { runLadder, type LadderRun } from "../src/engine/ladder/run.js";
+import { outcome, runLadder, type LadderRun } from "../src/engine/ladder/run.js";
 import {
   lettersOf,
   wordDepth,
@@ -18,7 +18,8 @@ import {
 } from "../src/engine/ladder/word.js";
 import { readFormula, rewriteRadicals } from "../src/engine/formula/tree.js";
 import { evaluateAlong } from "../src/engine/formula/evaluate.js";
-import { ladderVerdict, radicalCert } from "../src/engine/certify.js";
+import { ladderVerdict, radicalCert, radicalTheoremCert } from "../src/engine/certify.js";
+import { comm, letter } from "../src/engine/ladder/word.js";
 
 function run(degree: 2 | 3 | 4 | 5, formula: string, word: string): LadderRun {
   const r = runLadder(degree, formula, word);
@@ -253,5 +254,65 @@ describe("words, motions and the evaluator", () => {
     expect(c.level).toBe("≈");
     expect(c.method).toMatch(/checked AT the samples, not between them/);
     expect(formatCycles(r.composed)).toBe("(1 2 3)");
+  });
+});
+
+describe("sweep survivors (PRA-8)", () => {
+  it("a radical whose inner radical failed does not RETURN, and has no winding to report", () => {
+    const r = run(3, gallery(3, "cardano"), "d0");
+    if (!r.evaluation.ok) throw new Error("x");
+    const cube = r.evaluation.radicals[1];
+    expect(cube.returns).toBe(false);
+    expect(cube.winding).toBeNull();
+    expect(radicalCert(cube, 1, 0).claim).toBe(
+      "does not close (its radicand does not come back)",
+    );
+  });
+  it("a halved step grows back: extra samples stay proportional to the halvings", () => {
+    const r = run(4, gallery(4, "ferrari"), "d3");
+    if (!r.evaluation.ok) throw new Error("x");
+    expect(r.evaluation.halvings).toBeGreaterThan(0);
+    expect(r.evaluation.samples).toBeLessThan(
+      r.motion.frames.length + 4 * r.evaluation.halvings + 10,
+    );
+  });
+  it("a power by 1/2 is a square root", () => {
+    const f = readFormula("a0^(1/2) + a1", 3);
+    expect(f.ok && f.formula.radicals.map((x) => x.k)).toEqual([2]);
+  });
+  it("a commutator's depth is one more than its DEEPER side", () => {
+    const x = letter([1, 0, 2]);
+    expect(wordDepth(comm(x, comm(x, x)))).toBe(2);
+    expect(wordDepth(comm(comm(x, x), x))).toBe(2);
+  });
+  it("the theorem speaks for a radical of level equal to the word's depth, and not above it", () => {
+    expect(radicalTheoremCert(2, 2)?.level).toBe("=");
+    expect(radicalTheoremCert(3, 2)).toBeNull();
+  });
+  it("a measured closure that contradicts the theorem is a contradiction, not a result", () => {
+    const r = run(3, gallery(3, "cardano"), "d2");
+    if (!r.evaluation.ok) throw new Error("x");
+    const ev = r.evaluation;
+    // Pretend the level-2 radical had been measured failing along this depth-2 word.
+    const forged = {
+      ...ev,
+      radicals: ev.radicals.map((o) =>
+        o.radical.level === 2 ? { ...o, closes: false } : o,
+      ),
+    };
+    expect(outcome(r.formula, 2, r.composed, forged)).toEqual({
+      kind: "contradiction",
+      radical: 1,
+    });
+    expect(
+      ladderVerdict(
+        { ...r, evaluation: forged, outcome: { kind: "contradiction", radical: 1 } },
+        "()",
+      ).level,
+    ).toBe("⚠");
+  });
+  it("a verdict carried by measurement alone is ≈", () => {
+    const r = run(5, QUINTIC_CANDIDATES[3].text, "d3");
+    expect(ladderVerdict(r, permText(r.composed)).level).toBe("≈");
   });
 });

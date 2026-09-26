@@ -85,7 +85,7 @@ function compute(degree: RungDegree, formulaText: string, wordId: string): Ladde
   };
 }
 
-function outcome(
+export function outcome(
   f: Formula,
   depth: number,
   perm: Perm,

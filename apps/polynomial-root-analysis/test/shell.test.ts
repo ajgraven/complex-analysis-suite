@@ -1074,6 +1074,17 @@ describe("families (PRA-7)", () => {
     expect(Math.hypot(...b.path[1])).toBeLessThan(0.75 * Math.hypot(...a.path[1]));
   });
 
+  it("in a family only t₀ moves: a root or a coefficient, moved directly, stays put", () => {
+    const { app } = mount();
+    app.actions().openFamily("x^5 - x - t");
+    const before = app.currentState();
+    app.actions().moveTo({ kind: "root", index: 0 }, [2, 2]);
+    app.actions().release();
+    app.actions().moveTo({ kind: "coeff", index: 0 }, [3, 0]);
+    app.actions().release();
+    expect(app.currentState()).toEqual(before);
+  });
+
   it("typing a polynomial leaves the family", () => {
     const { app } = mount();
     app.actions().openFamily("x^3 + t x + 1");
@@ -1195,14 +1206,25 @@ describe("the ladder (PRA-8)", () => {
       }),
     );
     expect(bad?.ok).toBe(false);
+    const noWord = decodeShell(
+      encodeShell({
+        ...app.currentState(),
+        ladder: { rung: 4, formula: "sqrt(a0)", word: "d9" },
+      }),
+    );
+    expect(noWord?.ok === false && noWord.reason).toBe(
+      "the quartic rung has no word 'd9'",
+    );
   });
 
   it("typing a polynomial, or opening a family, leaves the ladder; the ladder's roots cannot be dragged", () => {
     const { app } = mount();
     app.actions().openLadder(3);
+    const before = app.currentState().poly;
     app.actions().moveTo({ kind: "root", index: 0 }, [2, 2]);
     app.actions().release();
     expect(app.currentState().ladder).not.toBeNull();
+    expect(app.currentState().poly).toEqual(before);
     app.actions().type("z^2 - 2");
     expect(app.currentState().ladder).toBeNull();
     app.actions().openLadder(2);

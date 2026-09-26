@@ -9,10 +9,28 @@ not silently changed.
 
 ## Current
 
-**PRA-8 — The ladder: Abel–Ruffini** (PLAN §7), awaiting the owner's go-ahead. PRA-7 is complete.
+**PRA-9 — Overlays, wave 2, and the surfaced ideas** (PLAN §7; a backlog the owner orders), awaiting
+the owner's go-ahead. PRA-8 is complete.
 
 ## Done
 
+- 2026-09-26 — **PRA-8 complete: the ladder — Arnold's proof of Abel–Ruffini, executed.**
+  `src/engine/formula/` reads a radical formula in a₀ … aₙ₋₁ (`sqrt`, `cbrt`, `root(k, ·)` rewritten to
+  powers `1/k`, `disc`, named parts `p = …;`) with each radical's LEVEL, and follows it along a motion of
+  the roots, one branch per radical, halving any step in which a radicand could have circled 0; a
+  radical closes when its radicand returns having wound a multiple of k times. `src/engine/ladder/` has
+  the words (letters are root motions; inverses; commutators — the permutation composed AND read off the
+  motion, which must agree), four rungs with generic polynomials, the gallery, the identity ladder
+  composed, and the derived series enumerated. The Ladder card runs a word, animates it on the roots,
+  lists each radical measured (`≈`) beside what the commutator theorem says it must do (`=`), and gives
+  the verdict; every rung is a `ShellState` and a permalink (`#vs=` key `ld`, gallery formulas by id).
+  Gate clauses: Cardano's cube root fails on the depth-1 word, whose permutation is (123), and closes
+  on every depth-2 word; Ferrari fails at depth 2 on the word whose permutation is (14)(23) and closes at
+  depth 3; each quintic candidate of depth N = 1…4 is ruled out (`=`) by Ramond's depth-N word, whose
+  permutation is a 3-cycle, composed and compared; S₄ 24 → 12 → 4 → 1 and S₅ 120 → 60 → 60,
+  enumerated; the four rungs audit clean through their permalinks. Sweep **29 mutants, 27 killed, 2 recorded equivalents** (below). Gate
+  **643 files / 7511 tests** (642 / 7479 before PRA-8), browser suite 1 / 3; `pnpm a11y --strict`
+  **1,698 interactive nodes across 42 pages, 0 unnamed** (roster entries `-ladder-2` … `-ladder-5` new).
 - 2026-09-26 — **PRA-7 complete: families.** A polynomial p(t, z) over ℚ, read exactly
   (`src/engine/family/family.ts`: a Newton interpolation in t at a structural bound on the degree in t,
   checked one point further), its branch points the zeros of disc_z(p) isolated in Smith discs, a base
@@ -146,6 +164,39 @@ not silently changed.
 
 ## Findings (things learned while executing; each names its step)
 
+- _(PRA-8)_ **Sweep: nine first-pass survivors, and one was a defect.** The actions API's `moveTo` (and
+  so the keyboard's nudge) did not ask `targetsIn`, so a root "moved" on the ladder rewrote the state's
+  polynomial behind the rung — invisible, because the rung decides what is shown, until a link carried
+  it. `moveTo` now refuses what `targetsIn` does not offer, on the ladder and for anything but t₀ in a
+  family. The rest were untested edges: a radicand that does not return (no winding to report), `X^(1/2)`
+  read as a radical, a commutator deeper on one side, the theorem at level = depth, the contradiction
+  branch, a measured verdict's `≈`, a link naming a word the rung does not have. **Recorded equivalents:**
+  `ev-grow` (a halved step not growing back only costs samples inside one frame, since the step resets
+  per frame), and `ap-drag`, now defence in depth behind the `moveTo` guard.
+- _(PRA-8)_ **Two independently tracked cube roots are not Cardano's formula.** The first gallery wrote
+  ∛(−q/2 + √Δ) + ∛(−q/2 − √Δ): each cube root followed its own branch, the link u·v = −p/3 broke on the
+  first loop that turned one and not the other, and the "formula" stopped being a root — which showed as
+  Ferrari (built on it) closing at depth 2, i.e. as a CORRECT formula refuted. Cardano is u − p/(3u) with
+  one cube root, and Euler's third square root is −q/(√z₁√z₂); every gallery formula is now checked to
+  equal a root at the start (to 1e-16).
+- _(PRA-8)_ **A winding is a measurement, so a closure is `≈` — DESIGN §3 said `=`.** The criterion
+  |X_f − X_{f−1}| < |X_{f−1}| is checked at the samples; between two samples nothing is bounded. What IS
+  `=` is the theorem beside it (a radical of level ≤ the word's depth closes: the winding of a commutator
+  is m₁ + m₂ − m₁ − m₂), so the card shows both, and a verdict is `=` exactly when the theorem alone
+  carries it (every radical's level ≤ the word's depth and the roots move); a measurement that
+  contradicts the theorem refuses rather than reporting.
+- _(PRA-8)_ **The gate's "measured winding ±1" reads ±2.** Along [(12),(23)] = (123) Cardano's radicand
+  winds −2 on the rung polynomial; ±2 ≡ ∓1 (mod 3), and a winding not divisible by 3 is all failure
+  needs. Which integer appears depends on the loops chosen, not only on their commutator's permutation.
+- _(PRA-8)_ **Quintic candidates had to be BUILT, and `disc` had to exist.** Radicals of plain
+  coefficient expressions (a₃, a₀ + a₁, …) never circle 0 along one swap of these roots, so they close
+  on every word and are "refuted" at depth 0 — true and useless. Only the discriminant vanishes where
+  roots meet, so √disc is the first radical that fails; each deeper candidate root(k, c + F) places c
+  where F's closed curve along the word one depth shallower winds round it, and is kept only if
+  evaluation confirms it fails there and closes one level deeper. Levels 1–3 are tight; no level-4
+  constant exists over the depth-3 word (its sub-words are other 3-cycles, on which F₃ closes), so the
+  four-level candidate is already ruled out at depth 3, and the card says so (`≈`, measured). Ramond's
+  words are built on SWAPS, not 3-cycles, for the same reason: √disc closes on every 3-cycle letter.
 - _(PRA-7)_ **The group over ℚ(t) needs the RAW discriminant.** The card shows disc_z(p) in primitive
   form, which drops the constant — and the constant decides squareness: disc(z³ − t) = −27t², primitive
   t², so the first draft named A₃ for z³ − t, whose group over ℚ(t) is S₃ (ℚ has no cube root of

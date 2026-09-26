@@ -168,7 +168,7 @@ export function readFormula(text: string, n: number): FormulaRead {
         return walk(node.operand);
       case "arith": {
         const rad = radicalOf(node);
-        if (rad) return radical(rad, node);
+        if (rad) return radical(rad);
         if (node.op === "^") {
           const e = rational(node.right);
           if (!e || e[1] !== 1)
@@ -185,17 +185,18 @@ export function readFormula(text: string, n: number): FormulaRead {
       }
       case "call": {
         const rad = radicalOf(node);
-        if (rad) return radical(rad, node);
+        if (rad) return radical(rad);
         return `'${node.name}(…)' is not a radical — use sqrt, cbrt or root(k, …)`;
       }
       default:
         return "this is not a radical formula";
     }
   };
-  const radical = (
-    rad: { k: number; power: number; radicand: Node },
-    _node: Node,
-  ): number | string => {
+  const radical = (rad: {
+    k: number;
+    power: number;
+    radicand: Node;
+  }): number | string => {
     const inner = walk(rad.radicand);
     if (typeof inner === "string") return inner;
     // A radical of a constant never moves: it is a number, not a level.
