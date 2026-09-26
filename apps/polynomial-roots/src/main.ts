@@ -16,18 +16,30 @@ import { GlStage, StageUnavailable } from "./stage/glStage.js";
 import { LimitPass, limitPixelRadius } from "./stage/limitPass.js";
 import { chooseEngine } from "./engine/limit/handover.js";
 import type { EngineMode, Handover } from "./engine/limit/handover.js";
-import { epsFor, MAX_DEPTH as WALK_MAX_DEPTH, MIN_DEPTH as WALK_MIN_DEPTH, NODE_BUDGET } from "./engine/limit/walk.js";
+import {
+  epsFor,
+  foldedPixelRadius,
+  MAX_DEPTH as WALK_MAX_DEPTH,
+  MIN_DEPTH as WALK_MIN_DEPTH,
+  NODE_BUDGET,
+  pixelEps,
+  walkAt,
+  walkSpec,
+} from "./engine/limit/walk.js";
 import { clampDepth } from "./engine/limit/walkGlsl.js";
 import { DeepPass } from "./stage/deepPass.js";
-import { dragonBounds, dragonPlan, dragonSet, maxAbsOf, nearestToOrigin, theoremOverlay } from "./engine/dragon.js";
+import { dragonBounds, dragonPlan, dragonSet, maxAbsOf, theoremOverlay } from "./engine/dragon.js";
 import { drawInset, drawTheorem, insetDescription, insetLayout, theoremDescription } from "./stage/inset.js";
+import type { InsetVerdict } from "./stage/inset.js";
 import { boundFor, drawBound } from "./stage/bounds.js";
 import { centreOnRoot, coefficientString, emptyFrame, nearestRoot, packFrame, rootAt, runReference } from "./engine/deep/reference.js";
 import type { ReferenceFrame, ReferenceRequest } from "./engine/deep/reference.js";
 import { buildToneMap } from "./stage/tone.js";
 import { RAMPS } from "./stage/ramps.js";
 import { MAX_HUE_DIGITS, MIN_HUE_DIGITS } from "./engine/egan.js";
+import { dd, ddFromString, ddSub, ddToNumber } from "./engine/deep/dd.js";
 import {
+  centreDd,
   centreNumbers,
   clampState,
   DEFAULT_STATE,
@@ -50,13 +62,15 @@ import {
   describeTotals,
   eganNote,
   emptyTotals,
+  totalsFor,
   limitLines,
   measureLimit,
   statLines,
 } from "./stats.js";
 import type { DeepSummary, LimitShares, LimitSummary } from "./stats.js";
 import type { Totals } from "./stats.js";
-import { captionFor, savePng } from "./pngExport.js";
+import { planScrub } from "./engine/scrub.js";
+import { captionFor, deepCaptionFor, savePng } from "./pngExport.js";
 import "./styles/app.css";
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -145,6 +159,15 @@ function main(): void {
   // degree mode's mean-degree hue through the DENSITY ramp until the reader touched the control. Found
   // wiring M6's third mode through the same two lines.
   stage.setRamp(rampFor(state.colour));
+  // A long draw (the limit walk with the band on, or a vast deposit of points) can make the browser
+  // reset the GPU context. Nothing listened for it, so the page went on as if every later frame drew
+  // (2026-09-26 review). Say so, and stop pretending: the context and everything on it are gone.
+  gl.addEventListener("webglcontextlost", (e) => {
+    e.preventDefault();
+    showError(
+      "The browser reset the GPU drawing context — the last picture asked too much of it. Reload the page; a smaller degree range or leaving the |z| ≈ 1 band unwalked avoids it.",
+    );
+  });
 
   const a11y = attachCanvasA11y(gl, {
     role: "application",
@@ -159,6 +182,20 @@ function main(): void {
   let deepFrame: ReferenceFrame = emptyFrame();
   let probeIndex = -1;
   let deepKey = "";
+  /** The centre the current `deepFrame` was walked at — its offsets are from HERE, not from the view. */
+  let deepFrameCentre = { cx: "0", cy: "0" };
+
+  /**
+   * Where the deep frame's centre sits relative to the view, in world units, exact in double-double.
+   * Zero when the frame is this view's own; otherwise the frame is still being replaced by a walk, and
+   * its dots are drawn — and probed — where they belong in the WORLD rather than where they were on the
+   * previous screen.
+   */
+  function deepShift(): { dx: number; dy: number } {
+    const f = { cx: ddFromString(deepFrameCentre.cx) ?? dd(0), cy: ddFromString(deepFrameCentre.cy) ?? dd(0) };
+    const v = centreDd(state);
+    return { dx: ddToNumber(ddSub(f.cx, v.cx)), dy: ddToNumber(ddSub(f.cy, v.cy)) };
+  }
   const deepClient = createComputeClient<ReferenceRequest, ReferenceFrame>({
     compute: (req) => packFrame(runReference(req)),
     worker: () => new Worker(new URL("./engine/deep/reference.worker.ts", import.meta.url), { type: "module" }),
@@ -296,6 +333,9 @@ function main(): void {
   const openPlace = (target: AppState): void => {
     // A place that names its own depth means it; the zoom must not overrule it.
     depthPinned = target.depth !== DEFAULT_STATE.depth;
+    // A hovered lamp is a WORLD point from the previous view; after a jump it may be off-screen, and Pin
+    // would pin it.
+    hoverLamp = null;
     apply(target);
   };
   for (const group of GROUPS) {
@@ -391,6 +431,7 @@ function main(): void {
     ].join("|");
     if (key === deepKey) return;
     deepKey = key;
+    const requested = { cx: state.cx, cy: state.cy };
     deepClient.request(
       {
         alphabet: state.alphabet,
@@ -403,6 +444,7 @@ function main(): void {
       },
       (frame) => {
         deepFrame = frame;
+        deepFrameCentre = requested;
         probeIndex = -1;
         toneDirty = true;
         if (frame.error !== undefined) showError(frame.error);
@@ -415,6 +457,13 @@ function main(): void {
     );
   }
 
+  /** One composite texel in world units, as the limit shader reads it — the legend, the dragon and the shader share it. */
+  function stagePixelRadius(aspect: number): number {
+    const w = stage.targetWidth > 0 ? stage.targetWidth : Math.round(1024 * aspect);
+    const h = stage.targetHeight > 0 ? stage.targetHeight : 1024;
+    return limitPixelRadius(state.halfHeight, aspect, w, h);
+  }
+
   /** Which engine owns the view as it stands. Read in three places, so it is computed in one. */
   function handover(): Handover {
     const c = centreNumbers(state);
@@ -425,7 +474,7 @@ function main(): void {
       halfHeight: state.halfHeight,
       maxDegree: state.maxDegree,
       annulus: state.annulus,
-      pixels: stage.resolution > 0 ? stage.resolution : 1024,
+      pixels: stage.targetHeight > 0 ? stage.targetHeight : 1024,
     });
   }
 
@@ -438,9 +487,8 @@ function main(): void {
    * panel that is wrong exactly when the reader has just changed something.
    */
   function limitSummary(): LimitSummary {
-    const size = stage.resolution > 0 ? stage.resolution : 1024;
     const aspect = gl.width / Math.max(1, gl.height);
-    const pixelRadius = limitPixelRadius(state.halfHeight, aspect, size);
+    const pixelRadius = stagePixelRadius(aspect);
     const c = centreNumbers(state);
     const absz = Math.hypot(c.cx, c.cy);
     let maxAbs = 1;
@@ -451,7 +499,7 @@ function main(): void {
     return {
       alphabet: alphabet?.label ?? "the alphabet",
       depth: clampDepth(state.depth),
-      eps: epsFor(pixelRadius, absz > 1 ? 1 / absz : absz, maxAbs),
+      eps: epsFor(foldedPixelRadius(pixelRadius, absz), absz > 1 ? 1 / absz : absz, maxAbs),
       annulus: state.annulus,
       reason: handover().reason,
       ...(limitShares === null ? {} : { shares: limitShares }),
@@ -470,7 +518,7 @@ function main(): void {
     if (gl.width !== w || gl.height !== h) {
       gl.width = w;
       gl.height = h;
-      stage.resize(Math.max(w, h));
+      stage.resize(w, h);
       stage.invalidate();
       toneDirty = true;
     }
@@ -506,6 +554,7 @@ function main(): void {
         halfHeight: state.halfHeight,
         aspect,
         pointSize: DEEP_POINT_SIZE,
+        shift: deepShift(),
       });
       any = deepFrame.count > 0;
     } else if (engine === "limit") {
@@ -565,6 +614,8 @@ function main(): void {
   let lastMaxDensity = 0;
   /** The coefficient count the loaded layers' hues were swept with, 0 for none. */
   let sweptHueDigits = 0;
+  /** What the stage's layers hold from earlier sweeps, for the incremental scrub (`engine/scrub.ts`). */
+  let held: { key: string; base: string; hueDigits: number; complete: Set<number> } | null = null;
   /** The sweep the reader last pressed Compute for (`sweepGate`'s key), or "" for none. */
   let confirmedSweep = "";
 
@@ -587,6 +638,7 @@ function main(): void {
       alphabetError = compiled.error;
       pool.cancel();
       stage.dropLayers();
+      held = null;
       totals = emptyTotals();
       complete = false;
       progress.textContent = "";
@@ -595,16 +647,27 @@ function main(): void {
       draw();
       return;
     }
+    // A deep frame belongs to the alphabet it was walked over: its digits would be read through the new
+    // one's values (`coefficientString`) and its dots drawn as if they were the new family's.
+    if (alphabet === null || alphabet.id !== compiled.alphabet.id) {
+      deepFrame = emptyFrame();
+      deepKey = "";
+    }
     alphabet = compiled.alphabet;
     alphabetError = null;
     pool.cancel();
-    stage.dropLayers();
-    totals = emptyTotals();
-    complete = false;
     toneDirty = true;
     lastMaxDensity = 0;
+    /** Forget every layer and count — for the paths that draw no root cloud. */
+    const forget = (): void => {
+      stage.dropLayers();
+      held = null;
+      totals = emptyTotals();
+      complete = false;
+    };
 
     if (handover().engine === "deep") {
+      forget();
       progress.textContent = "";
       requestDeep();
       syncControls();
@@ -616,6 +679,7 @@ function main(): void {
       // Nothing to enumerate: the walk is per pixel and the layers have just been dropped. Sweeping
       // millions of polynomials to fill textures nothing composites would cost the reader's cores for a
       // picture they are not looking at.
+      forget();
       progress.textContent = "";
       syncControls();
       syncStats();
@@ -629,6 +693,7 @@ function main(): void {
     // the 2026-09-26 review), and a Lowest change or a preset change swept past it too.
     const gate = sweepGate(alphabet);
     if (gate.cost.verdict === "refused" || (gate.cost.verdict === "confirm" && !gate.confirmed)) {
+      forget();
       progress.textContent = "";
       syncControls();
       syncStats();
@@ -637,16 +702,48 @@ function main(): void {
     }
     // Egan's hues cost |G| floats per root, so they are swept only when the mode is on — and switching
     // to it, or changing how many coefficients it reads, re-sweeps (see `apply`).
-    sweptHueDigits = state.colour === "egan" ? state.hueDigits : 0;
+    //
+    // Only what the stage does not already hold (`engine/scrub.ts`): a step of either degree slider
+    // sweeps the new degrees or nothing, and the layers already there are recomposited. Layers swept WITH
+    // hues serve the density modes too, so outside Egan's mode the held hue digits are kept rather than
+    // re-sweeping everything to drop them — the new degrees are swept to match, so `hasHues` stays true.
+    const base = `${alphabet.id}|${state.circleDelta}`;
+    const wanted = state.colour === "egan" ? state.hueDigits : 0;
+    sweptHueDigits = wanted === 0 && held !== null && held.base === base ? held.hueDigits : wanted;
+    const key = `${base}|${sweptHueDigits}`;
+    const plan = planScrub(held, key, state.minDegree, state.maxDegree);
+    if (plan.kind === "fresh") {
+      stage.dropLayers();
+      totals = emptyTotals();
+      held = { key, base, hueDigits: sweptHueDigits, complete: new Set() };
+    } else {
+      const keep = plan.keep;
+      stage.keepDegrees((d) => keep.has(d));
+      totals = totalsFor(totals, (d) => keep.has(d));
+      held = { key, base, hueDigits: sweptHueDigits, complete: new Set(keep) };
+    }
+    if (plan.kind === "extend" && !plan.sweep) {
+      complete = true;
+      progress.textContent = "";
+      syncControls();
+      syncStats();
+      syncProbe();
+      draw();
+      return;
+    }
+    complete = false;
+    const lo = plan.lo;
+    const hi = plan.hi;
+    const job = held;
     const totalsPerDegree: number[] = [];
-    for (let d = state.minDegree; d <= state.maxDegree; d++) {
+    for (let d = lo; d <= hi; d++) {
       totalsPerDegree.push(orbitSpace(alphabet, d).total);
     }
     pool.run(
       {
         spec: state.alphabet,
-        minDegree: state.minDegree,
-        maxDegree: state.maxDegree,
+        minDegree: lo,
+        maxDegree: hi,
         totals: totalsPerDegree,
         circleDelta: state.circleDelta,
         hueDigits: sweptHueDigits,
@@ -669,6 +766,7 @@ function main(): void {
         },
         onDone: () => {
           complete = true;
+          for (let d = lo; d <= hi; d++) job.complete.add(d);
           progress.textContent = "";
           toneDirty = true;
           draw();
@@ -764,7 +862,15 @@ function main(): void {
     probePanel.append(el("p", { class: "coefficients", textContent: coefficientString(a, root.digits) }));
     const centreButton = el("button", { class: "button", type: "button", textContent: "Centre on this root" });
     centreButton.addEventListener("click", () => {
-      const moved = centreOnRoot(state.alphabet, root.digits, state.cx, state.cy, chosen.precision);
+      // ALWAYS in double-double, and seeded at the root itself. It refined at `chosen.precision`, which
+      // is float64 at any view shallower than 1e-11 — so a centre taken there was good to 17 digits and
+      // lost as soon as the reader zoomed past it (measured: 0 roots at 1e-20 against 927 with dd) — and
+      // it started Newton at the view centre, which for a polynomial with two roots in view converged to
+      // the other one (2026-09-26 review).
+      const moved = centreOnRoot(state.alphabet, root.digits, deepFrameCentre.cx, deepFrameCentre.cy, "dd", {
+        dx: root.dx,
+        dy: root.dy,
+      });
       if ("error" in moved) {
         showError(moved.error);
         return;
@@ -842,6 +948,16 @@ function main(): void {
     return state.lamp ?? hoverLamp;
   }
 
+  /**
+   * The view centre as a lamp, when it can be one — what "Pin" pins with no pointer over the stage. The
+   * lamp used to come from `pointermove` alone, so a keyboard reader could never open the dragon panel
+   * (2026-09-26 review); the centre is where the keyboard's pan and zoom already point.
+   */
+  function centreLamp(): Cx | null {
+    const c = centreNumbers(state);
+    return Math.hypot(c.cx, c.cy) < 1 ? { re: c.cx, im: c.cy } : null;
+  }
+
   function scheduleInset(): void {
     if (insetTimer !== 0) return;
     insetTimer = window.requestAnimationFrame(() => {
@@ -853,8 +969,15 @@ function main(): void {
   function syncDragon(): void {
     const lamp = lampOf();
     const a = alphabet;
-    dragonPanel.hidden = lamp === null || a === null;
-    if (lamp === null || a === null) return;
+    // Theorem mode draws the PROBED root's overlay and needs no lamp; it used to be gated on one, so the
+    // theorem place (`lamp: null`) opened with no inset at all until the mouse crossed the stage.
+    const theoremNeedsNoLamp = state.theorem && handover().engine === "deep" && deepFrame.count > 0;
+    dragonPanel.hidden = a === null || (lamp === null && !theoremNeedsNoLamp && handover().engine !== "deep");
+    if (a === null || (lamp === null && !theoremNeedsNoLamp)) {
+      insetNote.textContent = lamp === null ? "Hover over the picture, or pin a dragon at the view centre." : "";
+      insetCanvas.getContext("2d")?.clearRect(0, 0, insetCanvas.width, insetCanvas.height);
+      return;
+    }
     const size = Math.max(64, Math.min(320, Math.round(insetCanvas.clientWidth || 220)));
     insetCanvas.width = size;
     insetCanvas.height = size;
@@ -862,7 +985,8 @@ function main(): void {
     const probed = state.theorem ? rootAt(deepFrame, probeIndex >= 0 ? probeIndex : 0) : null;
 
     if (probed !== null && handover().engine === "deep") {
-      const centre = centreNumbers(state);
+      // α is the probed root in the WORLD: the frame's own centre plus its offset, not the view's.
+      const centre = centreNumbers(deepFrameCentre);
       const overlay = theoremOverlay(a, {
         digits: probed.digits,
         alpha: { re: centre.cx + probed.dx, im: centre.cy + probed.dy },
@@ -886,6 +1010,7 @@ function main(): void {
       return;
     }
 
+    if (lamp === null) return; // theorem mode was the only thing to draw without one
     const spread = maxAbsOf(a) / Math.max(1e-9, 1 - Math.hypot(lamp.re, lamp.im));
     const plan = dragonPlan(a, lamp, spread / (size / 2));
     if (!plan.contracts) {
@@ -898,15 +1023,23 @@ function main(): void {
     const points = dragonSet(a, lamp, plan.depth);
     const layout = insetLayout(dragonBounds(points), size, size);
     if (ctx !== null) drawInset(ctx, points, layout, true);
-    // Bousch: the lamp is in the limit set exactly when the origin is inside the cloud. Asked at the
-    // SAME depth as the picture, so the sentence is about the cloud the reader can see — and of the
-    // PROPER set, which is the second enumeration and not an optimisation to remove. Over an alphabet
-    // containing 0 the full attractor's enumeration holds the origin at every depth for free, by the
-    // all-zero prefix, so asking it of the drawn cloud would call every point in the set. That is the
-    // same restriction the limit walk makes when it takes `a_0` from `alphabet.leading`.
-    const eps = epsFor(state.halfHeight / Math.max(1, gl.height), Math.hypot(lamp.re, lamp.im), maxAbsOf(a));
-    const inSet = nearestToOrigin(dragonSet(a, lamp, plan.depth, true)) <= plan.tail + eps;
-    const text = insetDescription(lamp, plan, inSet);
+    // Bousch: the lamp is in the limit set exactly when 0 is in the closure of the PROPER attractor.
+    // The verdict is the stage's OWN walk at this pixel — its depth, its ε from `limitPixelRadius`, its
+    // band — so "the same question the stage is answering" is literally true (see `InsetVerdict`).
+    const spec = walkSpec(a);
+    const aspect = gl.width / Math.max(1, gl.height);
+    const depth = clampDepth(state.depth);
+    const pixel = stagePixelRadius(aspect);
+    const walked = walkAt(spec, lamp.re, lamp.im, { depth, eps: pixelEps(spec, lamp.re, lamp.im, pixel), computeAnnulus: state.annulus });
+    const verdict: InsetVerdict = walked.excluded
+      ? { kind: "band" }
+      : walked.exhausted
+        ? { kind: "undecided" }
+        : walked.reach > depth
+          ? { kind: "kept", depth }
+          : { kind: "pruned", depth, reach: walked.reach };
+    const hasZero = a.values.some((v) => Math.hypot(v.re, v.im) < 1e-12);
+    const text = insetDescription(lamp, plan, verdict, hasZero);
     insetNote.textContent = text;
     insetCanvas.setAttribute("aria-label", text);
   }
@@ -920,10 +1053,13 @@ function main(): void {
    * found exactly this, on exactly this kind of card; the fix is that the children are built once.
    */
   function syncDragonControls(): void {
-    dragonPanel.hidden = lampOf() === null;
+    // The panel exists whenever there is something to pin or a theorem toggle to reach — not only while
+    // a pointer hovers — so a keyboard reader can get to it.
+    dragonPanel.hidden = lampOf() === null && centreLamp() === null && handover().engine !== "deep";
     dragonPanel.dataset.pinned = state.lamp === null ? "no" : "yes";
-    pinButton.textContent = state.lamp === null ? "Pin this dragon" : "Unpin";
-    pinButton.disabled = state.lamp === null && hoverLamp === null;
+    pinButton.textContent =
+      state.lamp !== null ? "Unpin" : hoverLamp !== null ? "Pin this dragon" : "Pin a dragon at the view centre";
+    pinButton.disabled = state.lamp === null && hoverLamp === null && centreLamp() === null;
     theoremRow.hidden = handover().engine !== "deep";
     extendRow.hidden = !state.theorem || handover().engine !== "deep";
     theoremToggle.checked = state.theorem;
@@ -941,7 +1077,7 @@ function main(): void {
 
   insetCanvas.setAttribute("role", "img");
   pinButton.addEventListener("click", () => {
-    apply({ ...state, lamp: state.lamp === null ? (hoverLamp ?? null) : null });
+    apply({ ...state, lamp: state.lamp === null ? (hoverLamp ?? centreLamp()) : null });
   });
   theoremToggle.addEventListener("change", () => {
     apply({ ...state, theorem: theoremToggle.checked });
@@ -1218,13 +1354,24 @@ function main(): void {
     apply({ ...state, cx: DEFAULT_STATE.cx, cy: DEFAULT_STATE.cy, halfHeight: DEFAULT_STATE.halfHeight });
   }
 
-  let dragging: { x: number; y: number } | null = null;
+  // **Pointers, not a drag.** One pointer pans; two pinch. The stage set `touch-action: none`, which
+  // turns off the browser's own pinch, and had no pinch of its own — so a phone could pan and never
+  // zoom — and a second finger simply overwrote the first (2026-09-26 review). A mouse drags with the
+  // primary button only.
+  const pointers = new Map<number, { x: number; y: number }>();
+  let pinchSpan = 0;
+  const span = (): { d: number; x: number; y: number } => {
+    const [a, b] = [...pointers.values()];
+    return { d: Math.hypot(a.x - b.x, a.y - b.y), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  };
   gl.addEventListener("pointerdown", (e) => {
-    dragging = { x: e.clientX, y: e.clientY };
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     gl.setPointerCapture(e.pointerId);
+    if (pointers.size === 2) pinchSpan = span().d;
   });
   gl.addEventListener("pointermove", (e) => {
-    if (dragging === null) {
+    if (pointers.size === 0) {
       // The hover lamp is NOT state (see `syncDragon`), so it moves the inset without touching the
       // permalink or the history — and it is ignored the moment a dragon is pinned.
       const centre = centreNumbers(state);
@@ -1236,33 +1383,63 @@ function main(): void {
       }
       if (handover().engine === "deep" && deepFrame.count > 0) {
         const at = offsetOf(e.clientX, e.clientY);
-        const i = nearestRoot(deepFrame, at.dx, at.dy);
+        const shift = deepShift();
+        const i = nearestRoot(deepFrame, at.dx - shift.dx, at.dy - shift.dy);
         if (i !== probeIndex) {
           probeIndex = i;
           syncProbe();
+          // The overlay is the probed root's; with a lamp pinned nothing else re-drew it, so the probe
+          // could name one root while the inset showed another's.
+          if (state.theorem) scheduleInset();
         }
       }
       return;
     }
-    const aspect = gl.width / Math.max(1, gl.height);
+    const last = pointers.get(e.pointerId);
+    if (last === undefined) return;
     const rect = gl.getBoundingClientRect();
     const perPx = (2 * state.halfHeight) / Math.max(1, rect.height);
+    if (pointers.size >= 2) {
+      const before = span();
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const after = span();
+      // Zoom about the pinch's midpoint by the change in finger spread, and pan by its movement.
+      const panned = shiftCentre(state, -(after.x - before.x) * perPx, (after.y - before.y) * perPx);
+      const at = offsetOf(after.x, after.y);
+      const factor = pinchSpan > 0 && after.d > 0 ? after.d / pinchSpan : 1;
+      pinchSpan = after.d;
+      apply(zoomAbout(panned, at.dx, at.dy, factor));
+      return;
+    }
     // Dragging moves the WORLD under the cursor, so the centre moves the other way.
-    apply(shiftCentre(state, -(e.clientX - dragging.x) * perPx * (aspect / aspect), (e.clientY - dragging.y) * perPx));
-    dragging = { x: e.clientX, y: e.clientY };
+    apply(shiftCentre(state, -(e.clientX - last.x) * perPx, (e.clientY - last.y) * perPx));
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   });
   const endDrag = (e: PointerEvent): void => {
-    dragging = null;
+    pointers.delete(e.pointerId);
+    pinchSpan = pointers.size === 2 ? span().d : 0;
     if (gl.hasPointerCapture(e.pointerId)) gl.releasePointerCapture(e.pointerId);
   };
   gl.addEventListener("pointerup", endDrag);
   gl.addEventListener("pointercancel", endDrag);
+  // A hover lamp is where the pointer IS; once it has left there is none, and a stale one survived pans,
+  // zooms and place clicks and could be pinned off-screen.
+  gl.addEventListener("pointerleave", () => {
+    if (pointers.size > 0 || hoverLamp === null) return;
+    hoverLamp = null;
+    if (state.lamp === null) {
+      scheduleInset();
+      syncDragonControls();
+    }
+  });
   gl.addEventListener(
     "wheel",
     (e) => {
       e.preventDefault();
       const at = offsetOf(e.clientX, e.clientY);
-      apply(zoomAbout(state, at.dx, at.dy, Math.exp(-e.deltaY * 0.0016)));
+      // A line-mode wheel reports lines, not pixels, and zoomed ~16× too slowly.
+      const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 800 : 1;
+      apply(zoomAbout(state, at.dx, at.dy, Math.exp(-e.deltaY * unit * 0.0016)));
     },
     { passive: false },
   );
@@ -1356,7 +1533,18 @@ function main(): void {
     const caption =
       chosen.engine === "limit"
         ? `Limit set of ${alphabet?.label ?? "unknown alphabet"} to depth ${clampDepth(state.depth)} — \u2248 a superset that shrinks onto the limit set as the depth rises.`
-        : captionFor({
+        : chosen.engine === "deep"
+          ? deepCaptionFor({
+              alphabet: alphabet?.label ?? "unknown alphabet",
+              count: deepFrame.count,
+              distinct: deepFrame.distinct,
+              degreeMin: deepFrame.degreeMin,
+              degreeMax: deepFrame.degreeMax,
+              halfHeight: state.halfHeight,
+              precision: deepFrame.precision,
+              exhausted: deepFrame.exhausted,
+            })
+          : captionFor({
             alphabet: alphabet?.label ?? "unknown alphabet",
             minDegree: state.minDegree,
             maxDegree: state.maxDegree,
@@ -1364,7 +1552,7 @@ function main(): void {
             complete,
           });
     render(); // the persisted buffer holds the LAST frame; make it this one
-    savePng(gl, "polynomial-roots.png", encodeState(state), caption);
+    savePng(gl, "polynomial-roots.png", `${window.location.origin}${window.location.pathname}${encodeState(state)}`, caption);
   });
 
   window.addEventListener("resize", () => {

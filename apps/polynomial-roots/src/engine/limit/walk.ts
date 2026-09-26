@@ -152,6 +152,23 @@ export interface WalkResult {
  * Foster's fudge for a pixel of radius `ρ` at `|z| = absz`: the largest `|P(z)|` a polynomial with a
  * root inside the pixel can have. See the header — it is an upper bound, so the picture is a superset.
  */
+/**
+ * A pixel's radius in the coordinate the walk runs in. Outside the disk the walk runs at `w = 1/z`, and
+ * `|dw/dz| = 1/|z|² = |w|²`, so a texel of radius ρ at `z` is a disc of radius `ρ·|w|²` at `w`. Foster's
+ * ε was computed from the UNFOLDED ρ, which over-reported the set outside the disk — measured, the
+ * image of the dragon window at `|z| ≈ 1.52` lit 4,578 texels against 3,388 for the same points inside
+ * and 3,409 with ε scaled (2026-09-26 review) — and broke the `z ↔ 1/z` symmetry the fold exists for.
+ */
+export function foldedPixelRadius(pixelRadius: number, absz: number): number {
+  return absz > 1 ? pixelRadius / (absz * absz) : pixelRadius;
+}
+
+/** Foster's ε for a texel of radius `pixelRadius` centred at `(x, y)`, the fold and its Jacobian applied. */
+export function pixelEps(spec: WalkSpec, x: number, y: number, pixelRadius: number): number {
+  const absz = Math.hypot(x, y);
+  return epsFor(foldedPixelRadius(pixelRadius, absz), absz > 1 ? 1 / absz : absz, spec.maxAbs);
+}
+
 export function epsFor(pixelRadius: number, absz: number, maxAbs: number): number {
   const gap = Math.max(1e-6, 1 - Math.min(absz, 1 - 1e-6));
   return pixelRadius * maxAbs / (gap * gap);
@@ -303,8 +320,7 @@ export function walkGrid(spec: WalkSpec, view: GridView, width: number, height: 
     const y = view.cy + view.halfHeight * ((2 * (j + 0.5)) / height - 1);
     for (let i = 0; i < width; i++) {
       const x = view.cx + view.halfWidth * ((2 * (i + 0.5)) / width - 1);
-      const absz = Math.hypot(x, y);
-      const eps = options.eps ?? epsFor(pixelRadius, absz > 1 ? 1 / absz : absz, spec.maxAbs);
+      const eps = options.eps ?? pixelEps(spec, x, y, pixelRadius);
       const r = walkAt(spec, x, y, { ...options, eps });
       const at = j * width + i;
       reach[at] = r.reach;

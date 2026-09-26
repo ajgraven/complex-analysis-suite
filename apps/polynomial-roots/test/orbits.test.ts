@@ -220,3 +220,25 @@ describe("canonical representatives and their stabilisers", () => {
     expect(fixedFound).toBeGreaterThan(0);
   });
 });
+
+describe("negation and the unit −1 agree, even on near-duplicates", () => {
+  it("counts the whole family of `1, -1.0000000005` — it lost 25% before", () => {
+    // Negation held within the tolerance while the ratio search never found the unit −1, so the group
+    // folded by z ↦ −z at odd degree without the unit that closes it.
+    const a = alpha({ preset: "custom", custom: "1, -1.0000000005" });
+    expect(a.hasNeg).toBe(true);
+    expect(a.units.some((u) => Math.abs(u.re + 1) < 1e-9 && Math.abs(u.im) < 1e-9)).toBe(true);
+    for (const degree of [1, 3, 5, 7]) {
+      const space = orbitSpace(a, degree);
+      const digits = new Int32Array(degree + 1);
+      const scratch = new Int32Array(degree + 1);
+      let stands = 0;
+      for (let i = 0; i < space.total; i++) {
+        decodeDigits(a, space, i, digits);
+        const { canonical, stabiliser } = canonicalOf(a, space, digits, scratch);
+        if (canonical) stands += (a.units.length * a.group.length) / stabiliser;
+      }
+      expect(stands, `degree ${degree}`).toBe(properCount(a, degree));
+    }
+  });
+});

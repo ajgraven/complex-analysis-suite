@@ -3,8 +3,9 @@ import { compileAlphabet, mapRoot } from "../src/engine/alphabet";
 import type { Alphabet, AlphabetSpec } from "../src/engine/alphabet";
 import { aberth, makeWorkspace } from "../src/engine/aberth";
 import { properCount } from "../src/engine/orbits";
-import { expectedRoots, sweepChunk } from "../src/engine/sweep";
+import { expectedRoots, isRealRoot, sweepChunk } from "../src/engine/sweep";
 import type { SweepResult } from "../src/engine/sweep";
+import { distinctRealRoots, realRootsWithMultiplicity } from "./support/sturm";
 
 const alpha = (spec: AlphabetSpec): Alphabet => {
   const r = compileAlphabet(spec);
@@ -225,40 +226,48 @@ describe("what the sweep counts", () => {
     expect(r.representatives).toBe(1);
   });
 
-  it("brute force agrees on the real-root count too, where the density test could not see it", () => {
-    // The density test bins positions; a real root and a root 1e-12 off the axis land in the same bin.
-    // Realness is decided, so it is checked against the same brute force separately.
-    for (const spec of [{ preset: "littlewood" } as const, { preset: "trinary" } as const]) {
+  it("the real-root count is EXACT against Sturm's theorem, multiple roots included", () => {
+    // The old version of this test built its "truth" with the same solver and the same `|im| < 1e-9`
+    // threshold as the sweep, so it agreed with the sweep's blind spot: a double real root comes back
+    // from Aberth as two points ~2.5e-8 off the axis and was counted as neither. The oracle now shares
+    // nothing with the solver — exact Sturm sequences in BigInt (`support/sturm.ts`) — and the count
+    // must agree with it EXACTLY, polynomial for polynomial, over every proper polynomial.
+    for (const [spec, degrees] of [
+      [{ preset: "littlewood" }, [3, 4, 5, 6, 7, 8]],
+      [{ preset: "trinary" }, [2, 3, 4, 5, 6]],
+      [{ preset: "zero-one" }, [3, 5, 7, 9]],
+      [{ preset: "range", n: 2 }, [2, 3]],
+    ] as [AlphabetSpec, number[]][]) {
       const a = alpha(spec);
-      for (const degree of [3, 4, 5]) {
-        const ws = makeWorkspace(degree);
-        const cRe = new Float64Array(degree + 1);
-        const cIm = new Float64Array(degree + 1);
+      let withMultiple = 0;
+      for (const degree of degrees) {
         const m = a.values.length;
         const middle = Math.pow(m, Math.max(0, degree - 1));
-        let realTruth = 0;
+        let truth = 0;
         for (const first of a.nonZero) {
           for (const last of a.nonZero) {
             for (let mid = 0; mid < middle; mid++) {
-              cRe[0] = a.values[first].re;
-              cIm[0] = a.values[first].im;
-              cRe[degree] = a.values[last].re;
-              cIm[degree] = a.values[last].im;
+              const coeffs = new Array<number>(degree + 1);
+              coeffs[0] = a.values[first].re;
+              coeffs[degree] = a.values[last].re;
               let rest = mid;
               for (let k = 1; k <= degree - 1; k++) {
                 const digit = rest % m;
                 rest = (rest - digit) / m;
-                cRe[k] = a.values[digit].re;
-                cIm[k] = a.values[digit].im;
+                coeffs[k] = a.values[digit].re;
               }
-              aberth(cRe, cIm, degree, ws);
-              for (let r = 0; r < degree; r++) if (Math.abs(ws.rootIm[r]) < 1e-9) realTruth++;
+              const exact = realRootsWithMultiplicity(coeffs);
+              truth += exact;
+              // Anti-vacuity: the cases the old test could not see must actually occur here.
+              if (exact > distinctRealRoots(coeffs)) withMultiple++;
             }
           }
         }
-        expect(run(spec, degree).stats.realRoots).toBeCloseTo(realTruth, 6);
-        expect(realTruth).toBeGreaterThan(0);
+        expect(run(spec, degree).stats.realRoots, `${JSON.stringify(spec)} degree ${degree}`).toBe(truth);
       }
+      // Anti-vacuity: repeated real roots — the case the old test was blind to — really occur in the
+      // families checked (e.g. (1 − z)²(1 + z) is Littlewood). {0, 1} has none at these degrees.
+      if (spec.preset !== "zero-one") expect(withMultiple, JSON.stringify(spec)).toBeGreaterThan(0);
     }
   });
 
@@ -277,5 +286,27 @@ describe("what the sweep counts", () => {
     const r = run({ preset: "littlewood" }, 0);
     expect(r.points).toHaveLength(0);
     expect(r.stats.roots).toBe(0);
+  });
+});
+
+describe("isRealRoot — the conjugate decides", () => {
+  it("calls a genuine near-real pair NON-real, where a nearest-root rule would call it real", () => {
+    // z² − z + 0.2500000001: roots 0.5 ± 1e-5i, a genuine pair ten thousand times above REAL_TOL and
+    // inside PAIRING_REACH. Its conjugate coincides with the other root, so it is not real — a rule that
+    // measured the distance to the nearest root (not to the conjugate) would see 2e-5 and say real. No
+    // polynomial in the Sturm corpus has a pair this close to the axis, so the batch-B sweep's mutant
+    // swapping the conjugate for the root survived it.
+    const re = new Float64Array([0.5, 0.5]);
+    const im = new Float64Array([1e-5, -1e-5]);
+    expect(isRealRoot(re, im, 2, 0)).toBe(false);
+    expect(isRealRoot(re, im, 2, 1)).toBe(false);
+  });
+
+  it("calls a split DOUBLE real root real — its partner is off the conjugate by as much as the axis", () => {
+    // What Aberth returns for (z − 1)²: 1 ± δ, δ ~ √ε in no particular direction.
+    const re = new Float64Array([1 + 1e-8, 1 - 1e-8]);
+    const im = new Float64Array([2e-8, -2e-8]);
+    expect(isRealRoot(re, im, 2, 0)).toBe(true);
+    expect(isRealRoot(re, im, 2, 1)).toBe(true);
   });
 });

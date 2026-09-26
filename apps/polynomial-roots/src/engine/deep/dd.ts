@@ -235,6 +235,9 @@ export function ddFromString(text: string): DD | null {
   if (num === 0n) return DD_ZERO;
   // Two correctly-rounded steps: the leading double, then the exact remainder's leading double.
   const hi = ratToDouble(num, den);
+  // A value past float64's range is no coordinate: "1e400" parsed to [Infinity, NaN], which the shell's
+  // clamp caught but the permalink's refusal did not, so such a link silently reset to 0.
+  if (!Number.isFinite(hi)) return null;
   const eh = exactDouble(hi);
   const rn = num * eh.den - eh.num * den;
   const rd = den * eh.den;

@@ -92,29 +92,61 @@ export function inkStats(hits: Uint32Array): { lit: number; peak: number } {
 }
 
 /**
+ * What the stage's own walk says about the lamp's pixel — the verdict the inset reports.
+ *
+ * **Asked of the WALK, at the stage's depth and the stage's pixel.** It used to be asked of the drawn
+ * cloud — "is the origin within `tail + ε` of it" — at the inset's own resolution-driven depth (~11) and
+ * with ε from `halfHeight / canvas height`, where the stage uses `limitPixelRadius` and `state.depth`
+ * (24–40). So the caption's "the same question the stage is answering at that pixel" was not true, and
+ * the "inside" branch stated MEMBERSHIP as fact from what is a superset test: on a Littlewood grid 208 of
+ * its 648 "inside" verdicts were points a depth-40, ε = 0 walk rigorously excludes (2026-09-26 review).
+ * The two branches are not alike: a pruned walk is a proof (every truncation is farther from 0 than its
+ * tail can travel), a surviving one is only consistent with membership, within a pixel's slack.
+ */
+export type InsetVerdict =
+  | { readonly kind: "kept"; readonly depth: number }
+  | { readonly kind: "pruned"; readonly depth: number; readonly reach: number }
+  | { readonly kind: "band" }
+  | { readonly kind: "undecided" };
+
+/**
  * The inset's generated alternative text.
  *
  * Every clause comes from something computed: the point, the depth actually enumerated, whether that
- * depth resolved the attractor, and whether the origin is inside. A hand-written alternative would
- * drift the first time the budget or the lamp moved.
+ * depth resolved the attractor, and what the stage's walk says at the point. A hand-written alternative
+ * would drift the first time the budget or the lamp moved.
  */
-export function insetDescription(z: Cx, plan: DragonPlan, inSet: boolean | null): string {
+export function insetDescription(
+  z: Cx,
+  plan: DragonPlan,
+  verdict: InsetVerdict | null,
+  hasZero = false,
+): string {
   const at = `${z.re.toFixed(6)}${z.im < 0 ? " − " : " + "}${Math.abs(z.im).toFixed(6)}i`;
   if (!plan.contracts) {
     return `No dragon at ${at}: |z| ≥ 1, so the maps x ↦ a + zx expand and there is no attractor to draw.`;
   }
-  const size = `${plan.points.toLocaleString("en-GB")} values of the polynomials of degree ${plan.depth}`;
+  const size = `${plan.points.toLocaleString("en-GB")} values of the polynomials of degree at most ${plan.depth}`;
   const accuracy = plan.resolved
     ? "which pins the attractor to finer than a pixel"
     : plan.capped
       ? `which is as deep as the point budget allows — the cloud is still ${plan.tail.toPrecision(2)} short of the attractor, so it is a coarse picture and not a finished one`
       : `accurate to ${plan.tail.toPrecision(2)}`;
-  const bousch =
-    inSet === null
-      ? ""
-      : inSet
-        ? " The origin lies inside the cloud, so a power series over this alphabet vanishes at the point and it is in the limit set."
-        : " The origin lies outside the cloud, so no power series over this alphabet vanishes at the point.";
+  let bousch = "";
+  if (verdict !== null) {
+    bousch =
+      verdict.kind === "pruned"
+        ? ` The stage's walk prunes every branch here by depth ${verdict.reach} of ${verdict.depth}: every power series over this alphabet stays farther from 0 than its tail can travel, so none vanishes at the point and it is outside the limit set.`
+        : verdict.kind === "kept"
+          ? ` The stage's walk keeps a branch here to its full depth ${verdict.depth}: ≈ consistent with a power series over this alphabet vanishing at the point, within a pixel's slack — which is not a proof that one does.`
+          : verdict.kind === "band"
+            ? " This point is in the band around |z| = 1 that the walk does not enter, so the stage does not answer here."
+            : " The stage's walk ran out of nodes here without deciding.";
+    if (hasZero) {
+      bousch +=
+        " (Over an alphabet containing 0 the cloud always covers the origin, by the all-zero series, so the picture cannot answer this; the walk asks it of series with a non-zero constant term.)";
+    }
+  }
   return `The dragon at ${at}: ${size}, ${accuracy}.${bousch}`;
 }
 

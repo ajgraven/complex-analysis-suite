@@ -79,11 +79,14 @@ describe("how the numbers are said", () => {
     addStats(totals, run(3));
     expect(totals.roots).toBe(48);
     expect(totals.polynomials).toBe(16);
-    expect(totals.realRoots).toBe(16);
+    // 24, exactly Sturm's count: (1 − z)²(1 + z) and its images carry DOUBLE real roots, which the
+    // solver returns ~2.5e-8 off the axis and the count read as non-real until the 2026-09-26 review
+    // (it said 16 here, and this test pinned the undercount).
+    expect(totals.realRoots).toBe(24);
     const lines = statLines(totals, { minDegree: 3, maxDegree: 3, circleDelta: 0.02, complete: true });
     const real = lines.find((l) => l.label === "Real roots");
-    expect(real?.value).toBe("16");
-    expect(real?.detail).toContain("33.3%"); // 16/48, not 16/16
+    expect(real?.value).toBe("24");
+    expect(real?.detail).toContain("50.0%"); // 24/48, not 24/16
     // EXACT, not `toContain`: at degree 3 the near-circle share is 24/48 = "50.0%" and the mutant's
     // 24/16 is "150.0%", which CONTAINS "50.0%" — the substring assertion passed the mutant.
     const near = lines.find((l) => l.label.includes("|z| = 1"));

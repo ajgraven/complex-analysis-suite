@@ -5,7 +5,7 @@ import { RAMPS } from "../src/stage/ramps";
 import { buildToneMap } from "../src/stage/tone";
 import { compileAlphabet } from "../src/engine/alphabet";
 import type { Alphabet } from "../src/engine/alphabet";
-import { walkAt, walkSpec } from "../src/engine/limit/walk";
+import { pixelEps, walkAt, walkSpec } from "../src/engine/limit/walk";
 import { STATUS_EXCLUDED, STATUS_EXHAUSTED } from "../src/engine/limit/walkGlsl";
 import { placeById } from "../src/places";
 import { centreNumbers } from "../src/state";
@@ -131,10 +131,9 @@ describe("the generated walk shader", () => {
         for (let i = 0; i < m.size; i++) {
           const x = view.cx + half * ((2 * (i + 0.5)) / m.size - 1);
           const y = view.cy + half * ((2 * (j + 0.5)) / m.size - 1);
-          const absz = Math.hypot(x, y);
-          const folded = absz > 1 ? 1 / absz : absz;
-          const gap = Math.max(1 - Math.min(folded, 1 - 1e-6), 1e-6);
-          const eps = (pixelRadius * cpuSpec.maxAbs) / (gap * gap);
+          // The fold's Jacobian included (walk.ts `pixelEps`): this line computed ε from the UNFOLDED
+          // texel, which is the defect the 2026-09-26 review fixed in both walks.
+          const eps = pixelEps(cpuSpec, x, y, pixelRadius);
           const cpu = walkAt(cpuSpec, x, y, { depth, eps });
           const at = j * m.size + i;
           const got = gpu[at];

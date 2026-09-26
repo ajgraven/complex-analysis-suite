@@ -147,10 +147,40 @@ describe("which engine draws", () => {
     expect(chooseEngine(at({ cx: 0.372, cy: -0.542, halfHeight: 1e-30 })).suggestedDepth).toBe(MAX_DEPTH);
   });
 
+  it("suggests the same depth on both sides of the fold — the texel shrinks by |w|² at w = 1/z", () => {
+    // Outside the disk the walk runs at `w = 1/z`, where the view's texel is `|w|²` times smaller; the
+    // depth has to be read off THAT texel. The mirror of the dragon's window must ask for the dragon's
+    // own 34 — without the Jacobian it asked for two levels fewer (the batch-B sweep's survivor).
+    const w = { re: 0.372, im: -0.542 };
+    const w2 = w.re * w.re + w.im * w.im;
+    const z = { re: w.re / w2, im: -w.im / w2 };
+    const inside = chooseEngine(at({ cx: w.re, cy: w.im, halfHeight: 0.0004 }));
+    const outside = chooseEngine(at({ cx: z.re, cy: z.im, halfHeight: 0.0004 / w2 }));
+    expect(inside.suggestedDepth).toBe(34);
+    expect(outside.suggestedDepth).toBe(34);
+  });
+
   it("the reason carries the two numbers it compares, so a reader can check the rule", () => {
     const chosen = chooseEngine(at({ cx: 0.657, cy: 0, halfHeight: 0.004 }));
     expect(chosen.reason).toContain(chosen.pixelSize.toExponential(1));
     expect(chosen.reason).toContain(chosen.spacing.toExponential(1));
     expect(chosen.reason).toContain("degree-16");
+  });
+});
+
+describe("outside the unit disk there is no deep engine to hand over to", () => {
+  it("keeps a deep view with |z| > 1 on the limit-set walk, and says why", () => {
+    // The deep walk refuses |z| ≥ 1, and auto mode used to route there anyway, blanking the outer ring
+    // below about 1e-4 (2026-09-26 review, reproduced at 1.6 + 0.3i and 1.3 + 0.3i at 1e-8).
+    for (const [cx, cy] of [
+      [1.6, 0.3],
+      [1.3, 0.3],
+    ]) {
+      const chosen = chooseEngine(at({ cx, cy, halfHeight: 1e-8 }));
+      expect(chosen.engine).toBe("limit");
+      expect(chosen.reason).toContain("inside the unit disk only");
+    }
+    // Inside the disk the same depth still goes deep.
+    expect(chooseEngine(at({ cx: 0.42065, cy: 0.48354, halfHeight: 1e-8 })).engine).toBe("deep");
   });
 });

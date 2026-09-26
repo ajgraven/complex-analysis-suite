@@ -13,7 +13,8 @@
 import { createProgram } from "@cas/gpu/shader";
 import type { Alphabet } from "../engine/alphabet.js";
 import { buildWalkShader, WALK_VERT, walkProgramKey } from "../engine/limit/walkGlsl.js";
-import { StageUnavailable } from "./glStage.js";
+import { StageUnavailable, targetDims } from "./glStage.js";
+import type { TargetSize } from "./glStage.js";
 import type { StageView } from "./glStage.js";
 
 /** Everything one limit-set frame needs. */
@@ -49,12 +50,13 @@ interface Cached {
  * disagree: the first draft had the legend reading it off the LAST frame, so a depth or a view change
  * showed one number in the controls and another in the panel until the next redraw.
  *
- * The composite is square and carries the world RECT, so a texel is not square in world units. The
- * larger side is taken: it fattens the picture rather than thinning it, which is the only direction a
- * superset may err in.
+ * The stage's composite has the canvas's own shape, so its texels are square in world units and the
+ * two sides below agree. A target of another shape (the browser suites' square one, carrying a
+ * non-square world rect) has texels that are not, and the larger side is taken: it fattens the picture
+ * rather than thinning it, which is the only direction a superset may err in.
  */
-export function limitPixelRadius(halfHeight: number, aspect: number, size: number): number {
-  return Math.max(halfHeight * aspect, halfHeight) / Math.max(1, size);
+export function limitPixelRadius(halfHeight: number, aspect: number, width: number, height: number = width): number {
+  return Math.max((halfHeight * aspect) / Math.max(1, width), halfHeight / Math.max(1, height));
 }
 
 export class LimitPass {
@@ -87,20 +89,21 @@ export class LimitPass {
     return entry;
   }
 
-  /** Draw one frame into `framebuffer`, a `size × size` float target. */
-  render(framebuffer: WebGLFramebuffer, size: number, options: LimitRender): LimitFrame {
+  /** Draw one frame into `framebuffer`, a float target of `size` texels. */
+  render(framebuffer: WebGLFramebuffer, size: TargetSize, options: LimitRender): LimitFrame {
     const gl = this.gl;
+    const { width, height } = targetDims(size);
     const { program, uniforms } = this.programFor(options.alphabet, options.depth);
     const halfWidth = options.view.halfHeight * options.aspect;
-    const pixelRadius = limitPixelRadius(options.view.halfHeight, options.aspect, size);
+    const pixelRadius = limitPixelRadius(options.view.halfHeight, options.aspect, width, height);
     gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-    gl.viewport(0, 0, size, size);
+    gl.viewport(0, 0, width, height);
     gl.disable(gl.BLEND);
     gl.useProgram(program);
     gl.bindVertexArray(this.vao);
     gl.uniform2f(uniforms.uCentre, options.view.cx, options.view.cy);
     gl.uniform2f(uniforms.uHalfExtent, halfWidth, options.view.halfHeight);
-    gl.uniform2f(uniforms.uResolution, size, size);
+    gl.uniform2f(uniforms.uResolution, width, height);
     gl.uniform1f(uniforms.uPixelRadius, pixelRadius);
     gl.uniform1f(uniforms.uAnnulus, options.annulus ? 1 : 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);

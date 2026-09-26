@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { compileAlphabet } from "../src/engine/alphabet";
 import type { Alphabet } from "../src/engine/alphabet";
 import { ANNULUS_INNER, MAX_DEPTH, MIN_DEPTH, NODE_BUDGET, walkSpec } from "../src/engine/limit/walk";
-import { buildWalkShader, clampDepth, STATUS_EXCLUDED, STATUS_EXHAUSTED, walkProgramKey, WALK_VERT } from "../src/engine/limit/walkGlsl";
+import { buildWalkShader, glslFloat, clampDepth, STATUS_EXCLUDED, STATUS_EXHAUSTED, walkProgramKey, WALK_VERT } from "../src/engine/limit/walkGlsl";
 
 const compile = (spec: Parameters<typeof compileAlphabet>[0]): Alphabet => {
   const r = compileAlphabet(spec);
@@ -65,9 +65,22 @@ describe("the generated walk shader", () => {
     // 0.0)` is a GLSL compile error the node gate cannot see. The custom alphabet accepts any finite
     // number, so the case is reachable by typing one.
     expect((123456789).toPrecision(9)).toBe("123456789");
+    expect(glslFloat(123456789)).toBe("123456789.0");
+    expect(glslFloat(-1)).toBe("-1.00000000");
+  });
+
+  it("normalises the alphabet to max|a| = 1, so float32 cannot overflow on a large one", () => {
+    // `length(s)` squares in float32 and overflowed at |a| ≳ 1.8e19: `1e20, -1e20` drew a blank limit
+    // set (0 of 5,704 in-set texels) where the CPU drew Littlewood's picture (2026-09-26 review). The
+    // roots and every prune are scale-invariant, so the shader carries the alphabet divided by max|a|.
+    const big = buildWalkShader(compile({ preset: "custom", custom: "1e20, -1e20" }), 12);
+    const lw = buildWalkShader(compile({ preset: "littlewood" }), 12);
+    expect(big).toContain("#define MAXABS 1.00000000");
+    // The same program as Littlewood's, constant for constant, since {±1e20} IS {±1} scaled.
+    expect(big.replace(/^.*VAL\[NVAL\].*$/m, "")).toBe(lw.replace(/^.*VAL\[NVAL\].*$/m, ""));
+    expect(big).toContain("vec2(-1.00000000, 0.00000000), vec2(1.00000000, 0.00000000)");
     const src = buildWalkShader(compile({ preset: "custom", custom: "123456789, -1" }), 12);
-    expect(src).toContain("vec2(123456789.0, 0.00000000)");
-    expect(src).not.toContain("vec2(123456789, ");
+    expect(src).toContain("vec2(1.00000000, 0.00000000)");
   });
 
   it("holds the SAME constants the float64 walk does", () => {

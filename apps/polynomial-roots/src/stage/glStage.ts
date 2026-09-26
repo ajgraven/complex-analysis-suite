@@ -230,6 +230,17 @@ export const NEUTRAL_EXCLUDED: readonly [number, number, number] = [0.16, 0.19, 
 /** The neutral for a pixel whose walk ran out of nodes. */
 export const NEUTRAL_EXHAUSTED: readonly [number, number, number] = [0.26, 0.21, 0.15];
 
+/**
+ * A render target's size: a number for a square one (the browser suites), or its two sides. What the
+ * passes that write the composite take, so the stage's non-square target reaches them unchanged.
+ */
+export type TargetSize = number | { readonly width: number; readonly height: number };
+
+/** The two sides of a `TargetSize`. */
+export function targetDims(size: TargetSize): { width: number; height: number } {
+  return typeof size === "number" ? { width: size, height: size } : { width: size.width, height: size.height };
+}
+
 /** The stage refused to start, with the reason a reader can act on. */
 export class StageUnavailable extends Error {}
 
@@ -247,7 +258,9 @@ export class GlStage {
   private composite: { texture: WebGLTexture; framebuffer: WebGLFramebuffer } | null = null;
   private toneTexture: WebGLTexture;
   private rampTexture: WebGLTexture;
-  private size = 0;
+  /** The accumulation targets' shape — the canvas's own, capped (see `resize`). */
+  private width = 0;
+  private height = 0;
   private readonly internalFormat: number;
   /** The composite's format: four channels, because Egan's hue needs two beyond density and degree. */
   private readonly compositeFormat: number;
@@ -318,12 +331,26 @@ export class GlStage {
     return tex;
   }
 
-  /** Match the accumulation resolution to the canvas (capped, since every degree costs one of these). */
-  resize(size: number): void {
-    const s = Math.max(64, Math.min(2048, Math.floor(size)));
-    if (s === this.size) return;
+  /**
+   * Match the accumulation targets to the canvas — its SHAPE, not only its longer side — capped at 2048
+   * on the longer side, since every degree costs one of these. `height` defaults to `width` (a square
+   * target, which the browser suites use).
+   *
+   * **The targets were square and the canvas is not**, so a 1600 × 1032 stage accumulated into a
+   * 1600 × 1600 texture carrying the world RECT and the present pass sampled it NEAREST onto 1032 rows:
+   * 568 of every 1600 texture rows were never shown, so about a third of the accumulated density — and a
+   * third of the roots of a sparse degree — never reached the screen, while the equalisation histogram
+   * counted all of it (2026-09-26 review). A target of the canvas's own shape has square texels in world
+   * units, one per screen pixel below the cap.
+   */
+  resize(width: number, height: number = width): void {
+    const scale = Math.min(1, 2048 / Math.max(width, height, 1));
+    const w = Math.max(64, Math.min(2048, Math.floor(width * scale)));
+    const h = Math.max(64, Math.min(2048, Math.floor(height * scale)));
+    if (w === this.width && h === this.height) return;
     this.eganKey = "";
-    this.size = s;
+    this.width = w;
+    this.height = h;
     // **Keep the points; rebuild only the textures.** This called `dropLayers()`, which deletes the
     // vertex buffers too, and nothing re-swept — so resizing the window blanked the root cloud while the
     // statistics went on describing it (measured in the 2026-09-26 review: 286,856 lit pixels before a
@@ -345,9 +372,19 @@ export class GlStage {
     }
   }
 
-  /** The accumulation resolution in use. */
+  /** The accumulation targets' longer side (0 before the first `resize`). */
   get resolution(): number {
-    return this.size;
+    return Math.max(this.width, this.height);
+  }
+
+  /** The accumulation targets' width in texels. */
+  get targetWidth(): number {
+    return this.width;
+  }
+
+  /** The accumulation targets' height in texels — the one a texel's world size is read from. */
+  get targetHeight(): number {
+    return this.height;
   }
 
   private target(rgba = false): { texture: WebGLTexture; framebuffer: WebGLFramebuffer } {
@@ -360,8 +397,8 @@ export class GlStage {
       gl.TEXTURE_2D,
       0,
       rgba ? this.compositeFormat : this.internalFormat,
-      this.size,
-      this.size,
+      this.width,
+      this.height,
       0,
       rgba ? gl.RGBA : gl.RG,
       gl.FLOAT,
@@ -432,10 +469,15 @@ export class GlStage {
 
   /** Forget the degrees outside this range; the scrub keeps the rest. */
   dropOutside(minDegree: number, maxDegree: number): void {
+    this.keepDegrees((d) => d >= minDegree && d <= maxDegree);
+  }
+
+  /** Forget every degree `keep` does not admit — the scrub also drops a degree a cancelled sweep left partial. */
+  keepDegrees(keep: (degree: number) => boolean): void {
     const gl = this.gl;
     this.epoch++;
     for (const [degree, layer] of [...this.layers]) {
-      if (degree >= minDegree && degree <= maxDegree) continue;
+      if (keep(degree)) continue;
       gl.deleteTexture(layer.texture);
       gl.deleteFramebuffer(layer.framebuffer);
       for (const b of layer.buffers) gl.deleteBuffer(b);
@@ -466,11 +508,11 @@ export class GlStage {
     // Re-splatting every loaded point on every frame would make a hover or a tone change cost a whole
     // sweep's worth of draws; the composite is kept while nothing it depends on has moved. Anything
     // else that writes the composite clears the key.
-    const key = `${view.cx},${view.cy},${view.halfHeight},${aspect},${minDegree},${maxDegree},${this.epoch},${this.size}`;
+    const key = `${view.cx},${view.cy},${view.halfHeight},${aspect},${minDegree},${maxDegree},${this.epoch},${this.width}x${this.height}`;
     if (this.composite !== null && key === this.eganKey) return this.eganDrawn;
     if (this.composite === null) this.composite = this.target(true);
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.composite.framebuffer);
-    gl.viewport(0, 0, this.size, this.size);
+    gl.viewport(0, 0, this.width, this.height);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.useProgram(this.eganProgram);
@@ -538,7 +580,7 @@ export class GlStage {
     gl.bindVertexArray(this.vao);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE);
-    gl.viewport(0, 0, this.size, this.size);
+    gl.viewport(0, 0, this.width, this.height);
     const uCentre = gl.getUniformLocation(this.pointProgram, "uCentre");
     const uHalf = gl.getUniformLocation(this.pointProgram, "uHalfExtent");
     const uFlags = gl.getUniformLocation(this.pointProgram, "uFlags");
@@ -577,10 +619,10 @@ export class GlStage {
    * downstream — the equalisation read-back, the tone ramp, the present pass, the PNG export — is the
    * same code for both engines and a difference between their pictures can only come from the walk.
    */
-  compositeTarget(): { framebuffer: WebGLFramebuffer; size: number } {
+  compositeTarget(): { framebuffer: WebGLFramebuffer; size: TargetSize } {
     this.eganKey = "";
     if (this.composite === null) this.composite = this.target(true);
-    return { framebuffer: this.composite.framebuffer, size: this.size };
+    return { framebuffer: this.composite.framebuffer, size: { width: this.width, height: this.height } };
   }
 
   /** Sum the selected degrees into the composite target. Returns false when nothing is selected. */
@@ -589,7 +631,7 @@ export class GlStage {
     this.eganKey = "";
     if (this.composite === null) this.composite = this.target(true);
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.composite.framebuffer);
-    gl.viewport(0, 0, this.size, this.size);
+    gl.viewport(0, 0, this.width, this.height);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.useProgram(this.accumProgram);
@@ -616,11 +658,11 @@ export class GlStage {
     const gl = this.gl;
     if (this.composite === null) return new Float32Array(0);
     // RGBA/FLOAT is the one read-back combination WebGL2 guarantees for a float colour buffer.
-    const buf = new Float32Array(this.size * this.size * 4);
+    const buf = new Float32Array(this.width * this.height * 4);
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.composite.framebuffer);
-    gl.readPixels(0, 0, this.size, this.size, gl.RGBA, gl.FLOAT, buf);
+    gl.readPixels(0, 0, this.width, this.height, gl.RGBA, gl.FLOAT, buf);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    const density = new Float32Array(this.size * this.size);
+    const density = new Float32Array(this.width * this.height);
     for (let i = 0, j = 0; i < density.length; i++, j += 4) density[i] = buf[j];
     return density;
   }

@@ -24,17 +24,26 @@ against every item below; the finding itself lives in the comment beside the cod
 
 | # | Finding | Status |
 |---|---|---|
-| B1 | Dragon inset: "inside" stated limit-set membership from an approximate superset test (208 of 648 Littlewood "inside" points rigorously outside); the drawn cloud and the verdict used different sets for alphabets containing 0; its ε and depth were not the stage's | batch B |
-| B2 | Deep zoom: "Centre on this root" refined in float64 above 1e-11 (0 roots found at 1e-20 vs 927); auto handed `|z| > 1` views to a walk that refuses them; stale frames drawn at the new view (suspected); an unconverged Newton root was painted | batch B |
+| B1 | Dragon inset: "inside" stated limit-set membership from an approximate superset test (208 of 648 Littlewood "inside" points rigorously outside); the drawn cloud and the verdict used different sets for alphabets containing 0; its ε and depth were not the stage's | fixed — the verdict is the stage's own walk (its depth, its ε); "kept" reads `≈ consistent with`, not membership; the all-zero series is named |
+| B2 | Deep zoom: "Centre on this root" refined in float64 above 1e-11 (0 roots found at 1e-20 vs 927); auto handed `|z| > 1` views to a walk that refuses them; stale frames drawn at the new view (suspected); an unconverged Newton root was painted | fixed — a repeated root is no longer drawn twice (found by the sweep); re-centring always refines in double-double, seeded at the probed root; `|z| > 1` below a float32 texel stays with the limit walk; stale frames are shifted in dd; a root failing `16·2^−bits` is not drawn |
 | B3 | Pool: a chunk error still ended in `onDone`; a dead worker leaked and hung the job | fixed in batch A with the cursor |
-| B4 | ~29% of accumulated density never drawn — square textures sampled NEAREST onto a non-square canvas | batch B |
-| B5 | The degree scrub re-swept everything (the stage was built to recomposite) | batch B |
-| B6 | Real-root count misses multiple real roots (~1% at trinary 11); the test's oracle used the same solver | batch B |
-| B7 | `SAME` tolerance lets negation hold where the unit −1 does not: `1, -1.0000000005` loses 25% of its family | batch B |
-| B8 | PNG caption wrong under the deep engine; `cas:state` carried only the fragment | batch B |
-| B9 | No pinch zoom; the lamp, probe and theorem mode were mouse-only; the theorem place opened empty | batch B |
-| B10 | Limit engine: the fold omits the `|w|²` Jacobian (≈35% over-report outside the disk); `|a| ≳ 1.8e19` draws blank; no context-loss handler | batch B |
-| B11 | Two gallery captions promise what the frame does not show (ω outside "the hexahole at ω"; i off-frame) | batch B |
+| B4 | ~29% of accumulated density never drawn — square textures sampled NEAREST onto a non-square canvas | fixed — the targets take the canvas's shape (`GlStage.resize(w, h)`); a browser test reproduces the dropped rows on the old square target |
+| B5 | The degree scrub re-swept everything (the stage was built to recomposite) | fixed — `engine/scrub.ts`: a step sweeps only the new degrees (16→17 1.4 s against 3.8 s fresh; a step down 108 ms), counts identical to a fresh sweep |
+| B6 | Real-root count misses multiple real roots (~1% at trinary 11); the test's oracle used the same solver | fixed — the conjugate-pairing rule, checked against an exact BigInt Sturm oracle (`test/support/sturm.ts`), exact on every case |
+| B7 | `SAME` tolerance lets negation hold where the unit −1 does not: `1, -1.0000000005` loses 25% of its family | fixed — the unit −1 is added whenever negation holds |
+| B8 | PNG caption wrong under the deep engine; `cas:state` carried only the fragment | fixed — `deepCaptionFor`; `cas:state` carries origin + path + fragment |
+| B9 | No pinch zoom; the lamp, probe and theorem mode were mouse-only; the theorem place opened empty | fixed — pinch zoom, primary-button pan, `deltaMode`-aware wheel; the lamp pins at the view centre from the keyboard; the theorem place draws without a hover |
+| B10 | Limit engine: the fold omits the `|w|²` Jacobian (≈35% over-report outside the disk); `|a| ≳ 1.8e19` draws blank; no context-loss handler | fixed — the fold's `|w|²` Jacobian in both walks; the shader normalises to max|a| = 1; a context-loss handler |
+| B11 | Two gallery captions promise what the frame does not show (ω outside "the hexahole at ω"; i off-frame) | fixed — "the holes at i and e^{iπ/4}" reframed to hold both; "a hexahole, near ω"; a test holds every named point in its frame |
+
+**Batch B sweep: 31 mutants, 29 killed by the node gate, 1 by the browser suite only (the shader's
+fold Jacobian — 1,552 texels disagree), 1 recorded equivalent** (`isRealRoot` skipping its own index:
+the root's own conjugate is `2|y|` away and `|y| ≤ 64·2|y|` always holds). Six survived the first
+pass. The one worth carrying is that **the re-centring test passed without the seed because its
+"second roots" were the SAME root drawn three or four times**. A polish after deflation can land on a
+root already found, and the deep walk pushed it again: 998 rows at a forced-deep half-height of 0.12,
+with 16 polynomials repeated, down to 972 after the fix. With the repeats removed, the test was rebuilt
+on a view with 81 genuine two-root polynomials, where 81 of 162 probes land wrong without the seed.
 
 ## C — efficiency (measured)
 

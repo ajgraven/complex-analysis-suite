@@ -281,3 +281,93 @@ describe("a resize keeps the picture", () => {
     stage.dispose();
   });
 });
+
+describe("the accumulation target has the canvas's shape", () => {
+  // The targets were square and the canvas is not, so the present pass sampled a 320-row texture NEAREST
+  // onto a 200-row canvas and 120 of its rows were never shown — a third of the density accumulated and
+  // counted by the equalisation, never drawn (2026-09-26 review). The points sit one per row of a
+  // 320-row grid — FINER than the canvas, as real roots are — so every canvas pixel they occupy must be
+  // lit. (One per canvas row would be vacuous: the square target's NEAREST sampling reads exactly the
+  // texture rows such points land in, which the first draft of this test measured at 196 of 200.)
+  const W = 320;
+  const H = 200;
+  const HALF = 1;
+  const ASPECT = W / H;
+  const FINE = 320;
+  let expected = 0;
+
+  function litAfter(resize: (s: GlStage) => void): number {
+    const canvas = document.createElement("canvas");
+    canvas.width = W;
+    canvas.height = H;
+    document.body.append(canvas);
+    const stage = new GlStage(canvas);
+    resize(stage);
+    stage.setRamp(RAMPS.density.stops);
+    const pts: number[] = [];
+    const occupied = new Set<number>();
+    for (let t = 0; t < FINE; t++) {
+      const i = (t * 37) % W; // spread across the width
+      const x = (((i + 0.5) / W) * 2 - 1) * HALF * ASPECT;
+      // (t + ½)/320 never equals k/200 (16k = 10m + 5 has no solution), so no point sits on a row edge.
+      const y = (((t + 0.5) / FINE) * 2 - 1) * HALF;
+      pts.push(x, y, 1);
+      occupied.add(Math.floor(((y / HALF + 1) / 2) * H) * W + i);
+    }
+    expected = occupied.size;
+    stage.addPoints(5, new Float32Array(pts));
+    stage.paint({ cx: 0, cy: 0, halfHeight: HALF }, ASPECT, IDENTITY);
+    expect(stage.composeDegrees(1, 10)).toBe(true);
+    const tone = buildToneMap(stage.readDensity(), 1, 1);
+    stage.setTone(tone.lut, tone.width);
+    stage.present({ maxDensity: tone.maxDensity, exposure: 1, byDegree: false, degreeRange: [1, 10] });
+    const px = readCanvas(canvas);
+    let lit = 0;
+    for (let k = 0; k < px.length; k += 4) if (px[k] + px[k + 1] + px[k + 2] > 0) lit++;
+    stage.dispose();
+    canvas.remove();
+    return lit;
+  }
+
+  it("shows every splatted root on a non-square stage — every occupied pixel lit", () => {
+    let lit: number;
+    try {
+      lit = litAfter((s) => s.resize(W, H));
+    } catch (err) {
+      expect(err).toBeInstanceOf(StageUnavailable);
+      return;
+    }
+    expect(expected).toBeGreaterThan(H); // anti-vacuity: more occupied pixels than canvas rows
+    expect(lit).toBe(expected);
+  });
+
+  it("and the square target it replaced drops rows (the defect, reproduced)", () => {
+    let lit: number;
+    try {
+      lit = litAfter((s) => s.resize(W));
+    } catch (err) {
+      expect(err).toBeInstanceOf(StageUnavailable);
+      return;
+    }
+    // 200 canvas rows sampling 320 texture rows: at most 200 of the 320 points can be shown.
+    expect(lit).toBeLessThanOrEqual(H);
+    expect(lit).toBeLessThan(expected * 0.7);
+  });
+
+  it("caps the longer side at 2048 and keeps the shape", () => {
+    const canvas = document.createElement("canvas");
+    let stage: GlStage;
+    try {
+      stage = new GlStage(canvas);
+    } catch (err) {
+      expect(err).toBeInstanceOf(StageUnavailable);
+      return;
+    }
+    stage.resize(4000, 2500);
+    expect([stage.targetWidth, stage.targetHeight]).toEqual([2048, 1280]);
+    expect(stage.resolution).toBe(2048);
+    stage.resize(300);
+    expect([stage.targetWidth, stage.targetHeight]).toEqual([300, 300]);
+    stage.dispose();
+  });
+});

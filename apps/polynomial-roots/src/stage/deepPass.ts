@@ -14,7 +14,8 @@
 // keeps the accumulation meaningful — two roots a texel apart still add — which a hard disc would not.
 import { createProgram } from "@cas/gpu/shader";
 import { FRAME_STRIDE } from "../engine/deep/reference.js";
-import { StageUnavailable } from "./glStage.js";
+import { StageUnavailable, targetDims } from "./glStage.js";
+import type { TargetSize } from "./glStage.js";
 
 const VERT = `#version 300 es
 precision highp float;
@@ -22,11 +23,12 @@ layout(location = 0) in vec2 aOffset;   // root − centre, in world units
 layout(location = 1) in float aWeight;
 layout(location = 2) in float aDegree;
 uniform vec2 uHalfExtent;
+uniform vec2 uShift;        // (frame's centre − view's centre), in world units — see DeepRender.shift
 uniform float uPointSize;
 out float vWeight;
 out float vDegree;
 void main() {
-  gl_Position = vec4(aOffset / uHalfExtent, 0.0, 1.0);
+  gl_Position = vec4((aOffset + uShift) / uHalfExtent, 0.0, 1.0);
   gl_PointSize = uPointSize;
   vWeight = aWeight;
   vDegree = aDegree;
@@ -64,6 +66,15 @@ export interface DeepRender {
   readonly aspect: number;
   /** Diameter of a splat, in texels. */
   readonly pointSize: number;
+  /**
+   * Where the frame's own centre sits relative to the view being drawn, in world units — zero when the
+   * frame was walked for this view. A walk takes seconds at depth and the view moves meanwhile; the
+   * frame's offsets are from the centre it was REQUESTED at, so drawing them against the current centre
+   * put every dot in the wrong world place for the length of the walk (2026-09-26 review). The shift is
+   * computed in double-double by the caller, so it is exact at any depth, and it is small by
+   * construction (a pan or zoom from one frame to the next).
+   */
+  readonly shift?: { readonly dx: number; readonly dy: number };
 }
 
 export class DeepPass {
@@ -72,6 +83,7 @@ export class DeepPass {
   private readonly buffer: WebGLBuffer;
   private readonly uHalfExtent: WebGLUniformLocation | null;
   private readonly uPointSize: WebGLUniformLocation | null;
+  private readonly uShift: WebGLUniformLocation | null;
 
   constructor(private readonly gl: WebGL2RenderingContext) {
     this.program = createProgram(gl, VERT, FRAG);
@@ -82,6 +94,7 @@ export class DeepPass {
     this.buffer = buffer;
     this.uHalfExtent = gl.getUniformLocation(this.program, "uHalfExtent");
     this.uPointSize = gl.getUniformLocation(this.program, "uPointSize");
+    this.uShift = gl.getUniformLocation(this.program, "uShift");
     gl.bindVertexArray(vao);
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
     const stride = DEEP_STRIDE * 4;
@@ -95,11 +108,12 @@ export class DeepPass {
   }
 
   /** Draw one frame into `framebuffer`. Returns the number of points drawn. */
-  render(framebuffer: WebGLFramebuffer, size: number, options: DeepRender): number {
+  render(framebuffer: WebGLFramebuffer, size: TargetSize, options: DeepRender): number {
     const gl = this.gl;
+    const { width, height } = targetDims(size);
     const count = Math.floor(options.points.length / DEEP_STRIDE);
     gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-    gl.viewport(0, 0, size, size);
+    gl.viewport(0, 0, width, height);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
     if (count > 0) {
@@ -109,6 +123,7 @@ export class DeepPass {
       gl.bufferData(gl.ARRAY_BUFFER, options.points, gl.STREAM_DRAW);
       gl.uniform2f(this.uHalfExtent, options.halfHeight * options.aspect, options.halfHeight);
       gl.uniform1f(this.uPointSize, options.pointSize);
+      gl.uniform2f(this.uShift, options.shift?.dx ?? 0, options.shift?.dy ?? 0);
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.ONE, gl.ONE);
       gl.drawArrays(gl.POINTS, 0, count);

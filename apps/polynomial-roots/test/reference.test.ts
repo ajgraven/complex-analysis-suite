@@ -9,6 +9,7 @@ import {
   nearestRoot,
   packFrame,
   rootAt,
+  residualCertified,
   runReference,
   MAX_REFERENCE_DEPTH,
 } from "../src/engine/deep/reference";
@@ -540,5 +541,83 @@ describe("the frame that crosses the worker boundary", () => {
     const complex = compileAlphabet({ preset: "custom", custom: "1, i, -1" });
     if ("error" in complex) throw new Error(complex.error);
     expect(coefficientString(complex.alphabet, [0, 1, 2])).toContain(",");
+  });
+});
+
+describe("the 2026-09-26 review's deep-zoom fixes", () => {
+  it("refuses a view that reaches the unit circle, where the margin has no bound", () => {
+    // ε was computed from `1 − |z₀|`, the margin at the centre; over the view it is `1 − |z₀| − r`.
+    const r = runReference({ alphabet: LITTLEWOOD, cx: "0.9", cy: "0", halfHeight: 0.08, aspect: 1.55, depth: 20, precision: "float64" });
+    expect("error" in r && r.error).toContain("reaches the unit circle");
+    // A view clear of it still runs.
+    expect("error" in runReference({ alphabet: LITTLEWOOD, cx: "0.6", cy: "0.45", halfHeight: 0.01, aspect: 1.55, depth: 20, precision: "float64" })).toBe(false);
+  });
+
+  it("re-centres on the root PROBED, not on whichever root Newton reaches from the view centre", () => {
+    // A wide forced-deep view holds polynomials with two roots in it. Seeding Newton at the centre
+    // converges to one of them for both probes; seeding at the probed root lands on it. Measured at this
+    // view: 81 polynomials with two roots in it, and 81 of their 162 probes re-centred on the WRONG root
+    // without the seed. (The first draft of this test used a view whose "pairs" were one root repeated —
+    // the deflation bug below — so it passed with the seed removed; the batch-B sweep found it.)
+    const cx = "-0.3";
+    const cy = "0.5";
+    const res = ok(runReference({ alphabet: LITTLEWOOD, cx, cy, halfHeight: 0.2, aspect: 1.55, depth: 14, precision: "dd" }));
+    const byPoly = new Map<string, typeof res.roots>();
+    for (const root of res.roots) {
+      const key = root.digits.join(",");
+      byPoly.set(key, [...(byPoly.get(key) ?? []), root]);
+    }
+    // Every root found once, and as many as the deflation reaches: 5,805 of the 5,821 that Aberth finds
+    // in view for these polynomials (deflating by the deflated polynomial's own root reaches 5,711).
+    expect(res.roots.length).toBe(5805);
+    const pairs = [...byPoly.values()].filter((rs) => rs.length >= 2).slice(0, 12);
+    expect(pairs.length).toBeGreaterThanOrEqual(12);
+    let wrongWithoutSeed = 0;
+    for (const rs of pairs) {
+      // Anti-vacuity: the pair's roots are DIFFERENT points, so one Newton start cannot serve both.
+      expect(Math.hypot(rs[0].dx - rs[1].dx, rs[0].dy - rs[1].dy)).toBeGreaterThan(1e-6);
+      for (const root of rs) {
+        const at = (m: { cx: string; cy: string } | { error: string }): number => {
+          if ("error" in m) throw new Error(m.error);
+          return Math.hypot(Number(m.cx) - (Number(cx) + root.dx), Number(m.cy) - (Number(cy) + root.dy));
+        };
+        expect(at(centreOnRoot(LITTLEWOOD, root.digits, cx, cy, "dd", { dx: root.dx, dy: root.dy }))).toBeLessThan(1e-12);
+        if (at(centreOnRoot(LITTLEWOOD, root.digits, cx, cy, "dd")) > 1e-12) wrongWithoutSeed++;
+      }
+    }
+    expect(wrongWithoutSeed).toBeGreaterThan(0);
+  });
+
+  it("draws each root of a polynomial once — a polish that lands on a root already found is not a new one", () => {
+    // Measured at this view before the fix: 998 rows, 16 polynomials carrying the same root 3–4 times.
+    const res = ok(runReference({ alphabet: LITTLEWOOD, cx: "0.5", cy: "0.45", halfHeight: 0.12, aspect: 1.55, depth: 12, precision: "dd" }));
+    const seen = new Set<string>();
+    for (const root of res.roots) {
+      const key = `${root.digits.join(",")}@${root.dx.toFixed(9)},${root.dy.toFixed(9)}`;
+      expect(seen.has(key), key).toBe(false);
+      seen.add(key);
+    }
+    expect(res.roots.length).toBe(972);
+  });
+
+  it("certifies a residual by the arithmetic's own precision, 16 units of it", () => {
+    expect(residualCertified(16 * 2 ** -106, 106)).toBe(true);
+    expect(residualCertified(17 * 2 ** -106, 106)).toBe(false);
+    expect(residualCertified(16 * 2 ** -53, 53)).toBe(true);
+    expect(residualCertified(17 * 2 ** -53, 53)).toBe(false);
+    expect(residualCertified(Number.NaN, 53)).toBe(false);
+  });
+
+  it("paints no root whose residual is not certified", () => {
+    // Every root the walk returns carries a backward error within its arithmetic's own floor — the
+    // filter that stops an unsettled Newton iterate being drawn as a root.
+    for (const precision of ["float64", "dd"] as const) {
+      const res = ok(
+        runReference({ alphabet: LITTLEWOOD, cx: "0.6", cy: "0.45", halfHeight: 0.02, aspect: 1.55, depth: 16, precision }),
+      );
+      expect(res.roots.length).toBeGreaterThan(10);
+      const bits = precision === "dd" ? 106 : 53;
+      for (const root of res.roots) expect(root.residual).toBeLessThanOrEqual(16 * 2 ** -bits);
+    }
   });
 });
