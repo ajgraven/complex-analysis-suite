@@ -4350,7 +4350,9 @@ DF64 reused where it buys depth and not paid for where it does not.
 
 1. **A hybrid, on one coefficient tree.** The root engine reads the tree's leaves (one orbit
    representative per derived symmetry, an app-local Aberth–Ehrlich solver in a worker pool, roots
-   accumulated **per degree into `R32F` textures by additive point splatting and not retained**);
+   accumulated **per degree into `R32F` textures by additive point splatting and not retained** —
+   *as shipped, `RG32F` (density + degree) in the canvas's own shape, and the roots ARE retained in
+   world-coordinate vertex buffers so a pan re-splats rather than re-sweeps; amended 2026-09-26*);
    the pixel engine prunes the same tree in a float32 fragment shader with an explicit stack; the
    dragon is the same tree's set of values. The engines hand over by zoom — the root engine owns the
    overview, the limit-set engine the zoom, the threshold the pixel size at which the loaded degree
@@ -4392,7 +4394,8 @@ DF64 reused where it buys depth and not paid for where it does not.
 ### Consequences
 
 - **Positive:** a twelfth published app that consumes six packages (`@cas/ui`, `@cas/gpu`,
-  `@cas/core`, `@cas/flow`, `@cas/interchange`, `@cas/export`) and creates none; two extractions
+  `@cas/core`, `@cas/flow`, `@cas/interchange`, `@cas/export` — *five since PR-3 dropped `@cas/flow`,
+  action item 4*) and creates none; two extractions
   that improve the reuse metric; the suite's first density-accumulation stage and first worker
   pool, both written once and extractable; and a picture the literature has only ever shown as
   stills becomes something a reader can scrub, zoom and probe.
@@ -4437,8 +4440,8 @@ DF64 reused where it buys depth and not paid for where it does not.
    the last empty, so the shared inclusive CDF reproduces the old `cdfK` entry for entry. One
    consequence is recorded rather than fixed — the width cap samples the bin at the CENTRE of each
    texel's range, so the last texel tops out at 254/255 and the highest few bins are in the
-   distribution but not addressable by any texel; changing that would alter seven apps' output for
-   one part in 255.
+   distribution but not addressable by any texel; changing that would alter two apps' output (Complex Dynamics
+   and this one — *this said "seven"; corrected 2026-09-26*) for one part in 255.
 3. [x] **PR-2 done, and it narrowed the plan's §5.3 output.** The pixel engine reports ONE field —
    the escape depth `reach`, the deepest level any branch survived to — where the plan specified a
    survivor count and a first-hit depth. Counting survivors is unaffordable: at the CKW hexaholes,
@@ -4506,6 +4509,17 @@ DF64 reused where it buys depth and not paid for where it does not.
    (`2d-electrostatics`, `2d-hydrodynamics`, `hele-shaw-flow`, `potential-theory`), so the
    no-cross-app-imports lint rule had silently stopped covering a third of the suite. The graph-level
    rule in `.dependency-cruiser.cjs` is generic and did cover them, which is why nothing broke.
+9. [x] **The 2026-09-26 review and its remediation.** Six read-only reviews and a browser pass found the
+   mathematics sound — the swept density matches brute force bin for bin, the pruning bound, the
+   theorem's sign, the double-double arithmetic and both cited bounds check out — and the defects in
+   GUARDING work and keeping state in step. Decision 2's ceiling is re-stated: the budget is the
+   number of ROOTS a sweep deposits (`≈ Σ_d (indices_d/|G|)·d`, 1e7 live, 5e7 behind Compute, refused
+   above), not a degree, since `{−2…2}` at the default degree 16 is 3.05e11 polynomials. The stage's
+   targets take the canvas's shape (a square target sampled NEAREST onto a non-square canvas never
+   showed about a third of its rows); the fold carries its Jacobian; the real-root count is checked
+   against an exact Sturm oracle rather than against the same solver; a degree scrub sweeps only the
+   degrees not already held. The report, with a status for every finding, is
+   [`docs/review/2026-09-26-polynomial-roots-review/REPORT.md`](review/2026-09-26-polynomial-roots-review/REPORT.md).
 ## ADR-0047: Polynomial Root Analysis — the fourteenth app, `@cas/exact` widened, `@cas/monodromy` extracted, certified tracking earns `=`
 
 **Status:** Proposed (2026-09-22). Becomes Accepted with the plan it records:

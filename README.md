@@ -10,7 +10,7 @@ visualization tools** that share common underlying packages and can hand data of
 another. The organizing goal — the **north star** — is that **each new tool added to the
 suite requires building fewer primitives from scratch than the last**.
 
-It currently hosts **twelve** applications riding **thirteen** shared `@cas/*` packages:
+It currently hosts **thirteen** applications (twelve published, Correspondences built but not yet published) riding **thirteen** shared `@cas/*` packages:
 
 | App                                                | What it does                                                                                                                                                                                                                                                                                                  | Stack                   |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
@@ -44,8 +44,9 @@ Quadrature-app-onto-Vite ESM-ification, and the shared-package extractions
 `@cas/dynamics`, and `@cas/export` on the ADR-0007 second-consumer rule, and `@cas/conformal`
 extracted *ahead* of its second consumer per [ADR-0018](docs/DECISIONS.md#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore))
 are all done; the Correspondences app exists through its parameter-space milestone plus a complete
-interactive mating visualizer. The whole workspace is green (**7111 Vitest tests**
-across **622** files — 7085 across 621 before ADR-0046's M6 (Egan's hue) added 26 across 1;
+interactive mating visualizer. The whole workspace is green (**7150 Vitest tests**
+across **625** files — 7111 across 622 before the 2026-09-26 review of Polynomial Roots added 39 across 3;
+7085 across 621 before ADR-0046's M6 (Egan's hue) added 26 across 1;
 7067 across 620 before its PR-5 (the gallery) added 18 across 1;
 7035 across 618 before its PR-4 (the dragons) added 32 across 2;
 6997 across 615 before its PR-3 (deep zoom by reference) added 38 across 3;
@@ -176,7 +177,7 @@ complex-analysis-suite/
 > _not_ a single-page shell with a tab per tool. See
 > [ARCHITECTURE §11](docs/ARCHITECTURE.md#11-the-launcher-unified-menu-without-a-unified-shell).
 
-Most packages and apps carry their own `README.md` with an API surface / feature list.
+Most packages and apps carry their own `README.md` with an API surface / feature list (not yet 2D Electrostatics, 2D Hydrodynamics, `@cas/dynamics`, `@cas/schwarz` or `@cas/ui`).
 
 ---
 

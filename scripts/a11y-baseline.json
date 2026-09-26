@@ -63,9 +63,14 @@
   },
   "launcher": {},
   "polynomial-roots": {},
+  "polynomial-roots-bounds": {},
+  "polynomial-roots-custom": {},
   "polynomial-roots-deep": {},
+  "polynomial-roots-dragon": {},
+  "polynomial-roots-egan": {},
   "polynomial-roots-limit": {},
   "polynomial-roots-place": {},
+  "polynomial-roots-story": {},
   "potential-theory": {},
   "quadrature-domains": {
     "color-contrast": {

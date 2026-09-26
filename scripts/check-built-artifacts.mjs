@@ -15,7 +15,8 @@
 // uploads the site) all self-verify — a dropped chunk fails the build instead of reaching users.
 // Deterministic: a dist directory listing, no browser and no flake.
 //
-// Scope: the two PUBLISHED apps (launcher has no workers; correspondences is built-but-not-published).
+// Scope: the PUBLISHED apps that spawn workers, listed in `APPS` below (launcher has no workers;
+// correspondences is built-but-not-published).
 // Detection is derived from source, so a NEW worker is covered automatically — no list to maintain.
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, basename, dirname, resolve } from 'node:path';

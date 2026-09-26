@@ -68,10 +68,19 @@ own count.
 
 ## D — documentation
 
-Plan header and §4/§5/§5.6/§7; the memory budget (R32F/4 MB written, RG32F up to 2048² shipped);
-ADR-0046; `CLAUDE.md` counts (browser configs, `@cas/export` consumers, tool apps); `@cas/gpu`'s
-description and README; the root README's app count; no app README; the launcher README; the sibling
-Polynomial Root Analysis plan's claims about this app; stale code comments.
+All fixed in batch D: the plan's header and §4/§5/§5.6/§7 corrected in place and dated, and a roadmap
+entry for this review; the memory budget (`R32F`/4 MB written, `RG32F` shipped) in the plan, ADR-0046 and
+`glStage.ts`; ADR-0046 amended (decision 1, the consequences, AI-2's "seven apps" → two, a new AI-9);
+`CLAUDE.md` (seven browser configs, eight `@cas/export` apps, thirteen tool apps, the PR-1 paragraph's
+`@cas/flow`, the place count, the jsdom count, the test counts, and a paragraph for this review);
+`@cas/gpu`'s description and README (the histogram module, the consumers, the tests); the root README
+(thirteen apps, the README list, the test count); a new `apps/polynomial-roots/README.md`; the launcher
+README (every card, ADR-0044) and its meta descriptions (Contour Integration was missing); the sibling
+Polynomial Root Analysis plan and research notes (ensembles are covered by NEITHER app, the wrong paths,
+`deep/dd.ts` as a reuse candidate, `createComputeClient`'s second consumer); `future-app-ideas.md`;
+ARCHITECTURE §3 and §8; the stale comments in `aberth.ts`, `walkGlsl.ts`, `places.ts`, `glStage.ts`,
+`scripts/a11y-audit.mjs` and `scripts/check-built-artifacts.mjs`; and the a11y baseline re-recorded (it
+held four of the app's nine pages; the five added are all clean, and nothing else moved).
 
 ## Extensions (not scheduled)
 

@@ -124,6 +124,10 @@ deep-zoom** and perturbation/rebasing paths; the **Riemann-sphere** and **projec
 (coarse-then-refine) rendering. This is the hardest extraction (the Dynamics app's
 deep-zoom code is sophisticated and tightly coupled), so it is sequenced late — see
 [MIGRATION Phase 5](MIGRATION.md#phase-5--extract-gpu-and-promote-expr).
+*As shipped (2026-09-26): df64 + the complex-GLSL stdlib, shader compile/link, colormaps, the polygon
+mask, the dual-backend harness, and two later second-consumer extractions for Polynomial Roots —
+`./histogram` (`equalizedCdfLut`, from Complex Dynamics) and `./cet` (`CET_C6`, from Contour
+Integration). The program scaffold and the remaps stayed in the apps; see the package README.*
 
 ### `@cas/expr` — the expression compiler (the keystone, part 1)
 A single AST that emits **both** a GLSL shader body (for rendering) and a JavaScript
@@ -381,9 +385,9 @@ tools:
   there are exactly two files.)* The
   `browser` job — the real-WebGL2 numeric backstop — lives only in CI and is *not* a publish
   blocker, so a GPU-only regression can reach the live site while still failing CI.
-- Packages are **not** separately *published* (all `workspace:*`); the five `dist/`-built packages
-  (`@cas/core`, `@cas/exact`, `@cas/export`, `@cas/faber`, `@cas/interchange`) are compiled once by the
-  root `build`/`test`/`typecheck` scripts, and the other seven are consumed as *source* through the
+- Packages are **not** separately *published* (all `workspace:*`); the six `dist/`-built packages
+  (`@cas/core`, `@cas/exact`, `@cas/export`, `@cas/faber`, `@cas/interchange`, `@cas/rigor`) are compiled
+  once by the root `build`/`test`/`typecheck` scripts, and the other seven are consumed as *source* through the
   workspace — either way each app's Vite build transpiles and bundles everything it
   imports. There is exactly **one build per app**. (This is the payoff of accepting a
   build step — it retires the awkward "pre-built ESM artifact with version pinning"

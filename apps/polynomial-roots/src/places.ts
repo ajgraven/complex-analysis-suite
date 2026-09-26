@@ -69,7 +69,8 @@ const at = (cx: number | string, cy: number | string, halfHeight: number, over: 
 
 /**
  * The slide deck's zoom, frame for frame: height `0.62508 · 2^{−k}` for `k = 0 … 8`, so the ninth frame
- * is the deck's own `0.0024456`, at the deck's degree 20. The deck then raises the degree to 27, which
+ * is `0.62508·2⁻⁸ = 0.0024417` — the deck's own ninth is `0.0024456`, its frames not being exact
+ * halvings (0.16%) — at the deck's degree 20. The deck then raises the degree to 27, which
  * is past this app's cap of 24 — and past any root solver's reach at that height — so the rest of the
  * story is the limit set, which the handover brings in by itself as the frames shrink.
  */

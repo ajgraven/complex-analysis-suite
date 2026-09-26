@@ -16,8 +16,9 @@
 //
 // **One texture per degree.** The degree scrub then costs a recomposite rather than a re-sweep, and
 // colour-by-degree is a second accumulation channel rather than a second pass over the data. The
-// textures are the app's memory budget (a degree is 4 MB at 1024²) and are dropped when the degree
-// leaves the range.
+// textures are `RG32F` (8 B a texel) in the canvas's own shape, capped at 2048 on the longer side — 8 MB
+// a degree at 1024², ~21 MB at 2048 × 1280 — and are dropped when the degree leaves the range. The ROOTS
+// behind them (12 B each) are what `engine/cost.ts` budgets.
 //
 // **Egan's hue splats straight into the composite**, the way the limit pass writes into it: the hue
 // needs two more channels (the weighted unit vector of the hue angle), and giving every degree an RGBA

@@ -12,7 +12,8 @@
 // the stack, the order of the prune test and the hit test, and the `1/z` fold are the same statements,
 // because the browser suite compares the two per pixel and a check between two DIFFERENT algorithms
 // would only ever be measuring which is better. What does differ is the arithmetic width — float32 here
-// against float64 there — and the parity test's tolerance is that difference and nothing else.
+// against float64 there — and the parity test compares the two for exact EQUALITY, since the output is
+// an integer (below) that float32 can move only at a tie.
 //
 // **The one output rides the channel the stage already has.** `R` is the escape depth `reach`, an
 // integer in `0 … D+1` (see `walk.ts` for why that, and not a survivor count). It is exact in float32
