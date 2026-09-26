@@ -138,10 +138,13 @@ export function chooseEngine(input: HandoverInput): Handover {
       : Math.max(1, Math.min(MAX_REFERENCE_DEPTH, Math.ceil(Math.log(radius) / Math.log(r)) + DEEP_DEPTH_MARGIN));
   const precision: Precision = input.halfHeight < DOUBLE_DOUBLE_BELOW ? "dd" : "float64";
   const texelUlps = pixelSize / ulp32(Math.max(Math.abs(input.cx), Math.abs(input.cy), r));
+  // The walk runs at w = 1/z outside the disk, where a pixel is `pixelSize·|w|²` wide; the spacing and
+  // the depth are both about that pixel (`walk.ts` foldedPixelRadius). Two levels too shallow otherwise.
+  const walkPixel = absz > 1 ? pixelSize * r * r : pixelSize;
   const suggestedDepth =
-    r <= 0 || r >= 1 || !(pixelSize > 0)
+    r <= 0 || r >= 1 || !(walkPixel > 0)
       ? MIN_DEPTH
-      : Math.max(MIN_DEPTH, Math.min(MAX_DEPTH, Math.ceil(Math.log(pixelSize) / Math.log(r))));
+      : Math.max(MIN_DEPTH, Math.min(MAX_DEPTH, Math.ceil(Math.log(walkPixel) / Math.log(r))));
   const base = { pixelSize, spacing, suggestedDepth, deepDepth, precision, texelUlps };
 
   if (input.mode === "roots") {
@@ -173,6 +176,19 @@ export function chooseEngine(input: HandoverInput): Handover {
       forced: false,
     };
   }
+  if (texelUlps < FLOAT32_TEXEL_ULPS && absz > 1) {
+    // The deep walk works INSIDE the unit disk (its tail bound is `|z|^{k+1}/(1−|z|)`), and auto mode
+    // used to hand it views outside anyway, where it refused with a message written for a developer —
+    // so below about 1e-4 the whole outer ring `1.25 < |z| < 2` went blank (2026-09-26 review). Until the
+    // walk folds `|z| > 1` onto the reversed polynomials, the limit-set engine keeps these views and
+    // says what it cannot do there.
+    return {
+      ...base,
+      engine: "limit",
+      reason: `a texel here spans ${sig(texelUlps)} float32 ulps, finer than the limit-set shader can place — but deep zoom works inside the unit disk only, so this view outside it stays with the limit-set walk and blurs below this scale.`,
+      forced: false,
+    };
+  }
   if (texelUlps < FLOAT32_TEXEL_ULPS) {
     // Deeper than the limit-set shader can place its own texels — see `FLOAT32_TEXEL_ULPS`. Checked
     // BEFORE the limit test, because it is the strictly deeper of the two conditions.
@@ -183,7 +199,7 @@ export function chooseEngine(input: HandoverInput): Handover {
       forced: false,
     };
   }
-  if (pixelSize < spacing) {
+  if (walkPixel < spacing) {
     return {
       ...base,
       engine: "limit",

@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "The GPU substrate for the suite's WebGL2 renderers: df64 double-float deep-zoom + a complex-number GLSL stdlib (shader compile/link and colormaps to follow). Promoted from the Complex Dynamics app (Phase 5). Consumed via SOURCE by the suite's Vite bundlers (no bare-Node consumer), so no dist build is needed.",
+  "description": "The GPU substrate for the suite's WebGL2 renderers: df64 double-float deep-zoom, a complex-number GLSL stdlib, shader compile/link, colormaps, the CET-C6 cyclic map, histogram equalisation, the polygon mask and the GLSL-vs-JS dual-backend harness. Promoted from the Complex Dynamics app (Phase 5). Consumed via SOURCE by the suite's Vite bundlers (no bare-Node consumer), so no dist build is needed.",
   "license": "MIT",
   "author": "Andrew Graven <andrew@graven.com>",
   "exports": {

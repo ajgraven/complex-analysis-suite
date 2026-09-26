@@ -21,7 +21,7 @@
 11. `packages/gpu` gives GLSL domain colouring (`PHASE_COLORING_GLSL` `colorAt(cvec w)` with 7 colormaps + 5 enhancement modes), `createProgram`, `makeColormapTexture`, `buildPolygonMaskTexture`. **No point/disc marker primitive on the GPU** — every app draws markers on a 2D overlay canvas.
 12. `packages/ui` gives `mountCanvas`/`attachCanvasA11y`/`runWithFatalBoundary`/`createComputeClient` (worker offload, coalescing, sync fallback), exemplified by CD's `JuliaMetricsClient`.
 13. Animation: `apps/complex-function-plotter/src/ui/animate.ts` (`stepT` + `createAnimator`, rAF transport over `t ∈ [t0,t1]`) and `apps/contour-integration/src/shell/sweep.ts` (ease-out sweep planner). Both reusable for animating roots around a loop.
-14. Extended precision: `@cas/gpu/df64` is a **complete double-double library** (`twoSum`, Dekker `split`, `twoProd`, `dfAdd/Mul/Div/Sqrt/Exp/Log/SinCos/Atan2`) plus its GLSL twin. No BigInt-based float/interval arithmetic anywhere.
+14. Extended precision: `@cas/gpu/df64` is a **complete double-FLOAT library** (`twoSum`, Dekker `split`, `twoProd`, `dfAdd/Mul/Div/Sqrt/Exp/Log/SinCos/Atan2`) plus its GLSL twin — a float32 pair, ~47 bits (ADR-0046 AI-4). *(Corrected 2026-09-26: the real float64 double-double, ~106 bits, with BigInt-exact decimal conversion, exists in `apps/polynomial-roots/src/engine/deep/dd.ts` — app-local, a second-consumer extraction candidate for this plan.)* No interval arithmetic anywhere.
 15. Permalink codec (`@cas/interchange` `encodeViewState`/`decodeViewState`) and PNG metadata export (`@cas/export` `injectPngText`/`readPngText`) are ready to use as-is.
 
 ---
@@ -201,7 +201,7 @@ Careful details: NaN-sticky `maxDelta` so a NaN root can never report `converged
 ### Extended precision
 
 - **`packages/gpu/src/glsl/df64Ref.ts`** is a full JS double-double library simulating GLSL float32 via `Math.fround`: private `twoSum`, `quickTwoSum`, Dekker `split` (overflow-safe, factor 2¹²+1), `twoProd`; exported `DF = [hi, lo]`, `df(x)`, `toNumber`, `dfNeg/dfAdd/dfSub/dfMul/dfDiv/dfSqrt/dfExp/dfLog/dfSinCos/dfAtan2`. Its GLSL twin is `df64.glsl.ts` + `complexDf64.glsl.ts`. **Note: it targets float32→~46–48 bits, i.e. it _extends single_ precision, not double.** A `double → ~106 bit` version would be a small edit (drop the `fround`s) and is exactly what a certified-root-disc computation would want.
-- No BigInt-based floating point, no interval/ball arithmetic, no MPFR-style library anywhere. `grep -l bigint` over `packages/core|conformal|faber` returns nothing.
+- No interval/ball arithmetic and no MPFR-style library anywhere. `grep -l bigint` over `packages/core|conformal|faber` returns nothing — *but see item 14's correction: Polynomial Roots' `deep/dd.ts` is exactly the "double → ~106 bit" version suggested above, with BigInt-exact decimal parsing and printing (2026-09-26).*
 
 ### Continuation / path-tracking of roots
 

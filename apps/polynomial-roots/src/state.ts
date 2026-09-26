@@ -77,10 +77,11 @@ export interface AppState {
 /** Most extension digits the overlay will enumerate. `2^14` is 16,384 Newton solves, about 0.4 s. */
 export const MAX_EXTEND = 14;
 
-/** Highest degree the app will sweep without being asked twice (ADR-0046: live to 20). */
-export const LIVE_DEGREE_CAP = 20;
-
-/** Highest degree the app will sweep at all in this milestone. */
+/**
+ * The schema's bound on a single degree — what a link may name. Whether a range RUNS is decided by its
+ * cost over the alphabet (`engine/cost.ts`), not by this: the old `LIVE_DEGREE_CAP = 20` was a degree
+ * limit applied to every alphabet alike, and on the Highest slider alone.
+ */
 export const MAX_DEGREE = 24;
 
 /**
@@ -209,7 +210,11 @@ export function shiftCentre(s: AppState, dx: number, dy: number): AppState {
  * the arithmetic and nothing ever subtracts two nearly-equal absolute positions.
  */
 export function zoomAbout(s: AppState, dx: number, dy: number, factor: number): AppState {
-  const k = Number.isFinite(factor) && factor > 0 ? factor : 1;
+  // Clamped against the floor HERE, so the centre moves by the zoom that actually happens. It moved by
+  // the requested one while `clampState` then held `halfHeight` at `MIN_HALF_HEIGHT`, so every wheel
+  // tick at the floor was a pan toward the cursor (2026-09-26 review: cx drifted 1.67e-31 per tick).
+  const requested = Number.isFinite(factor) && factor > 0 ? factor : 1;
+  const k = Math.min(requested, Math.max(1, s.halfHeight / MIN_HALF_HEIGHT));
   const t = 1 - 1 / k;
   const c = centreDd(s);
   return {

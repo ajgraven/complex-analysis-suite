@@ -64,11 +64,12 @@ export interface AberthResult {
   /**
    * The worst relative backward error over the roots, in units of `ε` — `|p(z)| / (ε · Σ|a_k||z|^k)`.
    *
-   * This is the solver's own account of how well it did, and it is reported rather than assumed because
-   * the two settling rules do not make the same promise: the residual rule bounds this by `ERR_FACTOR`,
-   * the step rule (a root that has stopped moving) bounds nothing. It is read from the FINAL sweep,
-   * before that sweep's corrections, so it is an over-estimate rather than an under-estimate — the only
-   * direction a self-report may err.
+   * This is the solver's own account of how well it did, reported rather than assumed. The residual
+   * rule — the only settling rule since PR-1 removed the step rule, which bounded nothing — bounds it by
+   * `ERR_FACTOR` on a converged solve. It is read from the FINAL sweep; a solve stops on a sweep in which
+   * every root was already settled, so on a converged solve nothing moved after it and it is exactly the
+   * backward error at the roots returned (`test/aberth.test.ts` recomputes it). On a give-up it is the
+   * last sweep's, before that sweep's corrections.
    */
   readonly backwardErrorEps: number;
 }
@@ -78,11 +79,18 @@ export interface AberthWorkspace {
   readonly degree: number;
   readonly rootRe: Float64Array;
   readonly rootIm: Float64Array;
+  /** `|a_j|`, filled once per solve (see `aberth`). */
+  readonly coeffAbs: Float64Array;
 }
 
 /** Allocate a workspace for polynomials of this degree. */
 export function makeWorkspace(degree: number): AberthWorkspace {
-  return { degree, rootRe: new Float64Array(degree), rootIm: new Float64Array(degree) };
+  return {
+    degree,
+    rootRe: new Float64Array(degree),
+    rootIm: new Float64Array(degree),
+    coeffAbs: new Float64Array(degree + 1),
+  };
 }
 
 /** Sweeps before giving up. Cubic convergence from a good seed needs well under ten. */
@@ -116,6 +124,14 @@ export function aberth(
     zi[k] = Math.sin(t);
   }
 
+  // **The coefficient moduli, once per solve.** The residual's error bound is Horner on `|a_j|` at
+  // `|z|`, and it called `Math.hypot(cRe[j], cIm[j])` for every coefficient of every root of every
+  // sweep — `n²` hypots a sweep for `n + 1` distinct values. Hoisted, the same numbers in the same
+  // order, so the roots are BIT-identical (hashed over all 232,938 polynomials of Littlewood 16, trinary
+  // 9 and {−2…2} 6) and the solve 2.6–2.9× faster: 9.8–10.1 s → 3.4–3.9 s (2026-09-26 review).
+  const ca = ws.coeffAbs;
+  for (let j = 0; j <= n; j++) ca[j] = Math.hypot(cRe[j], cIm[j]);
+
   // Hoisted so the give-up return can still report what the last sweep measured.
   let worstRel = 0;
   for (let sweep = 1; sweep <= MAX_SWEEPS; sweep++) {
@@ -132,7 +148,7 @@ export function aberth(
       let pi = cIm[n];
       let dr = 0;
       let di = 0;
-      let bound = Math.hypot(cRe[n], cIm[n]);
+      let bound = ca[n];
       for (let j = n - 1; j >= 0; j--) {
         const ndr = dr * x - di * y + pr;
         const ndi = dr * y + di * x + pi;
@@ -142,7 +158,7 @@ export function aberth(
         const npi = pr * y + pi * x + cIm[j];
         pr = npr;
         pi = npi;
-        bound = bound * absZ + Math.hypot(cRe[j], cIm[j]);
+        bound = bound * absZ + ca[j];
       }
 
       const resid = Math.hypot(pr, pi);

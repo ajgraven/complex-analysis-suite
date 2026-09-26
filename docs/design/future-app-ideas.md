@@ -139,7 +139,7 @@ over ℤ, `𝔽ₚ[x]`, Smith discs), `@cas/core`, `@cas/expr`, `@cas/gpu`, `@ca
   equilibrium measure and #5's conformal-invariant randomness.
 - **Apollonian gaskets / integral circle packings** — `@cas/exact` integer curvatures.
 - **Roots of polynomials with restricted coefficients** (Baez–Christensen–Derbyshire's *Beauty
-  of Roots*) — **now planned** as `apps/polynomial-roots`, [ADR-0046](../DECISIONS.md#adr-0046) /
+  of Roots*) — **built and published** as `apps/polynomial-roots`, [ADR-0046](../DECISIONS.md#adr-0046) /
   [`polynomial-roots-plan.md`](polynomial-roots-plan.md); it was not on this list.
 
 ## Cross-cutting reuse notes

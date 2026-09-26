@@ -13,7 +13,8 @@
 import { createProgram } from "@cas/gpu/shader";
 import type { Alphabet } from "../engine/alphabet.js";
 import { buildWalkShader, WALK_VERT, walkProgramKey } from "../engine/limit/walkGlsl.js";
-import { StageUnavailable } from "./glStage.js";
+import { StageUnavailable, targetDims } from "./glStage.js";
+import type { TargetSize } from "./glStage.js";
 import type { StageView } from "./glStage.js";
 
 /** Everything one limit-set frame needs. */
@@ -49,13 +50,21 @@ interface Cached {
  * disagree: the first draft had the legend reading it off the LAST frame, so a depth or a view change
  * showed one number in the controls and another in the panel until the next redraw.
  *
- * The composite is square and carries the world RECT, so a texel is not square in world units. The
- * larger side is taken: it fattens the picture rather than thinning it, which is the only direction a
- * superset may err in.
+ * The stage's composite has the canvas's own shape, so its texels are square in world units and the
+ * two sides below agree. A target of another shape (the browser suites' square one, carrying a
+ * non-square world rect) has texels that are not, and the larger side is taken: it fattens the picture
+ * rather than thinning it, which is the only direction a superset may err in.
  */
-export function limitPixelRadius(halfHeight: number, aspect: number, size: number): number {
-  return Math.max(halfHeight * aspect, halfHeight) / Math.max(1, size);
+export function limitPixelRadius(halfHeight: number, aspect: number, width: number, height: number = width): number {
+  return Math.max((halfHeight * aspect) / Math.max(1, width), halfHeight / Math.max(1, height));
 }
+
+/**
+ * Programs held at once. One is compiled per (alphabet, depth), and dragging the depth slider or typing
+ * a custom alphabet visits dozens; the cache was unbounded, so every one stayed linked on the GPU for the
+ * life of the page (2026-09-26 review). Eight covers a reader moving back and forth between a few.
+ */
+export const MAX_CACHED_PROGRAMS = 8;
 
 export class LimitPass {
   private readonly programs = new Map<string, Cached>();
@@ -75,7 +84,12 @@ export class LimitPass {
   private programFor(alphabet: Alphabet, depth: number): Cached {
     const key = walkProgramKey(alphabet, depth);
     const held = this.programs.get(key);
-    if (held !== undefined) return held;
+    if (held !== undefined) {
+      // Least-recently-used: a hit moves to the back of the Map's insertion order.
+      this.programs.delete(key);
+      this.programs.set(key, held);
+      return held;
+    }
     const gl = this.gl;
     const program = createProgram(gl, WALK_VERT, buildWalkShader(alphabet, depth));
     const uniforms: Record<string, WebGLUniformLocation | null> = {};
@@ -84,23 +98,29 @@ export class LimitPass {
     }
     const entry = { program, uniforms };
     this.programs.set(key, entry);
+    while (this.programs.size > MAX_CACHED_PROGRAMS) {
+      const [oldest, dropped] = this.programs.entries().next().value as [string, Cached];
+      gl.deleteProgram(dropped.program);
+      this.programs.delete(oldest);
+    }
     return entry;
   }
 
-  /** Draw one frame into `framebuffer`, a `size × size` float target. */
-  render(framebuffer: WebGLFramebuffer, size: number, options: LimitRender): LimitFrame {
+  /** Draw one frame into `framebuffer`, a float target of `size` texels. */
+  render(framebuffer: WebGLFramebuffer, size: TargetSize, options: LimitRender): LimitFrame {
     const gl = this.gl;
+    const { width, height } = targetDims(size);
     const { program, uniforms } = this.programFor(options.alphabet, options.depth);
     const halfWidth = options.view.halfHeight * options.aspect;
-    const pixelRadius = limitPixelRadius(options.view.halfHeight, options.aspect, size);
+    const pixelRadius = limitPixelRadius(options.view.halfHeight, options.aspect, width, height);
     gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-    gl.viewport(0, 0, size, size);
+    gl.viewport(0, 0, width, height);
     gl.disable(gl.BLEND);
     gl.useProgram(program);
     gl.bindVertexArray(this.vao);
     gl.uniform2f(uniforms.uCentre, options.view.cx, options.view.cy);
     gl.uniform2f(uniforms.uHalfExtent, halfWidth, options.view.halfHeight);
-    gl.uniform2f(uniforms.uResolution, size, size);
+    gl.uniform2f(uniforms.uResolution, width, height);
     gl.uniform1f(uniforms.uPixelRadius, pixelRadius);
     gl.uniform1f(uniforms.uAnnulus, options.annulus ? 1 : 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);

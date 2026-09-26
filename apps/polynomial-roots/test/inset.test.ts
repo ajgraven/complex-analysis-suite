@@ -136,14 +136,22 @@ describe("the inset's generated description", () => {
     expect(capped).not.toContain("finer than a pixel");
   });
 
-  it("carries Bousch's sentence BOTH ways, and omits it when it was not asked", () => {
-    const yes = insetDescription({ re: 0.4, im: 0.4 }, plan({}), true);
-    expect(yes).toContain("inside the cloud");
-    expect(yes).toContain("in the limit set");
-    const no = insetDescription({ re: 0.4, im: 0.4 }, plan({}), false);
-    expect(no).toContain("outside the cloud");
-    expect(no).toContain("no power series");
-    expect(insetDescription({ re: 0.4, im: 0.4 }, plan({}), null)).not.toContain("origin");
+  it("labels the two verdicts DIFFERENTLY: a prune is a proof, a survivor is only ≈", () => {
+    // The "inside" branch used to say "a power series vanishes at the point and it is in the limit
+    // set" from a superset test — 208 of 648 such Littlewood verdicts were rigorously outside (review).
+    const kept = insetDescription({ re: 0.4, im: 0.4 }, plan({}), { kind: "kept", depth: 28 });
+    expect(kept).toContain("≈ consistent with");
+    expect(kept).toContain("not a proof");
+    expect(kept).not.toContain("it is in the limit set");
+    const pruned = insetDescription({ re: 0.4, im: 0.4 }, plan({}), { kind: "pruned", depth: 28, reach: 13 });
+    expect(pruned).toContain("by depth 13 of 28");
+    expect(pruned).toContain("outside the limit set");
+    expect(insetDescription({ re: 0.4, im: 0.4 }, plan({}), { kind: "band" })).toContain("does not answer here");
+    expect(insetDescription({ re: 0.4, im: 0.4 }, plan({}), { kind: "undecided" })).toContain("without deciding");
+    expect(insetDescription({ re: 0.4, im: 0.4 }, plan({}), null)).not.toContain("walk");
+    // An alphabet containing 0: the drawn cloud always covers the origin, and the text says so.
+    const zero = insetDescription({ re: 0.4, im: 0.4 }, plan({}), { kind: "pruned", depth: 28, reach: 9 }, true);
+    expect(zero).toContain("all-zero series");
   });
 
   it("prints the point with a sign a reader can read", () => {

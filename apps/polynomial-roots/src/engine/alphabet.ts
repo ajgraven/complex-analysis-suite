@@ -318,6 +318,18 @@ export function compileAlphabet(spec: AlphabetSpec): { alphabet: Alphabet } | { 
       }
     }
   }
+  // **Negation and the unit −1 must agree.** Both are decided within `SAME`, but by different tests:
+  // negation asks "is −v in A for every v" (value by value), the unit search asks whether some RATIO
+  // b/a is −1. They part company on near-duplicates — `1, -1.0000000005` has −v ≈ w within 1e-9 both
+  // ways, so negation holds, while the ratio is −1.0000000005 and the unit −1 is never found. The group
+  // then folds by `z ↦ −z` at odd degree without the unit that makes it closed (`orbits.ts`), and 25% of
+  // the family went missing (2 of 4 polynomials at degree 1, 192 of 256 at 7 — the 2026-09-26 review).
+  // Negation IS multiplication by −1 on the alphabet, with the permutation already built, so it is a
+  // unit whenever it holds.
+  if (hasNeg && indexOf(units, cx(-1)) < 0) {
+    units.push(cx(-1));
+    unitPerm.push([...negPerm]);
+  }
   const one = indexOf(units, cx(1));
   if (one < 0) return { error: "internal: the identity is not a unit" }; // unreachable: 1 = a/a always permutes
   // Identity first, so `unitPerm[0]` is the no-op.

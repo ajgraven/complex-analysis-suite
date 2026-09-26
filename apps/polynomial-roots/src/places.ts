@@ -69,7 +69,8 @@ const at = (cx: number | string, cy: number | string, halfHeight: number, over: 
 
 /**
  * The slide deck's zoom, frame for frame: height `0.62508 · 2^{−k}` for `k = 0 … 8`, so the ninth frame
- * is the deck's own `0.0024456`, at the deck's degree 20. The deck then raises the degree to 27, which
+ * is `0.62508·2⁻⁸ = 0.0024417` — the deck's own ninth is `0.0024456`, its frames not being exact
+ * halvings (0.16%) — at the deck's degree 20. The deck then raises the degree to 27, which
  * is past this app's cap of 24 — and past any root solver's reach at that height — so the rest of the
  * story is the limit set, which the handover brings in by itself as the frames shrink.
  */
@@ -105,7 +106,9 @@ export const PLACES: readonly Place[] = [
     group: "tour",
     title: "The holes at i and e^{iπ/4}",
     seen: "Two more gaps on the unit circle. The cloud avoids the roots of unity except where a polynomial happens to vanish exactly at one.",
-    state: at(0.78, 0.62, 0.42),
+    // Framed to hold BOTH points at any stage aspect ≥ 1: it was `at(0.78, 0.62, 0.42)`, whose left edge
+    // at the stage's usual 1.55 is x = 0.13, so the title's i was off the frame (2026-09-26 review).
+    state: at(0.36, 0.86, 0.5),
   },
   {
     id: "four-fifths",
@@ -204,8 +207,11 @@ export const PLACES: readonly Place[] = [
   {
     id: "hexaholes",
     group: "alphabets",
-    title: "A hexahole, at ω",
-    seen: "The same centre in the limit-set engine, in a window 0.0005 tall: a hole opens, roughly a tenth of the window across, shaded by how deep the coefficient tree survived before it died. Raising the depth sharpens its edge; lowering it fills the hole in, because the picture is a superset of the limit set at every finite depth.",
+    title: "A hexahole, near ω",
+    // "at ω" was not true of this frame: the centre is 1.65×10⁻³ from ω and the window 5×10⁻⁴ tall, so ω
+    // is more than three windows off it (2026-09-26 review). The hole shown is one of those accumulating
+    // there, and the caption now says so.
+    seen: "The same neighbourhood in the limit-set engine, in a window 0.0005 tall whose centre is 1.7×10⁻³ from ω itself — one of the holes accumulating there, not ω: a hole opens, roughly a tenth of the window across, shaded by how deep the coefficient tree survived before it died. Raising the depth sharpens its edge; lowering it fills the hole in, because the picture is a superset of the limit set at every finite depth.",
     fact: "Infinitely many holes accumulate at ω ≈ 0.371859 + 0.519411i, a root of 1 − 2z + 2z² − 2z⁵ + 2z⁸.",
     source: "Calegari, Koch & Walker (2017), Theorem 9.1.1 and Figure 4.",
     state: at(0.372368, 0.517839, 0.00025, { alphabet: { preset: "trinary" }, engine: "limit", depth: 40 }),

@@ -42,6 +42,13 @@ export const MAX_ROOTS_PER_POLYNOMIAL = 8;
 /** Newton steps before giving up. The loop breaks on its own step size long before this. */
 const NEWTON_STEPS = 24;
 
+/**
+ * A root is accepted when its backward error is at most this many units of the arithmetic's own
+ * precision (`2^-bits`). Measured worst on accepted roots: 1.55e-32 in double-double (1.3 units) and
+ * about 2 units in float64; 16 is the root engine's `8ε` with a factor of two for the complex Horner.
+ */
+const RESIDUAL_UNITS = 16;
+
 
 /** What to ask of one view. */
 export interface ReferenceRequest {
@@ -129,7 +136,15 @@ function walk<T>(F: Num<T>, alphabet: Alphabet, request: ReferenceRequest): Refe
     // gets here, and `z = 0` is a root of nothing proper.
     return { error: "the deep engine works inside the unit disk; fold |z| > 1 onto 1/z first" };
   }
-  const gap = Math.max(1 - absz, 1e-300);
+  // The margin must hold over the whole VIEW, not at its centre: Foster's ε bounds how far a truncation
+  // can move across a disc of radius `radius`, and the series' derivative there is governed by
+  // `1 − (|z₀| + radius)`. Using `1 − |z₀|` understated ε by 2.4× at a half-height of 0.05 (the
+  // 2026-09-26 review; no miss observed, but the bound is the claim).
+  const rim = 1 - absz - radius;
+  if (!(rim > 0)) {
+    return { error: "this view reaches the unit circle, where the tail bound is infinite; zoom in, or use the limit-set engine" };
+  }
+  const gap = Math.max(rim, 1e-300);
   const eps = (radius * maxAbs) / (gap * gap);
 
   // Path-independent prologue, at full precision for the powers and in doubles for the bounds.
@@ -226,12 +241,18 @@ export function centreOnRoot(
   cx: string,
   cy: string,
   precision: Precision,
+  /**
+   * The probed root's offset from `(cx, cy)`, where Newton starts. It started at the view centre, so for
+   * a polynomial with two roots in the view it converged to the same one for both probes — measured in
+   * forced-deep mode at `−0.3 + 0.5i`, half-height 0.2: 81 of 162 probes re-centred on the wrong root.
+   */
+  seed?: { readonly dx: number; readonly dy: number },
 ): { cx: string; cy: string } | { error: string } {
   const compiled = compileAlphabet(alphabet);
   if ("error" in compiled) return compiled;
   return precision === "dd"
-    ? refine(DOUBLE_DOUBLE, compiled.alphabet, digits, cx, cy)
-    : refine(FLOAT64, compiled.alphabet, digits, cx, cy);
+    ? refine(DOUBLE_DOUBLE, compiled.alphabet, digits, cx, cy, seed)
+    : refine(FLOAT64, compiled.alphabet, digits, cx, cy, seed);
 }
 
 function refine<T>(
@@ -240,13 +261,15 @@ function refine<T>(
   digits: readonly number[],
   cxText: string,
   cyText: string,
+  seed?: { readonly dx: number; readonly dy: number },
 ): { cx: string; cy: string } | { error: string } {
   const cx = F.parse(cxText);
   const cy = F.parse(cyText);
   if (cx === null || cy === null) return { error: `the centre "${cxText}, ${cyText}" cannot be read` };
   const values = alphabet.values.map((v) => ({ re: F.of(v.re), im: F.of(v.im) }));
   const coeffs = digits.map((d) => values[d]);
-  const z = newtonFrom(F, coeffs, coeffs.length - 1, { re: cx, im: cy });
+  const start = seed === undefined ? { re: cx, im: cy } : { re: F.add(cx, F.of(seed.dx)), im: F.add(cy, F.of(seed.dy)) };
+  const z = newtonFrom(F, coeffs, coeffs.length - 1, start);
   if (z === null) return { error: "the polynomial has a multiple root here; Newton has nothing to divide by" };
   return { cx: F.format(z.re), cy: F.format(z.im) };
 }
@@ -281,6 +304,8 @@ function solve<T>(
 
   const viewRadius = Math.hypot(halfWidth, halfHeight);
   const outer = Math.hypot(F.toNumber(z0.re), F.toNumber(z0.im)) + viewRadius;
+  /** This polynomial's roots found so far, as offsets — so a polish that lands on one again is not a new root. */
+  const seen: { dx: number; dy: number }[] = [];
   for (let pass = 0; pass < MAX_ROOTS_PER_POLYNOMIAL && working.length > 1; pass++) {
     // Could what is LEFT still have a root in the view? `|Q(z₀)| ≤ r·max|Q′|` on the disc is the same
     // admission the walk itself makes, applied to the deflated polynomial, and it costs one Horner pass
@@ -294,14 +319,34 @@ function solve<T>(
     const dx = F.toNumber(F.sub(polished.re, z0.re));
     const dy = F.toNumber(F.sub(polished.im, z0.im));
     if (!Number.isFinite(dx) || !Number.isFinite(dy)) return;
-    if (Math.abs(dx) <= halfWidth && Math.abs(dy) <= halfHeight) {
+    // **The residual is the certificate, here as in the root engine.** `newtonFrom` returns its last
+    // iterate after NEWTON_STEPS whatever happened, and this pushed it: an iterate that did not settle
+    // would have been painted as a root (PR-1's rule is "not painted, and counted"). Adams's backward
+    // error at a few units of the arithmetic's own precision is what a converged root achieves — the
+    // measured worst at 1e-30 is 1.6e-32 against dd's 2⁻¹⁰⁶ = 1.2e-32 — so a looser one is a failure,
+    // and the search for this polynomial stops rather than deflating by a point that is not a root.
+    const residual = residualAt(F, alphabet, original, digits, degree, polished);
+    if (!residualCertified(residual, F.bits)) return;
+    // **A polish can land on a root already found.** The deflated polynomial's root is only
+    // approximately a root of the original, and Newton on the original from it converges to whichever
+    // root's basin it is in — measured in forced-deep mode at half-height 0.12: 998 rows, of which 16
+    // polynomials carried the SAME root three or four times, drawn as three or four dots
+    // (2026-09-26 review's sweep found it: the re-centring test's "second roots" were these repeats).
+    // So a repeat is not pushed. The deflation still divides out the POLISHED root, repeat or not:
+    // measured against Aberth on every polynomial the walk reached at `−0.3 + 0.5i`, half-height 0.2,
+    // it finds 5,805 of 5,821 roots in view, where dividing out the deflated polynomial's own root finds
+    // 5,711 of 5,731 and a hybrid 5,802 of 5,818 — the polished root is the more accurate factor.
+    const tol = SAME_ROOT_RELATIVE * Math.max(1, Math.hypot(F.toNumber(polished.re), F.toNumber(polished.im)));
+    const repeat = seen.some((q) => Math.hypot(q.dx - dx, q.dy - dy) <= tol);
+    seen.push({ dx, dy });
+    if (!repeat && Math.abs(dx) <= halfWidth && Math.abs(dy) <= halfHeight) {
       out.push({
         dx,
         dy,
         degree,
         digits,
         derivative: derivativeAt(F, original, degree, polished),
-        residual: residualAt(F, alphabet, original, digits, degree, polished),
+        residual,
       });
     }
     // A root outside the rect does NOT end the search: `z₀` can sit in the basin of a root just
@@ -311,6 +356,23 @@ function solve<T>(
     // cost 0.7 s on a 7.5 s suite, because `couldReach` had already stopped every loop it would have.
     working = deflate(F, working, polished);
   }
+}
+
+/**
+ * Two roots of ONE polynomial closer than this (relative) are one root found twice. Distinct roots of a
+ * polynomial over a small alphabet are separated far above it, and a pair that were not could not be
+ * told apart by the Newton that found them anyway.
+ */
+const SAME_ROOT_RELATIVE = 1e-9;
+
+/**
+ * Is `residual` — Adams's backward error — within `RESIDUAL_UNITS` units of an arithmetic of `bits`
+ * bits? What a converged root achieves; anything looser is an iterate that did not settle, and is not
+ * drawn. Exported for its test: no root the walk reaches in the suite's corpus fails it, so the bound's
+ * VALUE is pinned directly (the batch-B sweep found `RESIDUAL_UNITS = 1e30` changed no other test).
+ */
+export function residualCertified(residual: number, bits: number): boolean {
+  return residual <= RESIDUAL_UNITS * Math.pow(2, -bits);
 }
 
 /** Newton from an arbitrary seed; null when the derivative vanishes (a multiple root). */
@@ -358,19 +420,34 @@ function residualAt<T>(
 /**
  * Could this polynomial have a root within `radius` of `z₀`?
  *
- * `|Q(z₀)| ≤ radius · max|Q′|`, the derivative bounded term by term at the disc's far edge. A NECESSARY
- * condition, so a `false` is a proof that there is nothing left to find and the search may stop.
+ * Two NECESSARY conditions, so a `false` is a proof that there is nothing left to find and the search
+ * may stop. First order: `|Q(z₀)| ≤ radius · max|Q′|`, the derivative bounded term by term at the disc's
+ * far edge. Second order, by Taylor with the remainder: a root `z` in the disc has
+ * `0 = Q(z₀) + Q′(z₀)(z − z₀) + R` with `|R| ≤ radius²·max|Q″|/2`, so `|Q(z₀)| ≤ radius·|Q′(z₀)| +
+ * radius²·max|Q″|/2`. The second uses the derivative AT `z₀` rather than its maximum over the disc, which
+ * is what makes it tight on a small view: at the zoom story's 1e-30 the walk takes 1.23 s against 2.25 s,
+ * at 1e-12 126 ms against 180 ms, with the root set identical (hashed) at both (2026-09-26 review).
  */
 function couldReach<T>(F: Num<T>, coeffs: readonly Cx2<T>[], z0: Cx2<T>, radius: number, outer: number): boolean {
   const degree = coeffs.length - 1;
-  let bound = 0;
-  let power = 1;
+  let first = 0;
+  let second = 0;
+  let power = 1; // outer^(k−1)
+  let powerLess = 0; // outer^(k−2), 0 for k = 1
   for (let k = 1; k <= degree; k++) {
-    bound += k * Math.hypot(F.toNumber(coeffs[k].re), F.toNumber(coeffs[k].im)) * power;
+    const a = Math.hypot(F.toNumber(coeffs[k].re), F.toNumber(coeffs[k].im));
+    first += k * a * power;
+    second += k * (k - 1) * a * powerLess;
+    powerLess = power;
     power *= outer;
   }
-  const { p } = hornerAt(F, coeffs, degree, z0);
-  return Math.hypot(F.toNumber(p.re), F.toNumber(p.im)) <= radius * bound;
+  const { p, q } = hornerAt(F, coeffs, degree, z0);
+  const absP = Math.hypot(F.toNumber(p.re), F.toNumber(p.im));
+  // Kept although it is equivalent in OUTCOME to the second-order test alone (the batch-C sweep): both
+  // are necessary conditions, so dropping either only admits more Newton runs that find nothing in view.
+  if (absP > radius * first) return false;
+  const absQ = Math.hypot(F.toNumber(q.re), F.toNumber(q.im));
+  return absP <= radius * absQ + (radius * radius * second) / 2;
 }
 
 /** Divide out `(z − r)` by synthetic division. */

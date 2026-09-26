@@ -12,7 +12,8 @@
 // the stack, the order of the prune test and the hit test, and the `1/z` fold are the same statements,
 // because the browser suite compares the two per pixel and a check between two DIFFERENT algorithms
 // would only ever be measuring which is better. What does differ is the arithmetic width — float32 here
-// against float64 there — and the parity test's tolerance is that difference and nothing else.
+// against float64 there — and the parity test compares the two for exact EQUALITY, since the output is
+// an integer (below) that float32 can move only at a tie.
 //
 // **The one output rides the channel the stage already has.** `R` is the escape depth `reach`, an
 // integer in `0 … D+1` (see `walk.ts` for why that, and not a survivor count). It is exact in float32
@@ -32,8 +33,12 @@ export const STATUS_EXCLUDED = -1;
 /** `R` for a pixel whose walk ran out of nodes. */
 export const STATUS_EXHAUSTED = -2;
 
-/** A float, written so GLSL reads it as one. */
-function f(x: number): string {
+/**
+ * A float, written so GLSL reads it as one. Exported for its test: since the alphabet is normalised to
+ * max|a| = 1 no alphabet constant reaches nine integer digits any more, so the one case the guard below
+ * exists for (`toPrecision(9)` dropping the point) is reachable only through a direct call.
+ */
+export function glslFloat(x: number): string {
   if (!Number.isFinite(x)) throw new Error(`the shader cannot carry ${String(x)}`);
   const s = x.toPrecision(9);
   return /[.eE]/.test(s) ? s : `${s}.0`;
@@ -65,12 +70,24 @@ export function clampDepth(depth: number): number {
  * about the other.
  */
 export function buildWalkShader(alphabet: Alphabet, depth: number): string {
-  const spec = walkSpec(alphabet);
+  // **Normalised to max|a| = 1 for the GPU.** Every root and every prune decision is invariant under
+  // scaling the alphabet (the partial sums, the tail and ε all scale together), but float32 is not: a
+  // custom alphabet with |a| ≳ 1.8e19 overflowed `length(s)` and drew a blank limit set while the CPU
+  // and the root engine drew Littlewood's picture (2026-09-26 review). The CPU walk keeps the raw
+  // values — float64 has the range — and the parity test compares the two.
+  const raw = walkSpec(alphabet);
+  const k = raw.maxAbs > 0 ? 1 / raw.maxAbs : 1;
+  const spec = {
+    ...raw,
+    values: raw.values.map((v) => v * k),
+    leading: raw.leading.map((v) => v * k),
+    maxAbs: raw.maxAbs > 0 ? 1 : 0,
+  };
   const d = clampDepth(depth);
   const nv = spec.values.length >> 1;
   const nl = spec.leading.length >> 1;
   const vec2s = (a: Float64Array, n: number): string =>
-    Array.from({ length: n }, (_, j) => `vec2(${f(a[2 * j])}, ${f(a[2 * j + 1])})`).join(", ");
+    Array.from({ length: n }, (_, j) => `vec2(${glslFloat(a[2 * j])}, ${glslFloat(a[2 * j + 1])})`).join(", ");
   // Each node costs one iteration and each backtrack one more, and a backtrack cannot outnumber the
   // nodes that produced it — so twice the budget plus the depth is a cap the walk cannot reach, and the
   // loop is bounded for the driver without ever bounding the algorithm.
@@ -82,10 +99,10 @@ precision highp int;
 #define DEPTH ${d}
 #define NVAL ${nv}
 #define NLEAD ${nl}
-#define BUDGET ${f(NODE_BUDGET)}
+#define BUDGET ${glslFloat(NODE_BUDGET)}
 #define MAXITER ${maxIter}
-#define MAXABS ${f(spec.maxAbs)}
-#define BAND ${f(ANNULUS_INNER)}
+#define MAXABS ${glslFloat(spec.maxAbs)}
+#define BAND ${glslFloat(ANNULUS_INNER)}
 
 const vec2 VAL[NVAL] = vec2[NVAL](${vec2s(spec.values, nv)});
 const vec2 LEAD[NLEAD] = vec2[NLEAD](${vec2s(spec.leading, nl)});
@@ -108,12 +125,15 @@ void main() {
   vec2 w = r2 > 1.0 ? vec2(z.x, -z.y) / r2 : z;
   float absw = length(w);
 
-  if (absw > BAND && uAnnulus < 0.5) { fragColor = vec4(${f(STATUS_EXCLUDED)}, 0.0, 0.0, 1.0); return; }
-  if (absw >= 1.0) { fragColor = vec4(${f(STATUS_EXHAUSTED)}, 0.0, 0.0, 1.0); return; }
+  if (absw > BAND && uAnnulus < 0.5) { fragColor = vec4(${glslFloat(STATUS_EXCLUDED)}, 0.0, 0.0, 1.0); return; }
+  if (absw >= 1.0) { fragColor = vec4(${glslFloat(STATUS_EXHAUSTED)}, 0.0, 0.0, 1.0); return; }
 
   // Foster's fudge: the largest |P(z)| a polynomial with a root inside this texel can have.
   float gap = max(1.0 - min(absw, 1.0 - 1e-6), 1e-6);
-  float eps = uPixelRadius * MAXABS / (gap * gap);
+  // The fold's Jacobian: a texel of radius rho at z is a disc of radius rho*|w|^2 at w (walk.ts
+  // foldedPixelRadius). Without it everything outside the disk was judged on a texel too large.
+  float jac = r2 > 1.0 ? 1.0 / r2 : 1.0;
+  float eps = uPixelRadius * jac * MAXABS / (gap * gap);
 
   // Path-independent prologue: pw[k] = w^k and tl[k] = MAXABS*|w|^(k+1)/(1-|w|).
   vec2 pw[DEPTH + 1];
@@ -161,7 +181,7 @@ void main() {
     ix[level] = 0;
   }
 
-  if (exhausted) { fragColor = vec4(${f(STATUS_EXHAUSTED)}, 0.0, 0.0, 1.0); return; }
+  if (exhausted) { fragColor = vec4(${glslFloat(STATUS_EXHAUSTED)}, 0.0, 0.0, 1.0); return; }
   fragColor = vec4(reach, 0.0, 0.0, 1.0);
 }`;
 }

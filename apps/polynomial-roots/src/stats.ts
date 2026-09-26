@@ -39,6 +39,20 @@ export function emptyTotals(): Totals {
   return { ...zeroCounts(), byDegree: new Map() };
 }
 
+/**
+ * The totals restricted to the degrees `keep` admits, rebuilt from the per-degree rows — what the
+ * incremental scrub keeps when it drops the degrees outside the new range, so the aggregate stays the
+ * exact sum of the rows it is shown beside.
+ */
+export function totalsFor(totals: Totals, keep: (degree: number) => boolean): Totals {
+  const out = emptyTotals();
+  for (const [degree, row] of totals.byDegree) {
+    if (!keep(degree)) continue;
+    addStats(out, row, degree);
+  }
+  return out;
+}
+
 /** Fold one chunk's stats in, under the degree it was swept at when that is known. */
 export function addStats(into: Totals, s: SweepStats, degree?: number): void {
   const targets: DegreeCounts[] = [into];

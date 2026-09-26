@@ -99,8 +99,8 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **622 test files / 7111 tests**
-*(621 / 7085 before ADR-0046's M6 — Egan's hue, the CET-C6 extraction and the symmetry readout — added 1 file / 26 tests; 620 / 7067 before its PR-5 — the gallery — added 1 file / 18 tests; 618 / 7035 before its PR-4 — the dragons — added 2 files / 32 tests; 615 / 6997 before its PR-3 — deep zoom by reference — added 3 files / 38 tests; 610 / 6949 before its PR-2 — the limit-set engine — added 5 files / 48 tests; 599 / 6818 before
+Green is **625 test files / 7150 tests**
+*(622 / 7111 before the 2026-09-26 review of Polynomial Roots — its remediation, batches A–C — added 3 files / 39 tests; 621 / 7085 before ADR-0046's M6 — Egan's hue, the CET-C6 extraction and the symmetry readout — added 1 file / 26 tests; 620 / 7067 before its PR-5 — the gallery — added 1 file / 18 tests; 618 / 7035 before its PR-4 — the dragons — added 2 files / 32 tests; 615 / 6997 before its PR-3 — deep zoom by reference — added 3 files / 38 tests; 610 / 6949 before its PR-2 — the limit-set engine — added 5 files / 48 tests; 599 / 6818 before
 Polynomial Roots itself added 10 files / 122 tests and its `@cas/gpu` extraction 1 / 9; 592 / 6643 before the 2026-09-20 remediation)* with lint and typecheck
 silent. `pnpm lint` includes `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the
 `packages/*` dists first, so a clean clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as
@@ -108,7 +108,7 @@ silent. `pnpm lint` includes `pnpm dep:check` (dependency-cruiser). `pnpm test` 
 **jsdom is opted into per FILE, by a `// @vitest-environment jsdom` docblock on line 1** —
 `packages/ui` is the only one that sets it in its Vitest config, and Quadrature-Domains' own config
 says `environment: "node"` while ~33 of its `vitest/` DOM specs opt in anyway. Measured after the M8
-merge, rather than remembered: **33 Quadrature-Domains** specs, **23 Contour-Integration** ones (the
+merge, rather than remembered: **33 Quadrature-Domains** specs, **25 Contour-Integration** ones (the
 whole `src/shell/` surface after M8 — the cards, the two rails, the bar, the front door, the drill,
 the strip) and **3 Complex-Dynamics** ones (reaching `src/main.ts`), and no other app or package.
 *(Corrected 2026-09-20 by re-measuring rather than re-reading: this said the QD maths ran as one
@@ -116,7 +116,8 @@ wrapper spec around `node app/node-test.js`, which QD-TEST-1 replaced with the 2
 `app/node-test.js` is kept for standalone runs; and it said 34 QD jsdom specs where `head -1` over
 `apps/quadrature-domains/vitest/**` finds the docblock on line 1 in **33**, the thirty-fourth file
 being `vitest/_algebra-mount.ts`, a shared mount helper whose docblock is on line 10, where Vitest
-does not read it.)*
+does not read it.)* *(Re-measured 2026-09-26: Contour Integration's count is 25, not 23, by the same
+`head -1` test.)*
 *(This paragraph named three Contour-Integration files by name until M8 step 5.3; all three were
 deleted at the M8 cutover.)* **Never pipe the gate through `tail` or `head`** — doing so has
 truncated real failures before.
@@ -124,19 +125,20 @@ truncated real failures before.
 Dev servers go through `.claude/launch.json` (one entry per app that has one — **four today**:
 `qd-esm` 5199, `cd-esm` 5188, `corr` 5176, `contour` 5177), not a bare `vite` left running in the
 background. *(Corrected 2026-09-20: this said "one entry per app"; `grep '"name"' .claude/launch.json`
-gives four configurations against twelve tool apps.)*
+gives four configurations against twelve tool apps — thirteen since Polynomial Roots, which has no entry.)*
 
 **The browser suites are NOT in `pnpm test`** and must be run deliberately — `pnpm test:browser` in
 the app that has one (contour-integration, complex-dynamics, complex-function-plotter, quadrature-domains,
 polynomial-roots, `packages/gpu`, `packages/schwarz`). They compile real GLSL and need a Chromium, and Playwright pins an
 exact build that `pnpm install` does not fetch, so a container holding one under a different version
-cannot launch the provider at all. Four of the six configs say so: contour-integration,
-complex-dynamics and `packages/gpu` take `CAS_CHROMIUM_EXECUTABLE ?? /opt/pw-browsers/chromium` — both,
+cannot launch the provider at all. Five of the seven configs say so: contour-integration,
+complex-dynamics, polynomial-roots and `packages/gpu` take `CAS_CHROMIUM_EXECUTABLE ?? /opt/pw-browsers/chromium` — both,
 in that order — and quadrature-domains probes `/opt/pw-browsers/chromium` only. **complex-function-plotter
 and `packages/schwarz` still take neither, so their suites cannot run in such a container** — unify them
 when one is next touched. *(Corrected 2026-09-20: the split was written as one-env / one-probe / two-both;
 grepping all six configs gives three-both / one-probe / two-neither — contour-integration's line, which
-its own config once called "ONE LINE THE OTHER THREE DO NOT HAVE", has since been taken by two of them.)*
+its own config once called "ONE LINE THE OTHER THREE DO NOT HAVE", has since been taken by two of them.
+Polynomial Roots' seventh config makes it four-both / one-probe / two-neither, counted 2026-09-26.)*
 **Run it when a slice adds a record or touches the stage:** the contour-integration
 browser suite was red for three milestones on a hardcoded record count, and the node gate structurally
 cannot see it. Anything about a shader's NUMBERS belongs there too — QD's Schwarz in-Ω mask claimed
@@ -189,9 +191,9 @@ of 2D Electrostatics; riding `@cas/flow`, `@cas/gpu`, `@cas/export`, `@cas/inter
 than the phase plan, on the ADR-0007 second-consumer rule; `@cas/exact` and `@cas/schwarz` are each used by
 Complex-Dynamics and Correspondences, `@cas/dynamics` (Böttcher exterior maps + external rays) by
 Complex-Dynamics (its original second consumer, the Riemann-map studio, shed it — see below), and
-`@cas/export` (PNG text-chunk reproducibility metadata) by **seven** apps — Complex-Dynamics, the
-plotter, the Riemann-map studio, Argument-Principle, 2D Electrostatics, 2D Hydrodynamics and
-Contour-Integration. The plotter and Riemann-map apps plus `@cas/dynamics` (ADR-0010–0014) landed
+`@cas/export` (PNG text-chunk reproducibility metadata) by **eight** apps — Complex-Dynamics, the
+plotter, the Riemann-map studio, Argument-Principle, 2D Electrostatics, 2D Hydrodynamics,
+Contour-Integration and Polynomial Roots. The plotter and Riemann-map apps plus `@cas/dynamics` (ADR-0010–0014) landed
 on `master` alongside the σ arc. (The launcher consumes no packages.)
 
 **`@cas/export` + CD → Riemann-Map hand-off + Riemann Map goes pure-2D (merged, #257):**
@@ -506,7 +508,7 @@ family parameter changes the integrand as well as the geometry. That is M6.2's *
 optimisation.
 
 **M6.2 — the `#vs=` permalink, verified by verdict.** `src/shell/viewState.ts` on `@cas/interchange`
-(namespace `"ci"`, the ten-app idiom — *corrected 2026-09-20 from "eight-app": `grep -rl encodeViewState
+(namespace `"ci"`, the ten-app idiom — eleven since Polynomial Roots — *corrected 2026-09-20 from "eight-app": `grep -rl encodeViewState
 apps/` names ten, which `src/shell/viewState.ts:3` already had right as "nine other apps"*). **The
 measurement came first and corrected M6.0's**, which was
 taken before `ShellState` existed: against the real state object the payload is 2.2× larger, and
@@ -1410,7 +1412,8 @@ Green: **599 files / 6818 tests**, the browser suite 22 / 232, `pnpm a11y --stri
 **Done — PR-0 and PR-1 of ADR-0046 (Polynomial Roots, the twelfth published app).** `apps/polynomial-roots`
 — every root of every polynomial whose coefficients come from a small finite alphabet, painted by density:
 the picture at the head of Baez–Christensen–Derbyshire's *The Beauty of Roots*. **No new package**; it
-consumes `@cas/ui`, `@cas/gpu`, `@cas/core`, `@cas/flow`, `@cas/interchange` and `@cas/export`, and makes
+consumes `@cas/ui`, `@cas/gpu`, `@cas/core`, `@cas/interchange` and `@cas/export` (`@cas/flow` too until
+PR-3 dropped it, below), and makes
 two second-consumer extractions into `@cas/gpu` — Complex Dynamics' histogram-equalisation arithmetic as
 `equalizedCdfLut` (`@cas/gpu/histogram`, PR-1), with CD keeping the decode half alone, and Contour
 Integration's CET-C6 table as `@cas/gpu/cet` (M6). PR-1 shipped the scaffold,
@@ -1476,7 +1479,7 @@ the points at which a power series over the alphabet can vanish, which Bousch pr
 root set inside the disk. `src/engine/limit/` (`walk.ts` float64, `bandt.ts` the independent decision,
 `walkGlsl.ts` the generated shader, `handover.ts` the engine rule) + `src/stage/limitPass.ts`, which writes
 straight into the stage's existing composite so the equalisation, the ramp, the present pass and the PNG
-export are the same code for both engines. Three new places and one split in two; +47 node tests, +5
+export are the same code for both engines. Three new places in all (two limit-set entries, and the hexahole place split in two); +47 node tests, +5
 browser tests.
 
 **COUNTING SURVIVORS IS UNAFFORDABLE, and the escape depth is the better quantity anyway.** The plan
@@ -1732,6 +1735,34 @@ complex alphabets, both answers occurring. **A PR-1 defect, found wiring the thi
 opening in "By degree" drew its hue through the DENSITY ramp, set from the default state and skipped by
 `apply`'s re-sweep path. Sweeps: **M6.2 27 mutants (25 node, 2 shader), all killed**; **M6.3 10, 9 killed,
 1 recorded equivalent**. `pnpm a11y --strict`: **1,125 nodes across 29 pages, 0 unnamed**.
+
+**Done — the 2026-09-26 review of Polynomial Roots and its remediation (batches A–D).** Six read-only
+reviews and a browser pass found **the mathematics sound** — the swept density matches brute force bin
+for bin on nine more alphabets (by Egan hue class too), and the pruning bound, the theorem's sign, the
+double-double arithmetic and both cited bounds check out — and the defects in **guarding work, keeping
+state in step, and the docs**. Four batches, each gated and swept; the report, with a status for every
+finding, is [`docs/review/2026-09-26-polynomial-roots-review/REPORT.md`](docs/review/2026-09-26-polynomial-roots-review/REPORT.md).
+**A — the degree was never the budget**: `{−2…2}` at the default degree 16 is 3.05e11 polynomials and
+the menu started it (18.6 M chunks queued on the main thread, 6.9 s blocked, 1 GB); a sweep is now
+budgeted by the ROOTS it deposits (`engine/cost.ts`, 1e7 live, 5e7 behind Compute, refused above with the
+highest degree that fits), the pool's queue is a cursor, a resize no longer blanks the cloud, and the
+app's browser suite runs in CI. **B — wrong or misleading output**: the stage's targets were square on
+a non-square canvas, so NEAREST sampling never showed about a third of the rows it accumulated; the fold
+lacked its `|w|²` Jacobian; the real-root count used the solver as its own oracle (now exact Sturm over
+BigInt) and missed split multiple roots; a degree scrub re-swept everything (now 16→17 in 1.4 s against
+3.8 s, a step down 108 ms); and **the sweep found a deep-walk bug the review had not** — a polish after
+deflation can land on a root already found, and the walk drew it again (998 rows, 16 polynomials
+repeated at a forced-deep 0.12), which is also why the re-centring test had passed with its seed removed:
+its "second roots" were the same root. Sweep 31 mutants, 29 killed in node, 1 by the browser suite only,
+1 recorded equivalent. **C — efficiency**: Aberth's coefficient moduli hoisted (2.6–2.9×, bit-identical,
+hashed over 232,938 solves); chunks balanced across the pool; the composite keyed by its inputs so a tone
+change or a hover re-runs neither the limit walk nor the read-back; a second-order admission test in the
+deep walk (1e-30 2.25 → 1.23 s, same root set); the live region announces once settled. Sweep 10, 9
+killed, 1 recorded equivalent. **D — documentation**: the plan's §4/§5/§7 corrected in place and dated,
+ADR-0046 amended (AI-9), `@cas/gpu`'s description and README, the root and launcher READMEs, an app
+README, the sibling Polynomial Root Analysis plan (random-polynomial ensembles are covered by NEITHER app;
+`deep/dd.ts` is the float64 double-double its research said did not exist), and the counts in this file.
+`pnpm a11y --strict`: **1,128 nodes across 29 pages, 0 unnamed**.
 
 Work in small, reviewable commits. Pause at each phase/milestone gate for review before proceeding.
 When a command or path in the docs is marked `⚠ verify`, check it against the actual repo

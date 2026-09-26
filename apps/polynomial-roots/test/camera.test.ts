@@ -120,3 +120,29 @@ describe("the double-double camera", () => {
     expect(drift).toBeLessThan(1e-20);
   });
 });
+
+describe("the floor", () => {
+  it("is a floor: zooming in at it moves nothing, where it used to pan toward the cursor", () => {
+    const at = deep(MIN_HALF_HEIGHT);
+    const next = clampState(zoomAbout(at, 0.3 * MIN_HALF_HEIGHT, -0.2 * MIN_HALF_HEIGHT, 1.2));
+    expect(next.halfHeight).toBe(MIN_HALF_HEIGHT);
+    // The same double-double (the string is re-printed canonically, so compare the values).
+    const same = (a: string, b: string): number => ddToNumber(ddSub(ddFromString(a) ?? dd(0), ddFromString(b) ?? dd(0)));
+    expect(same(next.cx, at.cx)).toBe(0);
+    expect(same(next.cy, at.cy)).toBe(0);
+    // Just above it, the zoom stops AT the floor and the centre moves by that zoom, not the requested one.
+    const near = deep(MIN_HALF_HEIGHT * 1.1);
+    const z = clampState(zoomAbout(near, MIN_HALF_HEIGHT, 0, 1.5));
+    expect(z.halfHeight).toBeCloseTo(MIN_HALF_HEIGHT, 45);
+    const moved = ddToNumber(ddSub(ddFromString(z.cx) ?? dd(0), ddFromString(near.cx) ?? dd(0)));
+    // To within the camera's own step at the floor (a dd ulp at |z| ≈ 0.42 is ~5e-33), and far from the
+    // requested zoom's 1.1e-30·(1 − 1/1.5) = 3.3e-31.
+    expect(Math.abs(moved - MIN_HALF_HEIGHT * (1 - 1 / 1.1))).toBeLessThan(2e-32);
+  });
+
+  it("refuses a coordinate past float64's range rather than reading it as 0", () => {
+    expect(ddFromString("1e400")).toBeNull();
+    expect(ddFromString("-1e309")).toBeNull();
+    expect(ddFromString("1e308")).not.toBeNull();
+  });
+});

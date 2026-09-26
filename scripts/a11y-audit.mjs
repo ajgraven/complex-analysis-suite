@@ -44,8 +44,8 @@
 // It has **no baseline of its own and no flag**, both deliberately. No baseline, because there is
 // no acceptable non-zero number: recording tolerated unnamed controls would be recording that some
 // of this suite cannot be operated without sight. No flag, because measured over the whole roster
-// it costs **2.4%** (52.66 s → 53.93 s across 20 pages) and the suite is already at zero — 845
-// interactive nodes, none unnamed — so it starts from a clean sheet and a knob nobody turns would
+// it costs **2.4%** (52.66 s → 53.93 s across the 20 pages the roster then held) and the suite was
+// already at zero — 845 interactive nodes then, none unnamed — so it starts from a clean sheet and a knob nobody turns would
 // only be a way to stop looking.
 //
 // **The tree is the instrument, and a DOM walk is not.** M6.4 established this and M8 steps 5.1
@@ -82,7 +82,7 @@ const BASELINE_PATH = join(HERE, "a11y-baseline.json");
 /**
  * A `#vs=` permalink for this suite's view-state envelope, written out rather than pasted.
  *
- * One roster entry needs a page state that is NOT the default: M7.1 found that this roster audits
+ * Roster entries that need a page state that is NOT the default carry one (a dozen do now): M7.1 found that this roster audits
  * every page in its landing state, so a panel nobody opens — or a drill rung nobody reaches — is
  * never audited at all, and the alternative was measuring those states by hand once. Contour
  * Integration's drill rungs are addressable by design (M7's gate clause 2), so the roster can simply

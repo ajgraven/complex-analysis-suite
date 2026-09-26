@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { compileAlphabet } from "../src/engine/alphabet";
 import type { Alphabet } from "../src/engine/alphabet";
-import { walkGrid, walkSpec } from "../src/engine/limit/walk";
+import { pixelEps, walkAt, walkGrid, walkSpec } from "../src/engine/limit/walk";
 import { orbitSpace } from "../src/engine/orbits";
 import { sweepChunk } from "../src/engine/sweep";
 import { placeById } from "../src/places";
@@ -87,8 +87,40 @@ describe("the two engines, on the same picture", () => {
     expect(missed.slice(0, 8).join(","), "root pixels the limit set does not cover").toBe("");
     // And the inclusion has to be STRICT, or the test would also pass if the walk lit everything or if
     // the two were the same computation twice.
-    expect(limitOnly).toBeGreaterThan(800);
+    // Measured 708 surplus pixels at degree 14 — 1,244 before the fold's Jacobian was applied (the
+    // 2026-09-26 review): the outer ring had been judged on a texel |z|² too large, which the surplus
+    // over the root cloud shows directly. Strict, and the inclusion above still holds exactly.
+    expect(limitOnly).toBeGreaterThan(500);
     expect(limitOnly).toBeLessThan(rootLit);
+  });
+
+  it("the fold is symmetric: a point outside the disk and its image inside get the SAME answer", () => {
+    // Under z ↦ 1/z̄ a texel of radius ρ at p maps to one of radius ρ/|p|² at q = 1/p̄, and the walk at
+    // q runs at w = p. With the Jacobian, ε at q IS ε at p and the two answers must agree exactly.
+    // Without it they did not: the reviewer's window lit 4,578 texels outside against 3,388 inside.
+    const alphabet = compile({ preset: "littlewood" });
+    const spec = walkSpec(alphabet);
+    const size = 48;
+    const half = 0.02;
+    const rho = half / size;
+    let inside = 0;
+    let outside = 0;
+    for (let j = 0; j < size; j++) {
+      for (let i = 0; i < size; i++) {
+        const x = 0.372 + half * ((2 * (i + 0.5)) / size - 1);
+        const y = -0.542 + half * ((2 * (j + 0.5)) / size - 1);
+        const m2 = x * x + y * y;
+        const qx = x / m2;
+        const qy = y / m2;
+        const a = walkAt(spec, x, y, { depth: 30, eps: pixelEps(spec, x, y, rho) });
+        const b = walkAt(spec, qx, qy, { depth: 30, eps: pixelEps(spec, qx, qy, rho / m2) });
+        if (a.reach === 31) inside++;
+        if (b.reach === 31) outside++;
+        expect(b.reach).toBe(a.reach);
+      }
+    }
+    expect(inside).toBeGreaterThan(200);
+    expect(outside).toBe(inside);
   });
 
   it("a wrong fold would break the inclusion — the test can fail", () => {

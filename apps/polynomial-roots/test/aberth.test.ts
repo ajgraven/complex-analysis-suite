@@ -373,3 +373,43 @@ describe("the solver's honesty", () => {
     expect(worstSweeps).toBeLessThan(40);
   });
 });
+
+describe("the self-reported backward error", () => {
+  it("is exactly |p(z)| / (ε·Σ|a_j||z|^j) at the roots returned — leading coefficient included", () => {
+    // A solve stops on a sweep in which every root was already settled, so nothing moved after the
+    // measurement and the report can be recomputed exactly. Pinned because the bound is Horner on the
+    // HOISTED moduli, and dropping the leading one (or starting the Horner at 0) changed no root test.
+    const EPS = 2.220446049250313e-16;
+    for (const coeffs of [
+      [1, -1, 1, 1, -1, 1, -1, -1, 1, 1, 1],
+      [3, 0, -2, 1, 0, 5],
+      [1, 1, 1, 1, 1, 1, 1, 1, 7],
+    ]) {
+      const degree = coeffs.length - 1;
+      const cRe = new Float64Array(coeffs);
+      const cIm = new Float64Array(degree + 1);
+      cIm[1] = 0.5; // complex, so the moduli are hypots and not absolute values
+      const ws = makeWorkspace(degree);
+      const r = aberth(cRe, cIm, degree, ws);
+      expect(r.converged).toBe(true);
+      let worst = 0;
+      for (let k = 0; k < degree; k++) {
+        const x = ws.rootRe[k];
+        const y = ws.rootIm[k];
+        const az = Math.hypot(x, y);
+        let pr = cRe[degree];
+        let pi = cIm[degree];
+        let bound = Math.hypot(cRe[degree], cIm[degree]);
+        for (let j = degree - 1; j >= 0; j--) {
+          const npr = pr * x - pi * y + cRe[j];
+          const npi = pr * y + pi * x + cIm[j];
+          pr = npr;
+          pi = npi;
+          bound = bound * az + Math.hypot(cRe[j], cIm[j]);
+        }
+        worst = Math.max(worst, Math.hypot(pr, pi) / (EPS * bound));
+      }
+      expect(r.backwardErrorEps).toBe(worst);
+    }
+  });
+});

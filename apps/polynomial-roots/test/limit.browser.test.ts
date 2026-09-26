@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { GlStage, NEUTRAL_EXCLUDED, StageUnavailable } from "../src/stage/glStage";
-import { LimitPass } from "../src/stage/limitPass";
+import { LimitPass, MAX_CACHED_PROGRAMS } from "../src/stage/limitPass";
 import { RAMPS } from "../src/stage/ramps";
 import { buildToneMap } from "../src/stage/tone";
 import { compileAlphabet } from "../src/engine/alphabet";
 import type { Alphabet } from "../src/engine/alphabet";
-import { walkAt, walkSpec } from "../src/engine/limit/walk";
+import { pixelEps, walkAt, walkSpec } from "../src/engine/limit/walk";
 import { STATUS_EXCLUDED, STATUS_EXHAUSTED } from "../src/engine/limit/walkGlsl";
 import { placeById } from "../src/places";
 import { centreNumbers } from "../src/state";
@@ -94,12 +94,24 @@ describe("the generated walk shader", () => {
       for (const v of reach) if (v > 0) lit++;
       expect(lit, `${JSON.stringify(spec)} drew nothing`).toBeGreaterThan(50);
     }
-    // One program per (alphabet, depth), cached — a slider drag must not recompile.
-    expect(m.pass.cached).toBe(9);
-    renderReach(m, compile({ preset: "littlewood" }), { cx: 0, cy: 0, halfHeight: 1.45 }, 20);
-    expect(m.pass.cached).toBe(9);
+    // One program per (alphabet, depth), cached — a slider drag must not recompile — and the cache is
+    // BOUNDED: nine programs were compiled above, and it holds the eight most recent (it grew without
+    // limit until the 2026-09-26 review).
+    expect(m.pass.cached).toBe(MAX_CACHED_PROGRAMS);
+    const deletes: WebGLProgram[] = [];
+    const del = m.stage.gl.deleteProgram.bind(m.stage.gl);
+    m.stage.gl.deleteProgram = (p: WebGLProgram | null): void => {
+      if (p !== null) deletes.push(p);
+      del(p);
+    };
+    // A hit on the most recent program compiles nothing and evicts nothing.
+    renderReach(m, compile({ preset: "custom", custom: "1, 0.5+0.5i, -1" }), { cx: 0, cy: 0, halfHeight: 1.45 }, 20);
+    expect(deletes.length).toBe(0);
+    // A new (alphabet, depth) evicts exactly one — and deletes it on the GPU, not only from the Map.
     renderReach(m, compile({ preset: "littlewood" }), { cx: 0, cy: 0, halfHeight: 1.45 }, 21);
-    expect(m.pass.cached).toBe(10);
+    expect(m.pass.cached).toBe(MAX_CACHED_PROGRAMS);
+    expect(deletes.length).toBe(1);
+    m.stage.gl.deleteProgram = del;
     m.pass.dispose();
     m.stage.dispose();
   });
@@ -131,10 +143,9 @@ describe("the generated walk shader", () => {
         for (let i = 0; i < m.size; i++) {
           const x = view.cx + half * ((2 * (i + 0.5)) / m.size - 1);
           const y = view.cy + half * ((2 * (j + 0.5)) / m.size - 1);
-          const absz = Math.hypot(x, y);
-          const folded = absz > 1 ? 1 / absz : absz;
-          const gap = Math.max(1 - Math.min(folded, 1 - 1e-6), 1e-6);
-          const eps = (pixelRadius * cpuSpec.maxAbs) / (gap * gap);
+          // The fold's Jacobian included (walk.ts `pixelEps`): this line computed ε from the UNFOLDED
+          // texel, which is the defect the 2026-09-26 review fixed in both walks.
+          const eps = pixelEps(cpuSpec, x, y, pixelRadius);
           const cpu = walkAt(cpuSpec, x, y, { depth, eps });
           const at = j * m.size + i;
           const got = gpu[at];

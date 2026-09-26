@@ -331,6 +331,29 @@ describe("what a caption may claim", () => {
     }
   });
 
+  it("a title that names a point shows that point — at the narrowest aspect the stage takes, 1", () => {
+    // Two titles promised what their frames did not hold (2026-09-26 review): "the holes at i and
+    // e^{iπ/4}" left i 0.13 outside the left edge, and "a hexahole, at ω" was centred 1.65e-3 from ω in
+    // a window 5e-4 tall. So every point a title names is listed here, and must be in the frame.
+    const inFrame = (id: string, x: number, y: number): boolean => {
+      const place = placeById(id);
+      if (place === undefined) throw new Error(`no place ${id}`);
+      const s = place.state;
+      const { cx, cy } = centreNumbers(s);
+      return Math.abs(x - cx) < s.halfHeight && Math.abs(y - cy) < s.halfHeight;
+    };
+    expect(inFrame("hole-at-i", 0, 1)).toBe(true);
+    expect(inFrame("hole-at-i", Math.SQRT1_2, Math.SQRT1_2)).toBe(true);
+    expect(inFrame("hole-at-1", 1, 0)).toBe(true);
+    expect(inFrame("four-fifths", 0.8, 0)).toBe(true);
+    expect(inFrame("four-fifths-i", 0, 0.8)).toBe(true);
+    // And the hexahole's title no longer claims ω, because ω is not in its frame.
+    const omega: [number, number] = [0.371859, 0.519411];
+    expect(inFrame("hexaholes", ...omega)).toBe(false);
+    expect(placeById("hexaholes")?.title).toContain("near ω");
+    expect(inFrame("hexaholes-region", ...omega)).toBe(true);
+  });
+
   it("the theorems that ARE cited are the ones the research found, named", () => {
     const sources = PLACES.map((p) => p.source ?? "").join(" ");
     for (const name of ["Bousch", "Odlyzko", "Michelen", "Calegari", "Bandt"]) {

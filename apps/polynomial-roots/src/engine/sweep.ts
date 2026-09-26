@@ -12,7 +12,7 @@
 // ARE computed over every image — "how many roots are real" is a question about the whole cloud, not
 // about the quarter of it that happens to be enumerated.
 import type { Alphabet, AlphabetSpec } from "./alphabet.js";
-import { compileAlphabet, mapRoot } from "./alphabet.js";
+import { compileAlphabet } from "./alphabet.js";
 import { aberth, makeWorkspace } from "./aberth.js";
 import type { AberthWorkspace } from "./aberth.js";
 import { canonicalOf, decodeDigits, orbitSpace, properCount } from "./orbits.js";
@@ -71,8 +71,53 @@ export interface SweepResult {
   readonly stats: SweepStats;
 }
 
-/** A root counts as real when its imaginary part is below this (the solver's own noise floor). */
+/** A root counts as real outright when its imaginary part is below this, relative to `max(1, |z|)`. */
 const REAL_TOL = 1e-9;
+
+/** Past this (relative) imaginary part a root is non-real whatever its neighbours do. */
+const PAIRING_REACH = 1e-3;
+
+/**
+ * How many times the conjugate's distance to its nearest other root a real root's imaginary part may be.
+ * A split DOUBLE root measures ≤ 2; a split TRIPLE root up to ~6 (Littlewood `1 − z − z² + z³ + z⁴ −
+ * z⁵ − z⁶ + z⁷`-type, measured 5.0 at −1 — the first draft's 4 missed eight roots at degree 7). A
+ * genuine non-real pair has its conjugate within ~1e-15 of a root, so any factor below ~1e9 separates
+ * them; 64 is generous on the cluster side and nowhere near the pair side.
+ */
+const PAIRING_FACTOR = 64;
+
+/**
+ * Is root `r` of a REAL polynomial real?
+ *
+ * **A multiple real root does not come back on the axis.** Aberth resolves a double root to about `√ε`,
+ * so `(1 − z)²(1 + z)` returns `1 ± 2.5e-8i`-ish rather than two copies of 1, and a fixed `|im| < 1e-9`
+ * test counted neither: trinary at degree 11 lost about 4,190 of its real roots (1.05%), and the old
+ * test's "truth" used the same solver and the same threshold, so it could not see it (2026-09-26
+ * review). What decides it is the CONJUGATE: a real polynomial's non-real roots come in conjugate
+ * pairs, which the solver returns to working precision (`|conj z₁ − z₂| ~ 1e-15`, far below `|im|`),
+ * while a split real root's "partner" is as far from its conjugate as it is from the axis. So a root is
+ * real when its imaginary part is no more than `PAIRING_FACTOR` times the distance from its conjugate to
+ * the nearest OTHER root. A triple root's split is caught the same way, its members' mismatch being of
+ * the same order as their imaginary parts. Checked EXACTLY against Sturm's theorem over every proper
+ * polynomial of four alphabets (`test/sweep.test.ts`).
+ */
+export function isRealRoot(re: Float64Array, im: Float64Array, degree: number, r: number): boolean {
+  const x = re[r];
+  const y = im[r];
+  const scale = Math.max(1, Math.hypot(x, y));
+  const ay = Math.abs(y);
+  if (ay < REAL_TOL * scale) return true;
+  if (ay > PAIRING_REACH * scale) return false;
+  let nearest = Infinity;
+  for (let k = 0; k < degree; k++) {
+    // Skipping `r` itself is kept for clarity, not for the answer: its own conjugate is `2|y|` away, and
+    // `|y| ≤ 64·2|y|` always holds, so including it could never flip the test (a recorded equivalent).
+    if (k === r) continue;
+    const d = Math.hypot(re[k] - x, im[k] + y);
+    if (d < nearest) nearest = d;
+  }
+  return ay <= PAIRING_FACTOR * nearest;
+}
 
 /** Reusable per-degree buffers, so a sweep of a million polynomials allocates nothing per polynomial. */
 export interface Scratch {
@@ -188,6 +233,7 @@ export function sweepPrepared(
   let nearCircle = 0;
   let nonConverged = 0;
   const delta = req.circleDelta;
+  const realAlphabet = alphabet.allReal;
 
   for (let index = lo; index < hi; index++) {
     decodeDigits(alphabet, space, index, scratch.digits);
@@ -201,7 +247,6 @@ export function sweepPrepared(
       scratch.cIm[k] = v.im;
     }
     const solved = aberth(scratch.cRe, scratch.cIm, degree, scratch.ws);
-    if (hues !== null) imageHues(alphabet, space, scratch.digits, hueDigits, scratch.hueImage, scratch.hue);
     // Each image of this representative stands for `units / stabiliser` polynomials; summed over the
     // group that is `units · |G| / stabiliser` — the orbit size times the unit multiplicity.
     const weight = units / stabiliser;
@@ -213,6 +258,7 @@ export function sweepPrepared(
       nonConverged += stands;
       continue;
     }
+    if (hues !== null) imageHues(alphabet, space, scratch.digits, hueDigits, scratch.hueImage, scratch.hue);
 
     for (let r = 0; r < degree; r++) {
       const x = scratch.ws.rootRe[r];
@@ -223,12 +269,19 @@ export function sweepPrepared(
       // the picture is tone-mapped, and the counts below carry it instead.
       out.push(x, y, 1 / stabiliser);
       if (hues !== null) for (let g = 0; g < group.length; g++) hues.push(scratch.hue[g]);
-      for (const g of group) {
-        const p = mapRoot(g, x, y);
-        roots += weight;
-        if (Math.abs(p.im) < REAL_TOL) realRoots += weight;
-        if (Math.abs(Math.hypot(p.re, p.im) - 1) < delta) nearCircle += weight;
+      // Every group map preserves realness (conjugation, negation and 1/z all send ℝ to ℝ), so it is
+      // decided ONCE, on the representative's own root set — which is also the only set on which the
+      // conjugate-pairing test means anything. Half the group reverses (reversal is always in it), and
+      // reversal sends |z| to 1/|z|; conjugation and negation leave |z| alone. So two modulus checks
+      // stand for the whole group, where this used to allocate a mapped point per image per root.
+      const all = weight * group.length;
+      roots += all;
+      if (realAlphabet ? isRealRoot(scratch.ws.rootRe, scratch.ws.rootIm, degree, r) : Math.abs(y) < REAL_TOL) {
+        realRoots += all;
       }
+      const m = Math.hypot(x, y);
+      if (Math.abs(m - 1) < delta) nearCircle += all / 2;
+      if (Math.abs(1 / m - 1) < delta) nearCircle += all / 2;
     }
   }
 

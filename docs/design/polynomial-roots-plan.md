@@ -2,9 +2,12 @@
 
 > **Status.** A new app established by [ADR-0046](../DECISIONS.md#adr-0046). This is the **forward
 > plan** — what the app is, what the literature and the repo already give it, the one design decision
-> that organises it, and the milestones. **PR-0 and PR-1 are done** (see the Roadmap); nothing beyond
-> them is committed, and each milestone is a separately-approved gate, green before and after
-> (guardrail: working software at every step). Every
+> that organises it, and the milestones. **PR-0 through PR-5 and M6 are done, and the 2026-09-26
+> review's remediation (batches A–D) has landed** (see the Roadmap and
+> [`docs/review/2026-09-26-polynomial-roots-review/`](../review/2026-09-26-polynomial-roots-review/REPORT.md));
+> each milestone was a separately-approved gate, green before and after (guardrail: working software at
+> every step). §4 and §5 are the plan as WRITTEN, corrected in place where the code departed from it —
+> each correction is marked and dated, and the roadmap carries the reason. Every
 > number in §2 was measured on 2026-09-22 in Node on this container and is quoted so the plan can be
 > refuted rather than trusted.
 
@@ -143,23 +146,24 @@ full-plane path. **Web Workers** run the root engine and the reference walk; the
 | Worker offload | `@cas/ui` `createComputeClient` for the **reference walk** (one in flight, coalescing, sync fallback) | fits exactly |
 | Worker **pool** | **app-local** `src/engine/pool.ts` (N workers, chunked orbits, progress, cancel) — QD's `param-slice-pool.mjs` is the prior art but is `.mjs` inside an app | extract to `@cas/ui` on the second consumer |
 | Root solver | **app-local** Aberth–Ehrlich specialised to small real/complex integer coefficients, `src/engine/aberth.ts`; `@cas/core`'s `rootsMonic` (Durand–Kerner) **pins it** in the node gate on a fixed corpus (every root within `1e−12`, same multiset) | `@cas/core` gains nothing until a second consumer needs Aberth |
-| Density accumulation | **new**: `gl.POINTS` into an `R32F` framebuffer with `gl.blendFunc(gl.ONE, gl.ONE)` — CD's `renderAccumulate` is the only additive blend in the repo and it accumulates frames, not points | `EXT_color_buffer_float` required; probed at boot, refused by name |
-| Tone mapping | `apps/complex-dynamics/src/render/histogram.ts` `buildEqualizedCdf` → **extracted to `@cas/gpu`** at PR-1 (this app is its second consumer, ADR-0007) — log density with an equalised CDF and an exposure slider | CD rewired, byte-identical output pinned |
-| Colour ramps | `@cas/gpu/colormap` (`buildGradientLUT`, `makeColormapTexture`) with an app-local "hot" ramp (black → dark red → yellow → white, Derbyshire's) and a sequential ramp for degree | the viridis stop tables exist twice already (CD, Argument Principle); a third copy is refused — noted as a follow-up extraction, not done here |
+| Density accumulation | **new**: `gl.POINTS` into an `RG32F` framebuffer (density + degree; `RG16F` without `EXT_float_blend`) with `gl.blendFunc(gl.ONE, gl.ONE)` — CD's `renderAccumulate` is the only additive blend in the repo and it accumulates frames, not points | `EXT_color_buffer_float` required; probed at boot, refused by name |
+| Tone mapping | `apps/complex-dynamics/src/render/histogram.ts`'s CDF arithmetic → **extracted to `@cas/gpu/histogram` as `equalizedCdfLut`** at PR-1 (this app is its second consumer, ADR-0007) — log density with an equalised CDF and an exposure slider | CD rewired, byte-identical output pinned |
+| Colour ramps | `@cas/gpu/colormap` (`buildGradientLUT`, `makeColormapTexture`) with an app-local "hot" ramp (black → dark red → yellow → white, Derbyshire's) and a sequential ramp for degree | the viridis stop tables exist twice already (CD, Argument Principle); *(corrected 2026-09-26: a third copy was NOT refused — `src/stage/ramps.ts` ships one and says so; the extraction is still a follow-up)* |
 | CET-C6 | `apps/contour-integration/src/ui/stage/cetC6.ts` → **`@cas/gpu/cet`** — **done at M6.1**, by `git mv`, byte for byte (FNV-1a `ddd42cbb` pinned); the Egan hue mode is the second consumer | CC-BY 4.0 attribution travels with the table |
-| Deep zoom | `@cas/gpu/df64` (`df`, `dfAdd`, `dfMul`, …) — the **JS** half, on the CPU reference walk | `DF64_GLSL` is deliberately not used (§3) |
-| Pan / zoom | `@cas/flow` `pixelToWorld` / `panView` / `zoomView` (`View`, `Viewport`) | Riemann Map's `attachPanZoom` is app-local; a second consumer would extract it — this app takes `@cas/flow`'s instead |
+| Deep zoom | ~~`@cas/gpu/df64`~~ → app-local **`src/engine/deep/dd.ts`**, a float64 double-double (PR-3: df64 is a float32 pair, ~47 bits, a downgrade on the CPU) | `DF64_GLSL` is deliberately not used (§3) |
+| Pan / zoom | ~~`@cas/flow`~~ → app-local, `centre + increment` in double-double (PR-3: an absolute float64 view cannot say how far a `1e-30` view moved) | Riemann Map's `attachPanZoom` is app-local too |
 | Permalink | `@cas/interchange` `encodeViewState` / `decodeViewState`, app tag **`pr`** | fields optional-on-decode with named defaults, as 2D Hydrodynamics |
-| PNG export | `@cas/export` `injectPngText`, keys **`Software` + `cas:state`** (the documented convention; three of six apps follow it) | copy `2d-hydrodynamics/src/pngExport.ts` |
+| PNG export | `@cas/export` `injectPngText`, keys **`Software` + `cas:state`** (the documented convention; four of the eight `@cas/export` apps follow it — CD, Riemann Map, Contour Integration and this one) | copy `2d-hydrodynamics/src/pngExport.ts` |
 | Polynomial on the wire | `@cas/interchange` `RationalMap` `{form:"rational", num, den:[1]}` | the hand-off to the plotter / Argument Principle is a **later** milestone; the form already exists, no bump |
 
-So: consumes `@cas/ui`, `@cas/gpu`, `@cas/core`, `@cas/flow`, `@cas/interchange`, `@cas/export`;
-**zero new packages**; **two second-consumer extractions** into `@cas/gpu` (`buildEqualizedCdf` at
-PR-1, `CET_C6` at M6), each rewiring its first consumer and pinning byte-identical output.
+So: consumes `@cas/ui`, `@cas/gpu`, `@cas/core`, `@cas/interchange`, `@cas/export` (*`@cas/flow` was
+dropped at PR-3*); **zero new packages**; **two second-consumer extractions** into `@cas/gpu`
+(`equalizedCdfLut` at PR-1, `CET_C6` at M6), each rewiring its first consumer and pinning byte-identical
+output.
 
 ## 5. Engine specifications
 
-### 5.1 The root engine (`src/engine/roots/`)
+### 5.1 The root engine (`src/engine/{orbits,aberth,sweep,pool,cost}.ts`)
 
 - **Enumeration** (`orbits.ts`): a `Alphabet` is `{ values: Complex[], symmetries }`; `symmetries`
   is *derived* — `conj` (values closed under conjugation), `neg` (`a_k ↦ (−1)^k a_k` stays in the
@@ -169,39 +173,46 @@ PR-1, `CET_C6` at M6), each rewiring its first consumer and pinning byte-identic
   the orbit's images (`z`, `−z`, `1/z`, `−1/z`, and conjugates). Pinned by a test that the union over
   the orbit of the mirrored roots equals the roots of every member, at degree ≤ 8, for each preset.
 - **Solver** (`aberth.ts`): Aberth–Ehrlich with Gauss–Seidel updates, roots-of-unity seeding
-  rotated off the real axis, Horner for `p, p′`, stop at `max|step|² < 10⁻²⁶` or 60 iterations; a
-  polynomial that has not converged is **reported, not dropped** (a counter on the layer). Pinned
-  against `@cas/core` `rootsMonic` on a corpus of 2,000 random polynomials per preset at degrees
-  4–24 (multisets equal to `1e−12`), and against the closed forms `z^n ± 1` (roots of unity) and the
-  cyclotomic factors of `1 + z + … + z^n`.
+  rotated off the real axis, Horner for `p, p′`, stop when every residual reaches
+  `|p| ≤ 8ε·Σ|a_k||z|^k` or at 60 sweeps; a polynomial that has not converged is **reported, not
+  dropped**. *(Corrected 2026-09-26: this said `max|step|² < 10⁻²⁶`, the step rule PR-1 removed because a
+  small step is not convergence. The Durand–Kerner pin is every Littlewood polynomial to degree 12 plus
+  `{0,1}` and `{−1,0,1}`, at 1e-9 on simple roots and `√ε`/`∛ε` on double/triple ones — not 2,000 random
+  polynomials at 1e-12, which the multiplicities make unreachable.)*
 - **Pool** (`pool.ts`): `navigator.hardwareConcurrency − 1` module workers, each given a chunk of
   orbit indices and the alphabet; each replies with a `Float32Array` of roots for one degree
   (transferred, not copied), the main thread uploads it to that degree's texture and drops it.
   Progressive: degree ascending, so the picture refines in front of the reader; **cancel** on any
   state change; **progress** on the bar as `orbits done / orbits total` per degree.
-- **Ceilings**: degrees ≤ 20 render live; 21–24 behind an explicit **Compute** button with a time
-  estimate and cancel; above 24 the limit-set view takes over and says so.
+- **Ceilings**: *(corrected 2026-09-26 — the degree was never the budget)* the cost of a sweep is the
+  number of roots it deposits, `≈ Σ_d (indices_d/|G|)·d` (`cost.ts`): up to 1e7 sweeps live, up to 5e7
+  behind an explicit **Compute** button, above that the app refuses by name and names the highest degree
+  that fits. Littlewood 1–20 is 9.96e6 (the old live cap exactly); `{−2…2}` at degree 16 is 3.05e11
+  polynomials, which the old `≤ 20` rule let the menu start.
 
 ### 5.2 The density stage (`src/stage/`)
 
-- One `R32F` texture per degree (`1024²` = 4 MB; the count is the degree span, ≤ 25), accumulated
-  by `gl.POINTS` at 1 px with additive blending. The view is re-projected by **recomputing** (roots
-  are not retained), which the pool makes cheap for degree ≤ 20 and the probe/limit-set engines
-  cover above it.
-- The **composite** pass sums the selected degrees (the scrub is a `[d_min, d_max]` range with an
-  animate button) and tone-maps: `log(1 + c)` then the equalised CDF (`buildEqualizedCdf`, read
-  back once per composite from a low-resolution copy) then the ramp; **exposure** and **gamma**
+- One `RG32F` texture per degree (density and degree; *corrected 2026-09-26 from `R32F`/4 MB*), in the
+  canvas's own shape capped at 2048 on the longer side — 8 MB at 1024², up to ~21 MB on a 2048 × 1280
+  stage — for each degree in the span, plus an `RGBA32F` composite. Accumulated by `gl.POINTS` at 1 px
+  with additive blending. *The roots ARE retained* (in world-coordinate vertex buffers, 12 B a root —
+  what the cost gate budgets), so a pan, a zoom or a resize re-splats and never re-sweeps.
+- The **composite** pass sums the selected degrees (the scrub is a `[d_min, d_max]` range; *no animate
+  button was built*, and since 2026-09-26 a scrub sweeps only the degrees not already held —
+  `engine/scrub.ts`) and tone-maps: `log(1 + c)` then the equalised CDF (`equalizedCdfLut`, read back
+  from the composite) then the ramp; **exposure** and **gamma**
   sliders. **Colour by degree** composites each layer through a sequential ramp keyed by degree and
   blends by density.
-- The stage is `role="application"` with keyboard pan/zoom (`@cas/flow`), and its description is
+- The stage is `role="application"` with keyboard pan/zoom (app-local since PR-3), pinch zoom, and its description is
   **generated** from the state (alphabet, degrees loaded, roots counted, view) on every recompute —
   the M6.4 lesson.
 
 ### 5.3 The pixel engine (`src/engine/limit/`)
 
-- **Shader** (`walk.glsl.ts`, generated per alphabet): an iterative DFS with an explicit stack of
-  `(re, im, depth, next-child)` in registers/arrays, depth cap `D` as a uniform (`≤ 48`), the
-  alphabet as a `uniform vec2[]`, powers `z^k` precomputed in the loop, tail bounds `T_k = (max|a|)
+- **Shader** (`walkGlsl.ts`, generated per (alphabet, depth) — *corrected 2026-09-26: the depth and the
+  alphabet are compile-time constants, since GLSL ES 3.0 cannot size a loop or a stack by a uniform;
+  the file's header says why*): an iterative DFS with an explicit stack of `(re, im, depth, next-child)`
+  in registers/arrays, depth cap `D ≤ 48`, the alphabet normalised to `max|a| = 1`, powers `z^k` precomputed in the loop, tail bounds `T_k = (max|a|)
   Σ_{j>k} |z|^j = (max|a|)·|z|^{k+1}(1 − |z|^{D−k})/(1 − |z|)` computed in closed form per pixel.
   Prune when `|s_k| − T_{k+1} > ε`, with `ε` the pixel radius times a `|P′|` estimate (Foster's
   "fudge"). Output per pixel: **the escape depth** `reach`, the deepest level any branch survived to.
@@ -213,7 +224,8 @@ PR-1, `CET_C6` at M6), each rewiring its first consumer and pinning byte-identic
   one decides "is there a degree-`D` polynomial vanishing here", which is the root engine's object and
   already has an engine.
 - **`|z| > 1`** is folded onto `1/z` with the reversed alphabet (exact when `rev` is a symmetry;
-  otherwise the reversed alphabet is used honestly) — Foster's fold.
+  otherwise the reversed alphabet is used honestly) — Foster's fold — and the pixel radius with it,
+  `ρ ↦ ρ·|w|²` (*the Jacobian was missing until 2026-09-26, over-reporting the set outside the disk*).
 - **The annulus** `0.8 < |z| < 1.25` is **excluded by default**, painted in a distinct neutral with
   a legend entry "not computed here — the root engine covers it, and Bousch proves the roots are
   dense in `2^{−1/4} ≤ |z| ≤ 2^{1/4}`"; a toggle computes it under a per-pixel **node budget** and
@@ -223,7 +235,7 @@ PR-1, `CET_C6` at M6), each rewiring its first consumer and pinning byte-identic
   the `sin`/`cos`-free walk should agree to ~1e−6), in the browser suite; the JS walk against
   Bandt's Algorithm 1 as an independent formulation on `{−1, 0, 1}` (both decide `z ∈ M` on a grid).
 
-### 5.4 The reference walk and the handover (`src/engine/reference.ts`)
+### 5.4 The reference walk and the handover (`src/engine/deep/reference.ts`)
 
 - The float64 walk at `z₀` with the pruning radius set by the **view** (`ε = view radius × |P′|`
   bound), returning survivors as `{ digits, degree, δ*, |P′(z₀)|, residual }` with `δ*` Newton-
@@ -251,6 +263,12 @@ PR-1, `CET_C6` at M6), each rewiring its first consumer and pinning byte-identic
 
 ### 5.6 State and permalink (`src/state.ts`, `src/viewState.ts`)
 
+*(Corrected 2026-09-26: the sketch below is the plan's. The shipped type is `AppState` in
+`src/state.ts`, which is the one to read: flat `minDegree`/`maxDegree`; `colour` is
+`"density" | "degree" | "egan"` with no `"depth"` (the limit engine's two ramps are two readings of one
+quantity); `engine` also takes `"deep"`; `circleDelta` is top-level; `cx`/`cy` are ALWAYS decimal
+strings; and it adds `depth`, `hueDigits`, `bounds`, `theorem` and `extend`.)*
+
 ```ts
 interface ShellState {
   alphabet: { preset: "littlewood" | "zero-one" | "trinary" | "range" | "cube-roots" | "custom";
@@ -271,7 +289,7 @@ link it cannot honour (unknown preset, non-finite number, foreign app), and is g
 encode → decode → the same engine choice, the same survivors at the reference, the same generated
 stage description. Deep views carry `cx`, `cy` as decimal strings so a `1e−30` view survives JSON.
 
-### 5.7 The gallery and the statistics (`src/gallery.ts`, `src/stats.ts`)
+### 5.7 The gallery and the statistics (`src/places.ts`, `src/stats.ts`)
 
 - A gallery entry is `{ id, title, state: Partial<ShellState>, caption, cites[] }`, applied through
   `applyState`; the zoom story is an entry with a `steps[]` of states and a scrubber. Captions are
@@ -311,7 +329,8 @@ pass where the stage changed. Sizes: *S* / *M* / *L*.
   > decode stays app-side on both ends. ADR-0046 action item 2 records it, with the one consequence: the
   > width cap samples each texel's CENTRE bin, so the last texel tops out at 254/255 and the highest few
   > bins are in the distribution without being addressable — changing it would alter seven apps' output
-  > for one part in 255.
+  > for one part in 255. *(Corrected 2026-09-26: two apps' output — `equalizedCdfLut` has two consumers,
+  Complex Dynamics and this one — not seven.)*
   >
   > **A SMALL STEP IS NOT CONVERGENCE.** The first Aberth settled a root whose step had fallen below a
   > floor; two iterates within ~1e-15 drive the repulsion sum to ~1e15, which divides the correction to
@@ -381,7 +400,7 @@ pass where the stage changed. Sizes: *S* / *M* / *L*.
   picture where the latter is resolved (a pixel-wise correlation, measured and quoted).
 
   > **DONE.** `src/engine/limit/` (`walk.ts`, `bandt.ts`, `walkGlsl.ts`, `handover.ts`) +
-  > `src/stage/limitPass.ts`; 47 new node tests across 5 files and 4 new browser tests; three new places
+  > `src/stage/limitPass.ts`; 47 new node tests across 5 files and 4 new browser tests *(5 — `limit.browser.test.ts` has five; recounted 2026-09-26)*; three new places
   > and one split in two. Both gate clauses are met, and the second is met more strongly than it was
   > asked for.
   >
@@ -429,7 +448,8 @@ pass where the stage changed. Sizes: *S* / *M* / *L*.
   > `R = max|a|·|z|/(1−|z|)`, derived by summing the future rather than by rearranging the walk; it
   > divides by `z` where the walk multiplies by a precomputed power, and runs breadth-first where the
   > walk is depth-first. The two agree on the frontier COUNTS — not merely on the booleans — over 468
-  > points decided by both, 88 in the set and 380 out.
+  > points decided by both, 88 in the set and 380 out. *(`bandt.test.ts` now runs 624 — 158 in, 466 out;
+  > the figure above is the first draft's grid.)*
   >
   > **The hexaholes are a DEPTH phenomenon, not a window one.** At the place's own window, escaped
   > texels: 0 at depths 8, 12 and 16; 12 at depth 20; 37 at 30, 40 and 48, where it has converged. PR-1
@@ -619,7 +639,7 @@ pass where the stage changed. Sizes: *S* / *M* / *L*.
   pixel for `n ≥ 24`, measured, and the number is in the test.
 
   > **DONE.** `src/engine/dragon.ts` + `src/stage/inset.ts`, a pinned `lamp` and a `theorem` mode in the
-  > state and the permalink, two new places and a fourth a11y roster entry for the app. The gate is met
+  > state and the permalink, two new places and a fourth a11y roster entry for the app *(the fifth — place, limit, deep, dragon…; recounted 2026-09-26)*. The gate is met
   > with room: at a degree-30 prefix through Baez's point the worst PAIRED distance is **1.2e-5 in a
   > picture of radius 0.542** — 2.2e-5 of it, and 0.002 of an inset pixel.
   >
@@ -850,11 +870,20 @@ pass where the stage changed. Sizes: *S* / *M* / *L*.
   Principle) — the wire form exists, a receiving-tool gate on the ADR-0007 rule; a **precomputed
   atlas** for degree > 24 — declined, the limit-set engine covers the need.
 
+- **The 2026-09-26 review and its remediation — batches A–D. DONE.** Six read-only reviews and a browser
+  pass; the mathematics sound, the defects in guarding work, keeping state in step, and the docs. Every
+  finding has a status in [`docs/review/2026-09-26-polynomial-roots-review/REPORT.md`](../review/2026-09-26-polynomial-roots-review/REPORT.md),
+  and each fix is commented beside its code. §4, §5 and §7 above were corrected in place, each correction
+  marked and dated. Gate at the end: 625 files / 7150 tests; the browser suite 29/29; `pnpm a11y --strict`
+  1,128 nodes across 29 pages, 0 unnamed.
+
 ## 7. Risks and open questions
 
 - **`EXT_color_buffer_float` is not universal** (older mobile GPUs). The stage probes it at boot and
   falls back to an `RGBA8` accumulation with 8-bit-per-channel packing of a 16-bit count, labelled;
-  measured before it is promised (PR-1).
+  measured before it is promised (PR-1). *(Resolved otherwise, recorded 2026-09-26: the stage REFUSES by
+  name without `EXT_color_buffer_float`, and without `EXT_float_blend` falls back to `RG16F`/`RGBA16F`,
+  which blend in core WebGL2 and saturate at 65504 — `glStage.ts`'s constructor.)*
 - **The float32 walk's `ε`** couples the picture to a `|P′|` estimate; too small and the limit set
   looks sparse, too large and it looks fat. The parity corpus against the JS walk decides it, and
   the reader has an "ε" readout in the legend rather than a hidden constant.
@@ -863,7 +892,9 @@ pass where the stage changed. Sizes: *S* / *M* / *L*.
   not flatten — the Baez plot is the reference image (a browser test compares the band's mean
   intensity ratio to the interior against a recorded value).
 - **The pool's memory** is the transferred `Float32Array`s in flight (≤ N workers × one chunk), not
-  the roots; the layer textures are the budget (≤ 25 × 4 MB).
+  the roots; the layer textures are the budget (≤ 25 × 4 MB). *(Corrected 2026-09-26: the roots ARE
+  retained, 12 B each in vertex buffers, and that is what `engine/cost.ts` budgets — ≤ 5e7 roots,
+  ≈ 600 MB; each degree layer is `RG32F`, 8 B a texel in the canvas's shape.)*
 - **Symmetry derivation on custom alphabets** must never claim a symmetry the alphabet lacks — the
   test enumerates every preset and a dozen random alphabets and checks each claimed symmetry by
   brute force at degree ≤ 6.

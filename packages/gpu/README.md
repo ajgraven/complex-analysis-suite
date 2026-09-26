@@ -44,12 +44,21 @@ import {
   makeColormapTexture,
 } from "@cas/gpu/colormap";
 import { CET_C6, cetC6Bytes } from "@cas/gpu/cet";
+import { equalizedCdfLut } from "@cas/gpu/histogram";
 ```
 
 **Colormaps** (`./colormap`) — `sampleStops(stops, t)` interpolates a `ColorStop[]` ramp;
 `buildGradientLUT` / `buildColormapLUT` bake one into a lookup table; `makeColormapTexture(gl, …)`
 uploads it as a GL texture. Extracted once it had its second consumer per ADR-0007 — Complex
-Dynamics (`src/palettes.ts`) and the Quadrature app's Schwarz renderer both use it.
+Dynamics (`src/palettes.ts`) and the Quadrature app's Schwarz renderer both use it, and Polynomial Roots
+builds its ramps with `buildGradientLUT`.
+
+**Histogram equalisation** (`./histogram`) — `equalizedCdfLut(hist, maxWidth)` turns a histogram into
+an inclusive-CDF lookup table (`{ data, width }`, RGBA8, `width ≤ maxWidth`), the arithmetic an
+equalised tone map needs. Complex Dynamics (escape counts) and Polynomial Roots (log-density) are its
+two consumers; each keeps its own binning, which is why only the CDF-and-resample half was extracted.
+The width cap samples each texel's CENTRE bin, so the last texel tops out at 254/255 — recorded in
+ADR-0046 action item 2 rather than changed, since changing it would alter both consumers' output.
 
 **CET-C6** (`./cet`) — `CET_C6`, Peter Kovesi's cyclic perceptually-uniform colour map as 256 sRGB
 triples (CC-BY 4.0; cite Kovesi, arXiv:1509.03700), and `cetC6Bytes()`, the same table as 256 opaque
@@ -121,9 +130,11 @@ classification per pixel against the float64 CPU engine — the clause that stop
 pixels" from being bought by over-dilating the mask. That second one bites once ∂Ω moves by about
 one screen pixel, 38.7× the margin shipped), `test/df64.test.ts` (the double-float ops vs. an IEEE
 reference) and
-`test/dualBackend.test.ts` (`buildProbeGLSL` / `jsReference` / `compareResults` in Node).
-`runGLSL` needs a real WebGL2 context (with `EXT_color_buffer_float` for float readback), so
-the end-to-end GPU leg is validated in a preview browser rather than headless Node.
+`test/dualBackend.test.ts` (`buildProbeGLSL` / `jsReference` / `compareResults` in Node), plus
+`colormap`, `histogram`, `cetC6` (the table's FNV-1a pinned), `complexDf64`, `glslCoverage` and
+`phaseColoring`. `runGLSL` needs a real WebGL2 context (with `EXT_color_buffer_float` for float
+readback), so the end-to-end GPU leg is `test/dualBackend.browser.test.ts`, run by `pnpm test:browser`
+here and in CI's `browser` job.
 
 ## Not yet here
 
