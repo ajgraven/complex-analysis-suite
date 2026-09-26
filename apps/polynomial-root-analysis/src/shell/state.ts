@@ -76,6 +76,8 @@ export interface ShellState {
   readonly ladder: LadderState | null;
   /** The tour's step (PRA-10), when the reader is on it; the step's own state is the rest of this one. */
   readonly tour: number | null;
+  /** The faded drill's task and stage (PRA-10), when the reader is on it. */
+  readonly drill: { readonly task: string; readonly stage: 0 | 1 | 2 } | null;
   readonly rootCam: Cam;
   readonly coeffCam: Cam;
 }
@@ -108,6 +110,7 @@ export const DEFAULT_STATE: ShellState = {
   family: null,
   ladder: null,
   tour: null,
+  drill: null,
   rootCam: { cx: 0, cy: 0, half: 1.6 },
   coeffCam: { cx: 0, cy: 0, half: 1.6 },
 };

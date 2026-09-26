@@ -36,7 +36,7 @@ export interface TourContext {
 
 type StepId = keyof typeof TOUR.steps;
 
-type Opens =
+export type Opens =
   | { readonly kind: "sandbox"; readonly text: string }
   | {
       readonly kind: "ladder";
@@ -172,16 +172,23 @@ function formulaText(d: RungDegree, f: string): string {
 
 /** The state step `k` opens, built over `base` (its cameras framed to what it shows). */
 export function tourState(k: number, base: ShellState): ShellState {
-  const step = TOUR_STEPS[k];
+  return openState(TOUR_STEPS[k].opens, { ...base, tour: k });
+}
+
+/**
+ * A sandbox polynomial (over ℚ) or a ladder rung with a formula and a word, opened over `base` with its
+ * cameras framed — what a tour step or a classic opens. The tour and the drill are `base`'s to set; the
+ * family, the loop, the overlay and the correspondence are closed, since each belongs to another state.
+ */
+export function openState(o: Opens, base: ShellState): ShellState {
   const common: ShellState = {
     ...base,
-    tour: k,
+    drill: null,
     family: null,
     loop: null,
     overlay: false,
     lattice: false,
   };
-  const o = step.opens;
   if (o.kind === "sandbox") {
     const next: ShellState = {
       ...common,

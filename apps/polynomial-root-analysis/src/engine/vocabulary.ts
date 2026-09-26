@@ -161,6 +161,41 @@ export const TOUR = {
   },
 } as const;
 
+export const DRILL = {
+  heading: "Drill: which word rules it out?",
+  what: "A formula built from the coefficients by + − × ÷ and radicals comes back along every word deep enough — so if the roots do not, the formula cannot be following a root. Which word of this rung is the shallowest that rules the formula out, or does none?",
+  start: "Drill",
+  tasks: "Drill tasks",
+  stage: ["Worked", "Guided", "Alone"] as readonly string[],
+  stageWhy: [
+    "The answer, with every word of the rung run on the formula.",
+    "The formula's depth and each word's depth are shown; the runs are hidden until you answer.",
+    "Only the formula and the words: work out the depths yourself.",
+  ] as readonly string[],
+  answer: "The shallowest word that rules it out",
+  none: "No word of this rung rules it out",
+  studied: "I have read the worked answer",
+  nextStage: "Next stage",
+  right: "Right — the theorem says so.",
+  wrong: "Not what the ladder computes.",
+  worked: (w: string | null): string =>
+    w === null
+      ? "No word of this rung rules the formula out: along each one, some radical fails to come back, or the roots come back too."
+      : `The shallowest word that rules it out is ${w}.`,
+  runs: "Every word of the rung, run on the formula",
+  offTask: "The ladder has moved off this task's formula, so the drill is paused.",
+  returnTo: "Return to the task",
+  leave: "Leave the drill",
+  cleared: (k: number, n: number): string => `${k} of ${n} stages cleared`,
+} as const;
+
+export const DOOR = {
+  open: "Classics",
+  heading: "Classics",
+  what: "Polynomials, families and arguments worth opening first. Each opens a state you can then change.",
+  close: "Close",
+} as const;
+
 export const LADDER = {
   heading: "Ladder: Abel–Ruffini",
   what: "Arnold's proof, executed. Move the roots round a loop and a formula built from the coefficients by + − × ÷ comes back to its value; a radical comes back along every COMMUTATOR of loops. So a formula with N levels of radicals comes back along every N-fold nested commutator — and if the roots do not, it cannot be a formula for a root.",
@@ -172,6 +207,7 @@ export const LADDER = {
     5: "Five roots: a 3-cycle is a commutator of two 3-cycles, so the ladder never runs out — every depth of radicals is killed by some word, and the roots still move.",
   } as Record<number, string>,
   formula: "Formula",
+  masked: "The words and their runs are in the Drill card until you answer.",
   formulaBox: "x =",
   formulaHint:
     "In a₀ … aₙ₋₁ (the polynomial is monic), with + − * / ^, sqrt, cbrt, root(k, …), i, and disc for the discriminant; name parts with ‘p = …;’.",

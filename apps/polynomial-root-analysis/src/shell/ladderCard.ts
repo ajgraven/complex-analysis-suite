@@ -31,6 +31,11 @@ export interface LadderModel {
   /** The formula box's text when it did not read, and why. */
   readonly text: string | null;
   readonly refusal: string | null;
+  /**
+   * What the drill is hiding (PRA-10): 1 hides the words, every run, the identities and the derived
+   * series; 2 also the formula's depth and the rung's explanation. Absent or 0 hides nothing.
+   */
+  readonly mask?: 0 | 1 | 2;
 }
 
 export interface LadderHandlers {
@@ -112,31 +117,39 @@ export function ladderCard(m: LadderModel, on: LadderHandlers): Desc {
 
   const rg = rung(st.rung);
   const read = readFormula(st.formula, st.rung);
+  const mask = m.mask ?? 0;
   rows.push(
-    h("p", { key: "rungWhy", class: "summary" }, LADDER.rung[st.rung]),
+    mask >= 2 ? null : h("p", { key: "rungWhy", class: "summary" }, LADDER.rung[st.rung]),
     h("h3", { key: "fh" }, LADDER.formula),
-    h(
-      "label",
-      { key: "gal", class: "field" },
-      h("span", { key: "c" }, "Gallery"),
-      h(
-        "select",
-        {
-          key: "s",
-          onchange: (e: Event) => on.onFormula((e.target as HTMLSelectElement).value),
-        },
-        ...rg.formulas.map((f) =>
+    // The gallery's labels name each formula's depth ("three levels"), so the drill's last stage hides it.
+    mask >= 2
+      ? null
+      : h(
+          "label",
+          { key: "gal", class: "field" },
+          h("span", { key: "c" }, "Gallery"),
           h(
-            "option",
-            { key: f.id, value: f.text, selected: f.text === st.formula },
-            f.label,
+            "select",
+            {
+              key: "s",
+              onchange: (e: Event) => on.onFormula((e.target as HTMLSelectElement).value),
+            },
+            ...rg.formulas.map((f) =>
+              h(
+                "option",
+                { key: f.id, value: f.text, selected: f.text === st.formula },
+                f.label,
+              ),
+            ),
+            rg.formulas.some((f) => f.text === st.formula)
+              ? null
+              : h(
+                  "option",
+                  { key: "own", value: st.formula, selected: true },
+                  "your own",
+                ),
           ),
         ),
-        rg.formulas.some((f) => f.text === st.formula)
-          ? null
-          : h("option", { key: "own", value: st.formula, selected: true }, "your own"),
-      ),
-    ),
     h(
       "label",
       { key: "box", class: "field" },
@@ -159,9 +172,15 @@ export function ladderCard(m: LadderModel, on: LadderHandlers): Desc {
           `Not read: ${m.refusal}.`,
         )
       : null,
-    read.ok
+    read.ok && mask < 2
       ? h("p", { key: "levels", class: "summary" }, LADDER.levels(read.formula.depth))
       : null,
+  );
+  if (mask >= 1) {
+    rows.push(h("p", { key: "masked", class: "legend" }, LADDER.masked));
+    return card(...rows);
+  }
+  rows.push(
     h("h3", { key: "wh" }, LADDER.words),
     h(
       "ul",

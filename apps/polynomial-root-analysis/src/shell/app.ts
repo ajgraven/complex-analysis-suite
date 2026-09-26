@@ -17,8 +17,22 @@ import {
 } from "../engine/polynomial.js";
 import { parsePolynomial } from "../engine/parse.js";
 import { snapRational } from "../engine/rational.js";
-import { APP_NAME, MONODROMY, PANE, TOUR } from "../engine/vocabulary.js";
-import { TOUR_STEPS, onTourStep, tourState } from "./tour.js";
+import { APP_NAME, DOOR, MONODROMY, PANE, TOUR } from "../engine/vocabulary.js";
+import { TOUR_STEPS, onTourStep, openState, tourState } from "./tour.js";
+import {
+  clearStage,
+  drillAnswer,
+  drillState,
+  onDrillTask,
+  openingStage,
+  readProgress,
+  taskById,
+  DRILL_TASKS,
+  type DrillStage,
+  type KeyStore,
+} from "./drill.js";
+import { CLASSICS, createFrontDoor, type ClassicEntry } from "./frontDoor.js";
+import type { Modal } from "@cas/ui";
 import {
   baseText,
   defaultBase,
@@ -157,6 +171,13 @@ export interface App {
     tour(k: number): void;
     predict(choice: number): void;
     leaveTour(): void;
+    /** The front door and the drill (PRA-10). */
+    door(): void;
+    classic(id: string): void;
+    drill(id: string, stage?: DrillStage): void;
+    drillChoose(choice: string): void;
+    drillStudied(): void;
+    leaveDrill(): void;
   };
   /** The Galois card's model: refused, busy, or the evidence for the committed polynomial. */
   galois(): GaloisModel | null;
@@ -189,7 +210,9 @@ export function mountApp(host: HTMLElement): App {
   h1.textContent = APP_NAME;
   const tourButton = el(doc, "button", { type: "button", class: "bar-button" });
   tourButton.textContent = TOUR.start;
-  header.append(h1, tourButton);
+  const doorButton = el(doc, "button", { type: "button", class: "bar-button" });
+  doorButton.textContent = DOOR.open;
+  header.append(h1, doorButton, tourButton);
   const main = el(doc, "main", { class: "shell" });
   const linkRefusal = el(doc, "p", { class: "link-refusal", role: "alert" });
   linkRefusal.hidden = true;
@@ -288,6 +311,17 @@ export function mountApp(host: HTMLElement): App {
   let ladderRefusal: string | null = null;
   /** The tour's predictions, by step — this session's only, never in the permalink. */
   const tourAnswers = new Map<number, number>();
+  /** The drill's answers, by `task:stage` — this session's; progress is what outlives the tab. */
+  const drillAnswers = new Map<string, string>();
+  const store: KeyStore | null = (() => {
+    try {
+      return win?.localStorage ?? null;
+    } catch {
+      return null;
+    }
+  })();
+  let progress = readProgress(store);
+  let door: Modal | null = null;
   /** Root trails by LABEL, for the drag in progress (and kept after it when `state.trails`). */
   const trails = new Map<number, Cx[]>();
   // Loop authoring and playback — session state, never in the permalink (the WORD is; these are how it
@@ -1027,8 +1061,67 @@ export function mountApp(host: HTMLElement): App {
   }
   tourButton.addEventListener("click", () => goTour(state.tour ?? 0));
 
+  // ── The drill and the front door (PRA-10).
+  const drillKey = (): string | null =>
+    state.drill ? `${state.drill.task}:${state.drill.stage}` : null;
+  function goDrill(id: string, stage?: DrillStage): void {
+    if (!taskById(id)) return;
+    ladderText = null;
+    ladderRefusal = null;
+    selected = null;
+    commit(drillState(id, stage ?? openingStage(progress, id), state));
+  }
+  function drillChoose(choice: string): void {
+    const d = state.drill;
+    const t = d && taskById(d.task);
+    if (!d || !t || d.stage === 0) return;
+    drillAnswers.set(`${d.task}:${d.stage}`, choice);
+    if (choice === (drillAnswer(t).word ?? "none"))
+      progress = clearStage(store, d.task, d.stage);
+    render();
+  }
+  function drillStudied(): void {
+    const d = state.drill;
+    if (!d || d.stage !== 0) return;
+    progress = clearStage(store, d.task, 0);
+    goDrill(d.task, 1);
+  }
+  function leaveDrill(): void {
+    if (state.drill) commit({ ...state, drill: null });
+  }
+  /** The ladder card's mask: the drill's stage until the reader has answered it, on its own task. */
+  function ladderMask(): 0 | 1 | 2 {
+    const d = state.drill;
+    if (!d || d.stage === 0 || !onDrillTask(d.task, state)) return 0;
+    return drillAnswers.has(`${d.task}:${d.stage}`) ? 0 : d.stage;
+  }
+  function openClassic(c: ClassicEntry): void {
+    const does = c.does;
+    if (does.kind === "tour") return goTour(0);
+    if (does.kind === "drill") {
+      const next = DRILL_TASKS.find((t) => (progress[t.id] ?? 0) < 3) ?? DRILL_TASKS[0];
+      return goDrill(next.id);
+    }
+    if (does.kind === "family") return openFamily(does.text, does.base ?? null, true);
+    selected = null;
+    commit({
+      ...openState(does.opens, { ...state, tour: null }),
+      lattice: does.lattice ?? false,
+    });
+  }
+  function openDoor(): void {
+    door ??= createFrontDoor({
+      host: doc.body,
+      page: host,
+      choose: openClassic,
+      close: () => undefined,
+    });
+    door.open();
+  }
+  doorButton.addEventListener("click", openDoor);
+
   // ── Families (PRA-7).
-  function openFamily(text: string, base: string | null = null): void {
+  function openFamily(text: string, base: string | null = null, fresh = false): void {
     const read = readFamily(text);
     if (!read.ok) {
       familyText = text;
@@ -1050,6 +1143,8 @@ export function mountApp(host: HTMLElement): App {
     const res = next.res;
     commit({
       ...next.state,
+      // From the front door, the family is a fresh start: the tour and the drill are left.
+      ...(fresh ? { tour: null, drill: null } : {}),
       rootCam: res.poly ? frame(res.poly.roots) : state.rootCam,
       coeffCam: familyFrame(res),
     });
@@ -1345,6 +1440,7 @@ export function mountApp(host: HTMLElement): App {
             result: live.ladder,
             text: ladderText,
             refusal: ladderRefusal,
+            mask: ladderMask(),
           },
           on: {
             onRung: openLadder,
@@ -1366,6 +1462,26 @@ export function mountApp(host: HTMLElement): App {
                 },
               },
               on: { onGo: goTour, onChoose: predict, onLeave: leaveTour },
+            },
+        state.drill === null
+          ? undefined
+          : {
+              model: {
+                task: state.drill.task,
+                stage: state.drill.stage,
+                onTask: onDrillTask(state.drill.task, state),
+                chosen: drillAnswers.get(drillKey() ?? "") ?? null,
+                progress,
+              },
+              on: {
+                onTask: (id: string) => goDrill(id),
+                onReturn: () =>
+                  state.drill && goDrill(state.drill.task, state.drill.stage),
+                onStage: (st: DrillStage) => state.drill && goDrill(state.drill.task, st),
+                onChoose: drillChoose,
+                onStudied: drillStudied,
+                onLeave: leaveDrill,
+              },
             },
       ),
     );
@@ -1696,6 +1812,15 @@ export function mountApp(host: HTMLElement): App {
       tour: goTour,
       predict,
       leaveTour,
+      door: openDoor,
+      classic: (id: string) => {
+        const c = CLASSICS.find((x) => x.id === id);
+        if (c) openClassic(c);
+      },
+      drill: goDrill,
+      drillChoose,
+      drillStudied,
+      leaveDrill,
     }),
     galois: () => galois,
     lattice: () => lattice,

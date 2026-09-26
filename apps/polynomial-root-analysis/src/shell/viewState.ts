@@ -21,6 +21,7 @@ import { readFamily } from "../engine/family/family.js";
 import { rung } from "../engine/ladder/rungs.js";
 import { readFormula } from "../engine/formula/tree.js";
 import { TOUR_STEPS } from "./tour.js";
+import { taskById } from "./drill.js";
 
 export const NAMESPACE = "pra";
 
@@ -47,6 +48,8 @@ interface Wire {
   ld?: [number, string, string | null];
   /** Added at PRA-10: the tour's step (absent = not on the tour). `tr` is the trails flag. */
   tu?: number;
+  /** Added at PRA-10: the drill's `[task, stage]` (absent = not drilling). */
+  dl?: [string, number];
   rc: [number, number, number];
   cc: [number, number, number];
   [k: string]: unknown;
@@ -77,6 +80,7 @@ export function encodeShell(s: ShellState): string {
       : {}),
     ...(s.ladder ? { ld: ladderOut(s.ladder) } : {}),
     ...(s.tour !== null ? { tu: s.tour } : {}),
+    ...(s.drill ? { dl: [s.drill.task, s.drill.stage] as [string, number] } : {}),
     rc: cam(s.rootCam),
     cc: cam(s.coeffCam),
   };
@@ -316,6 +320,15 @@ export function decodeShell(hash: string): Decoded | null {
       return { ok: false, reason: `the tour has no step ${String(w.tu)}` };
     tour = w.tu as number;
   }
+  let drill: ShellState["drill"] = null;
+  if (w.dl !== undefined) {
+    const [task, stage] = Array.isArray(w.dl) ? w.dl : [undefined, undefined];
+    if (typeof task !== "string" || !taskById(task))
+      return { ok: false, reason: `the drill has no task '${String(task)}'` };
+    if (stage !== 0 && stage !== 1 && stage !== 2)
+      return { ok: false, reason: `the drill has no stage ${String(stage)}` };
+    drill = { task, stage };
+  }
   const state: ShellState = {
     ring,
     poly,
@@ -330,6 +343,7 @@ export function decodeShell(hash: string): Decoded | null {
     family,
     ladder,
     tour,
+    drill,
     rootCam: rc,
     coeffCam: cc,
   };

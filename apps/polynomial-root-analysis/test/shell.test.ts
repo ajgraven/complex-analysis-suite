@@ -278,6 +278,7 @@ describe("applyState restores a state the app is NOT in (M6.1's test, not the fi
     family: null,
     ladder: null,
     tour: null,
+    drill: null,
     rootCam: { cx: 0.25, cy: -0.5, half: 2 },
     coeffCam: { cx: 1, cy: 0, half: 3 },
   };
@@ -303,6 +304,7 @@ describe("applyState restores a state the app is NOT in (M6.1's test, not the fi
     family: { text: "x^5 - x - t", base: "1", open: false },
     ladder: null,
     tour: 3,
+    drill: { task: "cardano", stage: 1 },
     rootCam: { cx: -1, cy: 2, half: 0.75 },
     coeffCam: { cx: 0, cy: 0, half: 1.5 },
   };

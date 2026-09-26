@@ -23,6 +23,7 @@ import { galoisCard, type GaloisModel, type GaloisView } from "./galoisCard.js";
 import { familyCard, type FamilyHandlers, type FamilyModel } from "./familyCard.js";
 import { ladderCard, type LadderHandlers, type LadderModel } from "./ladderCard.js";
 import { tourCard, type TourHandlers, type TourModel } from "./tourCard.js";
+import { drillCard, type DrillHandlers, type DrillModel } from "./drillCard.js";
 
 /** The gain matrix's shared log scale, so one root's row can be read against another's. */
 function gainScale(c: readonly Conditioning[] | null): [number, number] {
@@ -153,10 +154,12 @@ export function leftRail(
   family?: { readonly model: FamilyModel; readonly on: FamilyHandlers },
   ladder?: { readonly model: LadderModel; readonly on: LadderHandlers },
   tour?: { readonly model: TourModel; readonly on: TourHandlers },
+  drill?: { readonly model: DrillModel; readonly on: DrillHandlers },
 ): Desc[] {
   const rings: Ring[] = ["C", "R", "Q"];
   const cards = [
     ...(tour ? [tourCard(tour.model, tour.on)] : []),
+    ...(drill ? [drillCard(drill.model, drill.on)] : []),
     card(
       "poly",
       CARD.polynomial,
