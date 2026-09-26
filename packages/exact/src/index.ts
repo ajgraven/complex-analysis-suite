@@ -27,6 +27,10 @@
 //                   (ADR-0047) — the one module here that reads an AST, hence the type-only @cas/expr edge.
 //   - smith.ts    : Smith's (1970) root-inclusion discs computed EXACTLY on dyadic approximations, with the
 //                   exact disjointness / membership tests and a rational √ upper bound (ADR-0047).
+//   - modPoly.ts  : polynomials over 𝔽ₚ (p < 2²⁵): arithmetic, gcd, powmod, distinct-degree and
+//                   Cantor–Zassenhaus equal-degree factorisation — Dedekind's cycle types (ADR-0047 PRA-4).
+//   - zPoly.ts    : ℤ[x] and its factorisation into irreducibles (Hensel lifting + Zassenhaus
+//                   recombination), rational roots, the integer square test (ADR-0047 PRA-4).
 // Consumers: apps/correspondences (deleted-correspondence curve + cusp locus, #16) and — from #17 —
 // apps/complex-dynamics (dynatomic / Gleason / multiplier component data).
 export { bigGcd, Frac, Gauss } from "./gaussian.js";
@@ -40,9 +44,21 @@ export {
 } from "./qiSeries.js";
 export { multiplicityAt, yunSquarefree, type SquarefreeFactor } from "./squarefree.js";
 export { SqrtExt, sqrtOfFrac, sqrtOfGauss, squarefreeSplit } from "./sqrtExt.js";
-export { arctanBounds, piBounds, piLower, piUpper, type RationalInterval } from "./piBounds.js";
+export {
+  arctanBounds,
+  piBounds,
+  piLower,
+  piUpper,
+  type RationalInterval,
+} from "./piBounds.js";
 export { BiPoly } from "./biPoly.js";
-export { bareissDet, discriminant, integerPrimitive, primitivePoly, resultant } from "./resultant.js";
+export {
+  bareissDet,
+  discriminant,
+  integerPrimitive,
+  primitivePoly,
+  resultant,
+} from "./resultant.js";
 export { renderBiPolyText, renderGaussMag, renderQiPolyText } from "./render.js";
 export {
   simplestRational,
@@ -62,3 +78,45 @@ export {
   sqrtUpperBound,
   type SmithResult,
 } from "./smith.js";
+export {
+  distinctDegree,
+  equalDegree,
+  factorDegreesModP,
+  factorModP,
+  invModP,
+  MAX_MOD_PRIME,
+  mpAdd,
+  mpDeg,
+  mpDeriv,
+  mpDivmod,
+  mpExtGcd,
+  mpFromBig,
+  mpGcd,
+  mpMonic,
+  mpMul,
+  mpPowMod,
+  mpRem,
+  mpScale,
+  mpSquarefree,
+  mpSub,
+  mpTrim,
+  primesBelow,
+  type ModPoly,
+} from "./modPoly.js";
+export {
+  factorOverZ,
+  isqrt,
+  isSquare,
+  rationalRoots,
+  zContent,
+  zDeg,
+  zDivExact,
+  zEval,
+  zFromQi,
+  zMul,
+  zPrimitive,
+  zToQi,
+  zTrim,
+  type ZFactorisation,
+  type ZPoly,
+} from "./zPoly.js";
