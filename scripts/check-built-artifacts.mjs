@@ -15,7 +15,8 @@
 // uploads the site) all self-verify — a dropped chunk fails the build instead of reaching users.
 // Deterministic: a dist directory listing, no browser and no flake.
 //
-// Scope: the two PUBLISHED apps (launcher has no workers; correspondences is built-but-not-published).
+// Scope: the apps that spawn workers — the published ones, plus Polynomial Root Analysis ahead of its
+// publish (launcher has no workers; correspondences is built-but-not-published and spawns none).
 // Detection is derived from source, so a NEW worker is covered automatically — no list to maintain.
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, basename, dirname, resolve } from 'node:path';
@@ -30,6 +31,9 @@ const APPS = [
   // Polynomial Roots spawns its root-sweep worker pool; without this row the post-build worker-chunk
   // check would silently skip the app that needs it most (ADR-0046).
   { name: 'polynomial-roots', dir: 'apps/polynomial-roots', srcRoots: ['src'] },
+  // Polynomial Root Analysis reads its Galois evidence in a worker (ADR-0047 PRA-4). Built now and
+  // published at PRA-5; checked from the first build that spawns one, so the publish does not find it.
+  { name: 'polynomial-root-analysis', dir: 'apps/polynomial-root-analysis', srcRoots: ['src'] },
 ];
 
 // `new Worker( new URL( '<literal>' , import.meta.url` — the bundlable form. Captures the specifier.
@@ -108,5 +112,5 @@ if (problems.length) {
 // list that disagreed, in the one message whose job is to say what was checked.
 console.log(
   `✓ built-artifact gate: all ${workersChecked} spawned worker chunk(s) present ` +
-    `across ${APPS.length} published apps (${APPS.map((a) => a.name).join(', ')}).`,
+    `across ${APPS.length} apps (${APPS.map((a) => a.name).join(', ')}).`,
 );

@@ -393,6 +393,18 @@ const PAGES = [
     hash: viewState("pra", { r: "Q", t: "z^5 - z - 1", d: 1, o: 0, cr: 1, j: 0, lp: [3, [0, 0, 1], [0, 2, 1]], rc: [0, 0, 1.6], cc: [0, 0, 1.6] }),
     expect: ".word-tree",
   },
+  {
+    // PRA-4's Galois card on a REDUCIBLE polynomial, by permalink: a factor whose group is open (the
+    // D₅ quintic) beside one that closes (z³ + 2, S₃), each with its rows and its drawn cycle types.
+    // `expect` keys on a factor heading, which only a reducible polynomial renders — and only once the
+    // worker has answered.
+    id: "polynomial-root-analysis-galois",
+    mount: "polynomial-root-analysis",
+    dist: "apps/polynomial-root-analysis/dist",
+    file: "index.html",
+    hash: viewState("pra", { r: "Q", t: "(z^5 - 5z + 12)*(z^3 + 2)", d: 1, o: 0, cr: 0, j: 0, rc: [0, 0, 2.2], cc: [0, 0, 60] }),
+    expect: ".factor-head",
+  },
 ];
 
 // The WCAG 2.0/2.1 A + AA conformance set plus axe's best-practice pack (landmarks/regions, valid

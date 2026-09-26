@@ -4,7 +4,7 @@
 // pushed on the undo stack, rendered, and written to the address bar. A drag is the one exception —
 // its frames update a LIVE polynomial straight from the engine and commit once, on release, so a
 // drag is one undo step (DESIGN §7) and a ℚ-mode drag snaps once, where the reader let go.
-import { attachCanvasA11y, patch } from "@cas/ui";
+import { attachCanvasA11y, createComputeClient, patch } from "@cas/ui";
 import { Frac, Gauss, QiPoly, renderQiPolyText } from "@cas/exact";
 import {
   fromCoeffs,
@@ -23,6 +23,13 @@ import { crossings, pathsAsFrames } from "../engine/loops/braid.js";
 import { loopPath } from "../engine/loops/loop.js";
 import { lassoGroup } from "../engine/loops/group.js";
 import { monodromyGroupCert } from "../engine/certify.js";
+import {
+  galoisEvidence,
+  galoisRequest,
+  type GaloisEvidence,
+  type GaloisRequest,
+} from "../engine/galois/tier0.js";
+import type { GaloisModel } from "./galoisCard.js";
 import { commuteLastTwo, inverted, withLasso } from "./loopEdit.js";
 import {
   scaleOf,
@@ -112,6 +119,8 @@ export interface App {
     play(): void;
     group(): void;
   };
+  /** The Galois card's model: refused, busy, or the evidence for the committed polynomial. */
+  galois(): GaloisModel | null;
   /** What the braid strip is showing: strand count and crossings. */
   braid(): { strands: number; crossings: number } | null;
   refusal(): string | null;
@@ -249,6 +258,56 @@ export function mountApp(host: HTMLElement): App {
     labels: readonly number[];
   } | null = null;
   let animHandle: number | null = null;
+  // The Galois evidence is read off the thread (a degree-24 polynomial takes ~0.5 s) for the COMMITTED
+  // polynomial only — a drag frame has no exact layer to ask about. Keyed by the integer polynomial, so
+  // a change that keeps it (a camera move, a toggle) asks nothing.
+  let galois: GaloisModel | null = null;
+  let galoisKey = "";
+  const galoisClient = createComputeClient<GaloisRequest, GaloisEvidence>({
+    compute: galoisEvidence,
+    worker: () =>
+      new Worker(new URL("../engine/galois/galois.worker.ts", import.meta.url), {
+        type: "module",
+      }),
+    toMessage: (request, reqId) => ({ reqId, request }),
+    fromMessage: (data) => {
+      const d = data as { reqId: number; evidence?: GaloisEvidence; error?: string };
+      return {
+        reqId: d.reqId,
+        ...(d.evidence === undefined ? {} : { result: d.evidence }),
+        ...(d.error === undefined ? {} : { error: d.error }),
+      };
+    },
+    onError: (message) => {
+      galois = { kind: "failed", reason: message };
+      render();
+    },
+  });
+  function syncGalois(): void {
+    const p = resolution.poly;
+    if (!p) {
+      galoisClient.cancel();
+      galoisKey = "";
+      galois = null;
+      return;
+    }
+    const req = galoisRequest(p);
+    if (!req.ok) {
+      galoisClient.cancel();
+      galoisKey = `refused:${req.reason}`;
+      galois = { kind: "refused", reason: req.reason };
+      return;
+    }
+    const key = req.request.coefficients.join(",");
+    if (key === galoisKey) return;
+    galoisKey = key;
+    galois = { kind: "busy" };
+    galoisClient.request(req.request, (evidence) => {
+      if (galoisKey !== key) return;
+      galois = { kind: "done", evidence };
+      render();
+    });
+  }
 
   const initial = decodeShell(win?.location.hash ?? "");
   if (initial?.ok) {
@@ -836,6 +895,7 @@ export function mountApp(host: HTMLElement): App {
 
   // ── Rendering.
   function render(): void {
+    syncGalois();
     const p = live.poly;
     patch(
       left,
@@ -916,6 +976,7 @@ export function mountApp(host: HTMLElement): App {
             onGroup: computeGroup,
           },
         },
+        galois,
       ),
     );
     drawBraidStrip();
@@ -1170,6 +1231,7 @@ export function mountApp(host: HTMLElement): App {
       play,
       group: computeGroup,
     }),
+    galois: () => galois,
     braid: () =>
       braid
         ? { strands: braid.labels.length, crossings: crossings(braid.frames).length }

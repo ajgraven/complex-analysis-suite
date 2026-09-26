@@ -755,3 +755,94 @@ describe("the Monodromy card (PRA-3)", () => {
     expect(card().textContent).not.toMatch(/Galois/);
   });
 });
+
+describe("the Galois card (PRA-4)", () => {
+  const card = (): HTMLElement => q("section[aria-labelledby='card-galois']");
+  async function settled(app: App): Promise<void> {
+    await vi.waitFor(() => expect(app.galois()?.kind).toBe("done"), { timeout: 5000 });
+  }
+
+  it("says it is reading the primes, then names S₅ for the opening polynomial, with its rows", async () => {
+    const { app } = mount();
+    expect(app.galois()?.kind).toBe("busy");
+    expect(card().textContent).toMatch(/reading the primes/);
+    await settled(app);
+    const text = card().textContent ?? "";
+    expect(text).toMatch(/The polynomial is irreducible over ℚ\./);
+    expect(text).toMatch(/It is the symmetric group S₅, of order 120\./);
+    expect(text).toMatch(/a 5-cycle at p = 3/);
+    expect(text).toMatch(/type \(3, 2\) at p = 2, cubed is a swap/);
+    expect(text).toMatch(/the discriminant 2869 is not a square/);
+    expect(card().querySelector(".galois-group .level")?.getAttribute("data-level")).toBe(
+      "=",
+    );
+    // The list of cycle types, each drawn and each labelled exactly.
+    const types = card().querySelectorAll(".cycle-types li");
+    expect(types.length).toBe(6);
+    expect(types[0].querySelectorAll(".cycle")).toHaveLength(2);
+    expect(types[0].querySelectorAll(".cycle-dot")).toHaveLength(5);
+  });
+
+  it("does not name the D₅ quintic, and says so", async () => {
+    const { app } = mount();
+    app.actions().type("z^5 - 5z + 12");
+    await settled(app);
+    const text = card().textContent ?? "";
+    expect(text).toMatch(/Contains the elements below; not yet identified\./);
+    expect(text).not.toMatch(/symmetric|alternating|dihedral|D₅/);
+    expect(card().querySelector(".galois-group .level")?.getAttribute("data-level")).toBe(
+      "⚠",
+    );
+  });
+
+  it("shows a reducible polynomial's factors, each with its own group", async () => {
+    const { app } = mount();
+    app.actions().type("(z^2-2)*(z^3-2)");
+    await settled(app);
+    expect(card().textContent).toMatch(/factors over ℚ into 2 irreducible factors/);
+    expect(card().querySelectorAll(".factor")).toHaveLength(2);
+    expect(card().textContent).toMatch(/S₂, of order 2.*S₃, of order 6/s);
+  });
+
+  it("refuses a Gaussian coefficient and a dragged float polynomial, by name", () => {
+    const { app } = mount();
+    app.actions().setRing("C");
+    app.actions().type("z^2 + i");
+    expect(card().textContent).toMatch(
+      /No Galois group: Galois groups over ℚ need rational coefficients/,
+    );
+    app.actions().moveTo({ kind: "root", index: 0 }, [0.3, 0.3]);
+    app.actions().release();
+    expect(card().textContent).toMatch(
+      /No Galois group: it needs exact rational coefficients/,
+    );
+  });
+
+  it("never shows a previous polynomial's answer beside the next one", async () => {
+    const { app } = mount();
+    app.actions().type("z^5 + 20z + 16");
+    app.actions().type("z^3 + 2");
+    await settled(app);
+    expect(card().textContent).toMatch(/S₃/);
+    expect(card().textContent).not.toMatch(/A₅/);
+  });
+
+  it("never carries a house name", async () => {
+    const { app } = mount();
+    const texts: string[] = [];
+    for (const t of [
+      "z^5 - z - 1",
+      "z^5 - 5z + 12",
+      "(z-1)^2*(z^4+1)",
+      "z^7 - 56z + 48",
+    ]) {
+      app.actions().type(t);
+      await settled(app);
+      const labels = [...card().querySelectorAll("[aria-label]")].map((e) =>
+        e.getAttribute("aria-label"),
+      );
+      texts.push(`${card().textContent}\n${labels.join("\n")}`);
+    }
+    for (const t of texts) for (const bad of DENYLIST) expect(t).not.toMatch(bad);
+  });
+});

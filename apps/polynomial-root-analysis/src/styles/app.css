@@ -356,3 +356,67 @@ canvas:focus-visible {
   width: 100%;
   border: 1px solid var(--line);
 }
+
+/* ── Galois group (PRA-4) ──────────────────────────────────────────────────────────── */
+.galois-group {
+  font-weight: 600;
+}
+.galois-rows,
+.cycle-types {
+  list-style: none;
+  margin: 6px 0;
+  padding: 0;
+  font-size: 13px;
+}
+.galois-rows li,
+.cycle-types li {
+  margin: 3px 0;
+}
+.cycle-types li {
+  display: grid;
+  grid-template-columns: 5em 1fr;
+  column-gap: 8px;
+  align-items: center;
+}
+.cycles {
+  flex-wrap: wrap;
+  row-gap: 2px;
+}
+.witness {
+  color: var(--muted);
+}
+.factor + .factor {
+  border-top: 1px solid var(--line);
+  margin-top: 8px;
+}
+.factor-head {
+  margin: 8px 0 2px;
+}
+.cycles {
+  display: inline-flex;
+  gap: 3px;
+  margin-right: 6px;
+  align-items: center;
+}
+.cycle {
+  position: relative;
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+}
+.cycle[data-length="1"] {
+  width: 8px;
+}
+.cycle-dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  margin: -2px 0 0 -2px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.cycle[data-length="1"] .cycle-dot {
+  background: var(--muted);
+}
