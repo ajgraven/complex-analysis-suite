@@ -30,6 +30,7 @@ import {
   type GaloisRequest,
 } from "../engine/galois/tier0.js";
 import type { GaloisModel } from "./galoisCard.js";
+import { loadLargeTable } from "../engine/galois/tables.js";
 import { commuteLastTwo, inverted, withLasso } from "./loopEdit.js";
 import {
   scaleOf,
@@ -282,6 +283,11 @@ export function mountApp(host: HTMLElement): App {
       galois = { kind: "failed", reason: message };
       render();
     },
+  });
+  // The sync fallback needs the degree-8–15 table too; when it arrives, ask again.
+  void loadLargeTable().then(() => {
+    galoisKey = "";
+    render();
   });
   function syncGalois(): void {
     const p = resolution.poly;

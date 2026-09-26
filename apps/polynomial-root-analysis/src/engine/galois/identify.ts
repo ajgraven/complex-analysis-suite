@@ -10,6 +10,7 @@ import { identify, type DescentStep } from "./descent.js";
 import {
   EXACT_MAX_DEGREE,
   TABLE_MAX_DEGREE,
+  hasDegree,
   alternatingGroup,
   symmetricGroup,
   type TransitiveGroup,
@@ -123,6 +124,8 @@ export function identifyFactor(
     });
   }
   if (n <= TABLE_MAX_DEGREE) {
+    if (!hasDegree(n))
+      return { tier: 0, reason: `the list of groups of degree ${n} has not loaded yet` };
     const t = rankCandidates(n, evidence.cycleTypes, evidence.discSquare);
     return { tier: 2, candidates: t.candidates, primesUsed: t.primesUsed };
   }

@@ -148,8 +148,13 @@ complete, and the app is wired to publish with the next merge to `master`.
   distances to multiply to ≥ 1/ρ — which puts a radius above ½ on the constant coefficient, and the
   certification refuses first. Both checks stay: the claim should not rest on that inequality. Recorded
   as equivalent. So is `tb-alt` (Aₙ is the only index-2 subgroup of Sₙ).
-- _(PRA-5)_ **The main chunk grew 399 → 741 kB** (the 347 kB table, needed by the sync fallback as well
-  as the worker). Accepted for now; loading the degree-8–15 half only in the worker is the obvious cut.
+- _(PRA-5)_ **The main chunk grew 399 → 741 kB** with the 347 kB table; **cut back to 429 kB** after the
+  owner's go-ahead by splitting it: degrees 2–7 (14 kB) ship in the main bundle, degrees 8–15 are
+  registered statically by the worker and fetched lazily on the main thread (a 315 kB chunk, 35 kB
+  gzipped), with the card re-asked when it lands. Sₙ/Aₙ need no data at all — their labels are the last
+  two of each degree and their generators textbook — so the theorem names them before it arrives. **And
+  GAP stalled** regenerating the split (> 10 min on 14T60's classes, where the first runs took 19 s for
+  everything): its class algorithms are randomised, so the script now fixes the seed.
 - _(PRA-5)_ **The denylist's `nTj` rule is gone**: DESIGN §9 denies a label "without its name", and the
   card never prints one without it (degree ≤ 7: "PSL(3,2) (7T5)"; beyond: GAP's name beside it).
 - _(PRA-5)_ **A browser pass found three**: A₇'s two classes of PSL(3,2) read as "inside no copy of

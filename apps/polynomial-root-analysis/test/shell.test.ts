@@ -847,3 +847,22 @@ describe("the Galois card (PRA-4)", () => {
     for (const t of texts) for (const bad of DENYLIST) expect(t).not.toMatch(bad);
   });
 });
+
+describe("the degree-8–15 table arrives lazily on the main thread (PRA-5 follow-up)", () => {
+  it("a degree-8 polynomial is ranked once it has loaded, and never shows a stale refusal", async () => {
+    const { app } = mount();
+    app.actions().type("z^8 - 3z^6 + 4z^4 - 2z^2 + 1");
+    await vi.waitFor(
+      () => {
+        const g = app.galois();
+        if (g?.kind !== "done" || !g.evidence.ok) throw new Error("not yet");
+        const id = g.evidence.factors[0].galois?.identification;
+        expect(id?.tier).toBe(2);
+      },
+      { timeout: 10_000 },
+    );
+    const card = q("section[aria-labelledby='card-galois']");
+    expect(card.textContent).toMatch(/8T10/);
+    expect(card.textContent).not.toMatch(/has not loaded/);
+  });
+});

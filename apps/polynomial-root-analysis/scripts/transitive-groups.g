@@ -6,6 +6,9 @@
 # also every class of MAXIMAL TRANSITIVE subgroup, with a representative's generators and the
 # permutation pi taking the standard nTj onto it (K = pi o H o pi^-1, as maps i -> i^p).
 LoadPackage("transgrp");
+# Class computations are randomised; a fixed seed makes the run (and its time) reproducible.
+Reset(GlobalMersenneTwister, 1);
+Reset(GlobalRandomSource, 1);
 
 JStr := function(s) return Concatenation("\"", ReplacedString(String(s), "\"", "'"), "\""); end;
 JList := function(l) return Concatenation("[", JoinStringsWithSeparator(List(l, String), ","), "]"); end;

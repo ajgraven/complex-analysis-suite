@@ -21,6 +21,10 @@ import { labelsHold, preciseRoots } from "../src/engine/galois/refine.js";
 import { galoisCard } from "../src/shell/galoisCard.js";
 import { actOn, orbit, stabiliserOrder } from "../src/engine/galois/invariant.js";
 import { groupByLabel, groupsOfDegree } from "../src/engine/galois/tables.js";
+import { registerTable } from "../src/engine/galois/tables.js";
+import large from "../src/engine/galois/data/transitive-8-15.json";
+
+registerTable(large);
 import { galoisCerts, identityCerts, permText } from "../src/engine/certify.js";
 import invariants from "../src/engine/galois/data/invariants.json";
 
