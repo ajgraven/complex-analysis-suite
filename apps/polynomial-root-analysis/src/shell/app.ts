@@ -298,7 +298,9 @@ export function mountApp(host: HTMLElement): App {
       galois = { kind: "refused", reason: req.reason };
       return;
     }
-    const key = req.request.coefficients.join(",");
+    // The generators are on the roots in the order the polynomial holds them, so the key carries that
+    // order too; the coefficients alone decide everything else.
+    const key = `${req.request.coefficients.join(",")}|${p.roots.map(([x, y]) => `${x.toPrecision(6)},${y.toPrecision(6)}`).join(";")}`;
     if (key === galoisKey) return;
     galoisKey = key;
     galois = { kind: "busy" };
@@ -729,8 +731,14 @@ export function mountApp(host: HTMLElement): App {
   }
   function play(): void {
     const run = resolution.loopRun;
+    if (!run || !run.ok) return;
+    playPerm(run.perm);
+  }
+  /** Play a permutation of the roots as a motion: a loop's σ, or a Galois group's generator. */
+  function playPerm(perm: readonly number[]): void {
     const p = resolution.poly;
-    if (!run || !run.ok || !p) return;
+    if (!p || perm.length !== p.degree) return;
+    const run = { perm: [...perm] };
     const m = makeMotion(p.roots, run.perm, p.lead);
     motionInfo = {
       fallback: m.fallback,
@@ -977,6 +985,10 @@ export function mountApp(host: HTMLElement): App {
           },
         },
         galois,
+        {
+          labels: resolution.poly?.labels ?? null,
+          onPlay: playPerm,
+        },
       ),
     );
     drawBraidStrip();

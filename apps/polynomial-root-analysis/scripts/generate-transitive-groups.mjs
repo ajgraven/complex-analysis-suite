@@ -1,0 +1,153 @@
+// generate-transitive-groups.mjs — writes src/engine/galois/data/transitive.json from GAP's transitive
+// groups library (ADR-0047 PRA-5). Run by hand when the table must change; the output is checked in and
+// never edited.
+//
+//   GAP=/path/to/gap/root node scripts/generate-transitive-groups.mjs
+//
+// GAP is the source rather than the LMFDB API PLAN §6 names: the API sits behind a captcha gate that a
+// script cannot pass, and the LMFDB's own transitive-group data IS this library (Conway–Hulpke–McKay's
+// classification and numbering, which PARI, Magma and the LMFDB all use for the labels nTj). The
+// generating environment here was the `passagemath-gap` wheels from PyPI with
+// `passagemath-gap-pkg-transgrp-data`; any GAP 4 with the `transgrp` package produces the same file.
+//
+// The script checks what it can without GAP: the group count per degree against OEIS A002106, that the
+// cycle-type counts of every group sum to its order, and the hand-written names below against the
+// orders. Groups with identical cycle-type distributions are recorded as `sameStatisticsAs`, because no
+// count of Frobenius elements can tell them apart.
+/* global process -- a Node script, run by hand */
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const root = process.env.GAP;
+if (!root) {
+  console.error("Set GAP to the root of a GAP 4 installation with the transgrp package.");
+  process.exit(2);
+}
+
+// OEIS A002106: the number of transitive groups of degree n.
+const A002106 = {
+  2: 1,
+  3: 2,
+  4: 5,
+  5: 5,
+  6: 16,
+  7: 7,
+  8: 50,
+  9: 34,
+  10: 45,
+  11: 8,
+  12: 301,
+  13: 9,
+  14: 63,
+  15: 104,
+};
+
+// The names a reader knows, for the degrees Tier 1 identifies exactly; checked against the order.
+const NAMES = {
+  "2T1": ["S₂", 2],
+  "3T1": ["A₃", 3],
+  "3T2": ["S₃", 6],
+  "4T1": ["C₄", 4],
+  "4T2": ["V₄", 4],
+  "4T3": ["D₄", 8],
+  "4T4": ["A₄", 12],
+  "4T5": ["S₄", 24],
+  "5T1": ["C₅", 5],
+  "5T2": ["D₅", 10],
+  "5T3": ["F₂₀", 20],
+  "5T4": ["A₅", 60],
+  "5T5": ["S₅", 120],
+  "6T1": ["C₆", 6],
+  "6T2": ["S₃", 6],
+  "6T3": ["D₆", 12],
+  "6T4": ["A₄", 12],
+  "6T5": ["C₃ × S₃", 18],
+  "6T6": ["C₂ × A₄", 24],
+  "6T7": ["S₄⁺", 24],
+  "6T8": ["S₄⁻", 24],
+  "6T9": ["S₃ × S₃", 36],
+  "6T10": ["C₃² ⋊ C₄", 36],
+  "6T11": ["C₂ × S₄", 48],
+  "6T12": ["PSL(2,5)", 60],
+  "6T13": ["S₃ ≀ C₂", 72],
+  "6T14": ["PGL(2,5)", 120],
+  "6T15": ["A₆", 360],
+  "6T16": ["S₆", 720],
+  "7T1": ["C₇", 7],
+  "7T2": ["D₇", 14],
+  "7T3": ["F₂₁", 21],
+  "7T4": ["F₄₂", 42],
+  "7T5": ["PSL(3,2)", 168],
+  "7T6": ["A₇", 2520],
+  "7T7": ["S₇", 5040],
+};
+
+const dir = mkdtempSync(join(tmpdir(), "tg-"));
+const out = join(dir, "raw.json");
+const script = join(dir, "run.g");
+writeFileSync(
+  script,
+  `OUTFILE := ${JSON.stringify(out)};\n${readFileSync(join(here, "transitive-groups.g"), "utf8")}`,
+);
+execFileSync(join(root, "gap"), ["-A", "-l", root, "-q", script], {
+  cwd: root,
+  stdio: ["ignore", "inherit", "inherit"],
+  env: { ...process.env, TERM: process.env.TERM === "dumb" ? "xterm" : process.env.TERM },
+});
+const raw = JSON.parse(readFileSync(out, "utf8"));
+
+const degrees = {};
+for (const [n, groups] of Object.entries(raw)) {
+  if (groups.length !== A002106[n])
+    throw new Error(
+      `degree ${n}: ${groups.length} groups, OEIS A002106 says ${A002106[n]}`,
+    );
+  const statKey = (g) => JSON.stringify(Object.entries(g.cycleTypes).sort());
+  degrees[n] = groups.map((g) => {
+    const order = Number(g.order);
+    const total = Object.values(g.cycleTypes).reduce((a, b) => a + b, 0);
+    if (total !== order)
+      throw new Error(`${g.label}: cycle types sum to ${total}, order ${order}`);
+    const named = NAMES[g.label];
+    if (named && named[1] !== order)
+      throw new Error(
+        `${g.label}: named ${named[0]} of order ${named[1]}, GAP says ${order}`,
+      );
+    const same = groups
+      .filter((h) => h.label !== g.label && statKey(h) === statKey(g))
+      .map((h) => h.label);
+    const types = Object.fromEntries(
+      Object.entries(g.cycleTypes).sort((a, b) => (a[0] < b[0] ? 1 : -1)),
+    );
+    return {
+      label: g.label,
+      name: named ? named[0] : g.gapName,
+      gapName: g.gapName,
+      order,
+      even: g.even,
+      solvable: g.solvable,
+      primitive: g.primitive,
+      generators: g.generators,
+      cycleTypes: types,
+      sameStatisticsAs: same,
+      ...(g.maximalTransitive ? { maximalTransitive: g.maximalTransitive } : {}),
+    };
+  });
+}
+
+const target = resolve(here, "../src/engine/galois/data/transitive.json");
+writeFileSync(
+  target,
+  `${JSON.stringify({
+    source:
+      "GAP 4 transgrp (Conway–Hulpke–McKay; Hulpke), generated by scripts/generate-transitive-groups.mjs",
+    generated: new Date().toISOString().slice(0, 10),
+    note: "The groups are mathematics; the labels nTj follow the transgrp numbering (Artistic-2.0), as the LMFDB, PARI and Magma do. Counts checked against OEIS A002106.",
+    degrees,
+  })}\n`,
+);
+console.info(`wrote ${target}`);

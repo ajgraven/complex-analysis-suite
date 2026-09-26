@@ -6,11 +6,14 @@
 // Sources. Degrees 2–6: Cohen's per-group polynomials (A Course in Computational Algebraic Number
 // Theory, §6.3), as sympy's galois-group suite carries them. The Klüners–Malle database PLAN names was
 // not reachable from this environment (STATUS, PRA-4), so degree 7 is assembled from citable
-// constructions instead: six of its seven groups, F₂₁ (7T3) left for PRA-5 to fill.
+// constructions, and F₂₁ (7T3) was found with PARI at PRA-5. Every `label` was checked with PARI's
+// polgalois (new_galois_format = 1), an implementation sharing nothing with this app's.
 export interface GaloisCase {
   readonly id: string;
   readonly text: string;
   /** The group, as a reader names it. */
+  /** The transitive-group label, checked independently with PARI's polgalois (new_galois_format). */
+  readonly label: string;
   readonly group: string;
   readonly order: number;
   /** What the evidence alone must conclude. */
@@ -21,31 +24,82 @@ export interface GaloisCase {
 const COHEN = "Cohen §6.3";
 
 export const GALOIS: readonly GaloisCase[] = [
-  { id: "2-S2", text: "z^2+z+1", group: "S₂", order: 2, verdict: "S", source: COHEN },
+  {
+    id: "2-S2",
+    text: "z^2+z+1",
+    label: "2T1",
+    group: "S₂",
+    order: 2,
+    verdict: "S",
+    source: COHEN,
+  },
   {
     id: "3-A3",
     text: "z^3+z^2-2z-1",
+    label: "3T1",
     group: "A₃",
     order: 3,
     verdict: "A",
     source: COHEN,
   },
-  { id: "3-S3", text: "z^3+2", group: "S₃", order: 6, verdict: "S", source: COHEN },
+  {
+    id: "3-S3",
+    text: "z^3+2",
+    label: "3T2",
+    group: "S₃",
+    order: 6,
+    verdict: "S",
+    source: COHEN,
+  },
   {
     id: "4-C4",
     text: "z^4+z^3+z^2+z+1",
+    label: "4T1",
     group: "C₄",
     order: 4,
     verdict: "open",
     source: COHEN,
   },
-  { id: "4-V", text: "z^4+1", group: "V₄", order: 4, verdict: "open", source: COHEN },
-  { id: "4-D4", text: "z^4-2", group: "D₄", order: 8, verdict: "open", source: COHEN },
-  { id: "4-A4", text: "z^4+8z+12", group: "A₄", order: 12, verdict: "A", source: COHEN },
-  { id: "4-S4", text: "z^4+z+1", group: "S₄", order: 24, verdict: "S", source: COHEN },
+  {
+    id: "4-V",
+    text: "z^4+1",
+    label: "4T2",
+    group: "V₄",
+    order: 4,
+    verdict: "open",
+    source: COHEN,
+  },
+  {
+    id: "4-D4",
+    text: "z^4-2",
+    label: "4T3",
+    group: "D₄",
+    order: 8,
+    verdict: "open",
+    source: COHEN,
+  },
+  {
+    id: "4-A4",
+    text: "z^4+8z+12",
+    label: "4T4",
+    group: "A₄",
+    order: 12,
+    verdict: "A",
+    source: COHEN,
+  },
+  {
+    id: "4-S4",
+    text: "z^4+z+1",
+    label: "4T5",
+    group: "S₄",
+    order: 24,
+    verdict: "S",
+    source: COHEN,
+  },
   {
     id: "5-C5",
     text: "z^5+z^4-4z^3-3z^2+3z+1",
+    label: "5T1",
     group: "C₅",
     order: 5,
     verdict: "open",
@@ -54,17 +108,43 @@ export const GALOIS: readonly GaloisCase[] = [
   {
     id: "5-D5",
     text: "z^5-5z+12",
+    label: "5T2",
     group: "D₅",
     order: 10,
     verdict: "open",
     source: COHEN,
   },
-  { id: "5-F20", text: "z^5+2", group: "F₂₀", order: 20, verdict: "open", source: COHEN },
-  { id: "5-A5", text: "z^5+20z+16", group: "A₅", order: 60, verdict: "A", source: COHEN },
-  { id: "5-S5", text: "z^5-z+1", group: "S₅", order: 120, verdict: "S", source: COHEN },
+  {
+    id: "5-F20",
+    text: "z^5+2",
+    label: "5T3",
+    group: "F₂₀",
+    order: 20,
+    verdict: "open",
+    source: COHEN,
+  },
+  {
+    id: "5-A5",
+    text: "z^5+20z+16",
+    label: "5T4",
+    group: "A₅",
+    order: 60,
+    verdict: "A",
+    source: COHEN,
+  },
+  {
+    id: "5-S5",
+    text: "z^5-z+1",
+    label: "5T5",
+    group: "S₅",
+    order: 120,
+    verdict: "S",
+    source: COHEN,
+  },
   {
     id: "5-S5-sandbox",
     text: "z^5-z-1",
+    label: "5T5",
     group: "S₅",
     order: 120,
     verdict: "S",
@@ -73,6 +153,7 @@ export const GALOIS: readonly GaloisCase[] = [
   {
     id: "6-C6",
     text: "z^6+z^5+z^4+z^3+z^2+z+1",
+    label: "6T1",
     group: "C₆",
     order: 6,
     verdict: "open",
@@ -81,15 +162,25 @@ export const GALOIS: readonly GaloisCase[] = [
   {
     id: "6-S3",
     text: "z^6+108",
+    label: "6T2",
     group: "S₃ (6T2)",
     order: 6,
     verdict: "open",
     source: COHEN,
   },
-  { id: "6-D6", text: "z^6+2", group: "D₆", order: 12, verdict: "open", source: COHEN },
+  {
+    id: "6-D6",
+    text: "z^6+2",
+    label: "6T3",
+    group: "D₆",
+    order: 12,
+    verdict: "open",
+    source: COHEN,
+  },
   {
     id: "6-A4",
     text: "z^6-3z^2-1",
+    label: "6T4",
     group: "A₄ (6T4)",
     order: 12,
     verdict: "open",
@@ -98,6 +189,7 @@ export const GALOIS: readonly GaloisCase[] = [
   {
     id: "6-G18",
     text: "z^6+3z^3+3",
+    label: "6T5",
     group: "C₃ × S₃",
     order: 18,
     verdict: "open",
@@ -106,6 +198,7 @@ export const GALOIS: readonly GaloisCase[] = [
   {
     id: "6-A4xC2",
     text: "z^6-3z^2+1",
+    label: "6T6",
     group: "A₄ × C₂",
     order: 24,
     verdict: "open",
@@ -114,6 +207,7 @@ export const GALOIS: readonly GaloisCase[] = [
   {
     id: "6-S4p",
     text: "z^6-4z^2-1",
+    label: "6T7",
     group: "S₄⁺ (6T7)",
     order: 24,
     verdict: "open",
@@ -122,6 +216,7 @@ export const GALOIS: readonly GaloisCase[] = [
   {
     id: "6-S4m",
     text: "z^6-3z^5+6z^4-7z^3+2z^2+z-4",
+    label: "6T8",
     group: "S₄⁻ (6T8)",
     order: 24,
     verdict: "open",
@@ -130,6 +225,7 @@ export const GALOIS: readonly GaloisCase[] = [
   {
     id: "6-G36m",
     text: "z^6+2z^3-2",
+    label: "6T9",
     group: "S₃ × S₃",
     order: 36,
     verdict: "open",
@@ -138,6 +234,7 @@ export const GALOIS: readonly GaloisCase[] = [
   {
     id: "6-S4xC2",
     text: "z^6+2z^2+2",
+    label: "6T11",
     group: "S₄ × C₂",
     order: 48,
     verdict: "open",
@@ -146,6 +243,7 @@ export const GALOIS: readonly GaloisCase[] = [
   {
     id: "6-PSL2F5",
     text: "z^6+10z^5+55z^4+140z^3+175z^2+170z+25",
+    label: "6T12",
     group: "PSL(2,5)",
     order: 60,
     verdict: "open",
@@ -154,6 +252,7 @@ export const GALOIS: readonly GaloisCase[] = [
   {
     id: "6-PGL2F5",
     text: "z^6+10z^5+55z^4+140z^3+175z^2-3019z+25",
+    label: "6T14",
     group: "PGL(2,5)",
     order: 120,
     verdict: "open",
@@ -162,6 +261,7 @@ export const GALOIS: readonly GaloisCase[] = [
   {
     id: "6-G36p",
     text: "z^6+6z^4+2z^3+9z^2+6z-4",
+    label: "6T10",
     group: "C₃² ⋊ C₄",
     order: 36,
     verdict: "open",
@@ -170,6 +270,7 @@ export const GALOIS: readonly GaloisCase[] = [
   {
     id: "6-G72",
     text: "z^6+2z^4+2z^3+z^2+2z+2",
+    label: "6T13",
     group: "C₃² ⋊ D₄",
     order: 72,
     verdict: "open",
@@ -178,17 +279,27 @@ export const GALOIS: readonly GaloisCase[] = [
   {
     id: "6-A6",
     text: "z^6+24z-20",
+    label: "6T15",
     group: "A₆",
     order: 360,
     verdict: "A",
     source: COHEN,
   },
-  { id: "6-S6", text: "z^6+z+1", group: "S₆", order: 720, verdict: "S", source: COHEN },
+  {
+    id: "6-S6",
+    text: "z^6+z+1",
+    label: "6T16",
+    group: "S₆",
+    order: 720,
+    verdict: "S",
+    source: COHEN,
+  },
   // Conrad's example: the first prime showing a transposition DIRECTLY is 311; the power trick finds
   // one at p = 2.
   {
     id: "6-S6-conrad",
     text: "z^6+z^4+z+3",
+    label: "6T16",
     group: "S₆",
     order: 720,
     verdict: "S",
@@ -198,6 +309,7 @@ export const GALOIS: readonly GaloisCase[] = [
   {
     id: "7-C7",
     text: "z^7+z^6-12z^5-7z^4+28z^3+14z^2-9z+1",
+    label: "7T1",
     group: "C₇",
     order: 7,
     verdict: "open",
@@ -207,14 +319,26 @@ export const GALOIS: readonly GaloisCase[] = [
   {
     id: "7-D7",
     text: "z^7-z^6-z^5+z^4-z^3-z^2+2z+1",
+    label: "7T2",
     group: "D₇",
     order: 14,
     verdict: "open",
     source: "Hilbert class field of ℚ(√−71)",
   },
+  // Found with PARI (polgalois = 7T3) — the one group PRA-4's corpus lacked.
+  {
+    id: "7-F21",
+    text: "z^7-8z^5-2z^4+16z^3+6z^2-6z-2",
+    label: "7T3",
+    group: "F₂₁",
+    order: 21,
+    verdict: "open",
+    source: "PARI polgalois",
+  },
   {
     id: "7-F42",
     text: "z^7-2",
+    label: "7T4",
     group: "F₄₂",
     order: 42,
     verdict: "open",
@@ -223,6 +347,7 @@ export const GALOIS: readonly GaloisCase[] = [
   {
     id: "7-PSL32",
     text: "z^7-7z+3",
+    label: "7T5",
     group: "PSL(3,2)",
     order: 168,
     verdict: "open",
@@ -232,6 +357,7 @@ export const GALOIS: readonly GaloisCase[] = [
   {
     id: "7-A7",
     text: "z^7-56z+48",
+    label: "7T6",
     group: "A₇",
     order: 2520,
     verdict: "A",
@@ -240,6 +366,7 @@ export const GALOIS: readonly GaloisCase[] = [
   {
     id: "7-S7",
     text: "z^7-z-1",
+    label: "7T7",
     group: "S₇",
     order: 5040,
     verdict: "S",

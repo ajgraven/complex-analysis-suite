@@ -19,7 +19,7 @@ import {
   type MonodromyModel,
 } from "./monodromyCard.js";
 import { level } from "./level.js";
-import { galoisCard, type GaloisModel } from "./galoisCard.js";
+import { galoisCard, type GaloisModel, type GaloisView } from "./galoisCard.js";
 
 /** The gain matrix's shared log scale, so one root's row can be read against another's. */
 function gainScale(c: readonly Conditioning[] | null): [number, number] {
@@ -359,6 +359,7 @@ export function rightRail(
   m: RightModel,
   mono?: { readonly model: MonodromyModel; readonly on: MonodromyHandlers },
   galois?: GaloisModel | null,
+  galoisView?: GaloisView,
 ): Child[] {
   if (!m.poly || !m.discs || !m.groups) {
     return [
@@ -455,6 +456,6 @@ export function rightRail(
       pseudozero: m.pseudozero,
     }),
     mono ? monodromyCard(mono.model, mono.on) : null,
-    galoisCard(galois ?? null),
+    galoisCard(galois ?? null, galoisView),
   ];
 }

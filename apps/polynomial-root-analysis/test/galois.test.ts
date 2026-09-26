@@ -12,6 +12,7 @@ import {
   type GaloisEvidence,
 } from "../src/engine/galois/tier0.js";
 import { factorisationCert, galoisCerts } from "../src/engine/certify.js";
+import { groupByLabel } from "../src/engine/galois/tables.js";
 
 function poly(text: string, ring: "Q" | "R" | "C" = "Q"): Polynomial {
   const read = parsePolynomial(text, ring);
@@ -97,7 +98,7 @@ describe("the corpus (PLAN §7 PRA-4 gate)", () => {
 
   it("the discriminant is a square exactly for the groups inside Aₙ", () => {
     // Groups of even permutations only: A₃, V₄, A₄, C₅, D₅, A₅, A₄ (6T4), PSL(2,5), C₃²⋊C₄ (6T10), A₆,
-    // C₇, PSL(3,2), A₇.
+    // C₇, F₂₁, PSL(3,2), A₇ — and, independently, exactly the corpus labels the table marks even.
     const even = new Set([
       "3-A3",
       "4-V",
@@ -111,11 +112,13 @@ describe("the corpus (PLAN §7 PRA-4 gate)", () => {
       "6-G36p",
       "6-A6",
       "7-C7",
+      "7-F21",
       "7-PSL32",
       "7-A7",
     ]);
     for (const c of CORPUS) {
       expect(gal(evidence(c.text).factors[0]).discSquare, c.id).toBe(even.has(c.id));
+      expect(groupByLabel(c.label).even, c.id).toBe(even.has(c.id));
     }
   });
 
@@ -133,7 +136,7 @@ describe("x⁵ − x − 1 reads = S₅ with the gate's rows", () => {
   const c = certs("z^5 - z - 1");
   it("the group", () => {
     expect(c.group.level).toBe("=");
-    expect(c.group.claim).toBe("the symmetric group S₅, of order 120");
+    expect(c.group.claim).toBe("the symmetric group S₅ (5T5), of order 120");
   });
   it("the rows", () => {
     const text = c.rows.map((r) => `${r.claim} — ${r.method}`);
@@ -157,7 +160,7 @@ describe("x⁵ − x − 1 reads = S₅ with the gate's rows", () => {
 describe("x⁵ + 20x + 16 reads = A₅", () => {
   const c = certs("z^5 + 20z + 16");
   it("by a 3-cycle and a square discriminant", () => {
-    expect(c.group.claim).toBe("the alternating group A₅, of order 60");
+    expect(c.group.claim).toBe("the alternating group A₅ (5T4), of order 60");
     expect(c.rows.map((r) => r.claim)).toContain("contains a 3-cycle");
     expect(c.rows.map((r) => r.claim)).toContain(
       "the discriminant 1024000000 is a square, so every element is an even permutation",
@@ -165,21 +168,23 @@ describe("x⁵ + 20x + 16 reads = A₅", () => {
   });
 });
 
-describe("the D₅ quintic does not close", () => {
+describe("the D₅ quintic: the theorem on cycle types does not close, the descent does", () => {
+  const ev = evidence("z^5 - 5z + 12");
+  const g = gal(ev.factors[0]);
   const c = certs("z^5 - 5z + 12");
-  it("refuses a name and lists what it contains", () => {
-    expect(c.group.level).toBe("⚠");
-    expect(c.group.method).toMatch(/^not yet identified/);
+  it("the evidence alone names nothing (PRA-4's gate, still true of that step)", () => {
+    expect(g.verdict).toBe("open");
     expect(c.types.map((t) => t.claim)).toEqual([
       "contains an element of type (2, 2, 1)",
       "contains an element of type (5)",
       "contains an element of type (1, 1, 1, 1, 1)",
     ]);
-    // No group name anywhere.
-    const everything = [c.group, ...c.rows, ...c.types]
-      .map((x) => `${x.claim} ${x.method}`)
-      .join(" ");
-    expect(everything).not.toMatch(/symmetric|alternating|D₅|dihedral/);
+    const rows = [...c.rows, ...c.types].map((x) => `${x.claim} ${x.method}`).join(" ");
+    expect(rows).not.toMatch(/symmetric|alternating|D₅|dihedral/);
+  });
+  it("and the descent names D₅ exactly (PRA-5)", () => {
+    expect(c.group.level).toBe("=");
+    expect(c.group.claim).toBe("D₅ (5T2), of order 10");
   });
 });
 
@@ -280,7 +285,7 @@ describe("the PRA-4 sweep's survivors, each closed by the property it exposed", 
     expect(g.discSquare).toBe(false);
     expect(g.verdict).toBe("S");
     const c = galoisCerts(g, 4, true);
-    expect(c.group.claim).toBe("the symmetric group S₄, of order 24");
+    expect(c.group.claim).toBe("the symmetric group S₄ (4T5), of order 24");
     expect(c.rows.map((r) => r.claim)).toContain("contains a 3-cycle");
     // With every prime below 1000 a swap does turn up, and the answer does not move.
     expect(factorGalois([-3n, -6n, 0n, 0n, 1n], 1000).verdict).toBe("S");

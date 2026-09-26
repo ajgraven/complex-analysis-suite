@@ -60,6 +60,17 @@ export const GALOIS = {
   linear: "a rational root — nothing for a group to move",
   busy: "reading the primes…",
   refused: (why: string): string => `No Galois group: ${why}.`,
+  solvable: "solvable — the roots can be written with radicals",
+  notSolvable: "not solvable — the roots cannot be written with radicals",
+  indistinguishable: (label: string, others: readonly string[]): string =>
+    `the primes cannot separate ${label} from ${others.join(", ")}: their cycle types occur in the same proportions`,
+  generators: "Generators, as permutations of the roots",
+  candidates: "Groups still consistent with the primes, best fit first",
+  estimateWhy:
+    "Past degree 7 no group is proved here: each candidate contains every cycle type seen and matches the discriminant, and the ranking is by how well its proportions match the counts.",
+  play: (text: string): string => `Play ${text} on the roots`,
+  moreCandidates: (k: number): string =>
+    `and ${k} more group${k === 1 ? "" : "s"} still consistent, each a worse fit`,
 } as const;
 
 /** "a swap", "a 5-cycle", "an 8-cycle", "an 11-cycle" — the article follows the spoken number. */
@@ -146,6 +157,17 @@ export const METHOD = {
     "a primitive group containing a 3-cycle contains every even permutation, and a square discriminant rules out the odd ones",
   alternatingOdd:
     "a primitive group containing a 3-cycle contains every even permutation, and a discriminant that is not a square puts an odd one in too",
+  descent:
+    "descended from the symmetric group one maximal subgroup at a time, each step decided by an integer found exactly",
+  resolvent: (bits: number, plain: boolean): string =>
+    `its coefficients certified from the roots to ${bits} bits and rounded to integers; the root tested exactly${plain ? "" : ", after a change of variable that makes it simple"}`,
+  statistics: (primes: number): string =>
+    `ranked by how often each cycle type appeared among ${primes} primes — an estimate`,
+  solvableTable: "read from the group's structure",
+  generatorsTheorem: "every permutation of this parity is in the group",
+  generatorsFix: (root: string): string =>
+    `each fixes the last resolvent's integer root ${root}`,
+  generatorsDescent: "the group the descent ended at",
 } as const;
 
 /** Words the screen must never carry — the house names of the methods behind it. */
@@ -178,5 +200,4 @@ export const DENYLIST: readonly RegExp[] = [
   /\bMignotte\b/,
   /\bBerlekamp\b/,
   /\bSn\b/,
-  /\b\d+T\d+\b/,
 ];

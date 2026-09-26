@@ -15,6 +15,10 @@ import {
   witnessText,
 } from "./vocabulary.js";
 import type { FactorEvidence, GaloisEvidence } from "./galois/tier0.js";
+import type { Identification } from "./galois/identify.js";
+import type { DescentStep } from "./galois/descent.js";
+import { groupByLabel } from "./galois/tables.js";
+import { formatCycles, type Perm } from "@cas/monodromy";
 import type { LoopRun } from "./loops/run.js";
 import type { Recognition } from "@cas/monodromy";
 
@@ -211,26 +215,144 @@ export function galoisCerts(
     ),
   );
   const provenance = rows.map((r) => ({ ok: true, text: `${r.claim} (${r.method})` }));
+  const id = g.identification;
+  const label = id.tier === 1 ? ` (${id.label})` : "";
   let group: Certificate;
   if (g.verdict === "S")
     group = exact(
-      `the symmetric group S${sub(n)}, of order ${factorial(n)}`,
+      `the symmetric group S${sub(n)}${label}, of order ${factorial(n)}`,
       g.transposition ? METHOD.symmetric : METHOD.alternatingOdd,
       { provenance },
     );
   else if (g.verdict === "A")
     group = exact(
-      `the alternating group A${sub(n)}, of order ${factorial(n) / 2n}`,
+      `the alternating group A${sub(n)}${label}, of order ${factorial(n) / 2n}`,
       METHOD.alternating,
+      { provenance },
+    );
+  else if (id.tier === 1)
+    group = exact(`${id.name} (${id.label}), of order ${id.order}`, METHOD.descent, {
+      provenance: id.steps.map((st) => ({ ok: true, text: stepText(st) })),
+    });
+  else if (id.tier === 2 && id.candidates.length > 0) {
+    const top = id.candidates[0];
+    group = estimate(
+      `probably ${top.name} (${top.label}), of order ${top.order}`,
+      METHOD.statistics(id.primesUsed),
       {
-        provenance,
+        ...(top.indistinguishableFrom.length
+          ? {
+              restriction: GALOIS.indistinguishable(top.label, top.indistinguishableFrom),
+            }
+          : {}),
       },
     );
-  else
-    group = refuse("the Galois group", `${GALOIS.open}: ${GALOIS.openWhy}`, {
-      provenance,
-    });
+  } else
+    group = refuse(
+      "the Galois group",
+      `${GALOIS.open}: ${id.tier === 0 && id.reason !== "" ? id.reason : GALOIS.openWhy}`,
+      { provenance },
+    );
   return { types, rows, group };
+}
+
+const ORDINAL = ["", "first", "second", "third", "fourth"];
+
+/** One step of the descent, as a sentence. */
+export function stepText(st: DescentStep): string {
+  const K = groupByLabel(st.to);
+  const name = `${K.name} (${K.label})`;
+  if (st.via === "discriminant")
+    return st.outcome === "descend"
+      ? `inside ${name}: the discriminant is a square`
+      : `not inside ${name}: the discriminant is not a square`;
+  const which = st.classOf
+    ? ` of the ${ORDINAL[st.classOf.k]} of its ${st.classOf.of} kinds`
+    : "";
+  return st.outcome === "descend"
+    ? `inside a copy of ${name}${which}: the resolvent of degree ${st.index} has the simple integer root ${st.root?.replace(/^-/, "−")}`
+    : `inside no copy of ${name}${which}: the resolvent of degree ${st.index} has no integer root`;
+}
+
+export interface IdentityCerts {
+  /** Solvable by radicals or not — at the group's own level. */
+  readonly solvable: Certificate | null;
+  /** The descent, step by step (Tier 1 by descent only). */
+  readonly steps: readonly Certificate[];
+  /** Generators on the numbered roots (Tier 1 only), each with its certificate. */
+  readonly generators: readonly { readonly perm: Perm; readonly cert: Certificate }[];
+  /** Tier 2: every candidate still consistent, ranked. */
+  readonly candidates: readonly Certificate[];
+}
+
+/** The identification's own rows: solvability, the descent, the labelled generators, the candidates. */
+export function identityCerts(
+  id: Identification,
+  labels: readonly number[] | null,
+): IdentityCerts {
+  if (id.tier === 0) return { solvable: null, steps: [], generators: [], candidates: [] };
+  if (id.tier === 2) {
+    const top = id.candidates[0];
+    return {
+      solvable: top
+        ? estimate(
+            top.solvable ? GALOIS.solvable : GALOIS.notSolvable,
+            METHOD.solvableTable,
+          )
+        : null,
+      steps: [],
+      generators: [],
+      candidates: id.candidates.map((c) =>
+        estimate(
+          `${c.name} (${c.label}), of order ${c.order}`,
+          `distance ${c.score.toFixed(1)} from the counts seen${
+            c.indistinguishableFrom.length
+              ? `; ${GALOIS.indistinguishable(c.label, c.indistinguishableFrom)}`
+              : ""
+          }`,
+        ),
+      ),
+    };
+  }
+  const steps = id.steps.map((st) =>
+    exact(
+      stepText(st),
+      st.via === "discriminant"
+        ? METHOD.discSquare
+        : METHOD.resolvent(
+            st.bits,
+            st.transform.length === 2 && st.transform[0] === 0 && st.transform[1] === 1,
+          ),
+    ),
+  );
+  const how =
+    id.by === "theorem"
+      ? METHOD.generatorsTheorem
+      : id.witness
+        ? METHOD.generatorsFix(id.witness.root.replace(/^-/, "−"))
+        : METHOD.generatorsDescent;
+  return {
+    solvable: exact(
+      id.solvable ? GALOIS.solvable : GALOIS.notSolvable,
+      METHOD.solvableTable,
+    ),
+    steps,
+    generators: id.generators.map((g) => ({
+      perm: [...g],
+      cert: exact(permText(g, labels), how),
+    })),
+    candidates: [],
+  };
+}
+
+/** A permutation of the roots in cycle notation on the reader's labels: (r₁ r₃ r₂). */
+export function permText(g: readonly number[], labels: readonly number[] | null): string {
+  const text = formatCycles([...g], 0);
+  if (text === "()") return "the identity";
+  return text.replace(
+    /\d+/g,
+    (d) => `r${sub(labels ? labels[Number(d)] : Number(d) + 1)}`,
+  );
 }
 
 function isPrime(n: number): boolean {

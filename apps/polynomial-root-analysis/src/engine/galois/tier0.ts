@@ -35,6 +35,7 @@ import {
   type ZPoly,
 } from "@cas/exact";
 import type { Polynomial } from "../polynomial.js";
+import { identifyFactor, type Identification } from "./identify.js";
 
 /** Decimal strings, so a `bigint` never has to cross the worker boundary. */
 export interface GaloisRequest {
@@ -42,6 +43,8 @@ export interface GaloisRequest {
   readonly coefficients: readonly string[];
   /** Cycle types are read at every good prime below this. */
   readonly primesBelow: number;
+  /** The reader's roots, in the order the polynomial holds them, so a named group acts on THEM. */
+  readonly roots?: readonly (readonly [number, number])[];
 }
 
 /** One cycle type seen, with the first prime that showed it and how many primes did. */
@@ -78,6 +81,8 @@ export interface FactorEvidence {
     readonly transposition: ElementWitness | null;
     readonly threeCycle: ElementWitness | null;
     readonly verdict: Verdict;
+    /** The group named, in whichever tier could name it (identify.ts). */
+    readonly identification: Identification;
   } | null;
 }
 
@@ -115,6 +120,7 @@ export function galoisRequest(
     request: {
       coefficients: zFromQi(p.exact).map(String),
       primesBelow: PRIME_BOUND,
+      roots: p.roots.map(([x, y]) => [x, y] as const),
     },
   };
 }
@@ -204,6 +210,7 @@ function cycleTypes(f: ZPoly, bound: number): { seen: CycleWitness[]; used: numb
 export function factorGalois(
   f: ZPoly,
   bound: number,
+  plotted: readonly (readonly [number, number])[] | null = null,
 ): NonNullable<FactorEvidence["galois"]> {
   const n = f.length - 1;
   const disc = discriminantOf(f);
@@ -229,6 +236,7 @@ export function factorGalois(
     transposition,
     threeCycle,
     verdict,
+    identification: identifyFactor(f, { verdict, discSquare, cycleTypes: seen }, plotted),
   };
 }
 
@@ -239,16 +247,19 @@ export function galoisEvidence(req: GaloisRequest): GaloisEvidence {
   if (degree < 1)
     return { ok: false, reason: "a constant has no Galois group to speak of" };
   const { unit, factors } = factorOverZ(f);
+  const irreducible = factors.length === 1 && factors[0].multiplicity === 1;
+  // The reader's roots belong to a factor only when the factor is the whole polynomial.
+  const plotted = irreducible && req.roots?.length === degree ? req.roots : null;
   return {
     ok: true,
     degree,
     unit: unit.toString(),
-    irreducible: factors.length === 1 && factors[0].multiplicity === 1,
+    irreducible,
     factors: factors.map(({ poly, multiplicity }) => ({
       coefficients: poly.map(String),
       degree: poly.length - 1,
       multiplicity,
-      galois: poly.length - 1 >= 2 ? factorGalois(poly, req.primesBelow) : null,
+      galois: poly.length - 1 >= 2 ? factorGalois(poly, req.primesBelow, plotted) : null,
     })),
   };
 }

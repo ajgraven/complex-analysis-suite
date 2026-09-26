@@ -769,7 +769,7 @@ describe("the Galois card (PRA-4)", () => {
     await settled(app);
     const text = card().textContent ?? "";
     expect(text).toMatch(/The polynomial is irreducible over ℚ\./);
-    expect(text).toMatch(/It is the symmetric group S₅, of order 120\./);
+    expect(text).toMatch(/It is the symmetric group S₅ \(5T5\), of order 120\./);
     expect(text).toMatch(/a 5-cycle at p = 3/);
     expect(text).toMatch(/type \(3, 2\) at p = 2, cubed is a swap/);
     expect(text).toMatch(/the discriminant 2869 is not a square/);
@@ -783,13 +783,14 @@ describe("the Galois card (PRA-4)", () => {
     expect(types[0].querySelectorAll(".cycle-dot")).toHaveLength(5);
   });
 
-  it("does not name the D₅ quintic, and says so", async () => {
+  it("does not name a group no tier reaches, and says so", async () => {
+    // z¹⁶ + 1 = Φ₃₂: its group is abelian (no swap, no 3-cycle), and degree 16 is past every table.
     const { app } = mount();
-    app.actions().type("z^5 - 5z + 12");
+    app.actions().type("z^16 + 1");
     await settled(app);
     const text = card().textContent ?? "";
     expect(text).toMatch(/Contains the elements below; not yet identified\./);
-    expect(text).not.toMatch(/symmetric|alternating|dihedral|D₅/);
+    expect(text).not.toMatch(/symmetric|alternating|cyclic|16T/);
     expect(card().querySelector(".galois-group .level")?.getAttribute("data-level")).toBe(
       "⚠",
     );
@@ -801,7 +802,7 @@ describe("the Galois card (PRA-4)", () => {
     await settled(app);
     expect(card().textContent).toMatch(/factors over ℚ into 2 irreducible factors/);
     expect(card().querySelectorAll(".factor")).toHaveLength(2);
-    expect(card().textContent).toMatch(/S₂, of order 2.*S₃, of order 6/s);
+    expect(card().textContent).toMatch(/S₂ \(2T1\), of order 2.*S₃ \(3T2\), of order 6/s);
   });
 
   it("refuses a Gaussian coefficient and a dragged float polynomial, by name", () => {
