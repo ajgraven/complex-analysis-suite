@@ -480,6 +480,32 @@ const PAGES = [
     hash: viewState("pra", { r: "C", t: "z^5 - 1", d: 1, o: 0, cr: 0, j: null, ld: [5, "#q2", "d2"], rc: [0, 0, 1.6], cc: [0, 0, 2] }),
     expect: ".verdict",
   },
+  // PRA-10: a tour step that asks a prediction (the fieldset, its claims withheld), and the drill at its
+  // worked and its last, masked stage — the states a default-state audit never reaches.
+  {
+    id: "polynomial-root-analysis-tour",
+    mount: "polynomial-root-analysis",
+    dist: "apps/polynomial-root-analysis/dist",
+    file: "index.html",
+    hash: viewState("pra", { r: "C", t: "z^3 - 1", d: 1, o: 0, cr: 0, j: null, ld: [3, "#cardano", "d1"], tu: 4, rc: [0, 0, 1.6], cc: [0, 0, 2] }),
+    expect: ".tour .predict",
+  },
+  {
+    id: "polynomial-root-analysis-drill-worked",
+    mount: "polynomial-root-analysis",
+    dist: "apps/polynomial-root-analysis/dist",
+    file: "index.html",
+    hash: viewState("pra", { r: "C", t: "z^5 - 1", d: 1, o: 0, cr: 0, j: null, ld: [5, "#q2", "d2"], dl: ["q2", 0], rc: [0, 0, 1.6], cc: [0, 0, 2] }),
+    expect: ".drill .claims",
+  },
+  {
+    id: "polynomial-root-analysis-drill-alone",
+    mount: "polynomial-root-analysis",
+    dist: "apps/polynomial-root-analysis/dist",
+    file: "index.html",
+    hash: viewState("pra", { r: "C", t: "z^5 - 1", d: 1, o: 0, cr: 0, j: null, ld: [5, "#q3", null], dl: ["q3", 2], rc: [0, 0, 1.6], cc: [0, 0, 2] }),
+    expect: ".drill .predict",
+  },
 ];
 
 // The WCAG 2.0/2.1 A + AA conformance set plus axe's best-practice pack (landmarks/regions, valid
