@@ -29,7 +29,8 @@ and proceed the PRA-10").
   answers taken from `runLadder`'s theorem verdict, three stages (worked · guided · alone), progress in
   `localStorage` `pra.drill.v1` read totally, `ShellState.drill` permalinked as `dl`. Three a11y roster
   entries (`-tour`, `-drill-worked`, `-drill-alone`). Sweep **31 mutants, 29 killed, 2 equivalent**
-  (below). Gate **GATE_PLACEHOLDER**.
+  (below). Gate **645 files / 7536 tests** (643 / 7511 before: +2 files / 25 tests); `pnpm a11y --strict` over
+  the app's 16 roster pages **758 interactive nodes, 0 unnamed**.
 
 - 2026-09-26 — **PRA-8 complete: the ladder — Arnold's proof of Abel–Ruffini, executed.**
   `src/engine/formula/` reads a radical formula in a₀ … aₙ₋₁ (`sqrt`, `cbrt`, `root(k, ·)` rewritten to
