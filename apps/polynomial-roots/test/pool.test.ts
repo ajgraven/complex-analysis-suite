@@ -284,6 +284,113 @@ describe("the pool", () => {
     pool.dispose();
   });
 
+  it("a chunk error with other chunks still in flight never ends as DONE, and is reported once", () => {
+    // The review's reproduction: 10 chunks, 3 workers, two errors and a success. The old pool cleared
+    // its queue on the first error while the job's other replies were still in flight, so the count
+    // reached its total and `onDone` fired — the shell then called a partial sweep the whole family.
+    const { pool, workers } = makePool(3);
+    const log: string[] = [];
+    pool.run(
+      { spec, minDegree: 18, maxDegree: 18, totals: [10 * 16384], circleDelta: 0.02, hueDigits: 0 },
+      {
+        onChunk: () => log.push("chunk"),
+        onProgress: () => {},
+        onDone: () => log.push("DONE"),
+        onError: (m) => log.push(`ERR ${m}`),
+      },
+    );
+    const busy = workers.filter((w) => w.inbox.length > 0);
+    expect(busy).toHaveLength(3);
+    busy[0].failOne("first");
+    busy[1].failOne("second");
+    busy[2].flushOne();
+    drain(workers);
+    expect(log).toEqual(["ERR first"]);
+    pool.dispose();
+  });
+
+  it("a worker that DIES fails its job once and is replaced, so the next job has the whole pool", () => {
+    const { pool, workers } = makePool(2);
+    const log: string[] = [];
+    const handlers = {
+      onChunk: () => {},
+      onProgress: () => {},
+      onDone: () => log.push("DONE"),
+      onError: (m: string) => log.push(`ERR ${m}`),
+    };
+    pool.run({ spec, minDegree: 10, maxDegree: 10, totals: [1 << 10], circleDelta: 0.02, hueDigits: 0 }, handlers);
+    const dying = workers.find((w) => w.inbox.length > 0);
+    if (dying === undefined) throw new Error("no busy worker");
+    dying.inbox.length = 0;
+    dying.onerror?.(new Event("error"));
+    drain(workers);
+    expect(log).toEqual(["ERR a worker failed; the sweep is incomplete"]);
+    expect(dying.terminated).toBe(true);
+    expect(pool.size).toBe(2);
+    // The next job is dispatched across two LIVE workers, not one.
+    log.length = 0;
+    pool.run({ spec, minDegree: 16, maxDegree: 16, totals: [4 * 16384], circleDelta: 0.02, hueDigits: 0 }, handlers);
+    expect(workers.filter((w) => !w.terminated && w.inbox.length > 0)).toHaveLength(2);
+    drain(workers);
+    expect(log).toEqual(["DONE"]);
+    pool.dispose();
+  });
+
+  it("a worker dying on a SUPERSEDED job's chunk says nothing about the current job", () => {
+    const { pool, workers } = makePool(2);
+    const log: string[] = [];
+    const handlers = {
+      onChunk: () => {},
+      onProgress: () => {},
+      onDone: () => log.push("DONE"),
+      onError: (m: string) => log.push(`ERR ${m}`),
+    };
+    pool.run({ spec, minDegree: 16, maxDegree: 16, totals: [4 * 16384], circleDelta: 0.02, hueDigits: 0 }, handlers);
+    const old = workers.filter((w) => w.inbox.length > 0);
+    // A new job replaces it while both workers still hold the old one's chunks.
+    pool.run({ spec, minDegree: 8, maxDegree: 8, totals: [1 << 8], circleDelta: 0.02, hueDigits: 0 }, handlers);
+    old[0].inbox.length = 0;
+    old[0].onerror?.(new Event("error"));
+    drain(workers);
+    expect(log).toEqual(["DONE"]);
+    pool.dispose();
+  });
+
+  it("after a failure, reports it ONCE and dispatches nothing more for that job", () => {
+    const { pool, workers, dispatched } = makePool(2);
+    const log: string[] = [];
+    pool.run(
+      { spec, minDegree: 18, maxDegree: 18, totals: [10 * 16384], circleDelta: 0.02, hueDigits: 0 },
+      { onChunk: () => {}, onProgress: () => {}, onDone: () => log.push("DONE"), onError: (m) => log.push(m) },
+    );
+    const [a, b] = workers.filter((w) => w.inbox.length > 0);
+    a.inbox.length = 0;
+    a.onerror?.(new Event("error"));
+    const issued = dispatched.length;
+    b.inbox.length = 0;
+    b.onerror?.(new Event("error"));
+    drain(workers);
+    expect(log).toEqual(["a worker failed; the sweep is incomplete"]);
+    expect(dispatched.length).toBe(issued);
+    pool.dispose();
+  });
+
+  it("issues a job lazily — a vast index space costs nothing until it is worked", () => {
+    // The queue used to be materialised up front on the main thread: 18.6 million entries for {−2…2}
+    // at degree 16. A cursor issues exactly one chunk per idle worker, whatever the total.
+    const { pool, dispatched } = makePool(4);
+    const t = performance.now();
+    pool.run(
+      { spec, minDegree: 30, maxDegree: 30, totals: [2 ** 45], circleDelta: 0.02, hueDigits: 0 },
+      { onChunk: () => {}, onProgress: () => {}, onDone: () => {}, onError: () => {} },
+    );
+    expect(performance.now() - t).toBeLessThan(50);
+    expect(dispatched).toHaveLength(4);
+    expect(dispatched.map((r) => r.lo)).toEqual([0, 16384, 32768, 49152]);
+    pool.cancel();
+    pool.dispose();
+  });
+
   it("dispose terminates every worker", () => {
     const { pool, workers } = makePool(3);
     expect(pool.size).toBe(3);

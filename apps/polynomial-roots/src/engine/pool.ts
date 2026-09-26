@@ -11,8 +11,10 @@
 //
 // **Degrees ascend, and that is a UX decision.** The cheap degrees finish in milliseconds, so the reader
 // sees the whole cloud immediately and watches it sharpen, instead of staring at nothing while degree 20
-// computes. Each degree's chunks are handed out in order across the pool; the next degree starts only
-// when the previous one is drained, so a degree's texture is complete before the one above it begins.
+// computes. Chunks are ISSUED in degree order across the pool; the last chunks of one degree and the
+// first of the next can be in flight together, so a degree's layer is not guaranteed complete before
+// the one above it begins (this said it was until the 2026-09-26 review — the pool's own test says
+// otherwise).
 import type { AlphabetSpec } from "./alphabet.js";
 import type { RootsRequest, RootsResponse } from "./roots.worker.js";
 import type { SweepStats } from "./sweep.js";
@@ -43,7 +45,7 @@ export interface PoolHandlers {
 /** How many raw indices one chunk covers. Big enough to amortise the message, small enough to stay live. */
 const CHUNK = 16384;
 
-/** The pool's view of one queued chunk. */
+/** The pool's view of one issued chunk. */
 interface Pending {
   degree: number;
   lo: number;
@@ -54,35 +56,56 @@ interface Pending {
  * A fixed pool of module workers sweeping one job at a time.
  *
  * `run` replaces whatever was running: the job id is bumped, every reply carrying the old id is dropped,
- * and the queue is rebuilt. The workers themselves are never torn down — recreating them on every
- * parameter change was measurably the slowest thing a slider could do.
+ * and the cursor is reset. The workers themselves are torn down only when one DIES — recreating them on
+ * every parameter change was measurably the slowest thing a slider could do.
+ *
+ * **The queue is a cursor, not an array.** It used to be materialised up front, one `Pending` per 16,384
+ * indices, on the main thread: choosing `{−2 … 2}` at degree 16 pushed 18.6 million of them (6.9 s
+ * blocked, 1 GB of heap) before the first chunk was sent. The cost gate (`engine/cost.ts`) now stops
+ * such a job reaching here at all, and the cursor makes a job's size cost nothing until it is worked —
+ * which also retires `queue.shift()`, O(n) on a large array.
+ *
+ * **A failed job stays failed.** A chunk error used to clear the queue while replies from the same job
+ * were still in flight, so the progress count reached its total and `onDone` fired — a partial sweep
+ * reported as the whole family. And a worker that died (`onerror`) was never returned to `idle` nor
+ * counted out of `inFlight`, so the job hung at "computing" and the pool was one worker smaller for
+ * ever. Both are reported once, the job is ended with `onError` and never `onDone`, and a dead worker is
+ * replaced.
  */
 export class RootPool {
   private readonly workers: Worker[] = [];
   private readonly idle: Worker[] = [];
+  /** What each busy worker is holding, so a death can be attributed to its job. */
+  private readonly holding = new Map<Worker, number>();
   private jobId = 0;
-  private queue: Pending[] = [];
+  private job: PoolJob | null = null;
+  /** The cursor: the degree and the next index to issue within it. */
+  private cursorDegree = 0;
+  private cursorLo = 0;
   private inFlight = 0;
   private issued = 0;
+  private answered = 0;
   private totalChunks = 0;
+  private failed = false;
   private handlers: PoolHandlers | null = null;
   private disposed = false;
 
   constructor(
     size: number,
     /** Injected so a test can drive the pool without a real Worker. */
-    spawn: () => Worker = () => new Worker(new URL("./roots.worker.ts", import.meta.url), { type: "module" }),
+    private readonly spawn: () => Worker = () =>
+      new Worker(new URL("./roots.worker.ts", import.meta.url), { type: "module" }),
   ) {
     const n = Math.max(1, Math.min(16, Math.floor(size)));
-    for (let i = 0; i < n; i++) {
-      const w = spawn();
-      w.onmessage = (e: MessageEvent<RootsResponse>): void => this.receive(w, e.data);
-      w.onerror = (): void => {
-        this.handlers?.onError("a worker failed; the sweep is incomplete");
-      };
-      this.workers.push(w);
-      this.idle.push(w);
-    }
+    for (let i = 0; i < n; i++) this.addWorker();
+  }
+
+  private addWorker(): void {
+    const w = this.spawn();
+    w.onmessage = (e: MessageEvent<RootsResponse>): void => this.receive(w, e.data);
+    w.onerror = (): void => this.died(w);
+    this.workers.push(w);
+    this.idle.push(w);
   }
 
   /** How many workers are running. */
@@ -95,17 +118,19 @@ export class RootPool {
     if (this.disposed) return;
     this.jobId++;
     this.handlers = handlers;
-    this.queue = [];
-    this.issued = 0;
-    this.inFlight = 0;
-    for (let degree = job.minDegree; degree <= job.maxDegree; degree++) {
-      const total = job.totals[degree - job.minDegree] ?? 0;
-      for (let lo = 0; lo < total; lo += CHUNK) {
-        this.queue.push({ degree, lo, hi: Math.min(total, lo + CHUNK) });
-      }
-    }
-    this.totalChunks = this.queue.length;
     this.job = job;
+    this.issued = 0;
+    this.answered = 0;
+    this.inFlight = 0;
+    this.failed = false;
+    this.holding.clear();
+    this.cursorDegree = job.minDegree;
+    this.cursorLo = 0;
+    let chunks = 0;
+    for (let degree = job.minDegree; degree <= job.maxDegree; degree++) {
+      chunks += Math.ceil((job.totals[degree - job.minDegree] ?? 0) / CHUNK);
+    }
+    this.totalChunks = chunks;
     if (this.totalChunks === 0) {
       handlers.onProgress(0, 0);
       handlers.onDone();
@@ -118,8 +143,9 @@ export class RootPool {
   /** Abandon the current job; replies still in flight are ignored. */
   cancel(): void {
     this.jobId++;
-    this.queue = [];
+    this.job = null;
     this.inFlight = 0;
+    this.holding.clear();
   }
 
   /** Terminate every worker. The pool cannot be used afterwards. */
@@ -135,15 +161,31 @@ export class RootPool {
     this.idle.length = 0;
   }
 
-  private job: PoolJob | null = null;
+  /** The next chunk the cursor stands on, advancing it; null when the job is issued in full. */
+  private nextChunk(): Pending | null {
+    const job = this.job;
+    if (job === null) return null;
+    while (this.cursorDegree <= job.maxDegree) {
+      const total = job.totals[this.cursorDegree - job.minDegree] ?? 0;
+      if (this.cursorLo < total) {
+        const chunk = { degree: this.cursorDegree, lo: this.cursorLo, hi: Math.min(total, this.cursorLo + CHUNK) };
+        this.cursorLo = chunk.hi;
+        return chunk;
+      }
+      this.cursorDegree++;
+      this.cursorLo = 0;
+    }
+    return null;
+  }
 
   private pump(): void {
     const job = this.job;
-    if (job === null) return;
-    while (this.idle.length > 0 && this.queue.length > 0) {
+    if (job === null || this.failed) return;
+    while (this.idle.length > 0) {
+      const next = this.nextChunk();
+      if (next === null) break;
       const w = this.idle.pop();
-      const next = this.queue.shift();
-      if (w === undefined || next === undefined) break;
+      if (w === undefined) break;
       const req: RootsRequest = {
         jobId: this.jobId,
         chunkId: this.issued++,
@@ -155,11 +197,40 @@ export class RootPool {
         hueDigits: job.hueDigits,
       };
       this.inFlight++;
+      this.holding.set(w, this.jobId);
       w.postMessage(req);
     }
   }
 
+  /** End the current job as a failure, once. */
+  private fail(message: string): void {
+    if (this.failed) return;
+    this.failed = true;
+    this.handlers?.onError(message);
+  }
+
+  private died(worker: Worker): void {
+    const heldFor = this.holding.get(worker);
+    this.holding.delete(worker);
+    worker.onmessage = null;
+    worker.onerror = null;
+    worker.terminate();
+    const at = this.workers.indexOf(worker);
+    if (at >= 0) this.workers.splice(at, 1);
+    const idleAt = this.idle.indexOf(worker);
+    if (idleAt >= 0) this.idle.splice(idleAt, 1);
+    if (!this.disposed) this.addWorker();
+    // Its chunk is lost, so the job it belonged to cannot be complete. A worker that died holding a
+    // chunk of a SUPERSEDED job says nothing about the current one.
+    if (heldFor === this.jobId) {
+      this.inFlight--;
+      this.fail("a worker failed; the sweep is incomplete");
+    }
+    this.pump();
+  }
+
   private receive(worker: Worker, res: RootsResponse): void {
+    this.holding.delete(worker);
     this.idle.push(worker);
     // A reply from a job that has been replaced: the picture it belongs to is gone.
     if (res.jobId !== this.jobId) {
@@ -169,17 +240,17 @@ export class RootPool {
     this.inFlight--;
     const handlers = this.handlers;
     if (handlers === null) return;
+    if (this.failed) return;
     if (res.error !== undefined) {
-      handlers.onError(res.error);
-      this.queue = [];
+      this.fail(res.error);
       return;
     }
     if (res.points !== undefined && res.stats !== undefined) {
       handlers.onChunk(res.degree, res.points, res.stats, res.hues);
     }
-    const done = this.totalChunks - this.queue.length - this.inFlight;
-    handlers.onProgress(done, this.totalChunks);
-    if (this.queue.length === 0 && this.inFlight === 0) {
+    this.answered++;
+    handlers.onProgress(this.answered, this.totalChunks);
+    if (this.answered === this.totalChunks) {
       handlers.onDone();
       return;
     }

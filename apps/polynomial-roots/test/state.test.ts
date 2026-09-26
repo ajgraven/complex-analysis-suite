@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { clampState, DEFAULT_STATE, LIVE_DEGREE_CAP, MAX_DEGREE, MAX_EXTEND } from "../src/state";
+import { clampState, DEFAULT_STATE, MAX_DEGREE, MAX_EXTEND } from "../src/state";
 import type { AppState } from "../src/state";
 
 const base = (over: Partial<AppState> = {}): AppState => ({ ...DEFAULT_STATE, ...over });
@@ -36,7 +36,6 @@ describe("clampState", () => {
     expect(clampState(base({ minDegree: -7, maxDegree: 5 })).minDegree).toBe(1);
     expect(clampState(base({ minDegree: 1, maxDegree: 999 })).maxDegree).toBe(MAX_DEGREE);
     expect(clampState(base({ minDegree: 3.7, maxDegree: 9.2 })).minDegree).toBe(4);
-    expect(LIVE_DEGREE_CAP).toBeLessThan(MAX_DEGREE); // the live cap is a cap, not the ceiling
   });
 
   it("replaces a non-finite number with its default rather than carrying NaN into the stage", () => {

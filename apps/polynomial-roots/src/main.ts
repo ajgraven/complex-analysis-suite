@@ -9,6 +9,8 @@ import type { CanvasKeyAction } from "@cas/ui";
 import { compileAlphabet, formatCx, symmetryReadout } from "./engine/alphabet.js";
 import type { Alphabet, AlphabetSpec, Cx } from "./engine/alphabet.js";
 import { orbitSpace } from "./engine/orbits.js";
+import { costNote, HARD_POINT_BUDGET, highestDegreeWithin, LIVE_POINT_BUDGET, sweepCost } from "./engine/cost.js";
+import type { SweepCost } from "./engine/cost.js";
 import { defaultPoolSize, RootPool } from "./engine/pool.js";
 import { GlStage, StageUnavailable } from "./stage/glStage.js";
 import { LimitPass, limitPixelRadius } from "./stage/limitPass.js";
@@ -29,7 +31,6 @@ import {
   centreNumbers,
   clampState,
   DEFAULT_STATE,
-  LIVE_DEGREE_CAP,
   MAX_DEGREE,
   MAX_EXTEND,
   MIN_HALF_HEIGHT,
@@ -487,7 +488,10 @@ function main(): void {
     resizeCanvas();
     const a = alphabet;
     syncOverlay();
-    if (a === null) return;
+    if (a === null) {
+      stage.clear();
+      return;
+    }
     const aspect = gl.width / Math.max(1, gl.height);
     const centre = centreNumbers(state);
     const view = { cx: centre.cx, cy: centre.cy, halfHeight: state.halfHeight };
@@ -561,6 +565,8 @@ function main(): void {
   let lastMaxDensity = 0;
   /** The coefficient count the loaded layers' hues were swept with, 0 for none. */
   let sweptHueDigits = 0;
+  /** The sweep the reader last pressed Compute for (`sweepGate`'s key), or "" for none. */
+  let confirmedSweep = "";
 
   // --- the sweep --------------------------------------------------------------------------------
   function recompute(): void {
@@ -573,10 +579,20 @@ function main(): void {
     scheduleInset();
     const compiled = compileAlphabet(state.alphabet);
     if ("error" in compiled) {
+      // **Stop the old sweep, not only its layers.** This dropped the layers and returned, so a sweep
+      // already in flight kept delivering chunks into fresh layers and into `totals`: typing `1, banana`
+      // mid-sweep left a ⚠ note beside a 66%-lit stage and statistics climbing from 6.6 M to 10.4 M
+      // polynomials (2026-09-26 review). An unreadable alphabet draws nothing and counts nothing.
       alphabet = null;
       alphabetError = compiled.error;
+      pool.cancel();
       stage.dropLayers();
+      totals = emptyTotals();
+      complete = false;
+      progress.textContent = "";
       syncControls();
+      syncStats();
+      draw();
       return;
     }
     alphabet = compiled.alphabet;
@@ -607,6 +623,18 @@ function main(): void {
       return;
     }
 
+    // **The gate is HERE, on the one path every sweep takes** — a link, a place, a preset change, the
+    // Egan switch and both degree sliders all arrive through `recompute`. It used to live on the Highest
+    // slider alone, so a `dmax: 22` link swept on load while the page said "press Compute" (verified in
+    // the 2026-09-26 review), and a Lowest change or a preset change swept past it too.
+    const gate = sweepGate(alphabet);
+    if (gate.cost.verdict === "refused" || (gate.cost.verdict === "confirm" && !gate.confirmed)) {
+      progress.textContent = "";
+      syncControls();
+      syncStats();
+      draw();
+      return;
+    }
     // Egan's hues cost |G| floats per root, so they are swept only when the mode is on — and switching
     // to it, or changing how many coefficients it reads, re-sweeps (see `apply`).
     sweptHueDigits = state.colour === "egan" ? state.hueDigits : 0;
@@ -1007,15 +1035,25 @@ function main(): void {
           ? `Limit set — ${chosen.reason} Depth ${state.depth}, node budget ${NODE_BUDGET.toLocaleString("en-US")} per pixel. Cool grey: not walked. Warm grey: the budget ran out.${shallow}`
           : `Root cloud — ${chosen.reason}`;
 
-    const above = state.maxDegree > LIVE_DEGREE_CAP;
-    computeButton.hidden = !above;
-    degreeNote.textContent = above
-      ? `Degree ${state.maxDegree} is ${formatBig(Math.pow(2, state.maxDegree))} polynomials; press Compute when ready.`
+    // The budget is the alphabet's, not the degree's (`engine/cost.ts`). Only the root engine sweeps, so
+    // only it is gated; the note says what the range costs whenever it will not run at once.
+    const gate = alphabet === null || chosen.engine !== "roots" ? null : sweepGate(alphabet);
+    computeButton.hidden = gate === null || gate.cost.verdict !== "confirm" || gate.confirmed;
+    degreeNote.textContent = gate !== null && gate.cost.verdict !== "live" && !gate.confirmed
+      ? costNote(
+          gate.cost,
+          state.minDegree,
+          state.maxDegree,
+          highestDegreeWithin(gate.alphabet, state.minDegree, HARD_POINT_BUDGET, MAX_DEGREE),
+        )
       : `Degrees ${state.minDegree}–${state.maxDegree}. Precision: ${stage.precision === "float32" ? "32-bit float accumulation" : "16-bit float accumulation (this browser has no EXT_float_blend; counts above 65504 saturate)"}.`;
   }
 
-  function formatBig(n: number): string {
-    return n >= 1e6 ? `${(n / 1e6).toFixed(1)} million` : Math.round(n).toLocaleString("en-US");
+  /** The sweep the state asks for, its cost, and whether the reader has pressed Compute for it. */
+  function sweepGate(a: Alphabet): { alphabet: Alphabet; cost: SweepCost; key: string; confirmed: boolean } {
+    const cost = sweepCost(a, state.minDegree, state.maxDegree);
+    const key = `${a.id}|${state.minDegree}|${state.maxDegree}`;
+    return { alphabet: a, cost, key, confirmed: cost.verdict === "confirm" && confirmedSweep === key };
   }
 
   function syncStats(): void {
@@ -1236,27 +1274,37 @@ function main(): void {
       ...(preset === "range" ? { n: 2 } : preset === "roots-of-unity" ? { n: 3 } : {}),
       ...(preset === "custom" ? { custom: customInput.value || "1, -1, i, -i" } : {}),
     };
-    apply({ ...state, alphabet: spec });
+    applyAlphabet(spec);
   });
   nInput.addEventListener("change", () => {
-    apply({ ...state, alphabet: { ...state.alphabet, n: Number(nInput.value) } });
+    applyAlphabet({ ...state.alphabet, n: Number(nInput.value) });
   });
   customInput.addEventListener("change", () => {
-    apply({ ...state, alphabet: { preset: "custom", custom: customInput.value } });
+    applyAlphabet({ preset: "custom", custom: customInput.value });
   });
+  /**
+   * Choosing an alphabet from the controls brings the degree range down to what that alphabet sweeps
+   * at once. A LINK is not clamped — it is gated, because it says exactly what its sharer asked for —
+   * but a menu choice that turned "{−2 … 2}" into a 3e11-polynomial Compute prompt would be the app
+   * punishing the reader for a click.
+   */
+  function applyAlphabet(spec: AlphabetSpec): void {
+    const compiled = compileAlphabet(spec);
+    if ("error" in compiled) {
+      apply({ ...state, alphabet: spec });
+      return;
+    }
+    const live = highestDegreeWithin(compiled.alphabet, 1, LIVE_POINT_BUDGET, MAX_DEGREE);
+    const maxDeg = Math.max(1, Math.min(state.maxDegree, live));
+    apply({ ...state, alphabet: spec, maxDegree: maxDeg, minDegree: Math.min(state.minDegree, maxDeg) });
+  }
   minDegree.addEventListener("input", () => {
     const v = Number(minDegree.value);
     apply({ ...state, minDegree: v, maxDegree: Math.max(v, state.maxDegree) });
   });
   maxDegree.addEventListener("input", () => {
     const v = Number(maxDegree.value);
-    if (v > LIVE_DEGREE_CAP) {
-      // Above the live cap the sweep is not started automatically; the reader presses Compute.
-      state = clampState({ ...state, maxDegree: v, minDegree: Math.min(state.minDegree, v) });
-      syncControls();
-      syncHash();
-      return;
-    }
+    // No special case: `recompute` gates every path on the alphabet's cost (`engine/cost.ts`).
     apply({ ...state, maxDegree: v, minDegree: Math.min(state.minDegree, v) });
   });
   engineSelect.addEventListener("change", () => {
@@ -1286,6 +1334,7 @@ function main(): void {
     apply({ ...state, gamma: Number(gamma.value) });
   });
   computeButton.addEventListener("click", () => {
+    if (alphabet !== null) confirmedSweep = sweepGate(alphabet).key;
     apply(state, { resweep: true });
   });
   resetButton.addEventListener("click", () => {

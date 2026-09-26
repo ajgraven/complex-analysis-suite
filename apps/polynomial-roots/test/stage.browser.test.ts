@@ -251,3 +251,33 @@ describe("a named place renders a picture, not a black screen", () => {
     for (const p of tight) expect(["limit", "deep"], p.id).toContain(p.state.engine);
   });
 });
+
+describe("a resize keeps the picture", () => {
+  it("re-splats from the kept buffers at the new resolution, rather than dropping the sweep", () => {
+    // The 2026-09-26 review measured a window resize blanking the root cloud (286,856 lit pixels → 0):
+    // `resize` dropped the layers, vertex buffers included, and nothing re-swept. The density's TOTAL is
+    // resolution-independent — every root is inside the view either way — so it must survive exactly.
+    const { stage } = mountStage();
+    const a = compileAlphabet({ preset: "littlewood" });
+    if ("error" in a) throw new Error(a.error);
+    const degree = 10;
+    const sw = sweepChunk({ spec: { preset: "littlewood" }, degree, lo: 0, hi: orbitSpace(a.alphabet, degree).total, circleDelta: 0.02 });
+    if ("error" in sw) throw new Error(sw.error);
+    stage.addPoints(degree, sw.points);
+    const view = { cx: 0, cy: 0, halfHeight: 2.2 };
+    const sum = (): number => {
+      stage.paint(view, 1, a.alphabet.group);
+      expect(stage.composeDegrees(1, 30)).toBe(true);
+      let total = 0;
+      for (const v of stage.readDensity()) total += v;
+      return total;
+    };
+    const before = sum();
+    expect(before).toBeGreaterThan(1000);
+    stage.resize(384);
+    expect(stage.resolution).toBe(384);
+    expect(stage.loadedDegrees()).toEqual([degree]);
+    expect(sum()).toBeCloseTo(before, 3);
+    stage.dispose();
+  });
+});

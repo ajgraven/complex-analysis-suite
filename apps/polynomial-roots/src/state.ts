@@ -77,10 +77,11 @@ export interface AppState {
 /** Most extension digits the overlay will enumerate. `2^14` is 16,384 Newton solves, about 0.4 s. */
 export const MAX_EXTEND = 14;
 
-/** Highest degree the app will sweep without being asked twice (ADR-0046: live to 20). */
-export const LIVE_DEGREE_CAP = 20;
-
-/** Highest degree the app will sweep at all in this milestone. */
+/**
+ * The schema's bound on a single degree — what a link may name. Whether a range RUNS is decided by its
+ * cost over the alphabet (`engine/cost.ts`), not by this: the old `LIVE_DEGREE_CAP = 20` was a degree
+ * limit applied to every alphabet alike, and on the Highest slider alone.
+ */
 export const MAX_DEGREE = 24;
 
 /**

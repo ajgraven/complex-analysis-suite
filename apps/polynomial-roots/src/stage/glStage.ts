@@ -205,8 +205,9 @@ void main() {
 
 /** One degree's accumulation target. */
 interface Layer {
-  readonly texture: WebGLTexture;
-  readonly framebuffer: WebGLFramebuffer;
+  /** Rebuilt on a resize; the buffers below are kept, because they are in world coordinates. */
+  texture: WebGLTexture;
+  framebuffer: WebGLFramebuffer;
   /** The GPU buffers holding this degree's representative roots, in world coordinates. */
   readonly buffers: WebGLBuffer[];
   /** Egan's hues for each buffer, `|G|` floats per point, or null for a chunk swept without them. */
@@ -323,7 +324,20 @@ export class GlStage {
     if (s === this.size) return;
     this.eganKey = "";
     this.size = s;
-    this.dropLayers();
+    // **Keep the points; rebuild only the textures.** This called `dropLayers()`, which deletes the
+    // vertex buffers too, and nothing re-swept — so resizing the window blanked the root cloud while the
+    // statistics went on describing it (measured in the 2026-09-26 review: 286,856 lit pixels before a
+    // 1280 → 1100 width change, 0 after, until the next pan). The buffers hold world coordinates, so a
+    // new resolution needs new textures and one re-splat, never a new sweep.
+    const gl = this.gl;
+    for (const layer of this.layers.values()) {
+      gl.deleteTexture(layer.texture);
+      gl.deleteFramebuffer(layer.framebuffer);
+      const fresh = this.target();
+      layer.texture = fresh.texture;
+      layer.framebuffer = fresh.framebuffer;
+      layer.painted = false;
+    }
     if (this.composite !== null) {
       this.gl.deleteTexture(this.composite.texture);
       this.gl.deleteFramebuffer(this.composite.framebuffer);
@@ -609,6 +623,15 @@ export class GlStage {
     const density = new Float32Array(this.size * this.size);
     for (let i = 0, j = 0; i < density.length; i++, j += 4) density[i] = buf[j];
     return density;
+  }
+
+  /** Clear the canvas to the empty background — nothing is drawn, and nothing claims to be. */
+  clear(): void {
+    const gl = this.gl;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+    gl.clearColor(0, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
   }
 
   /** Draw the composite to the canvas through the tone ramp and the colour ramp. */

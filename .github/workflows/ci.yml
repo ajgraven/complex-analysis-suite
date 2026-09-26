@@ -101,7 +101,7 @@ jobs:
         run: pnpm build
 
   # Everything that needs a real WebGL2 context, in headless Chromium — the backstop the node/jsdom
-  # gate structurally can't be. Six harnesses, all under `pnpm test:browser`:
+  # gate structurally can't be. Seven harnesses, all under `pnpm test:browser`:
   #
   #   · @cas/gpu — runGLSL over DUAL_BACKEND_CORPUS: executes the emitted GLSL and compares against
   #     the JS reference, catching float32 GPU-only drift (Review P4). SwiftShader (software WebGL2)
@@ -125,6 +125,10 @@ jobs:
   #     shader, checks it against its CPU twin, and compares rendered PIXELS between the declared and
   #     principal programs — the one assertion that sees a shader emitting a function it never calls,
   #     which links without complaint and draws the old picture.
+  #   · polynomial-roots — compiles and links the density stage, the limit-set walk (generated per
+  #     alphabet and depth), the deep splat and Egan's hue, and checks the walk against its float64
+  #     twin texel for texel. Added 2026-09-26: the review found this suite had never run in CI at all,
+  #     though half of the app's findings name a browser test as their guard.
   #
   # Kept SEPARATE from `build` so it never slows the main gate.
   # NOT covered: apps/correspondences' shaders are still never compiled (unpublished app).
