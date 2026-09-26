@@ -88,7 +88,8 @@ body {
 }
 .poly-input,
 .family-input,
-.base-input {
+.base-input,
+.formula-input {
   flex: 1;
   min-width: 0;
   background: var(--bg);
@@ -468,6 +469,75 @@ canvas:focus-visible {
   margin: 2px 0;
 }
 .bridge h3 {
+  margin: 10px 0 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* ── The ladder (PRA-8) ────────────────────────────────────────────────────────────── */
+.words,
+.radicals,
+.identities {
+  list-style: none;
+  margin: 6px 0;
+  padding: 0;
+}
+.words li + li,
+.radicals li + li {
+  margin-top: 4px;
+}
+.word {
+  text-align: left;
+  width: 100%;
+  font:
+    12px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+.radicals li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.radicals .radical {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+.radicals .theorem,
+.radicals .measured {
+  font-size: 12px;
+}
+.verdict {
+  font-weight: 600;
+}
+.derived-level {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+}
+.derived-label {
+  min-width: 2.5em;
+  text-align: right;
+  color: var(--muted);
+  font-size: 12px;
+}
+.derived-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1px;
+  max-width: 16em;
+}
+.derived-grid .el {
+  width: 6px;
+  height: 6px;
+  background: var(--line);
+}
+.derived-grid .el.lit {
+  background: var(--accent, #ffd24a);
+}
+.card h3 {
   margin: 10px 0 4px;
   font-size: 13px;
   color: var(--muted);

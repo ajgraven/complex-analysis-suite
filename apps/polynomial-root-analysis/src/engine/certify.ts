@@ -24,6 +24,8 @@ import type { LoopRun } from "./loops/run.js";
 import type { Recognition } from "@cas/monodromy";
 import type { FamilyReading } from "./family/family.js";
 import type { Arithmetic, Relation } from "./family/bridge.js";
+import type { LadderRun } from "./ladder/run.js";
+import type { RadicalOutcome } from "./formula/evaluate.js";
 
 export function coordinateCert(): Certificate {
   return estimate("the root's coordinates", METHOD.coordinate);
@@ -462,4 +464,78 @@ export function specialisationCert(r: Relation, t0: string, group: string): Cert
       : `the Galois group of p(${t0}, z) over ℚ is ${group}: a proper subgroup of the group over ℚ(t) — t = ${t0} lies in the thin set Hilbert's theorem allows`,
     METHOD.hilbert,
   );
+}
+
+/** `[a, b] = c`: composed, `=`. */
+export function identityCert(text: string): Certificate {
+  return exact(text, METHOD.composed);
+}
+
+/** A radical along a word: measured (≈), since the winding is read at samples. */
+export function radicalCert(
+  o: RadicalOutcome,
+  samples: number,
+  halvings: number,
+): Certificate {
+  const claim = o.closes
+    ? `closes (its radicand winds ${o.winding} time${Math.abs(o.winding ?? 0) === 1 ? "" : "s"} round 0)`
+    : o.returns
+      ? `does not close (its radicand winds ${o.winding} time${Math.abs(o.winding ?? 0) === 1 ? "" : "s"} round 0, not a multiple of ${o.radical.k})`
+      : "does not close (its radicand does not come back)";
+  return estimate(claim, METHOD.measuredWinding(samples, halvings));
+}
+
+/** What the theorem says about a radical of this level along a word of this depth, when it says anything. */
+export function radicalTheoremCert(level: number, depth: number): Certificate | null {
+  return level <= depth
+    ? exact(
+        `closes: level ${level} ≤ the word's depth ${depth}`,
+        METHOD.commutatorTheorem,
+      )
+    : null;
+}
+
+/** The run's verdict. */
+export function ladderVerdict(run: LadderRun, permText: string): Certificate {
+  const o = run.outcome;
+  if (!run.evaluation.ok)
+    return refuse("the formula along this word", run.evaluation.reason);
+  if (!run.agrees)
+    return refuse(
+      "the formula along this word",
+      "the permutation read off the motion disagrees with the one composed",
+    );
+  if (!o) return refuse("the formula along this word", "nothing was measured");
+  switch (o.kind) {
+    case "contradiction":
+      return refuse(
+        "the formula along this word",
+        `the radical ${run.formula.radicals[o.radical].text} was measured not to close, which the theorem rules out — the measurement is wrong, so nothing is claimed`,
+      );
+    case "trivial":
+      return exact(
+        `the roots come back to their places (${permText}): this word rules nothing out`,
+        METHOD.composed,
+      );
+    case "refuted":
+      return exact(
+        `every radical closes and the roots undergo ${permText}: no formula with at most ${o.depth} level${o.depth === 1 ? "" : "s"} of radicals can follow a root — depth ${o.depth} is killed by this word, and a formula needs at least ${o.depth + 1}`,
+        METHOD.commutatorTheorem,
+      );
+    case "refutedMeasured":
+      return estimate(
+        `every radical was measured to close while the roots undergo ${permText}: this word rules the formula out`,
+        METHOD.measuredWinding(run.evaluation.samples, run.evaluation.halvings),
+      );
+    case "survives":
+      return estimate(
+        `${run.formula.radicals[o.radical].text} does not close, so this word cannot rule the formula out`,
+        METHOD.measuredWinding(run.evaluation.samples, run.evaluation.halvings),
+      );
+  }
+}
+
+/** The derived series' orders, enumerated. */
+export function derivedCert(orders: readonly number[]): Certificate {
+  return exact(orders.join(" → "), METHOD.derivedEnumerated);
 }

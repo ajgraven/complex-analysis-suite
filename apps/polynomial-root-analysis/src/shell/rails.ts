@@ -21,6 +21,7 @@ import {
 import { level } from "./level.js";
 import { galoisCard, type GaloisModel, type GaloisView } from "./galoisCard.js";
 import { familyCard, type FamilyHandlers, type FamilyModel } from "./familyCard.js";
+import { ladderCard, type LadderHandlers, type LadderModel } from "./ladderCard.js";
 
 /** The gain matrix's shared log scale, so one root's row can be read against another's. */
 function gainScale(c: readonly Conditioning[] | null): [number, number] {
@@ -149,6 +150,7 @@ export function leftRail(
   m: LeftModel,
   on: LeftHandlers,
   family?: { readonly model: FamilyModel; readonly on: FamilyHandlers },
+  ladder?: { readonly model: LadderModel; readonly on: LadderHandlers },
 ): Desc[] {
   const rings: Ring[] = ["C", "R", "Q"];
   const cards = [
@@ -206,6 +208,7 @@ export function leftRail(
       m.poly ? coefficientRows(m.poly) : null,
     ),
     ...(family ? [familyCard(family.model, family.on)] : []),
+    ...(ladder ? [ladderCard(ladder.model, ladder.on)] : []),
     card(
       "view",
       CARD.view,

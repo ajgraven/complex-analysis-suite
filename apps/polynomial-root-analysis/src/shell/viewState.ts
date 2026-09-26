@@ -10,6 +10,7 @@ import {
   DEFAULT_STATE,
   buildPolynomial,
   resolveState,
+  type LadderState,
   type Cam,
   type PolySpec,
   type ShellState,
@@ -17,6 +18,8 @@ import {
 import type { Loop } from "../engine/loops/loop.js";
 import { branchPoints } from "../engine/analysis/discriminant.js";
 import { readFamily } from "../engine/family/family.js";
+import { rung } from "../engine/ladder/rungs.js";
+import { readFormula } from "../engine/formula/tree.js";
 
 export const NAMESPACE = "pra";
 
@@ -39,6 +42,8 @@ interface Wire {
   gc?: 0 | 1;
   /** Added at PRA-7: the family `[text, base, open]` (absent = none). */
   fm?: [string, string, 0 | 1];
+  /** Added at PRA-8: the ladder `[rung, formula (a gallery id, or the text), word or null]`. */
+  ld?: [number, string, string | null];
   rc: [number, number, number];
   cc: [number, number, number];
   [k: string]: unknown;
@@ -67,6 +72,7 @@ export function encodeShell(s: ShellState): string {
           ],
         }
       : {}),
+    ...(s.ladder ? { ld: ladderOut(s.ladder) } : {}),
     rc: cam(s.rootCam),
     cc: cam(s.coeffCam),
   };
@@ -77,6 +83,34 @@ export function encodeShell(s: ShellState): string {
     w.l = [s.poly.lead[0], s.poly.lead[1]];
   }
   return encodeViewState(NAMESPACE, w);
+}
+
+/** A gallery formula travels as its id; anything typed travels as the text. */
+function ladderOut(l: LadderState): [number, string, string | null] {
+  const g = rung(l.rung).formulas.find((f) => f.text === l.formula);
+  return [l.rung, g ? `#${g.id}` : l.formula, l.word];
+}
+
+function ladderIn(x: unknown): LadderState | string {
+  if (!Array.isArray(x) || x.length !== 3)
+    return "the ladder is not a rung, a formula and a word";
+  const [d, f, w] = x as unknown[];
+  if (d !== 2 && d !== 3 && d !== 4 && d !== 5)
+    return `there is no rung of degree ${String(d)}`;
+  if (typeof f !== "string") return "the ladder's formula is not text";
+  const rg = rung(d);
+  let formula = f;
+  if (f.startsWith("#")) {
+    const g = rg.formulas.find((q) => q.id === f.slice(1));
+    if (!g) return `the ${rg.name.toLowerCase()} rung has no formula '${f.slice(1)}'`;
+    formula = g.text;
+  } else {
+    const r = readFormula(f, d);
+    if (!r.ok) return `the ladder's formula cannot be read: ${r.reason}`;
+  }
+  if (w !== null && (typeof w !== "string" || !rg.words.some((q) => q.id === w)))
+    return `the ${rg.name.toLowerCase()} rung has no word '${String(w)}'`;
+  return { rung: d, formula, word: w as string | null };
 }
 
 /**
@@ -262,6 +296,12 @@ export function decodeShell(hash: string): Decoded | null {
       return { ok: false, reason: `the family cannot be read: ${read.reason}` };
     family = { text: f[0], base: f[1], open: f[2] === 1 };
   }
+  let ladder: LadderState | null = null;
+  if (w.ld !== undefined) {
+    const l = ladderIn(w.ld);
+    if (typeof l === "string") return { ok: false, reason: l };
+    ladder = l;
+  }
   const state: ShellState = {
     ring,
     poly,
@@ -274,9 +314,20 @@ export function decodeShell(hash: string): Decoded | null {
     loop,
     lattice: w.gc === 1,
     family,
+    ladder,
     rootCam: rc,
     coeffCam: cc,
   };
+  // The ladder decides the polynomial: its rung's own.
+  if (ladder)
+    return {
+      ok: true,
+      state: {
+        ...state,
+        ring: "C",
+        poly: { kind: "roots", roots: rung(ladder.rung).roots, lead: [1, 0] },
+      },
+    };
   if (family?.open) {
     // The family decides the polynomial; the link must name a base point it can stand on.
     const res = resolveState(state);

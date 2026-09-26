@@ -57,6 +57,35 @@ export const MONODROMY = {
     "The roots' real parts over the course of the last loop or motion, left to right; where two strands cross, the one with the larger imaginary part passes over.",
 } as const;
 
+export const LADDER = {
+  heading: "Ladder: Abel–Ruffini",
+  what: "Arnold's proof, executed. Move the roots round a loop and a formula built from the coefficients by + − × ÷ comes back to its value; a radical comes back along every COMMUTATOR of loops. So a formula with N levels of radicals comes back along every N-fold nested commutator — and if the roots do not, it cannot be a formula for a root.",
+  rungs: "Rungs",
+  rung: {
+    2: "Two roots: one swap, and one level of square root undoes it.",
+    3: "Three roots: two swaps' commutator is a 3-cycle, which kills one level; the 3-cycles commute, so two levels (Cardano) suffice.",
+    4: "Four roots: commutators of 3-cycles give double swaps, which kill two levels; those commute, so three levels (Ferrari) suffice.",
+    5: "Five roots: a 3-cycle is a commutator of two 3-cycles, so the ladder never runs out — every depth of radicals is killed by some word, and the roots still move.",
+  } as Record<number, string>,
+  formula: "Formula",
+  formulaBox: "x =",
+  formulaHint:
+    "In a₀ … aₙ₋₁ (the polynomial is monic), with + − * / ^, sqrt, cbrt, root(k, …), i, and disc for the discriminant; name parts with ‘p = …;’.",
+  levels: (k: number): string => `${k} level${k === 1 ? "" : "s"} of radicals`,
+  words: "Words — nested commutators of root motions",
+  wordsLabel: "Words to run, by depth",
+  wordButton: (depth: number, text: string, perm: string): string =>
+    `depth ${depth}: ${text} = ${perm}`,
+  radicals: "Each radical along the word",
+  identities: "The identities it rests on",
+  derived: "The derived series of the symmetric group",
+  derivedStall:
+    "It stops shrinking: the 60 even permutations are their own commutators, so no depth of radicals is ever enough.",
+  derivedEnds: "It reaches the identity: that many levels of radicals are enough.",
+  leave: "Leave the ladder",
+  busy: "following the formula along the word…",
+} as const;
+
 export const FAMILY = {
   heading: "Family",
   what: "A polynomial in z whose coefficients depend on a parameter t: one polynomial for every t. Where two of its roots collide — the zeros of the discriminant in t — the roots are branched, and a loop of t round one such point comes back with two of them swapped.",
@@ -238,6 +267,12 @@ export const METHOD = {
     "it contains the alternating monodromy group, and the discriminant is a square in ℚ(t), so it is even",
   arithmeticNotSquare:
     "it contains the alternating monodromy group, and the discriminant is not a square in ℚ(t), so it has an odd element too",
+  composed: "composed by the permutation engine, and read off the motion itself",
+  commutatorTheorem:
+    "the winding of a single-valued function round a commutator of loops is m₁ + m₂ − m₁ − m₂ = 0, so a radical closes along every commutator of depth at least its level",
+  measuredWinding: (samples: number, halvings: number): string =>
+    `followed along ${samples} samples of the motion (${halvings} steps halved) — each step small enough that the radicand cannot circle 0 between two samples was checked AT the samples, not between them`,
+  derivedEnumerated: "every level listed element by element",
   hilbert:
     "the specialisation's group is a subgroup of the group over ℚ(t) (Hilbert); a subgroup of the same order is the whole group",
 } as const;

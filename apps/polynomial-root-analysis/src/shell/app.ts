@@ -10,6 +10,7 @@ import {
   fromCoeffs,
   fromRoots,
   partnerOf,
+  vieta,
   type Cx,
   type Polynomial,
   type Ring,
@@ -25,6 +26,8 @@ import {
   snapBase,
 } from "../engine/family/family.js";
 import { specialGalois, type SpecialGalois } from "../engine/family/bridge.js";
+import { rung, type RungDegree } from "../engine/ladder/rungs.js";
+import { readFormula } from "../engine/formula/tree.js";
 import type { Loop } from "../engine/loops/loop.js";
 import { motion as makeMotion, FRAMES_PER_MOVE } from "../engine/loops/motion.js";
 import { crossings, pathsAsFrames } from "../engine/loops/braid.js";
@@ -78,6 +81,8 @@ import {
   DEFAULT_STATE,
   familyState,
   frame,
+  ladderPolynomial,
+  type LadderState,
   memoRun,
   resolveFamily,
   resolvePolynomial,
@@ -142,6 +147,11 @@ export interface App {
     specialise(): void;
     backToFamily(): void;
     leaveFamily(): void;
+    /** The ladder (PRA-8). */
+    openLadder(d: RungDegree): void;
+    setFormula(text: string): void;
+    runWord(id: string): void;
+    leaveLadder(): void;
   };
   /** The Galois card's model: refused, busy, or the evidence for the committed polynomial. */
   galois(): GaloisModel | null;
@@ -266,6 +276,9 @@ export function mountApp(host: HTMLElement): App {
   /** The family box's text when it did not read, and why. */
   let familyText: string | null = null;
   let familyRefusal: string | null = null;
+  /** The ladder's formula box when it did not read, and why. */
+  let ladderText: string | null = null;
+  let ladderRefusal: string | null = null;
   /** Root trails by LABEL, for the drag in progress (and kept after it when `state.trails`). */
   const trails = new Map<number, Cx[]>();
   // Loop authoring and playback — session state, never in the permalink (the WORD is; these are how it
@@ -451,6 +464,7 @@ export function mountApp(host: HTMLElement): App {
       r.poly?.coeffs ?? null,
       s.coefficient,
       s.family?.open ? s.family.text : null,
+      s.ladder?.rung ?? null,
     ]);
   }
   function resetSession(): void {
@@ -469,11 +483,28 @@ export function mountApp(host: HTMLElement): App {
   let adopted = "";
   function adoptRun(): void {
     const run = resolution.loopRun;
-    const key = JSON.stringify([sessionKey(state, resolution), state.loop]);
+    const key = JSON.stringify([sessionKey(state, resolution), state.loop, state.ladder]);
     if (key === adopted) return;
     adopted = key;
     motionInfo = null;
     const p = resolution.poly;
+    const lr = resolution.ladder;
+    if (lr?.ok && p) {
+      // A word run on the ladder: the roots travel its motion, the coefficients their closed loops,
+      // and each root takes the label the motion carries it to.
+      const frames = lr.run.motion.frames.map((f) => [...f]);
+      braid = { frames, labels: p.labels };
+      startAnim({
+        roots: frames,
+        coeffs: frames.map((f) => vieta(f, [1, 0])),
+        f: 0,
+        labels: p.labels,
+      });
+      const after = new Array<number>(p.degree);
+      lr.run.motion.perm.forEach((k, i) => (after[k] = p.labels[i]));
+      relabel(after);
+      return;
+    }
     if (!run || !run.ok || !p) return;
     const frames = pathsAsFrames(run.paths);
     braid = { frames, labels: p.labels };
@@ -547,6 +578,8 @@ export function mountApp(host: HTMLElement): App {
   function targetsIn(id: PaneId): Target[] {
     const p = live.poly;
     if (!p) return [];
+    // On the ladder the polynomial is the rung's: its roots move only along a word.
+    if (state.ladder) return [];
     // In a family the polynomial is p(t₀, z): it moves only as t₀ does.
     if (familyOpen()) return id === "coefficients" ? [{ kind: "base", index: 0 }] : [];
     const roots: Target[] = p.roots.map((_, i) => ({ kind: "root", index: i }));
@@ -916,6 +949,51 @@ export function mountApp(host: HTMLElement): App {
     render();
   }
 
+  // ── The ladder (PRA-8).
+  function openLadder(d: RungDegree): void {
+    const l: LadderState = { rung: d, formula: rung(d).formulas[0].text, word: null };
+    const p = ladderPolynomial(l);
+    if (!p) return;
+    ladderText = null;
+    ladderRefusal = null;
+    selected = null;
+    commit({
+      ...state,
+      family: null,
+      loop: null,
+      overlay: false,
+      ring: "C",
+      poly: { kind: "roots", roots: p.roots, lead: [1, 0] },
+      ladder: l,
+      rootCam: frame(p.roots),
+      coeffCam: frame(p.coeffs),
+    });
+  }
+  function setFormula(text: string): void {
+    const l = state.ladder;
+    if (!l) return;
+    const read = readFormula(text, l.rung);
+    if (!read.ok) {
+      ladderText = text;
+      ladderRefusal = read.reason;
+      render();
+      return;
+    }
+    ladderText = null;
+    ladderRefusal = null;
+    commit({ ...state, ladder: { ...l, formula: text } });
+  }
+  function runWord(id: string): void {
+    const l = state.ladder;
+    if (!l) return;
+    commit({ ...state, ladder: { ...l, word: id } });
+  }
+  function leaveLadder(): void {
+    ladderText = null;
+    ladderRefusal = null;
+    if (state.ladder) commit({ ...state, ladder: null });
+  }
+
   // ── Families (PRA-7).
   function openFamily(text: string, base: string | null = null): void {
     const read = readFamily(text);
@@ -1027,7 +1105,12 @@ export function mountApp(host: HTMLElement): App {
     textRefusal = null;
     pendingText = null;
     // Typing a polynomial leaves any family: it is no longer p(t₀, z).
-    const next: ShellState = { ...state, family: null, poly: { kind: "text", text } };
+    const next: ShellState = {
+      ...state,
+      family: null,
+      ladder: null,
+      poly: { kind: "text", text },
+    };
     const res = resolveState(next);
     if (!res.poly) {
       textRefusal = res.refusal;
@@ -1050,6 +1133,12 @@ export function mountApp(host: HTMLElement): App {
 
   function setRing(ring: Ring): void {
     ringRefusal = null;
+    if (state.ladder) {
+      ringRefusal =
+        "the ladder's polynomials are fixed — leave the ladder to change the ring";
+      render();
+      return;
+    }
     if (familyOpen()) {
       ringRefusal =
         "a family's members have the coefficients p(t₀, z) gives them — leave the family to change the ring";
@@ -1215,6 +1304,20 @@ export function mountApp(host: HTMLElement): App {
             onSpecialise: specialiseFamily,
             onBack: backToFamily,
             onLeave: leaveFamily,
+          },
+        },
+        {
+          model: {
+            state: state.ladder,
+            result: live.ladder,
+            text: ladderText,
+            refusal: ladderRefusal,
+          },
+          on: {
+            onRung: openLadder,
+            onFormula: setFormula,
+            onWord: runWord,
+            onLeave: leaveLadder,
           },
         },
       ),
@@ -1539,6 +1642,10 @@ export function mountApp(host: HTMLElement): App {
       specialise: specialiseFamily,
       backToFamily,
       leaveFamily,
+      openLadder,
+      setFormula,
+      runWord,
+      leaveLadder,
     }),
     galois: () => galois,
     lattice: () => lattice,

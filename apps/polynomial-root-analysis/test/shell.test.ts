@@ -11,7 +11,7 @@ import { decodeShell, encodeShell, NAMESPACE } from "../src/shell/viewState.js";
 import { verdictLine } from "../src/shell/figure.js";
 import { resolveState } from "../src/shell/state.js";
 import { DENYLIST } from "../src/engine/vocabulary.js";
-import { encodeViewState } from "@cas/interchange";
+import { decodeViewState, encodeViewState } from "@cas/interchange";
 
 function mount(hash = ""): { root: HTMLElement; app: App } {
   window.history.replaceState(null, "", `${window.location.pathname}${hash}`);
@@ -276,6 +276,7 @@ describe("applyState restores a state the app is NOT in (M6.1's test, not the fi
     loop: null,
     lattice: false,
     family: null,
+    ladder: null,
     rootCam: { cx: 0.25, cy: -0.5, half: 2 },
     coeffCam: { cx: 1, cy: 0, half: 3 },
   };
@@ -299,6 +300,7 @@ describe("applyState restores a state the app is NOT in (M6.1's test, not the fi
     loop: { kind: "lasso", point: 1, sign: -1 },
     lattice: true,
     family: { text: "x^5 - x - t", base: "1", open: false },
+    ladder: null,
     rootCam: { cx: -1, cy: 2, half: 0.75 },
     coeffCam: { cx: 0, cy: 0, half: 1.5 },
   };
@@ -1111,5 +1113,100 @@ describe("families (PRA-7)", () => {
     expect(u?.ok).toBe(false);
     if (u && !u.ok)
       expect(u.reason).toMatch(/the family cannot be read: not a polynomial in t/);
+  });
+});
+
+describe("the ladder (PRA-8)", () => {
+  const card = (): HTMLElement => q("section[aria-labelledby='card-ladder']");
+  const button = (text: string | RegExp): HTMLButtonElement => {
+    const b = [...document.querySelectorAll<HTMLButtonElement>("button")].find((x) =>
+      typeof text === "string" ? x.textContent === text : text.test(x.textContent ?? ""),
+    );
+    if (!b) throw new Error(`no button ${String(text)}`);
+    return b;
+  };
+
+  it("a rung opens its polynomial, Cardano, the words, the identities and the derived series", () => {
+    const { app } = mount();
+    button("Cubic").click();
+    const s = app.currentState();
+    expect(s.ladder).toMatchObject({ rung: 3, word: null });
+    expect(s.poly.kind).toBe("roots");
+    const text = card().textContent ?? "";
+    expect(text).toMatch(/2 levels of radicals/);
+    expect(text).toMatch(/\[\(1 2\), \(2 3\)\] = \(1 2 3\)/);
+    expect(text).toMatch(/S₃: 6 → 3 → 1\./);
+    expect(card().querySelectorAll(".words button")).toHaveLength(4);
+  });
+
+  it("running the depth-1 word: the cube root does not close, so the word cannot rule Cardano out", () => {
+    const { app } = mount();
+    app.actions().openLadder(3);
+    app.actions().runWord("d1");
+    const text = card().textContent ?? "";
+    expect(text).toMatch(/The roots undergo \(1 2 3\)\./);
+    expect(text).toMatch(/level 2: ∛[^]*does not close/);
+    expect(text).toMatch(/does not close, so this word cannot rule the formula out/);
+    // The roots have moved: each took the label the motion carried it to.
+    expect(livePoly(app).labels).not.toEqual([1, 2, 3]);
+    expect(app.braid()?.strands).toBe(3);
+  });
+
+  it("the quintic: the depth-2 candidate is killed by the depth-2 word, and the series stalls at 60", () => {
+    const { app } = mount();
+    app.actions().openLadder(5);
+    app.actions().setFormula("cbrt(-20.875 - 27.75*i + sqrt(disc))");
+    app.actions().runWord("d2");
+    const text = card().textContent ?? "";
+    expect(text).toMatch(
+      /depth 2 is killed by this word, and a formula needs at least 3/,
+    );
+    expect(text).toMatch(/S₅: 120 → 60 → 60\./);
+    expect(text).toMatch(/no depth of radicals is ever enough/);
+    expect(card().querySelector(".verdict")?.textContent).toMatch(/^=/);
+  });
+
+  it("a formula that does not read is refused by name and keeps the box", () => {
+    const { app } = mount();
+    app.actions().openLadder(4);
+    app.actions().setFormula("exp(a0)");
+    expect(card().textContent).toMatch(/Not read: 'exp\(…\)' is not a radical/);
+    expect(q<HTMLInputElement>(".formula-input").value).toBe("exp(a0)");
+    expect(app.currentState().ladder?.formula).toMatch(/^p = a2/);
+  });
+
+  it("a rung state is a permalink: rung, formula and word travel; a gallery formula travels as its id", () => {
+    const { app } = mount();
+    app.actions().openLadder(4);
+    app.actions().runWord("d2");
+    const hash = encodeShell(app.currentState());
+    // Ferrari's text is ~400 characters; on the wire it is its id.
+    const env = decodeViewState<{ ld: unknown[] }>(hash);
+    expect(env?.state.ld).toEqual([4, "#ferrari", "d2"]);
+    const d = decodeShell(hash);
+    expect(d?.ok && d.state.ladder).toEqual(app.currentState().ladder);
+    const { app: again } = mount(hash);
+    expect(again.currentState().ladder).toEqual(app.currentState().ladder);
+    expect(card().textContent).toMatch(/The roots undergo \(1 4\)\(2 3\)\./);
+    const bad = decodeShell(
+      encodeShell({
+        ...app.currentState(),
+        ladder: { rung: 4, formula: "x", word: "d9" },
+      }),
+    );
+    expect(bad?.ok).toBe(false);
+  });
+
+  it("typing a polynomial, or opening a family, leaves the ladder; the ladder's roots cannot be dragged", () => {
+    const { app } = mount();
+    app.actions().openLadder(3);
+    app.actions().moveTo({ kind: "root", index: 0 }, [2, 2]);
+    app.actions().release();
+    expect(app.currentState().ladder).not.toBeNull();
+    app.actions().type("z^2 - 2");
+    expect(app.currentState().ladder).toBeNull();
+    app.actions().openLadder(2);
+    app.actions().openFamily("x^3 + t x + 1");
+    expect(app.currentState().ladder).toBeNull();
   });
 });

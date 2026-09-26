@@ -29,6 +29,8 @@ import {
   type FamilyReading,
 } from "../engine/family/family.js";
 import { arithmeticGroup, type Arithmetic } from "../engine/family/bridge.js";
+import { rung, type RungDegree } from "../engine/ladder/rungs.js";
+import { runLadder, type LadderResult } from "../engine/ladder/run.js";
 
 /** A pane's camera: the world point at the centre and the half-HEIGHT of the view. */
 export interface Cam {
@@ -67,8 +69,19 @@ export interface ShellState {
    * the bridge back to the family it came from.
    */
   readonly family: FamilyState | null;
+  /**
+   * The ladder (PRA-8): a rung, a formula, and the word last run (null: none yet). While it is set the
+   * root plane shows the rung's own polynomial, which a reader does not edit.
+   */
+  readonly ladder: LadderState | null;
   readonly rootCam: Cam;
   readonly coeffCam: Cam;
+}
+
+export interface LadderState {
+  readonly rung: RungDegree;
+  readonly formula: string;
+  readonly word: string | null;
 }
 
 export interface FamilyState {
@@ -91,6 +104,7 @@ export const DEFAULT_STATE: ShellState = {
   loop: null,
   lattice: false,
   family: null,
+  ladder: null,
   rootCam: { cx: 0, cy: 0, half: 1.6 },
   coeffCam: { cx: 0, cy: 0, half: 1.6 },
 };
@@ -109,6 +123,8 @@ export interface Resolution {
   readonly loopRun: LoopRun | null;
   /** The family, when the state names one. */
   readonly family: FamilyResolution | null;
+  /** The ladder's run, when a word has been run. */
+  readonly ladder: LadderResult | null;
 }
 
 export interface FamilyResolution {
@@ -165,9 +181,11 @@ const blank = (refusal: string, family: FamilyResolution | null): Resolution => 
   loopContext: null,
   loopRun: null,
   family,
+  ladder: null,
 });
 
 export function resolveState(s: ShellState, prev?: Continuation): Resolution {
+  if (s.ladder) return resolveLadder(s, s.ladder);
   if (s.family?.open) return resolveFamily(s, s.family, prev, null);
   const built = buildPolynomial(s, prev);
   if (!built.ok) return blank(built.reason, null);
@@ -309,12 +327,25 @@ export function resolveFamily(
   return { ...r, family: { ...fam, ...flower } };
 }
 
+/** The rung's own polynomial, monic, its roots in the rung's order (labels 1 … n). */
+export function ladderPolynomial(l: LadderState): Polynomial | null {
+  const built = fromRoots(rung(l.rung).roots, [1, 0], "C");
+  return built.ok ? built.poly : null;
+}
+
+function resolveLadder(s: ShellState, l: LadderState): Resolution {
+  const p = ladderPolynomial(l);
+  if (!p) return blank("the rung's polynomial could not be built", null);
+  const r = resolvePolynomial(p, { ...s, coefficient: null }, false);
+  return { ...r, ladder: l.word === null ? null : runLadder(l.rung, l.formula, l.word) };
+}
+
 /** The state that opens `text` at base `base` (exact text) in family mode, or a refusal by name. */
 export function familyState(
   s: ShellState,
   f: FamilyState,
 ): { ok: true; state: ShellState; res: Resolution } | { ok: false; reason: string } {
-  const next: ShellState = { ...s, family: f, loop: null, overlay: false };
+  const next: ShellState = { ...s, family: f, ladder: null, loop: null, overlay: false };
   const res = resolveState(next);
   if (!res.poly || !res.poly.exact || !res.family?.base)
     return { ok: false, reason: res.refusal ?? "the family cannot be read" };
@@ -367,6 +398,7 @@ export function resolvePolynomial(
     loopContext: ctx,
     loopRun: ctx && s.loop ? memoRun(poly, s.loop, ctx) : null,
     family: null,
+    ladder: null,
   };
 }
 
