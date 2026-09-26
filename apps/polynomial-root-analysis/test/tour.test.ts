@@ -78,6 +78,10 @@ describe("the tour's steps, as states", () => {
       false,
     );
     expect(onTourStep(r, { ...t, ladder: s.ladder })).toBe(false);
+    // A family is another state, even over the step's own polynomial.
+    expect(
+      onTourStep(r, { ...t, family: { text: "x^5 - x - t", base: "0", open: true } }),
+    ).toBe(false);
   });
 });
 
@@ -176,6 +180,17 @@ describe("the Tour card", () => {
     expect(trails?.ok && [trails.state.trails, trails.state.tour]).toEqual([true, k]);
     const bad = decodeShell(encodeShell({ ...app.currentState(), tour: 99 }));
     expect(bad?.ok === false && bad.reason).toBe("the tour has no step 99");
+    // One past the last step is past the end, not the last step.
+    const past = decodeShell(
+      encodeShell({ ...app.currentState(), tour: TOUR_STEPS.length }),
+    );
+    expect(past?.ok === false && past.reason).toBe(
+      `the tour has no step ${TOUR_STEPS.length}`,
+    );
+    const last = decodeShell(
+      encodeShell({ ...app.currentState(), tour: TOUR_STEPS.length - 1 }),
+    );
+    expect(last?.ok).toBe(true);
   });
 
   it("the Galois step reads the Galois card's evidence once it arrives", async () => {

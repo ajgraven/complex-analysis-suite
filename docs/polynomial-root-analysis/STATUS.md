@@ -9,10 +9,27 @@ not silently changed.
 
 ## Current
 
-**PRA-9 — Overlays, wave 2, and the surfaced ideas** (PLAN §7; a backlog the owner orders), awaiting
-the owner's go-ahead. PRA-8 is complete.
+**PRA-10's long tail, owner-ordered** (PLAN §7): Dummit's radical solution, Tier 1 to degrees 8–11,
+Schreier–Sims, PARI-wasm, `@cas/interchange` hand-offs — awaiting the owner's order. PRA-10's
+narrative layer is complete. PRA-9 is skipped for now at the owner's instruction ("Skip PRA-9 for now,
+and proceed the PRA-10").
 
 ## Done
+
+- 2026-09-26 — **PRA-10 narrative layer complete: the tour, the front door, the faded drill.**
+  **10.1** moved Contour Integration's modal mechanics into `@cas/ui` (`createModal`, `git mv` with its
+  test) — the second app to need them. **10.2** `src/shell/tour.ts` + `tourCard.ts`: Arnold's proof in
+  ten steps, each OPENING a state the app already computes (a sandbox polynomial or a ladder rung,
+  formula and word), from a bar button; `ShellState.tour`, permalink key `tu`. What a step shows is
+  certificates read off its own state; five steps ask a forced-choice prediction first, withholding
+  those certificates until answered and grading from the same run. **10.3** `frontDoor.ts`: eleven
+  classics in a modal (x⁵ − x − 1, x⁵ + 20x + 16, x⁵ − 5x + 12, Trinks, x³ − 2 with its correspondence,
+  Wilkinson, two families, the ladder quintic, the tour, the drill). `drill.ts` + `drillCard.ts`: *which
+  word of the rung is the shallowest that rules this formula out, or does none?* over eight formulas,
+  answers taken from `runLadder`'s theorem verdict, three stages (worked · guided · alone), progress in
+  `localStorage` `pra.drill.v1` read totally, `ShellState.drill` permalinked as `dl`. Three a11y roster
+  entries (`-tour`, `-drill-worked`, `-drill-alone`). Sweep **31 mutants, 29 killed, 2 equivalent**
+  (below). Gate **GATE_PLACEHOLDER**.
 
 - 2026-09-26 — **PRA-8 complete: the ladder — Arnold's proof of Abel–Ruffini, executed.**
   `src/engine/formula/` reads a radical formula in a₀ … aₙ₋₁ (`sqrt`, `cbrt`, `root(k, ·)` rewritten to
@@ -163,6 +180,35 @@ the owner's go-ahead. PRA-8 is complete.
   `docs/design/future-app-ideas.md` as ▶ 8. No code touched.
 
 ## Findings (things learned while executing; each names its step)
+- _(PRA-10.3)_ **The formula gallery gave the drill's answer away.** At the last stage the Ladder card
+  hid the words, the runs and the "N levels of radicals" line, and still showed the gallery `<select>`
+  whose option for the task's own formula read *three levels*. The stage's leak test found it; the
+  gallery is hidden at that stage now. The same test's first regex matched the card's GENERAL sentence
+  ("a formula with N levels of radicals") and would have failed a correct mask, so it asks for a
+  digit.
+- _(PRA-10.3)_ **"Return to the task" first went back to the task's OPENING stage**, taken from
+  progress, rather than the stage the reader had left: a reader at *Alone* who edited the formula and
+  came back was shown the worked answer. It has its own handler now.
+- _(PRA-10.3)_ **The drill grades against the theorem only, and the task list is chosen to make that
+  honest.** `runLadder` also reports `refutedMeasured` (`≈`: deeper radicals than the word, all
+  measured to close). Measured over candidate tasks, `cbrt(a0 + sqrt(disc))` on the quartic is
+  `refutedMeasured` at depth 1 BEFORE the theorem's depth 2, and so is `#q4` at depth 3 — a drill
+  answer there would teach an estimate as a fact. Neither is a task, and a test pins that no task has a
+  measured refutation at or before its answer. So the `dr-measured` mutant (accept either kind) is
+  equivalent on the task list by construction.
+- _(PRA-10.2)_ **`tr` was already taken** (the trails flag), so the tour's wire key is `tu`; a test
+  encodes trails and a tour step together.
+- _(PRA-10.2)_ **A step the reader edits away withholds its claims** rather than asserting them about
+  a different state: `onTourStep` compares the live state with what the step opened, and the card says
+  so and offers the way back.
+- _(PRA-10, sweep)_ Four first-pass survivors, each bought a test: no test put a family on a tour
+  state; decoding accepted one step past the end (`>` for `>=`); the drill offered *Next stage* after a
+  WRONG answer; a family classic kept the tour open. The `tour-level` mutant (`>=` for `===` in the
+  radical's level) is equivalent: each step's first radical at or above the level asked is at exactly
+  that level.
+- _(PRA-10)_ **The front door's open state is not in the roster**: `scripts/a11y-audit.mjs` audits
+  permalinked states and the door is session state. Its trap, `aria-modal` and `inert` are asserted in
+  `test/drill.test.ts`, and the modal mechanics carry `@cas/ui`'s own tests.
 
 - _(PRA-8)_ **Sweep: nine first-pass survivors, and one was a defect.** The actions API's `moveTo` (and
   so the keyboard's nudge) did not ask `targetsIn`, so a root "moved" on the ladder rewrote the state's

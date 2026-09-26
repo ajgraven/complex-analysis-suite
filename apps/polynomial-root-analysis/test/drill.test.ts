@@ -174,6 +174,12 @@ describe("the Drill card", () => {
     app.actions().drill("sqrt3", 1);
     app.actions().drillChoose("d0");
     expect(card("drill")?.querySelector(".grade")?.textContent).toBe(DRILL.wrong);
+    // A wrong answer does not move the reader on.
+    expect(
+      [...(card("drill")?.querySelectorAll("button") ?? [])].some(
+        (b) => b.textContent === DRILL.nextStage,
+      ),
+    ).toBe(false);
     expect(readProgress(window.localStorage).sqrt3 ?? 0).toBe(0);
     app.actions().drillChoose("d1");
     expect(card("drill")?.querySelector(".grade")?.textContent).toBe(DRILL.right);
@@ -239,6 +245,17 @@ describe("the front door", () => {
     expect(root.hasAttribute("inert")).toBe(true);
     dialog?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(root.hasAttribute("inert")).toBe(false);
+  });
+
+  it("a family classic, like every classic, leaves the tour and the drill", () => {
+    const { app } = mount();
+    app.actions().tour(2);
+    app.actions().classic("family");
+    expect(app.currentState().family?.open).toBe(true);
+    expect(app.currentState().tour).toBeNull();
+    app.actions().drill("q2");
+    app.actions().classic("sottile");
+    expect(app.currentState().drill).toBeNull();
   });
 
   it("every classic opens a state that resolves, and clicking one shuts the door", () => {
