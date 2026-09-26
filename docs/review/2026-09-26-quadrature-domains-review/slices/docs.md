@@ -17,6 +17,7 @@ staleness, and a 5,908-line HANDOFF that four other trackers overlap.
 ## Findings
 
 ### DOC-1 [P2] The clean-realm worker-graph test is run by neither the gate nor CI, and the docs say the gate is complete
+
 - Category: test / stale-doc
 - Location: `app/node-test.js:56` (listed there) vs `vitest/node/` (29 wrappers, none for it); `CONTRIBUTING.md:157-162`; `README.md:127-129`; `CLAUDE.md` ("29 per-file specs … `app/node-test.js` is kept for standalone runs")
 - Claim: `app/test/` holds 30 `*.test.js` files. `vitest/node/` wraps 29 of them. The missing one is
@@ -36,6 +37,7 @@ staleness, and a 5,908-line HANDOFF that four other trackers overlap.
   asserting that the `TESTS` array and `vitest/node/*.test.ts` are the same set. Update CONTRIBUTING's recipe. (S)
 
 ### DOC-2 [P2] The Schwarz "tiling set" is defined backwards in THEORY_MAP, app/schwarz/README and README
+
 - Category: maths / stale-doc
 - Location: `THEORY_MAP.md:230-233`; `app/schwarz/README.md:4-6`; `README.md:721-724`
 - Claim: THEORY_MAP says iterating σ "partitions the plane into the 'tiling set' (orbits stay bounded forever) and its
@@ -53,6 +55,7 @@ staleness, and a 5,908-line HANDOFF that four other trackers overlap.
   land in the fundamental tile; K is the non-escaping set; the limit set is ∂T^∞. (S)
 
 ### DOC-3 [P2] `thesis.txt`, the named "ground-truth math reference", has no mathematical symbols; `prop463.txt` is misnamed, unreferenced and of untraceable origin
+
 - Category: stale-doc / structure
 - Location: `thesis.txt` (460 KB); `prop463.txt`; `HANDOFF.md:5899-5903` ("The thesis PDF and the extracted `thesis.txt` … are the ground-truth math reference"); THEORY_MAP "Equation labels match the thesis"
 - Claim: the extraction dropped every Greek, script and math-italic glyph. Theorem 3.2.2's inverse formula reads
@@ -71,6 +74,7 @@ staleness, and a 5,908-line HANDOFF that four other trackers overlap.
   `thesis.txt`. Delete or rename `prop463.txt`. State the source edition. (S)
 
 ### DOC-4 [P2] README says the third-party licences "travel with" `dist/`; the build carries neither the KaTeX nor the math.js notice
+
 - Category: stale-doc (licence compliance)
 - Location: `README.md:983-986`; `apps/quadrature-domains/dist/assets/*.js`
 - Claim: "Third-party libraries … KaTeX (MIT) and math.js (Apache-2.0). Both ship inside `dist/`, so their licenses
@@ -78,7 +82,7 @@ staleness, and a 5,908-line HANDOFF that four other trackers overlap.
   with redistribution, and MIT requires the copyright notice. QD's own `LICENSE` is not in `dist/` either, since only
   `public/` is copied.
 - Evidence (measured, on the `dist/` built 14:02 today): `grep -l -i 'khan academy\|Jos de Jong\|Apache'
-  dist/assets/*.js dist/*.html dist/*.js` → no match. `grep -c 'Permission is hereby granted'` → 0. The only surviving
+dist/assets/*.js dist/*.html dist/*.js` → no match. `grep -c 'Permission is hereby granted'` → 0. The only surviving
   headers are Fraction.js (`@license`) and decimal.js (`Copyright … Michael Mclaughlin`).
 - Confidence: medium (grep-based; I did not audit every chunk by hand)
 - Prior review: new
@@ -86,6 +90,7 @@ staleness, and a 5,908-line HANDOFF that four other trackers overlap.
   licence files into `public/`. Then fix the README sentence. (S)
 
 ### DOC-5 [P3] Package metadata and repo artefacts left over from the standalone era
+
 - Category: stale-doc / structure
 - Location: `package.json:37-40`; `package-lock.json`; `LICENSE` + `app/LICENSE.txt`; `Andrew_Graven_Thesis.pdf`
 - Claim:
@@ -107,20 +112,22 @@ staleness, and a 5,908-line HANDOFF that four other trackers overlap.
   PDF, or move it under `docs/references/`. (S)
 
 ### DOC-6 [P3] "h = 1/w, not the textbook 2/w": no standard convention gives 2/w
+
 - Category: maths (doc)
 - Location: `README.md:889-892`; `THEORY_MAP.md:307-310`; `HANDOFF.md:2262-2266`
 - Claim: this is the unit-disk quadrature function under different normalisations. QD/thesis (dA/π, suppressed
   1/(2πi)): (1/2πi)∮ f·(1/w) dw = f(0) = ∫_𝔻 f dA/π, so h = 1/w ✓. Standard dA with the Green's form
   (1/2i)∮ f w̄ dw: h = 1/w again. Standard dA with a literal ∮ gives π f(0) = ∮ f h dw, so h = 1/(2i w). dA/π with a
   literal ∮ gives h = 1/(2πi w). Standard dA with suppressed 1/(2πi) gives h = π/w. None of these is 2/w. The
-  convention *statement* is correct; the "contrast" example is wrong, and it is exactly the kind of sentence someone
+  convention _statement_ is correct; the "contrast" example is wrong, and it is exactly the kind of sentence someone
   would use to "fix" a factor at the interchange edge.
 - Evidence (inferred): the arithmetic above.
 - Confidence: high
 - Prior review: new
-- Fix: replace the clause with "the quadrature *coefficient* of the unit disk is 1 here and π under dA = dx dy". (S)
+- Fix: replace the clause with "the quadrature _coefficient_ of the unit disk is 1 here and π under dA = dx dy". (S)
 
 ### DOC-7 [P3] THEORY_MAP gives the Blaschke factor without the phase that code, thesis and HANDOFF use
+
 - Category: maths (doc)
 - Location: `THEORY_MAP.md:155` vs `app/solvers/solver-lqd-common.mjs:42,54-62` and `HANDOFF.md:2284-2286`
 - Claim: THEORY_MAP says `blaschkeEval` is the "standard Blaschke factor `(z − z_0)/(1 − conj(z_0) z)`". The code
@@ -132,11 +139,12 @@ staleness, and a 5,908-line HANDOFF that four other trackers overlap.
 - Fix: correct the row. (S)
 
 ### DOC-8 [P3] Two docs use "(★)" for different formulas, and the (★_S) header comment still states the formula the doc calls a bug
+
 - Category: maths (doc) / stale-doc
 - Location: `README.md:360`, `THEORY_MAP.md:53` vs `SCHWARZ_FORMULATION.md:30-33`, `THEORY_MAP.md:94`; `app/qd/qd-equations.mjs:333-336`
 - Claim:
-  (a) README's and THEORY_MAP's headline **(★)** is the *inverse* form `A_{j,k} = Σ_s (s/k) C_{j,s} [t^s] ψ̃_j^k`,
-  which uses the compositional inverse. SCHWARZ_FORMULATION's "**Classical (★)**" is the *forward* form
+  (a) README's and THEORY_MAP's headline **(★)** is the _inverse_ form `A_{j,k} = Σ_s (s/k) C_{j,s} [t^s] ψ̃_j^k`,
+  which uses the compositional inverse. SCHWARZ_FORMULATION's "**Classical (★)**" is the _forward_ form
   `C_{j,s} = Σ_k (k/s) A_{j,k} [t^k] φ̃_j^s`, and it says that form needs "no compositional inverse". I checked by
   Lagrange–Bürmann that the two are equivalent, so there is no maths error. But a reader of README → SCHWARZ_FORMULATION
   sees "(★) has no compositional inverse" next to a (★) that is built from one. The numeric solver uses the inverse
@@ -152,6 +160,7 @@ staleness, and a 5,908-line HANDOFF that four other trackers overlap.
 - Fix: label them (★_inv) and (★_fwd) consistently, and fix the header formula and path. (S)
 
 ### DOC-9 [P2] README omits whole shipped capabilities: weighted Direct problem, three interchange hand-offs, four of five `@cas` dependencies
+
 - Category: stale-doc
 - Location: `README.md:327-341` (family table), `:786-796` (Direct UI), `:836-852` (Direct API), `:13`, `:71`
 - Claim:
@@ -171,6 +180,7 @@ staleness, and a 5,908-line HANDOFF that four other trackers overlap.
 - Fix: add the weighted Direct rows and API, a "Hand-offs to other apps" subsection, and the real dependency list. (S)
 
 ### DOC-10 [P3] In-app help understates what the UI does
+
 - Category: stale-doc (user-facing)
 - Location: `app/schwarz/schwarz-ui.mjs:302-303`; `:485-487`; `app/ui/ui-strings.mjs:466-471` (`hints.directProblem`, rendered at `index.html:730`)
 - Claim:
@@ -180,14 +190,15 @@ staleness, and a 5,908-line HANDOFF that four other trackers overlap.
   - The export blurb says "σ export covers the unbounded-Laurent families … other φ export as φ only", but
     `explainSigmaUnavailable` (schwarz-export.mjs:104-106) also exports bounded-classical σ (S5-C2).
   - The Direct hint lists only classical modes (see DOC-9a).
-  Spot-checks that DO match the UI: Schwarz resolution 192–768, maxIter 1–200, the eleven colormaps, the five scale
-  modes, pole order 1–6, and the GPU caps 12/8/12.
+    Spot-checks that DO match the UI: Schwarz resolution 192–768, maxIter 1–200, the eleven colormaps, the five scale
+    modes, pole order 1–6, and the GPU caps 12/8/12.
 - Evidence (measured): the quoted source lines.
 - Confidence: high
 - Prior review: new
 - Fix: update the three strings. (S)
 
 ### DOC-11 [P3] README body contains a dozen claims that no longer match the code
+
 - Category: stale-doc
 - Location: `README.md` as listed
 - Claim (each measured):
@@ -213,6 +224,7 @@ staleness, and a 5,908-line HANDOFF that four other trackers overlap.
 - Fix: one pass over README. (S)
 
 ### DOC-12 [P3] TODO.md lists about 14 shipped features as open; PLAN-SPHERE says "ready for implementation"
+
 - Category: stale-doc
 - Location: `TODO.md:40,72,81,85,90,94,99,121,130,134,392,419-435`; `PLAN-SPHERE.md:3`
 - Claim: these are open `[ ]` but shipped:
@@ -231,7 +243,7 @@ staleness, and a 5,908-line HANDOFF that four other trackers overlap.
   - #A12 limit set
   - #A13 box counting (`boxCountingDimension`)
   - #A14 cycle finder (`findCycles`)
-  The sphere has long shipped and was later folded into the Schwarz tab.
+    The sphere has long shipped and was later folded into the Schwarz tab.
 - Evidence (measured): `grep -rli` for each feature. The `schwarz-features.mjs:13` header lists "σ level curves,
   critical orbits, the cycle finder, the orbit-family sweep".
 - Confidence: high (medium for #13 and #15)
@@ -239,6 +251,7 @@ staleness, and a 5,908-line HANDOFF that four other trackers overlap.
 - Fix: tick them, or retire TODO.md into the single tracker proposed in IMP-1. (S)
 
 ### DOC-13 [P3] HELPTEXT.md gives five pre-folderisation paths and is a developer doc with a user-help name
+
 - Category: stale-doc / structure
 - Location: `HELPTEXT.md:5,50-54`
 - Claim: `app/ui-strings.mjs`, `app/ui-modes.mjs`, `app/ui-solve.mjs`, `app/thesis-examples.mjs` and `app/qol.mjs` are
@@ -251,11 +264,12 @@ staleness, and a 5,908-line HANDOFF that four other trackers overlap.
 - Fix: fix the paths and fold it into CONTRIBUTING as "Editing UI text". (S)
 
 ### DOC-14 [P3] CONTRIBUTING: wrong residual contract, deleted test files, a broken anchor, a contradicted runtime
+
 - Category: stale-doc
 - Location: `CONTRIBUTING.md:31,43,157,164-165,137-146`
 - Claim:
   - "`residual` → Length-(n+d) real residual vector; concatenates the (★) and (●) blocks". `residual_QD`
-    (solver-qd.mjs:103-128) returns 2(n+d) reals, plus 1 for the gauge, with (●) *first*.
+    (solver-qd.mjs:103-128) returns 2(n+d) reals, plus 1 for the gauge, with (●) _first_.
   - `solvers.test.js` is split into 4 shards, and `schwarz-ui.test.js` moved to Vitest.
   - The link `ARCHITECTURE.md#script-load-order` has no target heading.
   - "Fast (well under 30 s for the full battery)" is contradicted by `vitest.config.ts`'s "~7 min cold on CI".
@@ -267,6 +281,7 @@ staleness, and a 5,908-line HANDOFF that four other trackers overlap.
 - Fix: one pass. (S)
 
 ### DOC-15 [P3] THEORY_MAP line references: 19 of 29 have drifted, two point past end of file; one test pointer is gone
+
 - Category: stale-doc
 - Location: `THEORY_MAP.md:29-30,64-70,155-160,192-195,289,293,173-174`
 - Claim:
@@ -274,14 +289,15 @@ staleness, and a 5,908-line HANDOFF that four other trackers overlap.
   - `solveInverseQD` is cited at `solver.mjs:790` and is at 1463.
   - `houseQR` is cited at :195 and is at 234.
   - "Tests … in `app/node-test.js` (search for `Thm 5.3.2`)" now live in `app/test/solvers-1.test.js`.
-  The file disclaims its line numbers ("the symbol name is the source of truth"), and every *symbol* I checked exists,
-  so this is P3.
+    The file disclaims its line numbers ("the symbol name is the source of truth"), and every _symbol_ I checked exists,
+    so this is P3.
 - Evidence (measured): `scratchpad/docs/tmcheck.py` plus per-symbol greps.
 - Confidence: high
 - Prior review: new
 - Fix: drop the line numbers and keep file + symbol. Add the IMP-2 check. (S)
 
 ### DOC-16 [P3] In-code headers: 68 of 126 `.mjs` files still name themselves `.js`; the test-config comments count 26 files and a child process that no longer exist
+
 - Category: stale-doc
 - Location: e.g. `app/ui/ui-url-state.mjs:2-8` ("ui-url-state.js … don't cross <script> tags"); `vitest.config.ts:4-9,23` ("26 CommonJS files", "The child runs the entire real suite"); `vitest/node/_run.ts:4`
 - Claim: the prior review's "twin of X.js" headers are fixed (2 benign hits remain). But 68 module headers still carry
@@ -293,6 +309,7 @@ staleness, and a 5,908-line HANDOFF that four other trackers overlap.
 - Fix: a mechanical sed on the self-names, and a rewrite of the two config comments. (S)
 
 ### DOC-17 [P3] Stale dev-server configuration
+
 - Category: stale-doc
 - Location: `apps/quadrature-domains/.claude/launch.json`; `.claude/launch.json` (`qd-esm`); `CLAUDE.md` ("Dev servers go through `.claude/launch.json` … `qd-esm` 5199")
 - Claim: the nested `qd-app` config serves `app/` with `python -m http.server 8765`. That cannot load the ESM app,
@@ -305,6 +322,7 @@ staleness, and a 5,908-line HANDOFF that four other trackers overlap.
 - Fix: delete the nested launch.json. Either make `qd-esm` run `vite` (dev) or note that it needs a fresh build. (S)
 
 ### DOC-18 [P2] HANDOFF.md (5,908 lines) is self-declared historical but still carries "current" sections that contradict README, and four trackers overlap
+
 - Category: structure
 - Location: `HANDOFF.md:17-60` (§0), `:1971` (§2 "File layout (current)"), `:5876-5898` (§12 status), `:5559` (§10); `TODO.md`; `README.md:933-966`
 - Claim:
@@ -327,16 +345,17 @@ staleness, and a 5,908-line HANDOFF that four other trackers overlap.
 - Fix: see IMP-1. (M)
 
 ### DOC-19 [P3] Suite-level docs: small contradictions about QD
+
 - Category: stale-doc
 - Location: `docs/MIGRATION.md:24,311-322`; `docs/DECISIONS.md` ADR-0026 context; `docs/INTERCHANGE.md:265-266`; root `README.md:120-128`; `apps/launcher/index.html:117-119`; `package.json:4`
 - Claim:
   - MIGRATION's status table says Phase 5 "both apps adopt" `@cas/expr` + `@cas/gpu`. QD imports no `@cas/expr`, and
     the Phase 5 gate "QD renders its Schwarz dynamics with df64 deep zoom" is unmet (it is listed as deferred in the
     same banner).
-  - ADR-0026's context says QD's σ engine has the weighted *LQD* adapters that the package lacks. It omits the four
+  - ADR-0026's context says QD's σ engine has the weighted _LQD_ adapters that the package lacks. It omits the four
     PQD adapters, and says QD "does not depend on `@cas/schwarz` (not in its package.json)". It is now a devDependency
     (AI-2 records this; the context is not annotated).
-  - INTERCHANGE names both QD producers "Schwarz tab → *Export map*". The Hele-Shaw control is "Send to Hele-Shaw
+  - INTERCHANGE names both QD producers "Schwarz tab → _Export map_". The Hele-Shaw control is "Send to Hele-Shaw
     Flow → copy link".
   - The root README lists `@cas/exact` as "(CD + Correspondences)" without QD's dev use, and `@cas/gpu` without QD.
   - The launcher card and `package.json` description say "(log-)weighted" and omit power-weighted PQDs and the Algebra
@@ -350,12 +369,13 @@ staleness, and a 5,908-line HANDOFF that four other trackers overlap.
 - Fix: one-line edits each. (S)
 
 ### DOC-20 [P2] Interchange: "h's residue is convention-neutral" is true only under a definition of `hData` that no doc states
+
 - Category: convention (doc)
 - Location: `docs/INTERCHANGE.md:88-95,139-142`; `packages/interchange/src/schema.ts:168`; `app/schwarz/schwarz-export.mjs:312-314`
 - Claim: the wire is tagged `CANONICAL = {area:"standard", contour:"standard"}`, and `hData` is "the quadrature
   function h … convention-neutral (no π/2πi conversion)". That holds if h means **the principal part of the Schwarz
-  function S (S = w̄ on ∂Ω)**, which involves no measure. If h instead means the kernel of the quadrature identity *in
-  the tagged convention* (∫ f dx dy = ∮ f h dw), then h_canonical = h_QD·π/(2πi) = h_QD/(2i). QD's two normalisations
+  function S (S = w̄ on ∂Ω)**, which involves no measure. If h instead means the kernel of the quadrature identity _in
+  the tagged convention_ (∫ f dx dy = ∮ f h dw), then h_canonical = h_QD·π/(2πi) = h_QD/(2i). QD's two normalisations
   are exactly what make those two definitions coincide in QD. Neither INTERCHANGE.md nor `schema.ts` says which one
   `hData` means, so a future consumer that reads the tag literally would introduce the silent 1/(2i) that ADR-0006
   exists to prevent. The shipped code (QD → Hele-Shaw, same author's conventions) is not shown to be wrong. This is a
@@ -365,7 +385,7 @@ staleness, and a 5,908-line HANDOFF that four other trackers overlap.
 - Confidence: medium (cross-slice; the interchange slice owns the code)
 - Prior review: new
 - Fix: define `hData` in both places as "the principal parts of the Schwarz function S, S|∂Ω = w̄
-  (convention-free)". State that the quadrature *coefficients* are what scale by π. Add that sentence to QD's
+  (convention-free)". State that the quadrature _coefficients_ are what scale by π. Add that sentence to QD's
   README "Conventions". (S)
 
 ## Improvements

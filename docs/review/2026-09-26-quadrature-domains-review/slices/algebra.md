@@ -7,6 +7,7 @@ I ran node probes against sympy 1.x as an external oracle: 60 random Gröbner ba
 Schur–Cohn cases, and 120 random ℚ(i) factorisations. I also ran 16 targeted spec files (247 tests, all green).
 **Headline:** the Gröbner bases, Hermite counting, Schur–Cohn (exact and interval), RUR and Sturm isolation all agree with the oracles
 (0/60 GB mismatches, 0/300 Schur–Cohn mismatches). The defects are elsewhere:
+
 - a reachable **false "Irreducible over ℚ(i) ✓"** certificate in the univariate ℚ(i) factoriser;
 - an **uncapped exponential `gcdMV`** that the render path calls synchronously on the main thread;
 - **four labelling gaps** where a float-derived or overlapping quantity is shown as exact.
@@ -16,6 +17,7 @@ Scratch probes: `/tmp/claude-0/-home-user-complex-analysis-suite/7d83a4a1-9cc2-5
 ## Findings
 
 ### ALG-1 [P1] `_qiFactor` returns a false "irreducible" when its shift budget runs out, and the UI prints "Irreducible over ℚ(i) ✓"
+
 - Category: maths / labelling
 - Location: `app/sym/sym-core.mjs:2315` (`SMAX = 2*deg+8`), `:2342` (`return [work]; // irreducible (or no clean shift found)`);
   consumed by `factor()` (`:2451-2455`, status `'irreducible'`), `minimalPrimes`' `isCertPrime` (`:5250`), `mvHenselLift:1366`,
@@ -36,11 +38,12 @@ Scratch probes: `/tmp/claude-0/-home-user-complex-analysis-suite/7d83a4a1-9cc2-5
   status becomes `undetermined` rather than returning `[work]`. Add the product above as a golden test.
 
 ### ALG-2 [P1] `gcdMV` blows up exponentially with no cap, and the render path calls `factor()` synchronously on the main thread (tab freeze)
+
 - Category: perf / bug (resource safety)
 - Location:
   - `sym-core.mjs:1150-1178` (`gcdMV`: primitive PRS with recursive content gcds; only a 1e5 iteration guard, no cost or time cap);
   - reached through `multivariateSquarefreePart:1224`, `bivariateSquarefreeInX:1205` and `factorMultivariate:1463`;
-  - `algebra-ui.mjs:2592` (`FACTOR_AUTO_CAP = 120` *terms*) and `:2604` (`_factorInfo` → sync `store.factorOf`), plus `:2398`
+  - `algebra-ui.mjs:2592` (`FACTOR_AUTO_CAP = 120` _terms_) and `:2604` (`_factorInfo` → sync `store.factorOf`), plus `:2398`
     (`doFactor` sync), `:3536` (suggested actions) and `algebra-store.mjs:3057` (`spuriousFactors`, sync over every reim polynomial).
 - Claim:
   - The render-path guard is a term count, not a cost bound. Small trivariate polynomials send `gcdMV(f, f_x)` into minutes of BigInt
@@ -67,6 +70,7 @@ Scratch probes: `/tmp/claude-0/-home-user-complex-analysis-suite/7d83a4a1-9cc2-5
   4. Longer term, use a modular or sparse (Zippel) gcd.
 
 ### ALG-3 [P1] Branch-count prose states the wrong direction: branches of a factor split do not "add up to the original", and a decomposition with `complete:false` is not "a lower bound"
+
 - Category: labelling / maths
 - Location: `algebra-ui.mjs:3366-3374` (classify verdict), `:555-556`, `:584-586`, `:2362-2369` (decompose card);
   `algebra-store.mjs:1895-1914` (`_factorBranchInfo`); `sym-core.mjs:5210`, `:5277` (`minimalPrimes` complete logic).
@@ -90,6 +94,7 @@ Scratch probes: `/tmp/claude-0/-home-user-complex-analysis-suite/7d83a4a1-9cc2-5
   - Note that the pooled ✦ Prove tree already dedups (numerically; see ALG-8).
 
 ### ALG-4 [P1] Shape-from-moments reports an "exact QD-order" and an "exact Prony polynomial" computed from float-snapped input; rounded decimals give a wrong order with a clean residual
+
 - Category: labelling / maths
 - Location:
   - `algebra-moment-parse.mjs:14-35` (moments parsed with `Number()`);
@@ -110,6 +115,7 @@ Scratch probes: `/tmp/claude-0/-home-user-complex-analysis-suite/7d83a4a1-9cc2-5
   exactly.
 
 ### ALG-5 [P1] "Show exact boundary curve" carries the verdict's `=` badge, but the curve is computed from ratApprox'd coordinates
+
 - Category: labelling
 - Location: `algebra-ui.mjs:3586-3600` (`rigor: pr.rigor`); `qd/qd-equations.mjs:1052-1061` (`boundaryCurveFromPhi` runs `_ratApprox`
   on each float coordinate).
@@ -126,6 +132,7 @@ Scratch probes: `/tmp/claude-0/-home-user-complex-analysis-suite/7d83a4a1-9cc2-5
 - Fix (S): pass `'estimate'` unless the solution was exact-verified rational. Longer term, see IMP-2.
 
 ### ALG-6 [P1] "No real quadrature domain" is labelled `=` when the real count is unknown and only the float filter found nothing
+
 - Category: labelling
 - Location: `prove-plan.mjs:444-449` (`analyzeLeaf`).
 - Claim:
@@ -140,6 +147,7 @@ Scratch probes: `/tmp/claude-0/-home-user-complex-analysis-suite/7d83a4a1-9cc2-5
 - Fix (S): return `'exact'` only when `cl.realCount === 0` or `r.certified`. Otherwise return `'estimate'`.
 
 ### ALG-7 [P2] The `|z_j|<1` admissibility gate runs on a rationalised float midpoint, not on the certified box; it is the one gate in the `=` chain not decided at the true root
+
 - Category: labelling
 - Location: `prove-plan.mjs:103-115` → `qd/qd-equations.mjs:121-127` (`_ratApprox(re)`, `_ratApprox(im)`).
 - Claim: X1 moved the fold and boundary tests to the isolating box, but admissibility still compares `ratApprox(mid)` against 1. A node
@@ -152,6 +160,7 @@ Scratch probes: `/tmp/claude-0/-home-user-complex-analysis-suite/7d83a4a1-9cc2-5
   candidate "undecided" and downgrade the verdict.
 
 ### ALG-8 [P2] Still open from the prior review: the genuine-QD count D is decided by a numeric 1e-4 comparison yet carries `=`
+
 - Category: labelling
 - Location: `prove-plan.mjs:318-322` (`gaugeQuotient`), `solvers/solver.mjs:1779` (`sameDomain(a, b, tol = 1e-4)`, absolute).
 - Claim: `certRigor = 'exact'` does not depend on the dedup. Two distinct domains within 1e-4 would merge into an undercount labelled
@@ -163,6 +172,7 @@ Scratch probes: `/tmp/claude-0/-home-user-complex-analysis-suite/7d83a4a1-9cc2-5
 - Fix (M): see IMP-3. At minimum, downgrade to `≈` when any pair falls in a "close" band (for example 1e-4 to 1e-2 relative).
 
 ### ALG-9 [P2] `factor()` skips the squarefree reduction before the bivariate (Gao) path, so repeated factors under-factor or go "undetermined", and the success card hides the caps
+
 - Category: maths (completeness) / labelling
 - Location: `sym-core.mjs:2388-2394` (bivariate branch needs a squarefree main variable); `algebra-ui.mjs:2429-2458` (the reducible path
   never shows `fr.caps`).
@@ -179,6 +189,7 @@ Scratch probes: `/tmp/claude-0/-home-user-complex-analysis-suite/7d83a4a1-9cc2-5
   n-variate paths already do. Render `fr.caps` on the reducible card.
 
 ### ALG-10 [P2] `curveGenus` calls reducible or degenerate conics "rational, genus 0"; it and several other engine features are unreachable from the product but documented as capabilities
+
 - Category: maths / structure
 - Location: `sym-core.mjs:5363` (`pa === 0` branch ignores `irreducible === null` and smoothness); dead exports `curveGenus:5336`,
   `comprehensiveGroebnerSystem:5009`, `verifySOS:4591`, `sturmHabicht`/`realRootCountSturm:1048-1086` (flagged "pinned EMPIRICALLY"),
@@ -193,6 +204,7 @@ Scratch probes: `/tmp/claude-0/-home-user-complex-analysis-suite/7d83a4a1-9cc2-5
   ALGEBRA_MODULE.md §4.
 
 ### ALG-11 [P2] Test gaps shaped like the defects above
+
 - Category: test
 - Location: `vitest/exact-symcore-differential.test.ts` (field operations only); `vitest/fixtures/cas-corpus.json` (11 bivariate,
   8 multivariate, 6 GB, 14 real-root, 11 resultant cases; **no univariate ℚ(i) factorisation and no repeated-factor bivariate case**).
@@ -208,6 +220,7 @@ Scratch probes: `/tmp/claude-0/-home-user-complex-analysis-suite/7d83a4a1-9cc2-5
   repeated-factor cases, to the corpus. Add a "factor of any ≤ 20-term input returns in < 2 s or `undetermined`" test.
 
 ### ALG-12 [P2] Expression parser: unbounded exponent combined with linear-time `MPoly.pow` hangs the tab
+
 - Category: bug (resource safety)
 - Location: `algebra/expr-parser.mjs:133-140`; `sym-core.mjs:287-291` (`pow`: `for (i < k) out = out.mul(this)`; the same loop appears
   at `:5665` and `:5737`).
@@ -218,6 +231,7 @@ Scratch probes: `/tmp/claude-0/-home-user-complex-analysis-suite/7d83a4a1-9cc2-5
 - Fix (S): cap the exponent (for example at 1000, with an error message) and use binary powering.
 
 ### ALG-13 [P2] `mvHenselLift` recombination returns "irreducible" without verifying it, and can drop an unmatched remainder
+
 - Category: maths (robustness)
 - Location: `sym-core.mjs:1320-1335` (`_mvDioph` solves only up to `e.degreeIn(w)`, not the final factor's degree bound), `:1407-1421`
   (`if (!found.length) return { ok:true, factors:[fp] }`; a partially-found list returns without `remaining`).
@@ -235,6 +249,7 @@ Scratch probes: `/tmp/claude-0/-home-user-complex-analysis-suite/7d83a4a1-9cc2-5
   `found` is empty but the image split into two or more factors. Use the degree bound deg_w F in `_mvDioph`.
 
 ### ALG-14 [P3] Stale or over-claiming documentation
+
 - Category: stale-doc
 - Location and claims in `docs/ALGEBRA_MODULE.md`:
   - §1/§7 say "everything … is computed in exact arithmetic … its results are proofs, not estimates". Moment input, gauge dedup,
@@ -249,6 +264,7 @@ Scratch probes: `/tmp/claude-0/-home-user-complex-analysis-suite/7d83a4a1-9cc2-5
 - Fix (S): reword, and add a short "where floats enter" list.
 
 ### ALG-15 [P3] Still open from the prior review: `parametricRealCount1D` samples one point per cell
+
 - Category: maths
 - Location: `sym-core.mjs:4340-4360`.
 - Claim: C LOW-1's fix (two samples per cell with a mismatch check, or stating the genericity assumption) has not been done. Cell counts
@@ -261,12 +277,14 @@ Scratch probes: `/tmp/claude-0/-home-user-complex-analysis-suite/7d83a4a1-9cc2-5
 
 **Is the separation still justified?** Yes, for the multivariate and Gröbner layer: there is still no second consumer, and the
 oracles agree. The duplication is now wider than the ADR's stated cost of "ℚ and ℚ(i) twice":
+
 - resultant and discriminant are implemented in both engines;
 - squarefree decomposition is implemented in both engines;
 - ADR-0047 (proposed) adds a third copy of Berlekamp–Zassenhaus, Cantor–Zassenhaus and Hensel to `@cas/exact`, where
   `_factorOverQ:2270` is already a working one.
 
 **Recommendations:**
+
 - ADR-0047's planned golden cross-check with QD should include ℚ(i) inputs whose norm needs several shifts (ALG-1) and repeated factors
   (ALG-9).
 - The ADR-0008 differential should grow past field arithmetic (ALG-11).

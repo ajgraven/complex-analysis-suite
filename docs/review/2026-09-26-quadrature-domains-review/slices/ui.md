@@ -16,6 +16,7 @@ never a consumer, and `grep -i "nav-header|cas-nav|SUITE_APPS|mountNav"` over `a
 ## Findings
 
 ### UI-1 [P1] Pasting a QD link into an already-open QD tab is ignored, then overwritten by the app
+
 - Category: bug
 - Location: `app/ui/ui-url-state.mjs:128` (applyUrlState, called once at boot from `app/ui/ui.mjs:1707`); there is no `hashchange` listener in QD (`grep -rn hashchange apps/quadrature-domains/app` → nothing)
 - Claim: A URL that differs only in its fragment is a same-document navigation, so the page does not reload.
@@ -40,6 +41,7 @@ never a consumer, and `grep -i "nav-header|cas-nav|SUITE_APPS|mountNav"` over `a
   Add a test that applies link A over state B, and B over A, with every field different. (M)
 
 ### UI-2 [P1] A share link to the Schwarz tab opens an empty Schwarz tab
+
 - Category: bug
 - Location: `app/ui/ui-url-state.mjs:181-185` (deferred `btn.click()`); `app/schwarz/schwarz-ui.mjs:199-238` (tab entry), `:505-514` (`_autoCaptureIfPending`, called only from the export actions at `:524/:567/:604`)
 - Claim: Capturing φ into the Schwarz tab is a manual "Use this φ" step. On restore, `tab:"schwarz"` clicks the
@@ -55,6 +57,7 @@ never a consumer, and `grep -i "nav-header|cas-nav|SUITE_APPS|mountNav"` over `a
   Add the Schwarz view parameters to the envelope as an `sw` sub-object, validated like `fig`. (M)
 
 ### UI-3 [P1] The typed h(w) is silently rounded to 6 significant figures before it is solved
+
 - Category: bug
 - Location: `app/ui/ui-h-text.mjs:134-136,148` (`QD.Complex.format(...)` with the default 6 digits); `app/ui/ui.mjs:1785-1797` (`_sendHToInverseTab`) and `:1854-1877` (`loadScenarioIntoQdTab`), both via `QD.Complex.toString(c, 6)`
 - Claim: parseAndApplyHText parses the expression exactly and then stores every pole and residue back into
@@ -75,6 +78,7 @@ never a consumer, and `grep -i "nav-header|cas-nav|SUITE_APPS|mountNav"` over `a
   → bit-identical. (S)
 
 ### UI-4 [P1] The QD-tab badge shows the same "✓ Valid quadrature domain" for a sampled numeric check as for an exact certificate, and a weaker algebra certificate gets the ⚠
+
 - Category: labelling
 - Location: `app/ui/ui-solve.mjs:35-48` (`qdValidityBadge`); `vitest/qd-validity-badge.test.ts:52-54` pins the solver path at the unqualified ✓
 - Claim: For solver output, `univalent` is `isBoundaryUnivalent(phi, samples)`, a self-intersection test on
@@ -92,6 +96,7 @@ never a consumer, and `grep -i "nav-header|cas-nav|SUITE_APPS|mountNav"` over `a
   should name the sample count and tolerance actually used. Update the test to pin the new wording. (S)
 
 ### UI-5 [P1] The link carries the problem, not the solution: a shared link can open a different domain than the sender saw
+
 - Category: bug
 - Location: `app/ui/ui-url-state.mjs:80-114` (the written keys); `app/ui/ui-solve.mjs:406-445` (the full solve warm-starts from the previous φ); `app/ui/ui-state.mjs:118-160` (`selectedSolutionIdx`, `searchOptions` including `seed` and `identityTol`)
 - Claim: The envelope holds `{mode,h,w0m,w0,c,a,q,agg,tab,fig,view}`. Not carried:
@@ -106,6 +111,7 @@ never a consumer, and `grep -i "nav-header|cas-nav|SUITE_APPS|mountNav"` over `a
   The sender's primary also depends on history: `solveAndRender` warm-starts from the previous φ whenever the
   structures match, while the recipient's restore solve is cold. On any h with several quadrature domains, the
   recipient can land on another root. Nothing tells the recipient, and the badge says ✓ either way.
+
 - Evidence: field list from code (measured by reading both sides and `qd-url-state.test.ts:167` `WRITE_KEYS`).
   That the history-dependence changes the root is inferred, not reproduced.
 - Confidence: medium (for the different-root consequence); high (for the list of missing fields)
@@ -115,6 +121,7 @@ never a consumer, and `grep -i "nav-header|cas-nav|SUITE_APPS|mountNav"` over `a
   so when it does not. The encoded payload stays under 2 kB for realistic pole counts. (M)
 
 ### UI-6 [P2] On every link restore, the default h = 1/w is solved and displayed before the link's h, beside the link's h text
+
 - Category: bug
 - Location: `app/ui/ui.mjs:1707-1710`; `app/ui/ui-h-text.mjs:96-106`; `app/core/vendor-globals.mjs:18-37`
 - Claim: mathjs is lazy, loaded through an idle prefetch with `timeout: 3000`, so it is never ready while
@@ -132,6 +139,7 @@ never a consumer, and `grep -i "nav-header|cas-nav|SUITE_APPS|mountNav"` over `a
   `scheduleSolve()` when `h` is present. Alternatively, keep a "Restoring link…" busy state until the parse has run. (S)
 
 ### UI-7 [P2] The legacy share-link format (`#mode=…&h=…`) that QD shipped until 2026-07-08 no longer opens, and the app overwrites it
+
 - Category: bug (back-compat)
 - Location: `app/ui/ui-url-state.mjs:129-130`
 - Claim: The pre-monorepo writer (subtree import `e94af769`, `app/ui-url-state.js`) wrote
@@ -156,6 +164,7 @@ never a consumer, and `grep -i "nav-header|cas-nav|SUITE_APPS|mountNav"` over `a
   MIGRATION. (S)
 
 ### UI-8 [P1] Restoring an autosaved algebra derivation bypasses the A4 stale-seed guard, so ops mix the old session's system with the current h
+
 - Category: bug
 - Location: `app/algebra/algebra-ui.mjs:896-916` (offerRestore → `store.importDAG`, which never sets `_seededHData`); `:1371-1377` (`ensureSeed`); `:4548` (the subscribe-time stale check); `:3288-3300` (✦ Prove)
 - Claim: The autosave payload (`algebra-autosave.mjs:35`) records no h-data provenance. After **Restore**,
@@ -174,6 +183,7 @@ never a consumer, and `grep -i "nav-header|cas-nav|SUITE_APPS|mountNav"` over `a
   the restore strip which h the derivation belongs to, and offer "restore and switch the QD tab to that h". (S)
 
 ### UI-9 [P2] `showQDSolution` and "Try harder" write `state.current` without taking ownership of the solve lanes
+
 - Category: bug (race)
 - Location: `app/ui/ui.mjs:1624-1642` (showQDSolution), `:1469-1521` (try-harder); cf. `app/ui/ui-solve.mjs:1257-1317` (the alt-search loop reads and appends to `state.current` every chunk)
 - Claim: Neither path bumps `state.altSearchToken`, and showQDSolution does not bump `_solveAndRenderToken` either.
@@ -188,6 +198,7 @@ never a consumer, and `grep -i "nav-header|cas-nav|SUITE_APPS|mountNav"` over `a
   is the only path that writes `state.current` from outside `ui-solve`. (S)
 
 ### UI-10 [P2] The share link serialises the raw text box, not the h that was solved
+
 - Category: bug
 - Location: `app/ui/ui-url-state.mjs:82-83`; parse only on Enter or click (`app/ui/ui.mjs:991-992`)
 - Claim: `writeUrlState` also fires on pan, zoom and every figure-card tick. It reads `#h-text` as typed. An edited
@@ -196,9 +207,10 @@ never a consumer, and `grep -i "nav-header|cas-nav|SUITE_APPS|mountNav"` over `a
 - Evidence: code (inferred).
 - Confidence: high
 - Prior review: new
-- Fix: serialise `formatH(state)` of the last *applied* data, at full precision (see UI-3). (S)
+- Fix: serialise `formatH(state)` of the last _applied_ data, at full precision (see UI-3). (S)
 
 ### UI-11 [P2] The main canvas has no accessible name and no keyboard pan or zoom; the a11y roster sees only the default tab
+
 - Category: structure (a11y)
 - Location: `app/index.html:768` (`<canvas id="canvas"></canvas>`, which carries no role, label or tabindex); `scripts/a11y-baseline.json` (`quadrature-domains`: 4 accepted `nested-interactive`, 1 `color-contrast`)
 - Claim: The canvas that carries every tab's primary output has no name. Pan and zoom are mouse-only (no
@@ -214,6 +226,7 @@ never a consumer, and `grep -i "nav-header|cas-nav|SUITE_APPS|mountNav"` over `a
   roster entries that open each tab via `#vs=…tab=…`. (M)
 
 ### UI-12 [P2] God modules and ad-hoc writers of shared state
+
 - Category: structure
 - Location: `app/algebra/algebra-ui.mjs` (4591 lines; `installAlgebra` at `:718` is one closure with 148 inner `function`s and 20 closure `let`s); `app/ui/ui.mjs` (1901 lines; `bootQdUi` is one closure feeding a `uiCtx` bag of about 40 injected functions)
 - Claim: Four sites write `state.current` (`ui-solve.mjs:250,477`, `ui.mjs:1500,1628`), each with its own partial
@@ -221,7 +234,7 @@ never a consumer, and `grep -i "nav-header|cas-nav|SUITE_APPS|mountNav"` over `a
   Direct and slice hooks at `ui.mjs:1784` and `:1853`, which disagree on precision (UI-3), and one calls
   `setMode` where another calls `applyModeVisuals`. There are seven escape helpers with divergent fallbacks
   (`ui.mjs:345,391`, `direct-ui.mjs:759`, `ui-faber.mjs:26`, `ui-thesis.mjs:23`, `ui-qd-equations.mjs:31`,
-  `param-slice-ui.mjs:851`; `algebra-ui.mjs:1190` falls back to *no* escaping). The "verbatim extraction"
+  `param-slice-ui.mjs:851`; `algebra-ui.mjs:1190` falls back to _no_ escaping). The "verbatim extraction"
   factories kept the coupling and changed only where the closures come from.
 - Evidence: counts measured with grep and awk.
 - Confidence: high
@@ -230,6 +243,7 @@ never a consumer, and `grep -i "nav-header|cas-nav|SUITE_APPS|mountNav"` over `a
   exported `escapeHTML`. Split algebra-ui along its existing section boundaries (Prove, Reduce, Eliminate, drawer). (L)
 
 ### UI-13 [P3] Dead or stale UI and docs
+
 - Category: stale-doc
 - Location and claim:
   - `app/index.html:888-897` populates `#app-version` from `window.QD_ASSET_MANIFEST`, which was retired at the
@@ -250,6 +264,7 @@ never a consumer, and `grep -i "nav-header|cas-nav|SUITE_APPS|mountNav"` over `a
 - Fix: delete or repoint. (S)
 
 ## Improvements
+
 - **IMP-1: A reproducible link (carry φ and verify it).** Value: high, since a permalink is what gets cited in a
   paper or lecture note. The fix for UI-5 turns the link into a certificate: "this link reproduces φ to residual
   r". Cost M.
@@ -266,6 +281,7 @@ never a consumer, and `grep -i "nav-header|cas-nav|SUITE_APPS|mountNav"` over `a
   links. Cost S–M.
 
 ## Coverage
+
 - Read closely: `ui-url-state`, `ui-state`, `ui-h-text`, `ui-copy-buttons`, the `ui.mjs` boot and cross-tab hooks
   (`:1530-1901`), `solveAndRender`, try-harder, alt search and the badge in `ui-solve`, `algebra-autosave` plus
   its wiring, the seeding, `ensureSeed`, ✦ Prove and the "View in QD plot" parts of `algebra-ui`, the Schwarz tab

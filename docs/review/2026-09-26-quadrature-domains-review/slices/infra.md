@@ -16,6 +16,7 @@ posted during the estimate is dropped without a message. Security (XSS through s
 ## Findings
 
 ### INF-1 [P1] PWA autoUpdate purges the running page's own chunks after a deploy, so lazy tabs and new workers 404
+
 - Category: bug
 - Location: `apps/quadrature-domains/vite.config.mjs:35-54` (`registerType: "autoUpdate"`, which generates `self.skipWaiting()` and
   `clientsClaim()` in `dist/sw.js`); `app/lazy-features.mjs:19-31` (a failed load is only logged to the console);
@@ -52,6 +53,7 @@ posted during the estimate is dropped without a message. Security (XSS through s
   (`apps/complex-dynamics/vite.config.ts:21`). Add the probe as a Playwright spec so this regression is caught.
 
 ### INF-2 [P1] Independent callers share one primary solve lane; supersession drops user solves and corrupts "Estimate max c"
+
 - Category: bug
 - Location: `solvers/primary-solver-worker.mjs:153-165` (a new `run()` rejects the in-flight job with
   `{aborted:true, superseded:true}` no matter who posted it); `ui/ui-solve.mjs:473`
@@ -82,6 +84,7 @@ posted during the estimate is dropped without a message. Security (XSS through s
   then, solveAndRender should treat `superseded` from a foreign caller as "retry", not "return".
 
 ### INF-3 [P2] A superseded primary or aux solve is not preempted: the new job waits behind the whole discarded job
+
 - Category: perf / stale-doc
 - Location: `solvers/primary-solver-worker.mjs:153-165` (supersede reuses the busy worker; only the analysis lane sets
   `terminateOnSupersede`); `ui/ui-solve.mjs:385-386`, whose comment says "The worker preempts any prior in-flight solve",
@@ -98,6 +101,7 @@ posted during the estimate is dropped without a message. Security (XSS through s
 - Fix (S): set `terminateOnSupersede: true` on the primary and aux lanes, as sym-worker does, and correct the ui-solve comment.
 
 ### INF-4 [P3] Worker-failure diagnostics and latching are inconsistent across lanes
+
 - Category: bug / structure
 - Location: `workers/worker-crash-detail.mjs:12-14`; `schwarz/schwarz-cpu-worker.mjs:98-122`; `solvers/primary-solver-worker.mjs:122`.
 - Claim: (a) a module-load failure raises a plain `Event`, not an `ErrorEvent`, so the logged detail is
@@ -111,6 +115,7 @@ posted during the estimate is dropped without a message. Security (XSS through s
 - Fix (S): format with `ev.type`, plus the worker URL captured at spawn. Latch the Schwarz lane on its first load failure.
 
 ### INF-5 [P3] The param-slice pool never replaces dead workers; a zero-worker pool silently renders all-unclassified
+
 - Category: bug
 - Location: `param-slice/param-slice-pool.mjs:154-172` (`_onWorkerError` drops the worker for good) and `:101-123`
   (`nChunks = Math.min(0, n) = 0` gives `chunkSize = Infinity`, no tiles, and an array of `undefined`);
@@ -124,6 +129,7 @@ posted during the estimate is dropped without a message. Security (XSS through s
 - Fix (S): respawn a replacement worker in `_onWorkerError`, or have `ensurePool` rebuild the pool when `workers.length === 0`.
 
 ### INF-6 [P3] The message protocol is centralized for the PSW entries only; three other entries keep the silent-hang class
+
 - Category: structure
 - Location: `workers/param-slice-worker-entry.mjs:17-18`, `schwarz-worker-entry.mjs:18-19` and `sym-worker-entry.mjs:15-16` drop unknown
   kinds silently (the QD-UI-4 class that `protocol.mjs` closed for the solver entries). The Schwarz render loop
@@ -140,6 +146,7 @@ posted during the estimate is dropped without a message. Security (XSS through s
   fallback, and either delete `getSignal` or detach it the way sym-worker does.
 
 ### INF-7 [P3] Worker wrapper headers describe the retired Blob/fetch bundle and a file:// path that cannot boot
+
 - Category: stale-doc
 - Location: `param-slice/param-slice-pool.mjs:4-7, 41-43` (dead `bundleURL`), `:263-264` and `:342-350`;
   `schwarz/schwarz-cpu-worker.mjs:41-45` and `:139` ("bundle URL is cached → cheap"); `algebra/sym-worker.mjs:5, 21, 60` (still
@@ -153,6 +160,7 @@ posted during the estimate is dropped without a message. Security (XSS through s
 - Fix (S): rewrite the headers.
 
 ### INF-8 [P3] The build/version label is permanently empty, and the SW-registration comment is stale
+
 - Category: stale-doc / bug
 - Location: `app/index.html:759-763` and `:889-896` read `window.QD_ASSET_MANIFEST.CACHE_VERSION`, which no longer exists
   (asset-manifest.js was retired at the ESM flip). `app/index.html:885-886` says PWA registration "is added … in a follow-up
@@ -165,6 +173,7 @@ posted during the estimate is dropped without a message. Security (XSS through s
 - Fix (S): `define: { __QD_BUILD__: JSON.stringify(gitSha + date) }` in `vite.config.mjs`, written into `#app-version`.
 
 ### INF-9 [P3] package.json and the lockfile carry stale identity, a misleading `test` script and phantom dependencies
+
 - Category: stale-doc / structure
 - Location: `apps/quadrature-domains/package.json:6, 20, 39`; `apps/quadrature-domains/package-lock.json`.
 - Claim: (a) `package-lock.json` is a tracked npm lockfile from the standalone repo: `"name": "quadrature-domain-solver"`,
@@ -181,6 +190,7 @@ posted during the estimate is dropped without a message. Security (XSS through s
   exact-pin mathjs, and declare the two dev dependencies.
 
 ### INF-10 [P3] `typecheck` checks one file; the 136 Vitest specs are in no tsconfig
+
 - Category: test / tooling
 - Location: `apps/quadrature-domains/tsconfig.json` (`checkJs: false`; the comment says "handful of files that already opt in").
 - Claim: exactly 1 of about 126 app modules has `// @ts-check` (`app/core/qd.mjs`), so the gated `pnpm typecheck` verifies
@@ -193,6 +203,7 @@ posted during the estimate is dropped without a message. Security (XSS through s
   `@ts-check` first (ADR-0002 leaves-first).
 
 ### INF-11 [P3] eslint.config.mjs targets seven files that do not exist, and its "non-blocking backlog" comment is false
+
 - Category: stale-doc
 - Location: `apps/quadrature-domains/eslint.config.mjs:81, 97, 130-133, 142-181, 186-189`.
 - Claim: `app/sw.js`, `app/complex.js`, `app/taylor.js`, `app/schwarz/schwarz-common.js`, `app/ui.js`, `app/bench.js` and `app/qd.mjs`
@@ -206,6 +217,7 @@ posted during the estimate is dropped without a message. Security (XSS through s
 - Fix (S): delete the dead blocks and correct the comment. Consider promoting `no-unused-vars` to error now that it is clean.
 
 ### INF-12 [P3] QD's precache has no size guard, so a chunk over 2 MiB would silently leave the offline app broken
+
 - Category: structure
 - Location: `vite.config.mjs:47-53` (no `maximumFileSizeToCacheInBytes`); CD set it (`apps/complex-dynamics/vite.config.ts:33`).
 - Claim: Workbox skips any file over 2 MiB and only logs it, and no build step checks that every `dist/assets/*.js` is in
@@ -216,6 +228,7 @@ posted during the estimate is dropped without a message. Security (XSS through s
 - Fix (S): set the cap as CD does, and assert full coverage in `check-built-artifacts.mjs`.
 
 ### INF-13 [P3] The eager bundle carries the exact-symbolic core, and five workers each duplicate the solver graph
+
 - Category: perf
 - Location: `app/main.mjs:56-57`; `vite.config.mjs` (worker bundles).
 - Claim (measured from a sourcemap build): the entry chunk is 786 kB (254 kB gzip): KaTeX 254 kB, `sym/sym-core.mjs` 124 kB,
@@ -232,6 +245,7 @@ posted during the estimate is dropped without a message. Security (XSS through s
   entry behind a worker-side `import()`.
 
 ### INF-14 [P3] A preset change costs about 1.1 s of main-thread long tasks against a 7 ms worker solve
+
 - Category: perf
 - Location: the `perf/measure.mjs` "warm UI preset selection" interaction.
 - Claim: `presetChangeToSettledPaintMs` has a median of 879 ms, with `longTaskMs` 1120 over 4 tasks, while
@@ -245,6 +259,7 @@ posted during the estimate is dropped without a message. Security (XSS through s
   equation HTML keyed by φ.
 
 ### INF-15 [P3] Tooling gaps: the a11y roster and the dev launch entry
+
 - Category: test / tooling
 - Location: `scripts/a11y-audit.mjs:103-108`; `.claude/launch.json:5-16`.
 - Claim: the a11y roster audits QD only in its default state (one page, baseline of 1 color-contrast and 4
@@ -258,6 +273,7 @@ posted during the estimate is dropped without a message. Security (XSS through s
   (`vite`, port 5199).
 
 ## Improvements
+
 - **IMP-1 Interactive and batch solve lanes.** Value: removes the INF-2 corruption class structurally, and lets a
   multi-second c* estimate run while the user keeps editing. Cost: S. Sketch: a `batch` `createWorkerLane` on
   `solver-worker-entry.mjs`; the estimator, Try harder and Verify c* take it; solveAndRender keeps `primary` with
@@ -275,6 +291,7 @@ posted during the estimate is dropped without a message. Security (XSS through s
   path is primary. Cost: M. WASM for the Newton inner loops is not justified without a profile on target hardware.
 
 ## Coverage: not reviewed or not run
+
 - The QD Vitest browser suite (the schwarz slice's job) and the root gate (not permitted).
 - Share-link backward compatibility for pre-`#vs` formats (the URL and state slice). I checked only that URL-sourced
   strings (`h`, `w0`, `q`, `tab`, `fig`, `view`) reach `.value`, `textContent`, whitelisted selectors or validated fields, and

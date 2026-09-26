@@ -1,6 +1,6 @@
 # analysis — summary
 
-*(Saved by the orchestrator from the reviewer's hand-back. The reviewer's own Write was refused.)*
+_(Saved by the orchestrator from the reviewer's hand-back. The reviewer's own Write was refused.)_
 
 **Scope.** `app/analysis/*` (univalence, critical-set, cusps, observables, symmetry, riemann-latex,
 thesis-examples, family-sweep, faber-analysis), `app/direct/*` (common, recompute, verify, and direct-ui's
@@ -17,6 +17,7 @@ the moment Stokes formula, harmonic measure, curvature, the PQD weighted area, a
 used for Faber.
 
 **Where the defects are.** They are in what is displayed and in the verdicts:
+
 - The Riemann card shows a wrong φ for unbounded PQD/LQD whenever h has a polynomial part.
 - Classical-unbounded Direct mode calls valid UQDs "not a QD" and paints them red.
 - Several verdicts are not gated on univalence: the convex/star-like ✓, the Direct Verify ✓, and the
@@ -26,6 +27,7 @@ used for Faber.
 ## Findings
 
 ### ANA-1 [P0] The Riemann-map card shows a wrong φ for unbounded PQD/LQD whose h has a polynomial part
+
 - **Category:** maths / labelling
 - **Location:** `app/analysis/riemann-latex.mjs:223-259` (unboundedPQD[_singular]), `:103-148`
   (unboundedLQD[_singular]), `:333-352` (params)
@@ -48,7 +50,9 @@ used for Faber.
   - Add a test that evaluates the substituted form numerically against `QD.evalPhi` for every family.
 
 ### ANA-2 [P0] Classical-unbounded Direct mode contradicts the inverse solver
+
 It adds a spurious pole in K, calls valid UQDs "not a QD", and its Verify checks the wrong half of the spectrum.
+
 - **Category:** maths / bug / test
 - **Location:** `direct-common.mjs:569-598, 798-880`; `direct-verify.mjs:143-173`; `direct/README.md`;
   `test/direct.test.js:286-296, 716-722`
@@ -77,6 +81,7 @@ It adds a spurious pole in K, calls valid UQDs "not a QD", and its Verify checks
     and the ellipse.
 
 ### ANA-3 [P1] The convex / star-like ✓ is shown for non-univalent maps
+
 - **Category:** labelling / maths
 - **Location:** `univalence.mjs:30-31` (the claim), `:150-159` (no gate), `ui-solve.mjs:752-771`
 - **Claim.**
@@ -95,6 +100,7 @@ It adds a spurious pole in K, calls valid UQDs "not a QD", and its Verify checks
   `is &&= univalent !== false` and render "n/a".
 
 ### ANA-4 [P1] The symmetry detector misses reflection axes off its 2520-point grid, and loses all symmetry when w₀ is not the centre
+
 - **Category:** bug / maths
 - **Location:** `symmetry.mjs:61-72, 101-116`
 - **Claim.**
@@ -112,6 +118,7 @@ It adds a spurious pole in K, calls valid UQDs "not a QD", and its Verify checks
 - **Fix (S–M):** see IMP-2.
 
 ### ANA-5 [P1] Direct returns h for non-univalent φ with no warning, and Verify then reads green
+
 - **Category:** labelling / maths
 - **Location:** `direct-common.mjs:163-181` (an 8-point |φ′| probe at radius 0.99), `:1042-1187`, `:1273-1411`,
   `:1599-1653`; `direct-recompute.mjs:246`; `direct-verify.mjs:57-81, 143-173`
@@ -130,6 +137,7 @@ It adds a spurious pole in K, calls valid UQDs "not a QD", and its Verify checks
   `univalent:false`, and gate Verify's ✓ on it.
 
 ### ANA-6 [P1] Singular PQD: Send-to-inverse drops the origin term r₀/w, and the displayed h omits it
+
 - **Category:** bug / labelling
 - **Location:** `direct-ui.mjs:1004-1020`, `direct-recompute.mjs:258-266`, `displayH`;
   `solver-pqd-singular.mjs:13-16` (the inverse family has "NO point charge")
@@ -140,6 +148,7 @@ It adds a spurious pole in K, calls valid UQDs "not a QD", and its Verify checks
 - **Fix (S).** Show the origin term in h, warn or disable Send when r₀ ≠ 0, and document it in the README.
 
 ### ANA-7 [P1] The bounded-PQD Riemann card uses w₀^⌈α⌉ for non-integer α
+
 - **Location:** `riemann-latex.mjs:171-176` (an integer loop). The singular fragment correctly uses cpow.
 - **Evidence (p8.cjs, w₀ = 0.8+0.3i).**
   - α = 1.5: the card shows w₀² = 0.55+0.48i against the true 0.678+0.405i.
@@ -147,41 +156,46 @@ It adds a spurious pole in K, calls valid UQDs "not a QD", and its Verify checks
 - **Fix (S).** Use `cpow` on the anchored branch.
 
 ### ANA-8 [P2] Param-slice "Valid QD" on warm pixels uses a 64-sample self-intersection test whatever the preset
+
 - **Location:** `param-slice-common.mjs:36, 419-433`. The cold path and `param-slice-ui.mjs:176-178` promise 512
   samples for "rigorous". The comment at `:415` says the identity check uses the full preset N; the code passes
   `univalenceSamples`.
 - **Evidence (p6.cjs).** Verdicts at N = 32 / 64 / 128 / 512 / 4096 (U = univalent, x = fails):
 
-  | φ | 32 | 64 | 128 | 512 | 4096 | φ′ zero in 𝔻 at \|z\| |
-  |---|---|---|---|---|---|---|
-  | z+0.334z³ (univalent iff b ≤ 1/3) | U | U | U | x | x | 0.999 |
-  | z+0.501z² | U | U | x | x | x | 0.998 |
-  | z+0.168z⁶ | U | U | x | x | x | 0.998 |
+  | φ                                 | 32  | 64  | 128 | 512 | 4096 | φ′ zero in 𝔻 at \|z\| |
+  | --------------------------------- | --- | --- | --- | --- | ---- | --------------------- |
+  | z+0.334z³ (univalent iff b ≤ 1/3) | U   | U   | U   | x   | x    | 0.999                 |
+  | z+0.501z²                         | U   | U   | x   | x   | x    | 0.998                 |
+  | z+0.168z⁶                         | U   | U   | x   | x   | x    | 0.998                 |
 
   Every one of these maps has a φ′ zero inside 𝔻, so all three are non-univalent; at 64 samples all three pass.
+
 - **Consequence (inferred):** pixels just past the fold are painted valid.
 - **Fix (S).** Use the preset's N on the warm path, or combine the sampled test with IMP-1.
 
 ### ANA-9 [P2] findCriticalPoints misses critical points, so the cusp panel can read "✓ smooth boundary"
+
 - **Location:** `critical-set.mjs:77-95` (13 radii × 12 angles, Newton, no completeness count)
 - **Evidence (p16.cjs).**
 
-  | φ | critical points found |
-  |---|---|
-  | z+z²⁰/25 | 15 of 19 |
-  | z+0.025z³⁰ | 17 of 29 |
-  | z+0.03z⁴⁰ | 9 of 39 |
+  | φ          | critical points found |
+  | ---------- | --------------------- |
+  | z+z²⁰/25   | 15 of 19              |
+  | z+0.025z³⁰ | 17 of 29              |
+  | z+0.03z⁴⁰  | 9 of 39               |
 
 - **Fix (M).** Count the zeros with the argument principle, use the polynomial root finder for rational φ′, and
   report "k of K found".
 
 ### ANA-10 [P2] "Star-like (∞)" and spiral-like for unbounded Ω are taken about w = 0, so they depend on translation
+
 - **Location:** `univalence.mjs:106-117`
 - **Evidence (p17.cjs).** The deltoid gives ✓ (margin 0.069). The same deltoid translated by +1
   (h = (w−1)²+1) gives ✗ (margin −1.14), and spiral-like becomes ✗ too.
 - **Fix (S).** Use zφ′/(φ−c₀), where c₀ is the Laurent constant.
 
 ### ANA-11 [P2] Cusp labelling
+
 - **Location:** `cusps.mjs:60, 272`; `ui-solve.mjs:877-888`
 - **Claim.**
   - A φ′ zero with |d| < 5e-3 is drawn as an actual cusp (● m=1) and the distance d is not shown, so an `≈`
@@ -193,6 +207,7 @@ It adds a spurious pole in K, calls valid UQDs "not a QD", and its Verify checks
 - **Fix (S).** Label near-boundary zeros "≈ cusp (d=…)", and label m ≥ 2 as a fold.
 
 ### ANA-12 [P2] About 250 duplicated lines in the Direct kernels
+
 - **Duplications.**
   - `boundedQD` (`:106-158`) is `forwardLocalPrincipal` (`:2141-2187`) inlined; the two agree to 2.3e-16
     (p18.cjs).
@@ -205,6 +220,7 @@ It adds a spurious pole in K, calls valid UQDs "not a QD", and its Verify checks
 - **Fix (S–M).** Route every kernel through the shared helpers.
 
 ### ANA-13 [P3] The param-slice classifier fails open and mislabels input errors
+
 - **Location:** `param-slice-common.mjs:288-297`
 - **Claim.**
   - `univalent` and `identityOK` are tested as `!== false`, so undefined counts as valid. This is latent today,
@@ -214,6 +230,7 @@ It adds a spurious pole in K, calls valid UQDs "not a QD", and its Verify checks
 - **Fix.** Require an explicit `=== true`, and anchor the regex.
 
 ### ANA-14 [P3] Stale or contradictory docs and labels
+
 - The observables header says unbounded φ is traced clockwise with signedArea < 0. Measured on the deltoid:
   +0.3785 = area(K) = π(c²−2c⁴). So the unbounded moments are +∬_K.
 - The card labels area(K) as "area".
@@ -224,6 +241,7 @@ It adds a spurious pole in K, calls valid UQDs "not a QD", and its Verify checks
 - "Thesis examples" contains no example from thesis.txt.
 
 ## Improvements
+
 - **IMP-1 (value high, cost S). A winding certificate for univalence.** The winding of φ′(e^{iθ}) counts the
   critical points in 𝔻, and univalence forces it to be 0. Together with a simple, positively oriented boundary,
   winding 0 is also sufficient. Refine the sampling adaptively, and wire the test into the Direct kernels, the
@@ -242,6 +260,7 @@ It adds a spurious pole in K, calls valid UQDs "not a QD", and its Verify checks
   (`param-slice-render.mjs:150-170`).
 
 ## Coverage (not reviewed)
+
 - The weighted (★)-probe inversions were only spot-checked. The PQD-singular weighted area was confirmed to
   3e-11 against an exact-derivative quadrature.
 - Solver internals (`isBoundaryUnivalent`, `boundarySelfIntersects`), `shapeFromMomentsJSON`, and the non-Send

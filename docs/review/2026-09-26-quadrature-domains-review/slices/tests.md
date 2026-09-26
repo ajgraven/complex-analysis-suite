@@ -4,37 +4,38 @@ Covered `app/test/` (legacy CJS suite + bootstrap/harness), `app/node-test.js`, 
 `_algebra-mount.ts`, the 136 native specs), `vitest/browser/` (read only) and both configs. Ran: the full QD project
 (165 files / 1285 tests, green, **1 m 56 s wall** on a loaded 4-core box, not ~20 min), `node app/node-test.js`
 (2342 assertions, green), a v8 coverage run, instrumented RNG runs, and an **18-mutant sweep** in a detached git worktree
-(full QD project per mutant): **7 killed, 11 survived** (one equivalent in outcome). Headline: the suite pins the *happy path*
-well and the *acceptance boundaries* poorly — the identity-tolerance gate, the univalence crossing window, the domain-dedupe
+(full QD project per mutant): **7 killed, 11 survived** (one equivalent in outcome). Headline: the suite pins the _happy path_
+well and the _acceptance boundaries_ poorly — the identity-tolerance gate, the univalence crossing window, the domain-dedupe
 tolerance, the share-link value domain, and, most seriously, the **soundness of the interval arithmetic behind a certified `=`**
 all survive mutation. One spec is wall-clock flaky (5 of 21 full runs failed under load, one on a clean tree).
 
 Mutation table (full QD project; "flaky" = only `sym-factor-recombine-cap` failed, see TST-4, so counted as survived):
 
-| id | site | mutant | result |
-|---|---|---|---|
-| M1 | `solvers/solver.mjs:1403` | site-A identity gate → `identityOK: true` | killed (param-slice, solvers-4 only) |
-| M2 | `solvers/solver.mjs:735` | `isBoundaryUnivalent` → `return true` | killed (cmax, thesis-examples only — indirect) |
-| M3 | `solvers/solver.mjs:750` | `SEG_ENDPOINT_EPS` 1e-9 → 0.05 | **survived** |
-| M4 | `solvers/solver-qd.mjs:340` | bounded-QD identity `scale` ×1000 | **survived** |
-| M5 | `analysis/observables.mjs:159` | ×π on moments k ≥ 1 | **survived** (flaky) |
-| M6 | `analysis/cusps.mjs:72` | `DEFAULT_CUSP_TOL` 5e-3 → 5e-2 | killed (cusps) |
-| M7 | `ui/ui-modes.mjs:252` | rename mode key `lqd-unbounded` | killed (3 files) |
-| M8 | `ui/ui-url-state.mjs:143` | restore α only if `a > 1` | **survived** |
-| M9 | `schwarz/schwarz-inverse.mjs:224` | σ⁻¹ round-trip check `< 1e-3` → `< 1e3` | **survived** |
-| M10 | `solvers/solver-pqd-common.mjs:502` | continuation identity default 1e-6 → 1e-2 | survived — equivalent in outcome (`evalCandidate` re-verifies, `solver.mjs:1523-1527`) |
-| M11 | `qd/qd-equations.mjs:851` | drop `2!` in the moment equation | killed (qd-equations) |
-| M12 | `sym/sym-core.mjs:4799` (`_riMul`) | min/max over 2 of the 4 endpoint products | **survived** |
-| M12b | `sym/sym-core.mjs:1923` (`_intervalPolyEval`) | same, in interval Horner | **survived** |
-| M13 | `solvers/solver.mjs:110` | `UNIVALENCE_SAMPLES` 500 → 24 | killed (6 files) |
-| M14 | `solvers/solver.mjs:1779` | `sameDomain` tol 1e-4 → 1e-1 | **survived** |
-| M15 | `schwarz/schwarz-export.mjs:329` | ×π on the Hele-Shaw residue α (ADR-0006 control) | killed (schwarz-export, 4 tests) |
-| M16 | `solvers/solver-pqd-common.mjs:2` | delete `import { Complex }` | **survived** (flaky) — only `node-test.js` catches it |
-| M17 | `ui/ui-url-state.mjs:145` | restore c only if `c > 1` | **survived** |
+| id   | site                                          | mutant                                           | result                                                                                 |
+| ---- | --------------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| M1   | `solvers/solver.mjs:1403`                     | site-A identity gate → `identityOK: true`        | killed (param-slice, solvers-4 only)                                                   |
+| M2   | `solvers/solver.mjs:735`                      | `isBoundaryUnivalent` → `return true`            | killed (cmax, thesis-examples only — indirect)                                         |
+| M3   | `solvers/solver.mjs:750`                      | `SEG_ENDPOINT_EPS` 1e-9 → 0.05                   | **survived**                                                                           |
+| M4   | `solvers/solver-qd.mjs:340`                   | bounded-QD identity `scale` ×1000                | **survived**                                                                           |
+| M5   | `analysis/observables.mjs:159`                | ×π on moments k ≥ 1                              | **survived** (flaky)                                                                   |
+| M6   | `analysis/cusps.mjs:72`                       | `DEFAULT_CUSP_TOL` 5e-3 → 5e-2                   | killed (cusps)                                                                         |
+| M7   | `ui/ui-modes.mjs:252`                         | rename mode key `lqd-unbounded`                  | killed (3 files)                                                                       |
+| M8   | `ui/ui-url-state.mjs:143`                     | restore α only if `a > 1`                        | **survived**                                                                           |
+| M9   | `schwarz/schwarz-inverse.mjs:224`             | σ⁻¹ round-trip check `< 1e-3` → `< 1e3`          | **survived**                                                                           |
+| M10  | `solvers/solver-pqd-common.mjs:502`           | continuation identity default 1e-6 → 1e-2        | survived — equivalent in outcome (`evalCandidate` re-verifies, `solver.mjs:1523-1527`) |
+| M11  | `qd/qd-equations.mjs:851`                     | drop `2!` in the moment equation                 | killed (qd-equations)                                                                  |
+| M12  | `sym/sym-core.mjs:4799` (`_riMul`)            | min/max over 2 of the 4 endpoint products        | **survived**                                                                           |
+| M12b | `sym/sym-core.mjs:1923` (`_intervalPolyEval`) | same, in interval Horner                         | **survived**                                                                           |
+| M13  | `solvers/solver.mjs:110`                      | `UNIVALENCE_SAMPLES` 500 → 24                    | killed (6 files)                                                                       |
+| M14  | `solvers/solver.mjs:1779`                     | `sameDomain` tol 1e-4 → 1e-1                     | **survived**                                                                           |
+| M15  | `schwarz/schwarz-export.mjs:329`              | ×π on the Hele-Shaw residue α (ADR-0006 control) | killed (schwarz-export, 4 tests)                                                       |
+| M16  | `solvers/solver-pqd-common.mjs:2`             | delete `import { Complex }`                      | **survived** (flaky) — only `node-test.js` catches it                                  |
+| M17  | `ui/ui-url-state.mjs:145`                     | restore c only if `c > 1`                        | **survived**                                                                           |
 
 ## Findings
 
 ### TST-1 [P1] The soundness of the interval arithmetic behind a certified `=` is untested — two unsound mutants survive
+
 - Category: test
 - Location: `app/sym/sym-core.mjs:4796-4801` (`_riMul`, used by `schurCohnInterval` / `_hermitianInertiaInterval`),
   `app/sym/sym-core.mjs:1917-1926` (`_intervalPolyEval`, the RUR coordinate-box enclosure); `vitest/algebra-interval-schur-cohn.test.ts`.
@@ -55,6 +56,7 @@ Mutation table (full QD project; "flaky" = only `sym-factor-recombine-cap` faile
   enclosure). Expose the two helpers on `QD.Sym._internals` for the purpose. (S)
 
 ### TST-2 [P1] The bounded-QD quadrature-identity acceptance threshold is not pinned: a 1000× looser verifier passes everything
+
 - Category: test
 - Location: `app/solvers/solver-qd.mjs:340` (`scale` in `verifyQuadratureIdentity_QD`); `vitest/solver-identity-tol.test.ts:15-18`.
 - Claim: `solver-identity-tol.test.ts` asserts `IDENTITY_TOL === 1e-6` and that a disk passes, and states "the accept/REJECT
@@ -69,6 +71,7 @@ Mutation table (full QD project; "flaky" = only `sym-factor-recombine-cap` faile
   `identityOK` false (true); pin the measured `maxRelDiff` of one known spurious root as a golden. Correct the spec comment. (S)
 
 ### TST-3 [P1] Deleting a kernel import from a solver module (the shipped "Complex is not defined" regression) passes the gate
+
 - Category: test
 - Location: `app/node-test.js:56` vs `vitest/node/` (no `worker-graph-cleanrealm.test.ts`); `vitest/node/_run.ts:27-35` (FLOORS
   copied from `node-test.js:88-96`, without the clean-realm entry).
@@ -84,6 +87,7 @@ Mutation table (full QD project; "flaky" = only `sym-factor-recombine-cap` faile
   `vitest/node/*.test.ts` == `TESTS`); keep FLOORS in one module both runners import. (S)
 
 ### TST-4 [P2] `sym-factor-recombine-cap.test.ts` is wall-clock flaky: 5 of 21 full-project runs failed, including a clean tree
+
 - Category: test
 - Location: `vitest/sym-factor-recombine-cap.test.ts:26-34` (`expect(ms).toBeLessThan(4000)`) and `:59-66`;
   `app/sym/sym-core.mjs:2215-2226` (`RECOMBINE_DEADLINE_MS = 2000`, comment "so the test's <4 s holds on ANY machine").
@@ -100,6 +104,7 @@ Mutation table (full QD project; "flaky" = only `sym-factor-recombine-cap` faile
   enumeration". Better still, cap by a trial budget, making the verdict deterministic. (S)
 
 ### TST-5 [P2] The thesis-example "analytic oracle" test accepts 2% area errors, 12% c* errors, and silently drops rows whose detector throws
+
 - Category: test / labelling
 - Location: `app/analysis/thesis-examples.mjs:135-138, 158-260` (`_status`, `checkOracle`, `allPass = rows.every(r => r.status !== 'fail')`);
   `app/test/thesis-examples.test.js:44-52`; the same `allPass` drives the in-app oracle card (`ui/ui-thesis.mjs:111`).
@@ -118,6 +123,7 @@ Mutation table (full QD project; "flaky" = only `sym-factor-recombine-cap` faile
   "all pass" over a crash. Add area/perimeter oracles for the two-point and polygonal examples (closed forms or high-N references). (S)
 
 ### TST-6 [P2] The univalence crossing window and the same-domain dedupe tolerance have no boundary tests
+
 - Category: test
 - Location: `app/solvers/solver.mjs:748-763` (`segmentsCross`, `SEG_ENDPOINT_EPS`), `:1727-1781` (`phisEquivalent`/`sameDomain`);
   `app/test/param-slice.test.js:563-609` (BSI battery), `app/test/cardioid-uniqueness.test.js:150-160`.
@@ -134,6 +140,7 @@ Mutation table (full QD project; "flaky" = only `sym-factor-recombine-cap` faile
   `univalent === false` directly; two genuinely distinct QDs at coefficient distance ~1e-3 asserted `sameDomain === false`. (S)
 
 ### TST-7 [P2] Share links: the value domain is untested and no frozen link string is decoded
+
 - Category: test
 - Location: `app/ui/ui-url-state.mjs:143, 145`; `vitest/qd-url-state.test.ts:150-330`.
 - Claim: the codec test is good on key coverage, but every value it round-trips is one fixture (`α = 1.5`, `c = 2`). Restricting the
@@ -148,6 +155,7 @@ Mutation table (full QD project; "flaky" = only `sym-factor-recombine-cap` faile
   decode each in a test forever; parametrise the round trip over boundary values. (S)
 
 ### TST-8 [P2] Legacy batteries can lose whole sub-batteries while staying green: unasserted success guards, "skipped" passes, loose floors
+
 - Category: test
 - Location: unasserted `if (r.success) { ok(…) }` guards (no preceding assertion that the solve succeeded):
   `cusp-accuracy.test.js:115,176,187` (the near-cusp honest-reporting §5 and the no-escalation §2 checks), `solvers-4.test.js:197,205,211,270,388,421,460,492,623`,
@@ -168,6 +176,7 @@ Mutation table (full QD project; "flaky" = only `sym-factor-recombine-cap` faile
   add `expect(ok).toBe(true)` to `seeded()`; raise floors to ~80% of measured counts. (S)
 
 ### TST-9 [P2] Observables' moments M₁…M₄ are computed, shipped through the worker, consumed nowhere and pinned nowhere
+
 - Category: test / structure
 - Location: `app/analysis/observables.mjs:145-159`; consumers: only `thesis-examples.mjs:171` (M₀); tests: `app/test/observables.test.js:42`,
   `vitest/qd-m0-convention.test.ts` (M₀ only, and only for the disk, where M₁…M₄ are 0).
@@ -181,6 +190,7 @@ Mutation table (full QD project; "flaky" = only `sym-factor-recombine-cap` faile
 - Fix: either drop M₁…M₄ or pin them with the two goldens above (and IMP-1). (S)
 
 ### TST-10 [P2] The σ⁻¹ branch-validation filter never rejects anything in the suite
+
 - Category: test
 - Location: `app/schwarz/schwarz-inverse.mjs:219-226` (`_validatePreimage`, called at `:256,289,321`).
 - Claim: `_validatePreimage` re-checks σ(w_pre) ≈ w along a different path (σ inverts φ itself, so a preimage on the wrong branch
@@ -193,6 +203,7 @@ Mutation table (full QD project; "flaky" = only `sym-factor-recombine-cap` faile
   filtered; if none can be built, document the filter as belt-and-braces. (S/M)
 
 ### TST-11 [P2] Maths- and labelling-bearing modules with zero coverage
+
 - Category: test
 - Location: `app/direct/direct-verify.mjs` (207 lines: the Direct tab "Verify" verdict), `app/direct/direct-recompute.mjs` (473: its
   own copy of weighted-boundary sampling, φ = (R#)^{1/α} with arg continuation and φ = (b/|z₀|)·w₀·exp(r#), separate from the
@@ -208,6 +219,7 @@ Mutation table (full QD project; "flaky" = only `sym-factor-recombine-cap` faile
   test `sampleBoundedPhi` vs `Family.*.evalPhi` on |z| = 1 for each weight. (M)
 
 ### TST-12 [P3] `IDENTITY_TOL` is not the single source it claims: a fourth site hard-codes `|| 1e-6`
+
 - Category: structure
 - Location: `app/solvers/solver-pqd-common.mjs:502`; `solver.mjs:116-120` ("single source for the three gate sites").
 - Claim: the α-continuation endpoint gate uses `(options.identityTol || 1e-6)` — a literal, and `||` makes an explicit
@@ -218,6 +230,7 @@ Mutation table (full QD project; "flaky" = only `sym-factor-recombine-cap` faile
 - Fix: `options.identityTol ?? QD.IDENTITY_TOL`. (S)
 
 ### TST-13 [P3] The unseeded Newton-recovery RNG is still exercised by 13 legacy call sites
+
 - Category: test
 - Location: `app/solvers/solver.mjs:516, 601`; hit from `solvers-1.test.js:579,599,663`, `solvers-3.test.js:280,285,290`,
   `solvers-4.test.js:38,58,68,77,348`, `param-slice.test.js:992`, `bootstrap.js:240`.
@@ -230,6 +243,7 @@ Mutation table (full QD project; "flaky" = only `sym-factor-recombine-cap` faile
 - Fix: default to a fixed-seed PRNG inside `newtonSolve` (reproducible research runs), or pass one from `solveInverseQD`. (S)
 
 ### TST-14 [P3] Suite hygiene: 600 s timeouts, a 17 s syntax spawn loop, duplicated floors, 2342 PASS lines of console noise
+
 - Category: test / perf
 - Location: `vitest.config.ts:25-29`; `app/test/parse-check.test.js:24-36`; `node-test.js:88-96` + `vitest/node/_run.ts:27-35`; `app/test/harness.js:14-17`.
 - Claim: `testTimeout`/`hookTimeout` 600 000 were sized for the retired single child process; the slowest spec now takes 22 s
@@ -243,6 +257,7 @@ Mutation table (full QD project; "flaky" = only `sym-factor-recombine-cap` faile
   only FAIL lines unless `QD_TEST_VERBOSE`. (S)
 
 ### TST-15 [P3] Two tests disagree on the cardioid c* and each tolerance admits the other
+
 - Category: test
 - Location: `app/test/cusp-accuracy.test.js:161` (`approxEq(res.cMax, 1.46, 4e-2)`, labelled "tight");
   `app/analysis/thesis-examples.mjs:98` (`cMax: 1.449`); `app/test/cmax.test.js`.
@@ -274,6 +289,7 @@ Mutation table (full QD project; "flaky" = only `sym-factor-recombine-cap` faile
   bootstrap in place) removes the floor mechanism for those files.
 
 ## Coverage: what I did NOT review or could not run
+
 - Did not run the browser suite (`vitest/browser/`, schwarz slice's job); read it only.
 - The mutation sweep is a sample (18 sites). Each mutant ran the full QD project once under heavy shared load; a mutant counted as
   "killed" was never re-run, and "flaky-only" failures were counted as survived.
