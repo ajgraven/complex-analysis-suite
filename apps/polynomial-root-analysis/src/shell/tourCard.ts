@@ -50,8 +50,9 @@ export function tourCard(m: TourModel, on: TourHandlers): Desc {
       ),
     );
   } else {
-    const asks = text.question !== undefined && step.answer !== undefined;
-    const answer = asks ? step.answer!(m.ctx) : null;
+    const grade = step.answer;
+    const asks = text.question !== undefined && grade !== undefined;
+    const answer = grade && asks ? grade(m.ctx) : null;
     if (asks) {
       rows.push(
         h(

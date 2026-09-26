@@ -1064,12 +1064,12 @@ export function mountApp(host: HTMLElement): App {
   // ── The drill and the front door (PRA-10).
   const drillKey = (): string | null =>
     state.drill ? `${state.drill.task}:${state.drill.stage}` : null;
-  function goDrill(id: string, stage?: DrillStage): void {
+  function goDrill(id: string, at?: DrillStage): void {
     if (!taskById(id)) return;
     ladderText = null;
     ladderRefusal = null;
     selected = null;
-    commit(drillState(id, stage ?? openingStage(progress, id), state));
+    commit(drillState(id, at ?? openingStage(progress, id), state));
   }
   function drillChoose(choice: string): void {
     const d = state.drill;

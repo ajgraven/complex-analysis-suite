@@ -71,7 +71,8 @@ describe("the tour's steps, as states", () => {
   it("a step is left when the reader edits its state away", () => {
     const k = TOUR_STEPS.findIndex((s) => s.id === "cardano");
     const s = tourState(k, DEFAULT_STATE);
-    expect(onTourStep(k, { ...s, ladder: { ...s.ladder!, word: "d2" } })).toBe(false);
+    if (!s.ladder) throw new Error("the Cardano step opens no ladder");
+    expect(onTourStep(k, { ...s, ladder: { ...s.ladder, word: "d2" } })).toBe(false);
     const r = TOUR_STEPS.findIndex((x) => x.id === "roots");
     const t = tourState(r, DEFAULT_STATE);
     expect(onTourStep(r, { ...t, poly: { kind: "text", text: "z^5 - z + 1" } })).toBe(
