@@ -29,6 +29,10 @@ import {
   specialisationCert,
 } from "../src/engine/certify.js";
 import { galoisEvidence, galoisRequest } from "../src/engine/galois/tier0.js";
+import { registerTable } from "../src/engine/galois/tables.js";
+import large from "../src/engine/galois/data/transitive-8-15.json";
+
+registerTable(large);
 
 function family(text: string): FamilyReading {
   const r = readFamily(text);
@@ -246,6 +250,10 @@ describe("reading a family, or refusing by name", () => {
     expect(f.grid[1].map((c) => c.toTuple()[0])).toEqual([-3]);
     expect(renderQiPolyText(f.disc, "t")).toBe("t^4 - 4");
   });
+  it("reads a product of two factors in t at the degree of their product", () => {
+    const f = family("z^2 + t*(t - 1)*z + 1");
+    expect(f.grid[1].map((c) => c.toTuple()[0])).toEqual([0, -1, 1]);
+  });
   it("reads (t + 1)² z² … through products and powers", () => {
     const f = family("z^2 + (t + 1)^2 z - t^3/2");
     expect(f.grid[1].map((c) => c.toTuple()[0])).toEqual([1, 2, 1]);
@@ -269,5 +277,35 @@ describe("the base point as exact text", () => {
     }
     expect(readBase("t").ok).toBe(false);
     expect(readBase("1/(").ok).toBe(false);
+  });
+});
+
+describe("sweep survivors (PRA-7)", () => {
+  it("the default base point is one from which EVERY straight tether is clear, not merely one off the branch points", () => {
+    // Branch points at 1 and 2: from 0 (and from every real candidate) the tether to 2 runs through 1.
+    const f = family("z^2 - (t - 1)(t - 2)");
+    expect(renderQiPolyText(f.disc, "t")).toBe("t^2 - 3 t + 2");
+    expect(baseText(defaultBase(f))).toBe("i");
+  });
+  it("a reducible member is a proper subgroup: z⁵ − z at t = 0 factors", () => {
+    const f = family("x^5 - x - t");
+    const sg = specialGalois(galoisOf(atBase(f, Q(0n))));
+    expect(sg).toEqual({ kind: "reducible" });
+    const g = lassoGroup(flower(f).runs, 5);
+    expect(relate(arithmeticGroup(g, f.rawDisc, 5), sg)).toEqual({ kind: "proper" });
+  });
+  it("a member the Galois card only estimates is never compared", () => {
+    const b = fromExact(
+      (() => {
+        const r = readFamily("x^8 - 3x^6 + 4x^4 - 2x^2 + t");
+        if (!r.ok) throw new Error(r.reason);
+        return specialise(r.family, Q(1n));
+      })(),
+      "Q",
+    );
+    if (!b.ok) throw new Error(b.reason);
+    const sg = specialGalois(galoisOf(b.poly));
+    expect(sg.kind).toBe("open");
+    if (sg.kind === "open") expect(sg.why).toMatch(/only estimates/);
   });
 });

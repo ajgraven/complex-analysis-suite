@@ -61,7 +61,47 @@ const CUBIC_T2: Gauss[][] = [[Q(0n), Q(0n), Q(1n)], [Q(-3n)], [], [Q(1n)]];
 const floatsAt = (family: Gauss[][], t: Gauss): Cx[] =>
   familyAt(family, t).map((c) => c.toTuple());
 
+/** n·|p(zᵢ)| / (|aₙ|·∏|zᵢ − zⱼ|): Smith's radius of the polynomial `c` about the points `z`. */
+function smithRadius(c: readonly Cx[], z: readonly Cx[], i: number): number {
+  const n = c.length - 1;
+  let pr = c[n][0];
+  let pi = c[n][1];
+  const [x, y] = z[i];
+  for (let k = n - 1; k >= 0; k--) {
+    const nr = pr * x - pi * y + c[k][0];
+    pi = pr * y + pi * x + c[k][1];
+    pr = nr;
+  }
+  let den = Math.hypot(c[n][0], c[n][1]);
+  for (let k = 0; k < n; k++) if (k !== i) den *= Math.hypot(x - z[k][0], y - z[k][1]);
+  return (n * Math.hypot(pr, pi)) / den;
+}
+
 describe("the family tracker (PRA-7): p(t, z) followed along a path of t", () => {
+  it("each certified disc covers Smith's radius of every member of its segment — through t = 0, where t² turns", () => {
+    // From t = −½ to ½ the two ends are the SAME polynomial (t² = ¼), so an endpoint envelope would see
+    // nothing move; in between t² dips to 0 and every root moves.
+    let steps = 0;
+    const from = Q(-1n, 2n);
+    const r = trackFamilyPath({
+      family: CUBIC_T2,
+      path: [from, Q(1n, 2n)],
+      roots: rootsOf(floatsAt(CUBIC_T2, from)),
+      solve,
+      onStep: ({ from: a, to: b, centres, radii }) => {
+        for (let k = 0; k <= 20; k++) {
+          const c = floatsAt(CUBIC_T2, a.add(b.sub(a).mul(G(k / 20))));
+          centres.forEach((_, i) =>
+            expect(smithRadius(c, centres, i)).toBeLessThanOrEqual(radii[i] * (1 + 1e-9)),
+          );
+        }
+        steps++;
+      },
+    });
+    expect(r.ok).toBe(true);
+    expect(steps).toBeGreaterThan(1);
+  });
+
   it("x⁵ − x − t agrees with moving a₀ = −t: the same transposition, lasso by lasso", () => {
     const b = Math.pow(256 / 3125, 1 / 4); // a real branch point, 0.535…
     for (const c of [

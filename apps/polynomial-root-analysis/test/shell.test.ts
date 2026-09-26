@@ -1047,6 +1047,31 @@ describe("families (PRA-7)", () => {
     expect(q<HTMLInputElement>(".family-input").value).toBe("t x^2 + x + 1");
   });
 
+  it("an edited member is no longer the member: the bridge goes, the family box stays", () => {
+    const { app } = mount();
+    app.actions().openFamily("x^5 - x - t", "1");
+    app.actions().specialise();
+    expect(card().textContent).toMatch(/This is the member t = 1/);
+    app.actions().moveTo({ kind: "coeff", index: 0 }, [-2, 0]);
+    app.actions().release();
+    expect(app.currentState().poly).toEqual({ kind: "text", text: "z^5 - z - 2" });
+    expect(card().textContent).not.toMatch(/This is the member/);
+  });
+
+  it("two families with the same member at t₀ do not share lassos", () => {
+    const a = resolveState({
+      ...DEFAULT_STATE,
+      family: { text: "x^5 - x - t", base: "0", open: true },
+    }).family?.runs?.[0];
+    const b = resolveState({
+      ...DEFAULT_STATE,
+      family: { text: "x^5 - x - 2t", base: "0", open: true },
+    }).family?.runs?.[0];
+    if (!a?.ok || !b?.ok) throw new Error("refused");
+    // Both are p(0, z) = z⁵ − z, but the second's branch points are half as far out.
+    expect(Math.hypot(...b.path[1])).toBeLessThan(0.75 * Math.hypot(...a.path[1]));
+  });
+
   it("typing a polynomial leaves the family", () => {
     const { app } = mount();
     app.actions().openFamily("x^3 + t x + 1");
@@ -1059,6 +1084,13 @@ describe("families (PRA-7)", () => {
     app.actions().openFamily("x^4 - 4x^2 + t");
     const hash = encodeShell(app.currentState());
     const d = decodeShell(hash);
+    const closed = decodeShell(
+      encodeShell({
+        ...app.currentState(),
+        family: { text: "x^4 - 4x^2 + t", base: "1", open: false },
+      }),
+    );
+    expect(closed?.ok && closed.state.family?.open).toBe(false);
     expect(d?.ok && d.state.family).toEqual({
       text: "x^4 - 4x^2 + t",
       base: "1",

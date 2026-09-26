@@ -10,6 +10,7 @@ import {
   inDisc,
   smithDiscs,
   smithDiscsEnvelope,
+  smithDiscsSeries,
   sqrtUpperBound,
 } from "../src/index.js";
 
@@ -331,5 +332,34 @@ describe("smithDiscsEnvelope (the certified tracker's segment test, @cas/monodro
   it("refuses polynomials of different degrees, by name", () => {
     const r = smithDiscsEnvelope([a, a.slice(0, 3)], z);
     expect(!r.ok && r.reason).toMatch(/same degree/);
+  });
+});
+
+describe("smithDiscsSeries (a family's segment, coefficients polynomial in its parameter)", () => {
+  it("each radius is at least Smith's radius of EVERY member Σ sʳ·partᵣ, s ∈ [0, 1]", () => {
+    // p_s(z) = z² − 1 + c·(s + s²): the two parts add up at s = 1, where |p| = 2c at z = ±1 — more than
+    // √(Σ|vᵣ|²) = √2·c, so the Cauchy–Schwarz factor K is what makes this a bound at all.
+    const c = Frac.of(1n, 10n);
+    const k = new Gauss(c, Frac.ZERO);
+    const zero = Gauss.ZERO;
+    const parts = [
+      [g(-1), zero, g(1)],
+      [k, zero, zero],
+      [k, zero, zero],
+    ];
+    const r = smithDiscsSeries(parts, [g(1), g(-1)]);
+    if (!r.ok) throw new Error(r.reason);
+    const cf = c.toNumber();
+    for (let i = 0; i <= 100; i++) {
+      const sv = i / 100;
+      for (const [d, z] of [
+        [0, 1],
+        [1, -1],
+      ] as const) {
+        const value = Math.abs(z * z - 1 + cf * (sv + sv * sv));
+        const smith = (2 * value) / Math.abs(z - -z);
+        expect(smith).toBeLessThanOrEqual(r.discs[d].radiusUpper());
+      }
+    }
   });
 });

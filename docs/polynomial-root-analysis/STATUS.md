@@ -9,10 +9,28 @@ not silently changed.
 
 ## Current
 
-**PRA-7 — Families** (PLAN §7), awaiting the owner's go-ahead. PRA-6 is complete.
+**PRA-8 — The ladder: Abel–Ruffini** (PLAN §7), awaiting the owner's go-ahead. PRA-7 is complete.
 
 ## Done
 
+- 2026-09-26 — **PRA-7 complete: families.** A polynomial p(t, z) over ℚ, read exactly
+  (`src/engine/family/family.ts`: a Newton interpolation in t at a structural bound on the degree in t,
+  checked one point further), its branch points the zeros of disc_z(p) isolated in Smith discs, a base
+  point t₀ (default: the first of 0, 1, −1, ½, … from which every straight tether is clear), the flower
+  of lassos — each along its own straight tether, so they never cross and generate π₁ — each run through
+  the certified tracker, which now follows a FAMILY (`@cas/monodromy` `trackFamilyPath`; coefficients
+  polynomial in t are bounded by `@cas/exact`'s new `smithDiscsSeries`), and the bridge
+  (`src/engine/family/bridge.ts`): G over ℂ(t) = the monodromy group; the group over ℚ(t) named only
+  when G and the RAW discriminant pin it; the member at t₀ compared with it by order. Opened from four
+  presets or the Family card's box, the coefficient pane becomes the t-plane with a draggable base point
+  (snapped on release), and a member opens in the sandbox with the bridge kept (`ShellState.family`,
+  `#vs=` key `fm`). Gate clauses: x⁵ − x − t lists exactly four branch points, the roots of
+  3125t⁴ − 256 (`=`), four certified transpositions, `= S₅`; x⁴ − 4x² + t gives a swap at t = 0 and a
+  double swap at t = 4 (D₄ over ℂ(t)); from t₀ = 1 the tether to −0.535 crosses +0.535's circle and
+  that lasso refuses by name; specialising x⁵ − x − t at t = 1 opens x⁵ − x − 1 in the sandbox and the
+  bridge cites the Galois card's `= S₅` ("outside the thin set"); Trinks' x⁷ − 7x + 3 is PSL(3,2),
+  order 168, "in the thin set" of a family whose geometric group is S₇. Sweep **34 mutants, 31 killed, 3 recorded equivalents** (below). Gate
+  **642 files / 7479 tests** (640 / 7439 before PRA-7), browser suite 1 / 3; `pnpm a11y --strict` **1,503 interactive nodes across 38 pages, 0 unnamed** (roster entry `-family` new).
 - 2026-09-26 — **PRA-6 complete: the Galois correspondence, numerically** (and, first, the owner-approved
   split of the group table: main chunk 741 → 429 kB). `src/engine/galois/correspondence.ts` + its own
   `lattice.worker.ts`: for a labelled group of degree ≤ 7, every subgroup (degree ≤ 5; one per class past
@@ -128,6 +146,33 @@ not silently changed.
 
 ## Findings (things learned while executing; each names its step)
 
+- _(PRA-7)_ **The group over ℚ(t) needs the RAW discriminant.** The card shows disc_z(p) in primitive
+  form, which drops the constant — and the constant decides squareness: disc(z³ − t) = −27t², primitive
+  t², so the first draft named A₃ for z³ − t, whose group over ℚ(t) is S₃ (ℚ has no cube root of
+  unity). `FamilyReading` carries both; Shanks' simplest cubic, (t² + 3t + 9)², is the square case.
+- _(PRA-7)_ **A lasso is refused from one base and fine from another; the group is not.** From t₀ = 1
+  the straight tether to x⁵ − x − t's branch point −0.535 runs through +0.535 — refused, correctly, as
+  the gate asks. The first draft then withheld the group, the arithmetic group and the bridge too. The
+  group is base-independent (a path between bases conjugates one flower into the other), so it is now
+  asked of a base whose tethers are all clear and the card names that base.
+- _(PRA-7)_ **Every preset family is linear in t, so the series bound had to be tested apart.** The
+  endpoint envelope is exact only when the coefficients move linearly (convexity); with t² it can miss
+  an interior peak, `s(1 − s)` being 0 at both ends. `smithDiscsSeries` bounds the Taylor parts
+  instead, tested on z³ − 3z + t² against its image t² ↦ s (the same permutations) and by sampling
+  INSIDE every certified segment.
+- _(PRA-7)_ **Sweep: twelve first-pass survivors; two of them were the bound itself.** Dropping the
+  Cauchy–Schwarz factor from `smithDiscsSeries`, or taking the endpoint envelope for a family quadratic in
+  t, left every test green: root-inclusion sampling cannot see a disc that is too small by less than
+  Smith's factor of n. The tests now assert the BOUND — every sampled member's Smith radius inside the
+  claimed disc — on a segment through t = 0, where both ends of z³ − 3z + t² are the same polynomial and
+  the envelope sees nothing move. The rest: a product of two t-factors read at the degree of their
+  product; a default base that is off the branch points but has a blocked tether (z² − (t − 1)(t − 2):
+  every real candidate is collinear with 1 and 2, so it is i); a reducible member (z⁵ − z at t = 0); a
+  member the Galois card only estimates (never compared); an edited member losing the bridge; two
+  families with the same member at t₀ sharing memoised lassos (x⁵ − x − t and x⁵ − x − 2t at 0); a closed
+  family's link. **Recorded equivalents:** `f-check`, the interpolation's check at t = d + 1, which only a
+  wrong degree bound can reach; `l-first`, which names the first blocker when a straight tether has only
+  one candidate; `r-start`, which indexes `coeffs[−1]`, undefined in a family's plane.
 - _(PRA-6)_ **The gate's "invariants reading = integer at the nodes Conrad lists" is read as the Galois
   correspondence says it must be:** only the invariant of the whole group (and of any group containing
   it) is rational. Below the top each node's claim is its fixed field's defining polynomial, exact — x³ − 2's
