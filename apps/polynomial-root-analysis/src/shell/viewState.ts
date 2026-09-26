@@ -20,6 +20,7 @@ import { branchPoints } from "../engine/analysis/discriminant.js";
 import { readFamily } from "../engine/family/family.js";
 import { rung } from "../engine/ladder/rungs.js";
 import { readFormula } from "../engine/formula/tree.js";
+import { TOUR_STEPS } from "./tour.js";
 
 export const NAMESPACE = "pra";
 
@@ -44,6 +45,8 @@ interface Wire {
   fm?: [string, string, 0 | 1];
   /** Added at PRA-8: the ladder `[rung, formula (a gallery id, or the text), word or null]`. */
   ld?: [number, string, string | null];
+  /** Added at PRA-10: the tour's step (absent = not on the tour). `tr` is the trails flag. */
+  tu?: number;
   rc: [number, number, number];
   cc: [number, number, number];
   [k: string]: unknown;
@@ -73,6 +76,7 @@ export function encodeShell(s: ShellState): string {
         }
       : {}),
     ...(s.ladder ? { ld: ladderOut(s.ladder) } : {}),
+    ...(s.tour !== null ? { tu: s.tour } : {}),
     rc: cam(s.rootCam),
     cc: cam(s.coeffCam),
   };
@@ -302,6 +306,16 @@ export function decodeShell(hash: string): Decoded | null {
     if (typeof l === "string") return { ok: false, reason: l };
     ladder = l;
   }
+  let tour: number | null = null;
+  if (w.tu !== undefined) {
+    if (
+      !Number.isInteger(w.tu) ||
+      (w.tu as number) < 0 ||
+      (w.tu as number) >= TOUR_STEPS.length
+    )
+      return { ok: false, reason: `the tour has no step ${String(w.tu)}` };
+    tour = w.tu as number;
+  }
   const state: ShellState = {
     ring,
     poly,
@@ -315,6 +329,7 @@ export function decodeShell(hash: string): Decoded | null {
     lattice: w.gc === 1,
     family,
     ladder,
+    tour,
     rootCam: rc,
     coeffCam: cc,
   };

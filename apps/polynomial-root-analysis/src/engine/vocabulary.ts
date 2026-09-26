@@ -57,6 +57,110 @@ export const MONODROMY = {
     "The roots' real parts over the course of the last loop or motion, left to right; where two strands cross, the one with the larger imaginary part passes over.",
 } as const;
 
+/**
+ * The tour (PRA-10): Arnold's proof of Abel–Ruffini in a lecturer's order. Every step opens a state the
+ * app computes on, and every sentence that asserts a fact about THAT state is a certificate read off
+ * the computation (see `shell/tour.ts`), never a sentence here. What is here is the lecture.
+ */
+export const TOUR = {
+  heading: "Tour: why the quintic has no formula",
+  start: "Take the tour",
+  step: (k: number, n: number): string => `Step ${k} of ${n}`,
+  previous: "Previous step",
+  next: "Next step",
+  leave: "Leave the tour",
+  computed: "What the app computes here",
+  predict: "Predict first",
+  unanswered: "Answer to see what the app computes.",
+  right: "Right.",
+  wrong: "Not what the computation says.",
+  ungraded: "The computation has not finished, so there is nothing to grade against yet.",
+  offStep:
+    "The app has moved off this step's state, so what it computes now is not what this step is about.",
+  returnTo: "Return to this step",
+  pending: "Still computing.",
+  steps: {
+    roots: {
+      title: "A polynomial is its roots",
+      lines: [
+        "A monic polynomial is determined by its roots: its coefficients are ± their elementary symmetric functions (Vieta).",
+        "So moving the roots moves the coefficients continuously, and moving them back — as a SET, in any order — brings the coefficients back.",
+      ],
+    },
+    swap: {
+      title: "Every permutation is a loop",
+      lines: [
+        "Swap two roots along a lens: the set of roots comes back, so every coefficient traces a closed loop — while the roots themselves are exchanged.",
+        "A formula built from the coefficients by + − × ÷ is a single-valued function of them, so along any closed loop it comes back to its starting value. Here it cannot follow a root: the root it named has moved.",
+      ],
+      question: "The roots swap. Does the formula's value come back?",
+      choices: ["Yes, it comes back", "No, it changes"],
+    },
+    sqrt: {
+      title: "A square root does not come back",
+      lines: [
+        "Radicals are what escape that argument: along a loop round a place where roots collide, √(a₁² − 4a₀) changes sign, exactly as the two roots trade places.",
+      ],
+      question: "Along the same swap, does √(a₁² − 4a₀) come back?",
+      choices: ["Yes, it comes back", "No, it changes sign"],
+    },
+    commutator: {
+      title: "…but a radical comes back along a COMMUTATOR",
+      lines: [
+        "Run a loop, then a second, then the first backwards, then the second backwards. A radicand winds m₁ + m₂ − m₁ − m₂ = 0 times round 0, so every radical of it comes back.",
+        "Yet on three roots the commutator of two swaps is a 3-cycle: the roots do NOT come back. So one level of radicals cannot give a root of the cubic.",
+      ],
+      question: "Along [(1 2), (2 3)], does √disc come back?",
+      choices: ["Yes, it comes back", "No, it changes"],
+    },
+    cardano: {
+      title: "Cardano has two levels",
+      lines: [
+        "Cardano's formula nests a cube root over a square root. Along the commutator the square root comes back — and the cube root's radicand, which the square root moved, winds round 0 a number of times not divisible by 3.",
+      ],
+      question: "Along [(1 2), (2 3)], does Cardano's cube root come back?",
+      choices: ["Yes, it comes back", "No, it moves to another cube root"],
+    },
+    cubicDone: {
+      title: "…and two levels are enough for three roots",
+      lines: [
+        "Commutators of commutators on three roots are trivial: the 3-cycles commute. Along such a word everything in Cardano comes back, and so do the roots — nothing is ruled out.",
+        "That is the derived series of S₃ reaching the identity.",
+      ],
+    },
+    quartic: {
+      title: "Four roots need three levels",
+      lines: [
+        "On four roots, commutators of 3-cycles are double swaps such as (1 4)(2 3): a depth-2 word that moves the roots, so two levels are not enough. Ferrari's formula has three, and its third level does not come back along it.",
+        "One level deeper the double swaps commute and the ladder stops: S₄'s derived series reaches the identity.",
+      ],
+    },
+    quintic: {
+      title: "Five roots: the ladder never ends",
+      lines: [
+        "On five roots a 3-cycle is itself a commutator of two 3-cycles. So there is a word of every depth whose roots undergo a 3-cycle — and along it every radical of that depth comes back.",
+      ],
+      question:
+        "A two-level formula, along a depth-2 word whose roots undergo (1 2 3): does every radical come back?",
+      choices: ["Yes, every one", "No, some radical changes"],
+    },
+    everyDepth: {
+      title: "Every depth is killed",
+      lines: [
+        "The same holds at every depth, because the 60 even permutations of five roots are their own commutators: S₅'s derived series stops at 60 and never reaches the identity. No formula in radicals, of any depth, follows a root of the general quintic.",
+      ],
+    },
+    galois: {
+      title: "What this proves, and what it does not",
+      lines: [
+        "This is Arnold's theorem: no formula built from the coefficients by + − × ÷ and radicals gives a root of the general quintic. It says nothing yet about one particular polynomial.",
+        "For a polynomial with rational coefficients that is Galois's question, and the Galois card answers it here: x⁵ − x − 1's group over ℚ is not solvable, so its own roots are not radicals over ℚ.",
+        "A loop's permutation is NOT a Galois element: a loop moves every coefficient, while the Galois group of one polynomial fixes them all. The two meet only through families (the Family card).",
+      ],
+    },
+  },
+} as const;
+
 export const LADDER = {
   heading: "Ladder: Abel–Ruffini",
   what: "Arnold's proof, executed. Move the roots round a loop and a formula built from the coefficients by + − × ÷ comes back to its value; a radical comes back along every COMMUTATOR of loops. So a formula with N levels of radicals comes back along every N-fold nested commutator — and if the roots do not, it cannot be a formula for a root.",

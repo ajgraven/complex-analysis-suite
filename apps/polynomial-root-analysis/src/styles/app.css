@@ -34,8 +34,15 @@ body {
 }
 
 .bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
   padding: 10px 16px;
   border-bottom: 1px solid var(--line);
+}
+.bar .brand {
+  margin-right: auto;
 }
 /* The page's h1 is the brand, so the document has a heading structure; the CSS cancels its size. */
 .brand {
@@ -541,4 +548,20 @@ canvas:focus-visible {
   margin: 10px 0 4px;
   font-size: 13px;
   color: var(--muted);
+}
+
+/* The tour (PRA-10). */
+.tour .predict {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  margin: 8px 0;
+  padding: 6px 10px;
+}
+.tour .claims {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.tour .grade {
+  font-weight: 600;
 }

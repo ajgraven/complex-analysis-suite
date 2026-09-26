@@ -17,7 +17,8 @@ import {
 } from "../engine/polynomial.js";
 import { parsePolynomial } from "../engine/parse.js";
 import { snapRational } from "../engine/rational.js";
-import { APP_NAME, MONODROMY, PANE } from "../engine/vocabulary.js";
+import { APP_NAME, MONODROMY, PANE, TOUR } from "../engine/vocabulary.js";
+import { TOUR_STEPS, onTourStep, tourState } from "./tour.js";
 import {
   baseText,
   defaultBase,
@@ -152,6 +153,10 @@ export interface App {
     setFormula(text: string): void;
     runWord(id: string): void;
     leaveLadder(): void;
+    /** The tour (PRA-10): open step k, predict on the current step, leave. */
+    tour(k: number): void;
+    predict(choice: number): void;
+    leaveTour(): void;
   };
   /** The Galois card's model: refused, busy, or the evidence for the committed polynomial. */
   galois(): GaloisModel | null;
@@ -182,7 +187,9 @@ export function mountApp(host: HTMLElement): App {
   const header = el(doc, "header", { class: "bar" });
   const h1 = el(doc, "h1", { class: "brand" });
   h1.textContent = APP_NAME;
-  header.append(h1);
+  const tourButton = el(doc, "button", { type: "button", class: "bar-button" });
+  tourButton.textContent = TOUR.start;
+  header.append(h1, tourButton);
   const main = el(doc, "main", { class: "shell" });
   const linkRefusal = el(doc, "p", { class: "link-refusal", role: "alert" });
   linkRefusal.hidden = true;
@@ -279,6 +286,8 @@ export function mountApp(host: HTMLElement): App {
   /** The ladder's formula box when it did not read, and why. */
   let ladderText: string | null = null;
   let ladderRefusal: string | null = null;
+  /** The tour's predictions, by step — this session's only, never in the permalink. */
+  const tourAnswers = new Map<number, number>();
   /** Root trails by LABEL, for the drag in progress (and kept after it when `state.trails`). */
   const trails = new Map<number, Cx[]>();
   // Loop authoring and playback — session state, never in the permalink (the WORD is; these are how it
@@ -998,6 +1007,26 @@ export function mountApp(host: HTMLElement): App {
     if (state.ladder) commit({ ...state, ladder: null });
   }
 
+  // ── The tour (PRA-10).
+  function goTour(k: number): void {
+    if (!Number.isInteger(k) || k < 0 || k >= TOUR_STEPS.length) return;
+    ladderText = null;
+    ladderRefusal = null;
+    familyText = null;
+    familyRefusal = null;
+    selected = null;
+    commit(tourState(k, state));
+  }
+  function predict(choice: number): void {
+    if (state.tour === null) return;
+    tourAnswers.set(state.tour, choice);
+    render();
+  }
+  function leaveTour(): void {
+    if (state.tour !== null) commit({ ...state, tour: null });
+  }
+  tourButton.addEventListener("click", () => goTour(state.tour ?? 0));
+
   // ── Families (PRA-7).
   function openFamily(text: string, base: string | null = null): void {
     const read = readFamily(text);
@@ -1324,6 +1353,20 @@ export function mountApp(host: HTMLElement): App {
             onLeave: leaveLadder,
           },
         },
+        state.tour === null
+          ? undefined
+          : {
+              model: {
+                step: state.tour,
+                onStep: onTourStep(state.tour, state),
+                chosen: tourAnswers.get(state.tour) ?? null,
+                ctx: {
+                  res: resolution,
+                  galois: galois?.kind === "done" ? galois.evidence : null,
+                },
+              },
+              on: { onGo: goTour, onChoose: predict, onLeave: leaveTour },
+            },
       ),
     );
     patch(
@@ -1650,6 +1693,9 @@ export function mountApp(host: HTMLElement): App {
       setFormula,
       runWord,
       leaveLadder,
+      tour: goTour,
+      predict,
+      leaveTour,
     }),
     galois: () => galois,
     lattice: () => lattice,

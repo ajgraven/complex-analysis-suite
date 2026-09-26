@@ -74,6 +74,8 @@ export interface ShellState {
    * root plane shows the rung's own polynomial, which a reader does not edit.
    */
   readonly ladder: LadderState | null;
+  /** The tour's step (PRA-10), when the reader is on it; the step's own state is the rest of this one. */
+  readonly tour: number | null;
   readonly rootCam: Cam;
   readonly coeffCam: Cam;
 }
@@ -105,6 +107,7 @@ export const DEFAULT_STATE: ShellState = {
   lattice: false,
   family: null,
   ladder: null,
+  tour: null,
   rootCam: { cx: 0, cy: 0, half: 1.6 },
   coeffCam: { cx: 0, cy: 0, half: 1.6 },
 };
