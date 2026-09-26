@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { defaultPoolSize, RootPool } from "../src/engine/pool";
+import { defaultPoolSize, RootPool, chunkSize } from "../src/engine/pool";
 import type { RootsRequest, RootsResponse } from "../src/engine/roots.worker";
 import { sweepChunk } from "../src/engine/sweep";
 
@@ -406,5 +406,32 @@ describe("the pool size", () => {
     expect(defaultPoolSize(1)).toBe(1); // never zero
     expect(defaultPoolSize(undefined)).toBe(3); // the 4-core assumption, less the main thread
     expect(defaultPoolSize(64)).toBe(12); // capped: more workers than that only adds message overhead
+  });
+});
+
+describe("chunkSize — every worker has work until the degree is done", () => {
+  it("cuts a degree into at least four chunks a worker, within the floor and the cap", () => {
+    // Littlewood's degree 16 is 32,768 representatives' worth of indices: four fixed chunks for eight
+    // workers, so half the pool idled through the most expensive degree.
+    const size = chunkSize(65536, 8);
+    expect(Math.ceil(65536 / size)).toBeGreaterThanOrEqual(32);
+    expect(chunkSize(1e9, 8)).toBe(16384); // the cap
+    expect(chunkSize(100, 8)).toBe(512); // the floor: a small degree is one message, not dozens
+    expect(chunkSize(65536, 0)).toBe(chunkSize(65536, 1));
+  });
+
+  it("the POOL cuts by its own worker count — eight workers, a 65,536-index degree, at least 32 chunks", () => {
+    const { pool, dispatched } = makePool(8);
+    let done = false;
+    pool.run(
+      { spec, minDegree: 16, maxDegree: 16, totals: [65536], circleDelta: 0.02, hueDigits: 0 },
+      { onChunk: () => {}, onProgress: () => {}, onDone: () => (done = true), onError: (m) => { throw new Error(m); } },
+    );
+    // Only the first eight are handed out before any reply; the cursor's own step is what is checked.
+    expect(dispatched.length).toBe(8);
+    const step = dispatched[0].hi - dispatched[0].lo;
+    expect(Math.ceil(65536 / step)).toBeGreaterThanOrEqual(32);
+    expect(done).toBe(false);
+    pool.cancel();
   });
 });

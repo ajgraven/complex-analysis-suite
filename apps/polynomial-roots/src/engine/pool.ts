@@ -42,8 +42,26 @@ export interface PoolHandlers {
   onError: (message: string) => void;
 }
 
-/** How many raw indices one chunk covers. Big enough to amortise the message, small enough to stay live. */
+/** How many raw indices one chunk covers at most. Big enough to amortise the message, small enough to stay live. */
 const CHUNK = 16384;
+/** The fewest indices worth a message. */
+const MIN_CHUNK = 512;
+/** Chunks per worker a degree is cut into, so the last one to finish is not most of the degree. */
+const CHUNKS_PER_WORKER = 4;
+
+/**
+ * The chunk size for a degree of `total` indices across `workers` workers.
+ *
+ * **A fixed 16,384 left the top degree on one worker.** The top degree is the most expensive and, with
+ * the orbit reduction, often only a few chunks long — Littlewood's degree 16 was four chunks for eight
+ * workers, so half the pool idled while the other half finished it, and the sweep's wall time was set by
+ * that tail (the 2026-09-26 review measured 75% of degree 16 on one worker). Cutting each degree into at
+ * least `CHUNKS_PER_WORKER × workers` pieces keeps every worker busy to the end; the floor keeps a small
+ * degree from becoming hundreds of tiny messages.
+ */
+export function chunkSize(total: number, workers: number): number {
+  return Math.max(MIN_CHUNK, Math.min(CHUNK, Math.ceil(total / (CHUNKS_PER_WORKER * Math.max(1, workers)))));
+}
 
 /** The pool's view of one issued chunk. */
 interface Pending {
@@ -86,6 +104,8 @@ export class RootPool {
   private issued = 0;
   private answered = 0;
   private totalChunks = 0;
+  /** This job's chunk size per degree, fixed at `run` so the count and the cursor agree. */
+  private sizes: number[] = [];
   private failed = false;
   private handlers: PoolHandlers | null = null;
   private disposed = false;
@@ -127,8 +147,12 @@ export class RootPool {
     this.cursorDegree = job.minDegree;
     this.cursorLo = 0;
     let chunks = 0;
+    this.sizes = [];
     for (let degree = job.minDegree; degree <= job.maxDegree; degree++) {
-      chunks += Math.ceil((job.totals[degree - job.minDegree] ?? 0) / CHUNK);
+      const total = job.totals[degree - job.minDegree] ?? 0;
+      const size = chunkSize(total, this.workers.length);
+      this.sizes.push(size);
+      chunks += Math.ceil(total / size);
     }
     this.totalChunks = chunks;
     if (this.totalChunks === 0) {
@@ -168,7 +192,8 @@ export class RootPool {
     while (this.cursorDegree <= job.maxDegree) {
       const total = job.totals[this.cursorDegree - job.minDegree] ?? 0;
       if (this.cursorLo < total) {
-        const chunk = { degree: this.cursorDegree, lo: this.cursorLo, hi: Math.min(total, this.cursorLo + CHUNK) };
+        const size = this.sizes[this.cursorDegree - job.minDegree] ?? CHUNK;
+        const chunk = { degree: this.cursorDegree, lo: this.cursorLo, hi: Math.min(total, this.cursorLo + size) };
         this.cursorLo = chunk.hi;
         return chunk;
       }

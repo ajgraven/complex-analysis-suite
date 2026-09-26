@@ -420,19 +420,34 @@ function residualAt<T>(
 /**
  * Could this polynomial have a root within `radius` of `z₀`?
  *
- * `|Q(z₀)| ≤ radius · max|Q′|`, the derivative bounded term by term at the disc's far edge. A NECESSARY
- * condition, so a `false` is a proof that there is nothing left to find and the search may stop.
+ * Two NECESSARY conditions, so a `false` is a proof that there is nothing left to find and the search
+ * may stop. First order: `|Q(z₀)| ≤ radius · max|Q′|`, the derivative bounded term by term at the disc's
+ * far edge. Second order, by Taylor with the remainder: a root `z` in the disc has
+ * `0 = Q(z₀) + Q′(z₀)(z − z₀) + R` with `|R| ≤ radius²·max|Q″|/2`, so `|Q(z₀)| ≤ radius·|Q′(z₀)| +
+ * radius²·max|Q″|/2`. The second uses the derivative AT `z₀` rather than its maximum over the disc, which
+ * is what makes it tight on a small view: at the zoom story's 1e-30 the walk takes 1.23 s against 2.25 s,
+ * at 1e-12 126 ms against 180 ms, with the root set identical (hashed) at both (2026-09-26 review).
  */
 function couldReach<T>(F: Num<T>, coeffs: readonly Cx2<T>[], z0: Cx2<T>, radius: number, outer: number): boolean {
   const degree = coeffs.length - 1;
-  let bound = 0;
-  let power = 1;
+  let first = 0;
+  let second = 0;
+  let power = 1; // outer^(k−1)
+  let powerLess = 0; // outer^(k−2), 0 for k = 1
   for (let k = 1; k <= degree; k++) {
-    bound += k * Math.hypot(F.toNumber(coeffs[k].re), F.toNumber(coeffs[k].im)) * power;
+    const a = Math.hypot(F.toNumber(coeffs[k].re), F.toNumber(coeffs[k].im));
+    first += k * a * power;
+    second += k * (k - 1) * a * powerLess;
+    powerLess = power;
     power *= outer;
   }
-  const { p } = hornerAt(F, coeffs, degree, z0);
-  return Math.hypot(F.toNumber(p.re), F.toNumber(p.im)) <= radius * bound;
+  const { p, q } = hornerAt(F, coeffs, degree, z0);
+  const absP = Math.hypot(F.toNumber(p.re), F.toNumber(p.im));
+  // Kept although it is equivalent in OUTCOME to the second-order test alone (the batch-C sweep): both
+  // are necessary conditions, so dropping either only admits more Newton runs that find nothing in view.
+  if (absP > radius * first) return false;
+  const absQ = Math.hypot(F.toNumber(q.re), F.toNumber(q.im));
+  return absP <= radius * absQ + (radius * radius * second) / 2;
 }
 
 /** Divide out `(z − r)` by synthetic division. */

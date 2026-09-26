@@ -563,6 +563,11 @@ export class GlStage {
   /** Bumped whenever the loaded points change — a chunk added, a degree or every layer dropped. */
   private epoch = 0;
 
+  /** The loaded points' version — part of the shell's composite key (`main.ts` `compositeKey`). */
+  get pointsEpoch(): number {
+    return this.epoch;
+  }
+
   /** Which degrees currently hold points. */
   loadedDegrees(): number[] {
     return [...this.layers.keys()].sort((a, b) => a - b);

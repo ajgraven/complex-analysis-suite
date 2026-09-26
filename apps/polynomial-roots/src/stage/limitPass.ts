@@ -59,6 +59,13 @@ export function limitPixelRadius(halfHeight: number, aspect: number, width: numb
   return Math.max((halfHeight * aspect) / Math.max(1, width), halfHeight / Math.max(1, height));
 }
 
+/**
+ * Programs held at once. One is compiled per (alphabet, depth), and dragging the depth slider or typing
+ * a custom alphabet visits dozens; the cache was unbounded, so every one stayed linked on the GPU for the
+ * life of the page (2026-09-26 review). Eight covers a reader moving back and forth between a few.
+ */
+export const MAX_CACHED_PROGRAMS = 8;
+
 export class LimitPass {
   private readonly programs = new Map<string, Cached>();
   private readonly vao: WebGLVertexArrayObject;
@@ -77,7 +84,12 @@ export class LimitPass {
   private programFor(alphabet: Alphabet, depth: number): Cached {
     const key = walkProgramKey(alphabet, depth);
     const held = this.programs.get(key);
-    if (held !== undefined) return held;
+    if (held !== undefined) {
+      // Least-recently-used: a hit moves to the back of the Map's insertion order.
+      this.programs.delete(key);
+      this.programs.set(key, held);
+      return held;
+    }
     const gl = this.gl;
     const program = createProgram(gl, WALK_VERT, buildWalkShader(alphabet, depth));
     const uniforms: Record<string, WebGLUniformLocation | null> = {};
@@ -86,6 +98,11 @@ export class LimitPass {
     }
     const entry = { program, uniforms };
     this.programs.set(key, entry);
+    while (this.programs.size > MAX_CACHED_PROGRAMS) {
+      const [oldest, dropped] = this.programs.entries().next().value as [string, Cached];
+      gl.deleteProgram(dropped.program);
+      this.programs.delete(oldest);
+    }
     return entry;
   }
 

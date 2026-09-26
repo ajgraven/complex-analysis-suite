@@ -47,12 +47,24 @@ on a view with 81 genuine two-root polynomials, where 81 of 162 probes land wron
 
 ## C — efficiency (measured)
 
-Aberth `hypot` hoist (3.1–3.4×, bit-identical) · chunk imbalance (75% of degree 16 on one worker) ·
-per-image stats loop (~20% of a sweep) · full-composite read-back on nearly every change · limit walk
-re-run on tone-only changes · dragon inset and theorem overlay recomputed per pan / per mouse move
-(61–94 ms, up to 857 ms) · unbounded `LimitPass` program cache · deep second-order admission test
-(3.2 → 1.0 s, 11.3 → 3.7 s, identical root set) · live-region chatter, paragraph-long button names,
-probe focus loss.
+| # | Finding | Status |
+|---|---|---|
+| C1 | Aberth `hypot` in the inner loop | fixed — moduli hoisted once per solve: 232,938 solves 9.8–10.1 s → 3.4–3.9 s, roots bit-identical (hashed) |
+| C2 | Chunk imbalance (75% of degree 16 on one worker) | fixed — `chunkSize`: every degree cut into ≥ 4 chunks a worker, floor 512, cap 16,384 |
+| C3 | Per-image stats loop (~20% of a sweep) | fixed in batch B — realness and the circle decided once per representative |
+| C4 | Full-composite read-back on nearly every change | fixed — the composite is keyed by everything it is drawn from; a tone-only change re-tones the last read-back (10 gamma steps: 0 `readPixels`) |
+| C5 | Limit walk re-run on tone-only changes and hovers | fixed — same key; 10 gamma steps draw only the present pass, 20 hovers draw nothing |
+| C6 | Dragon inset and theorem overlay recomputed per pan / pointer move | fixed — the inset is keyed by its inputs and redraws only when they change |
+| C7 | Unbounded `LimitPass` program cache | fixed — LRU of 8, evictions `deleteProgram`'d (browser test) |
+| C8 | Deep second-order admission test | fixed — 1e-30: 2.25 → 1.23 s; 1e-12: 180 → 126 ms; root sets identical |
+| C9 | Live-region chatter, paragraph-long place names, probe focus loss | fixed — the summary is announced once settled and the progress line is visual; places are named by their title and described by the rest; the probe card rebuilds only when it changes and keeps focus. The audit also found `role-img-alt` on the deep page's empty inset (a batch-B regression), fixed |
+
+**Batch C sweep: 10 mutants, 9 killed, 1 recorded equivalent in outcome** (dropping the first-order
+admission — both admissions are necessary conditions). Three survived the first pass and each bought a
+test. The Aberth bound's leading term and its Horner start: the self-reported backward error is now
+recomputed exactly, since a solve stops on a sweep in which nothing moved. The pool's chunk size: it is
+now tested from the pool's own dispatch, which catches a pool that cuts by one worker rather than its
+own count.
 
 ## D — documentation
 

@@ -125,7 +125,11 @@ function main(): void {
   const overlay = el("canvas", { class: "stage-overlay" }) as HTMLCanvasElement;
   overlay.setAttribute("aria-hidden", "true");
   const stageHost = el("div", { class: "stage" }, gl, overlay);
-  const progress = el("div", { class: "progress", role: "status" });
+  // Visual only. As a `status` region it announced "computing 3%", "computing 4%" … for the length of a
+  // sweep; the settled summary is announced once instead (`syncStats`), and the stage is `aria-busy`
+  // while the sweep runs (2026-09-26 review).
+  const progress = el("div", { class: "progress" });
+  progress.setAttribute("aria-hidden", "true");
   stageHost.append(progress);
 
   const controls = el("section", { class: "panel controls" });
@@ -347,9 +351,15 @@ function main(): void {
     section.append(el("p", { class: "note", textContent: group.intro }));
     const list = el("ul", { class: "place-list" });
     for (const place of members) {
+      // Named by its TITLE and described by the rest: the whole card as the name made every place a
+      // paragraph-long control name, read out in full on each Tab (2026-09-26 review).
       const button = el("button", { class: "place", type: "button" });
-      button.append(el("span", { class: "place-title", textContent: place.title }));
-      button.append(el("span", { class: "place-seen", textContent: place.seen }));
+      const titleId = `pr-place-${place.id}-title`;
+      const seenId = `pr-place-${place.id}-seen`;
+      button.append(el("span", { class: "place-title", id: titleId, textContent: place.title }));
+      button.append(el("span", { class: "place-seen", id: seenId, textContent: place.seen }));
+      button.setAttribute("aria-labelledby", titleId);
+      button.setAttribute("aria-describedby", seenId);
       if (place.fact !== undefined) {
         button.append(el("span", { class: "place-fact", textContent: `Theorem. ${place.fact}` }));
       }
@@ -395,6 +405,21 @@ function main(): void {
   // --- rendering --------------------------------------------------------------------------------
   let frame = 0;
   let toneDirty = true;
+  /**
+   * What the composite holds — the engine and every input it was drawn from — or "" when unknown.
+   *
+   * **A frame that changes nothing the composite depends on redraws nothing.** Every hover, every tone
+   * slider step and every probe move called `render`, and `render` re-ran the limit-set walk (the most
+   * expensive pass in the app: tens of ms at the hexaholes) and read the whole float composite back for
+   * the histogram, for a picture that had not changed (2026-09-26 review). The key is the whole of what
+   * the pass reads; equal keys mean an equal composite, so the pass is skipped and the density is taken
+   * from the last read-back.
+   */
+  let compositeKey = "";
+  /** The last composite read back, for re-toning without a `readPixels` when only exposure or gamma moved. */
+  let lastDensity: Float32Array | null = null;
+  /** Bumped whenever `deepFrame` is replaced, so the composite key can name it. */
+  let deepSerial = 0;
 
   /**
    * The world offset of a client point from the view centre.
@@ -444,6 +469,7 @@ function main(): void {
       },
       (frame) => {
         deepFrame = frame;
+        deepSerial++;
         deepFrameCentre = requested;
         probeIndex = -1;
         toneDirty = true;
@@ -538,47 +564,66 @@ function main(): void {
     syncOverlay();
     if (a === null) {
       stage.clear();
+      compositeKey = "";
       return;
     }
     const aspect = gl.width / Math.max(1, gl.height);
     const centre = centreNumbers(state);
     const view = { cx: centre.cx, cy: centre.cy, halfHeight: state.halfHeight };
     const engine = handover().engine;
+    const viewKey = `${state.cx},${state.cy},${state.halfHeight},${aspect},${stage.targetWidth}x${stage.targetHeight}`;
+    let key: string;
     let any: boolean;
     if (engine === "deep") {
       // The walk's roots, as OFFSETS. Nothing on the GPU ever sees the centre — which is the whole of
       // ADR-0046 decision 3, and the reason a 1e-30 view is a picture rather than a lattice.
-      const target = stage.compositeTarget();
-      deep.render(target.framebuffer, target.size, {
-        points: deepFrame.points,
-        halfHeight: state.halfHeight,
-        aspect,
-        pointSize: DEEP_POINT_SIZE,
-        shift: deepShift(),
-      });
+      const shift = deepShift();
+      key = `deep|${deepSerial}|${shift.dx},${shift.dy}|${viewKey}`;
+      if (key !== compositeKey) {
+        const target = stage.compositeTarget();
+        deep.render(target.framebuffer, target.size, {
+          points: deepFrame.points,
+          halfHeight: state.halfHeight,
+          aspect,
+          pointSize: DEEP_POINT_SIZE,
+          shift,
+        });
+      }
       any = deepFrame.count > 0;
     } else if (engine === "limit") {
       // The walk writes straight into the composite, so everything below this line — the equalisation
       // read-back, the ramp, the present pass, the export — is the same code the root cloud runs.
-      const target = stage.compositeTarget();
-      limit.render(target.framebuffer, target.size, {
-        view,
-        aspect,
-        alphabet: a,
-        depth: state.depth,
-        annulus: state.annulus,
-      });
+      key = `limit|${a.id}|${clampDepth(state.depth)}|${state.annulus}|${viewKey}`;
+      if (key !== compositeKey) {
+        const target = stage.compositeTarget();
+        limit.render(target.framebuffer, target.size, {
+          view,
+          aspect,
+          alphabet: a,
+          depth: state.depth,
+          annulus: state.annulus,
+        });
+      }
       any = true;
     } else if (state.colour === "egan") {
+      key = `egan|${stage.pointsEpoch}|${state.minDegree}-${state.maxDegree}|${viewKey}`;
       any = stage.paintEgan(view, aspect, a.group, state.minDegree, state.maxDegree);
     } else {
-      stage.paint(view, aspect, a.group);
-      any = stage.composeDegrees(state.minDegree, state.maxDegree);
+      key = `roots|${stage.pointsEpoch}|${state.minDegree}-${state.maxDegree}|${viewKey}`;
+      if (key !== compositeKey) {
+        stage.paint(view, aspect, a.group);
+        stage.composeDegrees(state.minDegree, state.maxDegree);
+      }
+      any = stage.loadedDegrees().some((d) => d >= state.minDegree && d <= state.maxDegree);
     }
+    const changed = key !== compositeKey;
+    compositeKey = key;
     let maxDensity = 0;
     let measured = false;
-    if (any && toneDirty) {
-      const density = stage.readDensity();
+    if (any && (toneDirty || changed || lastDensity === null)) {
+      // Read the composite back only when it changed; a tone-only change re-tones the last read-back.
+      if (changed || lastDensity === null) lastDensity = stage.readDensity();
+      const density = lastDensity;
       const tone = buildToneMap(density, state.exposure, state.gamma);
       stage.setTone(tone.lut, tone.width);
       lastMaxDensity = tone.maxDensity;
@@ -651,6 +696,7 @@ function main(): void {
     // one's values (`coefficientString`) and its dots drawn as if they were the new family's.
     if (alphabet === null || alphabet.id !== compiled.alphabet.id) {
       deepFrame = emptyFrame();
+      deepSerial++;
       deepKey = "";
     }
     alphabet = compiled.alphabet;
@@ -825,10 +871,27 @@ function main(): void {
    * read at the cursor — which is also why it can offer to re-centre on a root, the one action that
    * makes a deeper view reachable at all (`centreOnRoot`).
    */
+  /**
+   * What the probe card shows, or "" — so a pointer move over the same root rebuilds nothing.
+   *
+   * **A rebuild takes the focus with it.** The card was rebuilt with `replaceChildren` on every pointer
+   * move, so a keyboard reader who had tabbed to "Centre on this root" lost focus the moment the mouse
+   * crossed the stage (the Contour Integration M7.2 finding, met again — 2026-09-26 review). It is now
+   * rebuilt only when what it says changes, and a rebuild hands the focus to the new button.
+   */
+  let probeKey = "";
+
   function syncProbe(): void {
     const chosen = handover();
     probePanel.hidden = chosen.engine !== "deep";
-    if (probePanel.hidden) return;
+    if (probePanel.hidden) {
+      probeKey = "";
+      return;
+    }
+    const key = `${deepSerial}|${probeIndex}|${state.halfHeight}|${alphabet?.id ?? ""}`;
+    if (key === probeKey) return;
+    probeKey = key;
+    const hadFocus = probePanel.contains(document.activeElement);
     probePanel.replaceChildren(el("h2", {}, "Under the cursor"));
     if (deepFrame.count === 0) {
       probePanel.append(
@@ -880,6 +943,7 @@ function main(): void {
       apply({ ...state, cx: moved.cx, cy: moved.cy });
     });
     probePanel.append(el("div", { class: "buttons" }, centreButton));
+    if (hadFocus) centreButton.focus();
     probePanel.append(
       el(
         "p",
@@ -966,6 +1030,16 @@ function main(): void {
     });
   }
 
+  /**
+   * What the inset last drew, or "" — so a call that would draw the same thing draws nothing.
+   *
+   * `syncDragon` runs on every pan, every zoom step and, in theorem mode, every pointer move, and each
+   * call rebuilt the attractor (up to 2²⁰ values), re-walked the lamp and redrew — 61–94 ms a call, up to
+   * 857 ms for the theorem overlay — for an inset whose inputs had not moved (2026-09-26 review). The key
+   * is everything the drawing reads.
+   */
+  let insetKey = "";
+
   function syncDragon(): void {
     const lamp = lampOf();
     const a = alphabet;
@@ -974,17 +1048,32 @@ function main(): void {
     const theoremNeedsNoLamp = state.theorem && handover().engine === "deep" && deepFrame.count > 0;
     dragonPanel.hidden = a === null || (lamp === null && !theoremNeedsNoLamp && handover().engine !== "deep");
     if (a === null || (lamp === null && !theoremNeedsNoLamp)) {
+      insetKey = "";
       insetNote.textContent = lamp === null ? "Hover over the picture, or pin a dragon at the view centre." : "";
+      // The panel is visible here under the deep engine (its theorem toggle must be reachable), so the
+      // inset is a `role="img"` on screen and needs its alternative even when it shows nothing — axe's
+      // `role-img-alt` on the deep roster page, found by the batch-C audit.
+      insetCanvas.setAttribute("aria-label", "No dragon drawn: nothing is hovered or pinned.");
       insetCanvas.getContext("2d")?.clearRect(0, 0, insetCanvas.width, insetCanvas.height);
       return;
     }
     const size = Math.max(64, Math.min(320, Math.round(insetCanvas.clientWidth || 220)));
-    insetCanvas.width = size;
-    insetCanvas.height = size;
-    const ctx = insetCanvas.getContext("2d");
     const probed = state.theorem ? rootAt(deepFrame, probeIndex >= 0 ? probeIndex : 0) : null;
+    const theoremDrawn = probed !== null && handover().engine === "deep";
+    const aspect = gl.width / Math.max(1, gl.height);
+    const key = theoremDrawn
+      ? `theorem|${a.id}|${probed.digits.join(",")}|${deepFrameCentre.cx},${deepFrameCentre.cy}|${probed.dx},${probed.dy}|${state.extend}|${size}`
+      : lamp === null
+        ? ""
+        : `lamp|${a.id}|${lamp.re},${lamp.im}|${size}|${clampDepth(state.depth)}|${stagePixelRadius(aspect)}|${state.annulus}`;
+    if (key !== "" && key === insetKey) return;
+    insetKey = key;
+    // Assigning a canvas's size clears it, so it is done only on a redraw, and only when it differs.
+    if (insetCanvas.width !== size) insetCanvas.width = size;
+    if (insetCanvas.height !== size) insetCanvas.height = size;
+    const ctx = insetCanvas.getContext("2d");
 
-    if (probed !== null && handover().engine === "deep") {
+    if (theoremDrawn) {
       // α is the probed root in the WORLD: the frame's own centre plus its offset, not the view's.
       const centre = centreNumbers(deepFrameCentre);
       const overlay = theoremOverlay(a, {
@@ -1027,7 +1116,6 @@ function main(): void {
     // The verdict is the stage's OWN walk at this pixel — its depth, its ε from `limitPixelRadius`, its
     // band — so "the same question the stage is answering" is literally true (see `InsetVerdict`).
     const spec = walkSpec(a);
-    const aspect = gl.width / Math.max(1, gl.height);
     const depth = clampDepth(state.depth);
     const pixel = stagePixelRadius(aspect);
     const walked = walkAt(spec, lamp.re, lamp.im, { depth, eps: pixelEps(spec, lamp.re, lamp.im, pixel), computeAnnulus: state.annulus });
@@ -1264,13 +1352,21 @@ function main(): void {
         : chosen.engine === "limit"
           ? describeLimit(limitSummary())
           : describeTotals(totals, state);
-    a11y.announce(summary);
+    // Announced once the picture has SETTLED — not on every throttled refresh during a sweep, which read
+    // a new count aloud several times a second.
+    const busy = progress.textContent !== "";
+    gl.setAttribute("aria-busy", busy ? "true" : "false");
+    if (!busy && summary !== lastAnnounced) {
+      lastAnnounced = summary;
+      a11y.announce(summary);
+    }
     gl.setAttribute(
       "aria-label",
       `${chosen.engine === "limit" ? "Limit set" : chosen.engine === "deep" ? "Deep zoom" : "Root cloud"}, ${alphabet?.label ?? "an alphabet"}, centred at ${state.cx} ${state.cy.startsWith("-") ? "−" : "+"} ${state.cy.replace(/^-/, "")}i, half-height ${state.halfHeight.toPrecision(3)}. ${summary}`,
     );
   }
 
+  let lastAnnounced = "";
   let statsTimer = 0;
   function scheduleStats(): void {
     if (statsTimer !== 0) return;
