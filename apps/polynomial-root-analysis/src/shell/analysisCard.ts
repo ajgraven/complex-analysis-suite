@@ -48,7 +48,11 @@ export function gaussLatex(g: Gauss): { latex: string; plain: string } {
 
 /** disc as a polynomial in aⱼ, when short enough to read. */
 function polyLatex(p: QiPoly, j: number): string | null {
-  const v = `a_{${j}}`;
+  return polyLatexIn(p, `a_{${j}}`);
+}
+
+/** A short rational polynomial in the variable `v`, as LaTeX — or null when it is too long to typeset. */
+export function polyLatexIn(p: QiPoly, v: string): string | null {
   const terms: string[] = [];
   for (let k = p.degree(); k >= 0; k--) {
     const c = p.coeff(k);

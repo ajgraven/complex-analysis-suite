@@ -5,6 +5,7 @@
 import { gaussOfDoubles, type Gauss, type QiPoly } from "@cas/exact";
 import {
   trackCoefficientPath,
+  trackFamilyPath,
   type Perm,
   type Solver,
   type TrackEvidence,
@@ -65,7 +66,7 @@ function exactCoeffs(p: Polynomial): Gauss[] {
 
 export function runLoop(p: Polynomial, loop: Loop, ctx: LoopContext): LoopRun {
   const j = ctx.coefficient;
-  if (j >= p.degree)
+  if (!ctx.family && j >= p.degree)
     return {
       ok: false,
       reason: `the leading coefficient a${j} is held fixed along a loop`,
@@ -76,12 +77,16 @@ export function runLoop(p: Polynomial, loop: Loop, ctx: LoopContext): LoopRun {
   if (!built.ok) return { ok: false, reason: built.reason, path: null, paths: [] };
   const coeffs = exactCoeffs(p);
   const last = built.path.length - 1;
-  // The ends are aⱼ itself, EXACTLY (in ℚ mode it need not be a double); the vertices between are the
-  // doubles drawn, which are exact dyadic rationals.
+  // The ends are aⱼ itself (or the family's base point), EXACTLY — in ℚ mode it need not be a double;
+  // the vertices between are the doubles drawn, which are exact dyadic rationals.
+  const fam = ctx.family;
+  const start = fam ? fam.base : coeffs[j];
   const path = built.path.map((z, i) =>
-    i === 0 || i === last ? coeffs[j] : gaussOfDoubles(z[0], z[1]),
+    i === 0 || i === last ? start : gaussOfDoubles(z[0], z[1]),
   );
-  const r = trackCoefficientPath({ coeffs, coefficient: j, path, roots: p.roots, solve });
+  const r = fam
+    ? trackFamilyPath({ family: fam.grid, path, roots: p.roots, solve, name: "t" })
+    : trackCoefficientPath({ coeffs, coefficient: j, path, roots: p.roots, solve });
   if (!r.ok) {
     let reason = r.reason;
     if (r.at && ctx.branchPoints.length) {

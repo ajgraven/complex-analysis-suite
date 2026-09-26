@@ -26,6 +26,7 @@ import {
   gaussOfDoubles,
   smithDiscs,
   smithDiscsEnvelope,
+  smithDiscsSeries,
   type SmithDisc,
 } from "@cas/exact";
 import type { Perm } from "./permGroup.js";
@@ -194,8 +195,138 @@ export function certifySegment(
 }
 
 export function trackCoefficientPath(input: TrackInput): TrackResult {
-  const { coeffs, coefficient: j, path, solve } = input;
+  const { coeffs, coefficient: j, path } = input;
   const n = coeffs.length - 1;
+  const early = (reason: string): TrackResult => ({
+    ok: false,
+    reason,
+    edge: null,
+    at: null,
+    paths: input.roots.map((r) => [r]),
+    evidence: { steps: 0, bisections: 0, maxDepth: 0 },
+  });
+  if (!(j >= 0 && j < n))
+    return early(
+      `only a coefficient below the leading one can be moved along a loop (a${j} of degree ${n})`,
+    );
+  if (path.length >= 1 && !path[0].equals(coeffs[j]))
+    return early(`the path does not start at the current value of a${j}`);
+  const coeffsAt = (v: Gauss): Gauss[] => coeffs.map((c, k) => (k === j ? v : c));
+  return trackPath(input, {
+    n,
+    name: `a${j}`,
+    coeffsAt,
+    // Linear in t with aₙ fixed: the convexity argument in the header.
+    certify: (a, b, z) => certifySegment(coeffsAt(a), coeffsAt(b), z),
+  });
+}
+
+/** A family `p(t, z) = Σₖ aₖ(t) zᵏ`, `aₖ(t) = Σₘ family[k][m]·tᵐ`, followed along a path of `t`. */
+export interface FamilyTrackInput extends Omit<TrackInput, "coeffs" | "coefficient"> {
+  /** `family[k][m]` is the coefficient of `zᵏ·tᵐ`; the leading `aₙ` must not depend on `t`. */
+  readonly family: readonly (readonly Gauss[])[];
+  /** The parameter's name, for refusals (default "t"). */
+  readonly name?: string;
+}
+
+/** `aₖ(v)` for every k, exactly. */
+export function familyAt(family: readonly (readonly Gauss[])[], v: Gauss): Gauss[] {
+  return family.map((ak) => {
+    let acc = Gauss.ZERO;
+    for (let m = ak.length - 1; m >= 0; m--) acc = acc.mul(v).add(ak[m]);
+    return acc;
+  });
+}
+
+/**
+ * The parts of `p(a + s·h, z) = Σ_r s^r·partᵣ(z)`: `partᵣ` has coefficients `h^r·Σₘ C(m, r)·a^{m−r}·aₖₘ`
+ * — the Taylor expansion of each `aₖ(t)` about `a`, scaled to the segment. `part₀` is `p(a, ·)`.
+ */
+export function segmentParts(
+  family: readonly (readonly Gauss[])[],
+  a: Gauss,
+  h: Gauss,
+): Gauss[][] {
+  const d = Math.max(0, ...family.map((ak) => ak.length - 1));
+  const parts: Gauss[][] = [];
+  let hr = Gauss.ONE;
+  for (let r = 0; r <= d; r++) {
+    parts.push(
+      family.map((ak) => {
+        let acc = Gauss.ZERO;
+        // Σ_{m ≥ r} C(m, r)·a^{m−r}·aₖₘ, by Horner in a over m − r.
+        for (let m = ak.length - 1; m >= r; m--)
+          acc = acc.mul(a).add(ak[m].mul(new Gauss(Frac.of(binomial(m, r)), Frac.ZERO)));
+        return acc.mul(hr);
+      }),
+    );
+    hr = hr.mul(h);
+  }
+  return parts;
+}
+
+function binomial(m: number, r: number): bigint {
+  let out = 1n;
+  for (let k = 1; k <= r; k++) out = (out * BigInt(m - r + k)) / BigInt(k);
+  return out;
+}
+
+/**
+ * The certified tracker for a FAMILY (ADR-0047 PRA-7): the roots of `p(t, ·)` followed along a polyline
+ * of `t`. Each segment is certified as in the header, with one change when some `aₖ(t)` has degree > 1
+ * in `t`: then `Wᵢ` is a polynomial in the segment's parameter, not linear, its modulus can peak INSIDE
+ * the segment, and the endpoint envelope is not a bound — so the bound is `smithDiscsSeries`'s
+ * triangle inequality over the segment's Taylor parts. With every `aₖ` of degree ≤ 1 the family moves
+ * linearly and the (tighter) endpoint envelope is exactly right.
+ */
+export function trackFamilyPath(input: FamilyTrackInput): TrackResult {
+  const { family } = input;
+  const n = family.length - 1;
+  const name = input.name ?? "t";
+  const early = (reason: string): TrackResult => ({
+    ok: false,
+    reason,
+    edge: null,
+    at: null,
+    paths: input.roots.map((r) => [r]),
+    evidence: { steps: 0, bisections: 0, maxDepth: 0 },
+  });
+  if (n < 1)
+    return early("the family has degree 0 in z, so there are no roots to follow");
+  const lead = family[n];
+  if (lead.length === 0 || lead[0].isZero() || lead.slice(1).some((c) => !c.isZero()))
+    return early(
+      `the leading coefficient must be a non-zero constant, not a polynomial in ${name}: where it vanishes a root runs off to infinity`,
+    );
+  const linear = family.every((ak) => ak.length <= 2);
+  const coeffsAt = (v: Gauss): Gauss[] => familyAt(family, v);
+  return trackPath(input, {
+    n,
+    name,
+    coeffsAt,
+    certify: (a, b, z) => {
+      if (linear) return certifySegment(coeffsAt(a), coeffsAt(b), z);
+      const r = smithDiscsSeries(segmentParts(family, a, b.sub(a)), z.map(exactOf));
+      return r.ok && r.components === z.length ? r.discs : null;
+    },
+  });
+}
+
+interface PathModel {
+  readonly n: number;
+  /** The moving parameter's name, for refusals: `a₀`, `t`. */
+  readonly name: string;
+  readonly coeffsAt: (v: Gauss) => Gauss[];
+  /** Discs about `z`, pairwise disjoint, each holding one root of EVERY polynomial on [a, b] — or null. */
+  readonly certify: (a: Gauss, b: Gauss, z: readonly Cx[]) => readonly SmithDisc[] | null;
+}
+
+function trackPath(
+  input: Omit<TrackInput, "coeffs" | "coefficient">,
+  model: PathModel,
+): TrackResult {
+  const { path, solve } = input;
+  const { n, name, coeffsAt } = model;
   const floor = input.floor ?? 20;
   const maxSteps = input.maxSteps ?? 20_000;
   let steps = 0;
@@ -217,20 +348,12 @@ export function trackCoefficientPath(input: TrackInput): TrackResult {
     evidence: evidence(),
   });
 
-  if (!(j >= 0 && j < n))
-    return refuse(
-      `only a coefficient below the leading one can be moved along a loop (a${j} of degree ${n})`,
-      null,
-      null,
-    );
   if (path.length < 2) return refuse("the path has fewer than two points", null, null);
-  if (!path[0].equals(coeffs[j]))
-    return refuse(`the path does not start at the current value of a${j}`, null, null);
   if (z.length !== n)
     return refuse(`${z.length} roots were given for degree ${n}`, null, null);
 
-  const coeffsAt = (v: Gauss): Gauss[] => coeffs.map((c, k) => (k === j ? v : c));
   const floats = (cs: readonly Gauss[]): Cx[] => cs.map((c) => c.toTuple());
+  const coeffs = coeffsAt(path[0]);
 
   const start = smithDiscs(coeffs, z.map(exactOf));
   if (!start.ok)
@@ -261,7 +384,7 @@ export function trackCoefficientPath(input: TrackInput): TrackResult {
       let next: Cx[] | null = null;
       const env = plainlyOverlapping(floats(ca), floats(cb), z)
         ? null
-        : certifySegment(ca, cb, z);
+        : model.certify(a, b, z);
       if (env) {
         const solved = solve(floats(cb), cb, z);
         if (solved.length === n) {
@@ -294,7 +417,7 @@ export function trackCoefficientPath(input: TrackInput): TrackResult {
         const [ax, ay] = a.toTuple();
         const [bx, by] = b.toTuple();
         return refuse(
-          `the step from a${j} = ${fmt(ax, ay)} to ${fmt(bx, by)} could not be certified after ${floor} halvings of ${edgeLen.toPrecision(3)}: two roots come too close there — the path runs through, or too near, a place where roots collide`,
+          `the step from ${name} = ${fmt(ax, ay)} to ${fmt(bx, by)} could not be certified after ${floor} halvings of ${edgeLen.toPrecision(3)}: two roots come too close there — the path runs through, or too near, a place where roots collide`,
           e,
           [
             [ax, ay],

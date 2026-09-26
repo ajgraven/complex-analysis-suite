@@ -436,6 +436,16 @@ const PAGES = [
     hash: viewState("pra", { r: "Q", t: "z^3 - 2", d: 1, o: 0, cr: 0, j: 0, gc: 1, rc: [0, 0, 2], cc: [0, 0, 4] }),
     expect: ".lattice-nodes",
   },
+  {
+    // PRA-7: a family opened, by permalink — x⁵ − x − t in the t-plane, its flower of lassos and the
+    // bridge. `expect` keys on the flower's list, which only an open family (`fm: [..., 1]`) renders.
+    id: "polynomial-root-analysis-family",
+    mount: "polynomial-root-analysis",
+    dist: "apps/polynomial-root-analysis/dist",
+    file: "index.html",
+    hash: viewState("pra", { r: "Q", t: "z^5 - z", d: 1, o: 0, cr: 0, j: 0, fm: ["x^5 - x - t", "0", 1], rc: [0, 0, 1.6], cc: [0, 0, 1.2] }),
+    expect: ".flower",
+  },
 ];
 
 // The WCAG 2.0/2.1 A + AA conformance set plus axe's best-practice pack (landmarks/regions, valid

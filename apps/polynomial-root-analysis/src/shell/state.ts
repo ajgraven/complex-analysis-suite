@@ -1,7 +1,7 @@
 // The whole truth of the page (DESIGN §7): `ShellState`, and `resolveState` — one pure function from
 // it to everything computed. The permalink carries a `ShellState`, undo stores `ShellState`s, and the
 // golden tests run `resolveState`, so what the suite pins is what the screen shows.
-import { renderQiPolyText } from "@cas/exact";
+import { renderQiPolyText, type Gauss } from "@cas/exact";
 import { parsePolynomial } from "../engine/parse.js";
 import {
   fromCoeffs,
@@ -18,6 +18,17 @@ import { rootGroups, type GroupReport } from "../engine/roots/multiplicity.js";
 import { analyse, type Analysis } from "../engine/analysis/analyse.js";
 import type { Loop, LoopContext } from "../engine/loops/loop.js";
 import { loopContext, runLoop, type LoopRun } from "../engine/loops/run.js";
+import { lassoGroup, type LassoGroup } from "../engine/loops/group.js";
+import {
+  baseText,
+  defaultBase,
+  familyContext,
+  readBase,
+  readFamily,
+  specialise,
+  type FamilyReading,
+} from "../engine/family/family.js";
+import { arithmeticGroup, type Arithmetic } from "../engine/family/bridge.js";
 
 /** A pane's camera: the world point at the centre and the half-HEIGHT of the view. */
 export interface Cam {
@@ -50,8 +61,22 @@ export interface ShellState {
   readonly loop: Loop | null;
   /** Show the Galois correspondence — computed on request, so it is off until asked for (PRA-6). */
   readonly lattice: boolean;
+  /**
+   * A family p(t, z) (PRA-7). `open`: the coefficient pane is the t-plane and the root pane shows
+   * p(t₀, z); not open: the sandbox holds the member p(t₀, z), specialised, and the Family card keeps
+   * the bridge back to the family it came from.
+   */
+  readonly family: FamilyState | null;
   readonly rootCam: Cam;
   readonly coeffCam: Cam;
+}
+
+export interface FamilyState {
+  /** The family as typed. */
+  readonly text: string;
+  /** The base point t₀, exact, as text (`1`, `-1/2`, `1/2 + 3/4*i`). */
+  readonly base: string;
+  readonly open: boolean;
 }
 
 export const DEFAULT_STATE: ShellState = {
@@ -65,6 +90,7 @@ export const DEFAULT_STATE: ShellState = {
   pseudozero: null,
   loop: null,
   lattice: false,
+  family: null,
   rootCam: { cx: 0, cy: 0, half: 1.6 },
   coeffCam: { cx: 0, cy: 0, half: 1.6 },
 };
@@ -81,6 +107,29 @@ export interface Resolution {
   readonly loopContext: LoopContext | null;
   /** The state's loop, run through the certified tracker — on a commit, never a drag frame. */
   readonly loopRun: LoopRun | null;
+  /** The family, when the state names one. */
+  readonly family: FamilyResolution | null;
+}
+
+export interface FamilyResolution {
+  readonly open: boolean;
+  readonly reading: FamilyReading | null;
+  /** Why the family (or its base point) cannot be followed. */
+  readonly refusal: string | null;
+  readonly base: Gauss | null;
+  readonly baseText: string;
+  /** One run per branch point: the flower of lassos (null mid-drag). */
+  readonly runs: readonly LoopRun[] | null;
+  readonly group: LassoGroup | null;
+  /**
+   * Where the group's lassos were run, when not at t₀: the group does not depend on the base point (a
+   * path between two bases conjugates one flower's permutations into the other's), but a straight
+   * tether can be blocked from one base and clear from another. Null: the lassos at t₀ themselves.
+   */
+  readonly groupBase: string | null;
+  readonly arithmetic: Arithmetic | null;
+  /** The polynomial resolved IS p(t₀, z) — false once a specialised member has been edited. */
+  readonly matches: boolean;
 }
 
 /** Build the polynomial a state names, continuing root labels from `prev` when given. */
@@ -106,21 +155,178 @@ export function buildPolynomial(
   }
 }
 
+const blank = (refusal: string, family: FamilyResolution | null): Resolution => ({
+  poly: null,
+  refusal,
+  discs: null,
+  groups: null,
+  conditioning: null,
+  analysis: null,
+  loopContext: null,
+  loopRun: null,
+  family,
+});
+
 export function resolveState(s: ShellState, prev?: Continuation): Resolution {
+  if (s.family?.open) return resolveFamily(s, s.family, prev, null);
   const built = buildPolynomial(s, prev);
-  if (!built.ok) {
-    return {
-      poly: null,
-      refusal: built.reason,
-      discs: null,
-      groups: null,
-      conditioning: null,
-      analysis: null,
-      loopContext: null,
-      loopRun: null,
-    };
+  if (!built.ok) return blank(built.reason, null);
+  const r = resolvePolynomial(built.poly, s, false);
+  if (!s.family) return r;
+  // Specialised: the sandbox holds a member; the bridge needs the family's own flower.
+  const core = familyCore(s.family, null);
+  if (core.refusal !== null || !core.reading || !core.base)
+    return { ...r, family: { ...emptyFamily(s.family, core), matches: false } };
+  const member = fromExact(specialise(core.reading, core.base), ringAt(core.base, false));
+  const flower = member.ok ? flowerOf(core.reading, core.base, member.poly) : null;
+  return {
+    ...r,
+    family: {
+      ...emptyFamily(s.family, core),
+      runs: flower?.runs ?? null,
+      group: flower?.group ?? null,
+      groupBase: flower?.groupBase ?? null,
+      arithmetic: flower?.arithmetic ?? null,
+      matches:
+        built.poly.exact !== null &&
+        built.poly.exact.equals(specialise(core.reading, core.base)),
+    },
+  };
+}
+
+interface FamilyCore {
+  readonly reading: FamilyReading | null;
+  readonly base: Gauss | null;
+  readonly refusal: string | null;
+}
+
+/** The family read and its base point read — or why not. `at` overrides the base (a drag frame). */
+function familyCore(f: FamilyState, at: Gauss | null): FamilyCore {
+  const read = readFamily(f.text);
+  if (!read.ok) return { reading: null, base: null, refusal: read.reason };
+  let base = at;
+  if (!base) {
+    const b = readBase(f.base);
+    if (!b.ok) return { reading: read.family, base: null, refusal: b.reason };
+    base = b.base;
   }
-  return resolvePolynomial(built.poly, s, false);
+  if (read.family.rawDisc.eval(base).isZero())
+    return {
+      reading: read.family,
+      base,
+      refusal: `the base point t₀ = ${baseText(base)} is a branch point: two roots of p(t₀, z) coincide there — move it off`,
+    };
+  return { reading: read.family, base, refusal: null };
+}
+
+function emptyFamily(f: FamilyState, core: FamilyCore): FamilyResolution {
+  return {
+    open: f.open,
+    reading: core.reading,
+    refusal: core.refusal,
+    base: core.base,
+    baseText: core.base ? baseText(core.base) : f.base,
+    runs: null,
+    group: null,
+    groupBase: null,
+    arithmetic: null,
+    matches: true,
+  };
+}
+
+/** A member's ring: ℚ at a rational base (ℝ while dragging, where it is dyadic), ℂ off the real axis. */
+const ringAt = (base: Gauss, drag: boolean): Ring =>
+  base.im.isZero() ? (drag ? "R" : "Q") : "C";
+
+function lassosAt(reading: FamilyReading, base: Gauss, p: Polynomial): LoopRun[] {
+  const ctx = familyContext(reading, base);
+  return reading.points.map((_, k) =>
+    memoRun(p, { kind: "lasso", point: k, sign: 1 }, ctx),
+  );
+}
+
+function flowerOf(
+  reading: FamilyReading,
+  base: Gauss,
+  p: Polynomial,
+): {
+  runs: LoopRun[];
+  group: LassoGroup;
+  groupBase: string | null;
+  arithmetic: Arithmetic;
+} {
+  const runs = lassosAt(reading, base, p);
+  let group = lassoGroup(runs, reading.degree);
+  let groupBase: string | null = null;
+  // A lasso blocked from t₀ is refused there, by name; the GROUP is asked of a base whose tethers are
+  // all clear, since it is the same group from any base.
+  if (group.missing) {
+    const other = defaultBase(reading);
+    if (!other.equals(base)) {
+      const q = fromExact(specialise(reading, other), ringAt(other, false));
+      if (q.ok) {
+        const g = lassoGroup(lassosAt(reading, other, q.poly), reading.degree);
+        if (!g.missing) {
+          group = g;
+          groupBase = baseText(other);
+        }
+      }
+    }
+  }
+  return {
+    runs,
+    group,
+    groupBase,
+    arithmetic: arithmeticGroup(group, reading.rawDisc, reading.degree),
+  };
+}
+
+/**
+ * Family mode: the root pane shows p(t₀, z) and loops live in the t-plane. `at` is a drag frame's base
+ * point (dyadic, not committed): then nothing slow runs — no flower, no loop.
+ */
+export function resolveFamily(
+  s: ShellState,
+  f: FamilyState,
+  prev: Continuation | undefined,
+  at: Gauss | null,
+): Resolution {
+  const drag = at !== null;
+  const core = familyCore(f, at);
+  const fam = emptyFamily(f, core);
+  if (core.refusal !== null || !core.reading || !core.base)
+    return blank(core.refusal ?? "the family cannot be read", fam);
+  const built = fromExact(
+    specialise(core.reading, core.base),
+    ringAt(core.base, drag),
+    prev,
+  );
+  if (!built.ok) return blank(built.reason, { ...fam, refusal: built.reason });
+  const ctx = familyContext(core.reading, core.base);
+  const r = resolvePolynomial(built.poly, { ...s, coefficient: null }, drag, ctx);
+  if (drag) return { ...r, family: fam };
+  const flower = flowerOf(core.reading, core.base, built.poly);
+  return { ...r, family: { ...fam, ...flower } };
+}
+
+/** The state that opens `text` at base `base` (exact text) in family mode, or a refusal by name. */
+export function familyState(
+  s: ShellState,
+  f: FamilyState,
+): { ok: true; state: ShellState; res: Resolution } | { ok: false; reason: string } {
+  const next: ShellState = { ...s, family: f, loop: null, overlay: false };
+  const res = resolveState(next);
+  if (!res.poly || !res.poly.exact || !res.family?.base)
+    return { ok: false, reason: res.refusal ?? "the family cannot be read" };
+  return {
+    ok: true,
+    state: {
+      ...next,
+      ring: ringAt(res.family.base, false),
+      poly: { kind: "text", text: renderQiPolyText(res.poly.exact, "z") },
+    },
+    res,
+  };
 }
 
 /** The pseudozero certificate is made over the root pane's (square) view. */
@@ -134,6 +340,7 @@ export function resolvePolynomial(
   poly: Polynomial,
   s: ShellState,
   drag: boolean,
+  familyCtx?: LoopContext,
 ): Resolution {
   const discs = rootDiscs(poly);
   const analysis = analyse(poly, discs, {
@@ -143,8 +350,13 @@ export function resolvePolynomial(
     drag,
   });
   const j = s.coefficient;
-  const ctx =
-    j !== null && j < poly.degree && !drag ? loopContext(poly, j, analysis.branch) : null;
+  const ctx = familyCtx
+    ? drag
+      ? null
+      : familyCtx
+    : j !== null && j < poly.degree && !drag
+      ? loopContext(poly, j, analysis.branch)
+      : null;
   return {
     poly,
     refusal: null,
@@ -154,6 +366,7 @@ export function resolvePolynomial(
     analysis,
     loopContext: ctx,
     loopRun: ctx && s.loop ? memoRun(poly, s.loop, ctx) : null,
+    family: null,
   };
 }
 
@@ -167,6 +380,7 @@ export function memoRun(poly: Polynomial, loop: Loop, ctx: LoopContext): LoopRun
     poly.roots,
     poly.labels,
     ctx.coefficient,
+    ctx.family?.key ?? null,
     loop,
   ]);
   const hit = RUNS.get(key);

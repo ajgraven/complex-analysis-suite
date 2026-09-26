@@ -275,6 +275,7 @@ describe("applyState restores a state the app is NOT in (M6.1's test, not the fi
     pseudozero: null,
     loop: null,
     lattice: false,
+    family: null,
     rootCam: { cx: 0.25, cy: -0.5, half: 2 },
     coeffCam: { cx: 1, cy: 0, half: 3 },
   };
@@ -297,6 +298,7 @@ describe("applyState restores a state the app is NOT in (M6.1's test, not the fi
     pseudozero: -8,
     loop: { kind: "lasso", point: 1, sign: -1 },
     lattice: true,
+    family: { text: "x^5 - x - t", base: "1", open: false },
     rootCam: { cx: -1, cy: 2, half: 0.75 },
     coeffCam: { cx: 0, cy: 0, half: 1.5 },
   };
@@ -933,5 +935,149 @@ describe("the Galois correspondence (PRA-6)", () => {
     await vi.waitFor(() => expect(app.lattice()?.kind).toBe("done"), { timeout: 10_000 });
     expect(card().textContent).not.toMatch(/After the last motion/);
     expect(card().querySelector(".moved")).toBeNull();
+  });
+});
+
+describe("families (PRA-7)", () => {
+  const card = (): HTMLElement => q("section[aria-labelledby='card-family']");
+  const button = (text: string | RegExp): HTMLButtonElement => {
+    const b = [...document.querySelectorAll<HTMLButtonElement>("button")].find((x) =>
+      typeof text === "string" ? x.textContent === text : text.test(x.textContent ?? ""),
+    );
+    if (!b) throw new Error(`no button ${String(text)}`);
+    return b;
+  };
+
+  it("a preset opens the family: the t-plane, p(t₀, z) in the root pane, the flower and the bridge", () => {
+    const { app } = mount();
+    button("x⁵ − x − t").click();
+    const s = app.currentState();
+    expect(s.family).toEqual({ text: "x^5 - x - t", base: "0", open: true });
+    expect(s.poly).toEqual({ kind: "text", text: "z^5 - z" });
+    expect(q("#pane-coefficients").textContent).toBe("Parameter plane (t)");
+    const text = card().textContent ?? "";
+    expect(text).toMatch(/4 branch points in t\./);
+    expect(card().querySelectorAll(".flower li")).toHaveLength(4);
+    expect(
+      [...card().querySelectorAll(".flower li")].every((li) =>
+        /σ = \(\d \d\)/.test(li.textContent ?? ""),
+      ),
+    ).toBe(true);
+    expect(text).toMatch(/Over ℂ\(t\): the symmetric group S₅, order 120\./);
+    expect(text).toMatch(/Over ℚ\(t\): S₅, the symmetric group\./);
+    // The monodromy card's loops are now loops of t.
+    expect(q("section[aria-labelledby='card-monodromy']").textContent).toMatch(
+      /Group of every loop round a branch point of t/,
+    );
+  });
+
+  it("specialising at t = 1 opens x⁵ − x − 1 in the sandbox, and the bridge cites the Galois card's = S₅", async () => {
+    const { app } = mount();
+    app.actions().openFamily("x^5 - x - t");
+    app.actions().setBase("1");
+    expect(app.currentState().family?.base).toBe("1");
+    app.actions().specialise();
+    const s = app.currentState();
+    expect(s.family).toEqual({ text: "x^5 - x - t", base: "1", open: false });
+    expect(s.poly).toEqual({ kind: "text", text: "z^5 - z - 1" });
+    expect(q("#pane-coefficients").textContent).toBe("Coefficient plane");
+    await vi.waitFor(() => expect(app.galois()?.kind).toBe("done"), { timeout: 10_000 });
+    const text = card().textContent ?? "";
+    expect(text).toMatch(/This is the member t = 1 of the family x\^5 - x - t\./);
+    expect(text).toMatch(
+      /The Galois group of p\(1, z\) over ℚ is S₅: all of the group over ℚ\(t\) — t = 1 is outside the thin set\./,
+    );
+    // Back, and out.
+    button("Back to the family").click();
+    expect(app.currentState().family?.open).toBe(true);
+    button("Leave the family").click();
+    expect(app.currentState().family).toBeNull();
+  });
+
+  it("Trinks' member lands in the thin set", async () => {
+    const { app } = mount();
+    button("x⁷ − 7x + t at t = 3 (Trinks)").click();
+    expect(app.currentState().poly).toEqual({ kind: "text", text: "z^7 - 7 z + 3" });
+    await vi.waitFor(() => expect(app.galois()?.kind).toBe("done"), { timeout: 10_000 });
+    expect(card().textContent).toMatch(
+      /order 168|lies in the thin set Hilbert's theorem allows/,
+    );
+    expect(card().textContent).toMatch(/lies in the thin set Hilbert's theorem allows/);
+  });
+
+  it("a base point whose tether crosses another branch point refuses that lasso; the group is asked of a clear base", () => {
+    const { app } = mount();
+    app.actions().openFamily("x^5 - x - t", "1");
+    const items = [...card().querySelectorAll(".flower li")].map(
+      (li) => li.textContent ?? "",
+    );
+    expect(
+      items.filter((t) => /passes through the circle round branch point/.test(t)),
+    ).toHaveLength(1);
+    // The GROUP does not depend on the base point: it is asked of one whose tethers are all clear.
+    expect(card().textContent).toMatch(
+      /Over ℂ\(t\): the symmetric group S₅, order 120 \(from the lassos at t = 0, where every tether is clear\)\./,
+    );
+  });
+
+  it("dragging the base point moves the member, and the release snaps it to a simple rational", () => {
+    const { app } = mount();
+    app.actions().openFamily("x^4 - 4x^2 + t");
+    expect(app.currentState().family?.base).toBe("1");
+    app.actions().moveTo({ kind: "base", index: 0 }, [2.0000001, 0]);
+    expect(app.live().family?.base?.toTuple()[0]).toBeCloseTo(2.0000001, 9);
+    expect(app.currentState().family?.base).toBe("1"); // nothing committed mid-drag
+    app.actions().release();
+    expect(app.currentState().family?.base).toBe("2");
+    expect(app.currentState().poly).toEqual({ kind: "text", text: "z^4 - 4 z^2 + 2" });
+    // A release ON a branch point is refused, and the base stays where it was.
+    app.actions().moveTo({ kind: "base", index: 0 }, [4, 0]);
+    app.actions().release();
+    expect(app.currentState().family?.base).toBe("2");
+    expect(card().textContent).toMatch(/is a branch point/);
+  });
+
+  it("refuses what it cannot follow, by name, and keeps the box's text", () => {
+    const { app } = mount();
+    app.actions().openFamily("t x^2 + x + 1");
+    expect(app.currentState().family).toBeNull();
+    expect(card().textContent).toMatch(
+      /Not read: the leading coefficient in x depends on t/,
+    );
+    expect(q<HTMLInputElement>(".family-input").value).toBe("t x^2 + x + 1");
+  });
+
+  it("typing a polynomial leaves the family", () => {
+    const { app } = mount();
+    app.actions().openFamily("x^3 + t x + 1");
+    app.actions().type("z^3 - 2");
+    expect(app.currentState().family).toBeNull();
+  });
+
+  it("travels in the link, and a link naming a base point on a branch point is refused by name", () => {
+    const { app } = mount();
+    app.actions().openFamily("x^4 - 4x^2 + t");
+    const hash = encodeShell(app.currentState());
+    const d = decodeShell(hash);
+    expect(d?.ok && d.state.family).toEqual({
+      text: "x^4 - 4x^2 + t",
+      base: "1",
+      open: true,
+    });
+    const bad = encodeShell({
+      ...app.currentState(),
+      family: { text: "x^4 - 4x^2 + t", base: "4", open: true },
+    });
+    const r = decodeShell(bad);
+    expect(r?.ok).toBe(false);
+    if (r && !r.ok) expect(r.reason).toMatch(/t₀ = 4 is a branch point/);
+    const unread = encodeShell({
+      ...app.currentState(),
+      family: { text: "x^2 - 1/t", base: "1", open: true },
+    });
+    const u = decodeShell(unread);
+    expect(u?.ok).toBe(false);
+    if (u && !u.ok)
+      expect(u.reason).toMatch(/the family cannot be read: not a polynomial in t/);
   });
 });

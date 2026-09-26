@@ -74,6 +74,7 @@ export {
   inDisc,
   smithDiscs,
   smithDiscsEnvelope,
+  smithDiscsSeries,
   SmithDisc,
   sqrtUpperBound,
   type SmithResult,

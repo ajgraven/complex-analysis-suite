@@ -35,7 +35,7 @@ function variables(node: Node, out: Set<string>): Set<string> {
 }
 
 /** Names that multiply when written next to something: the variables and the constants. */
-const FACTOR_NAMES = new Set(["z", "x", "i", "pi", "e"]);
+const FACTOR_NAMES = new Set(["z", "x", "t", "i", "pi", "e"]);
 const TOKEN = /\s*(\d+\.?\d*(?:[eE][+-]?\d+)?|\.\d+(?:[eE][+-]?\d+)?|[A-Za-z_]\w*|\S)/gy;
 
 /**

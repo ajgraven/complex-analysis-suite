@@ -93,13 +93,26 @@ export function branchPoints(p: Polynomial, j: number): BranchPoints {
     k === j ? QiPoly.variable() : QiPoly.constant((p.exact as QiPoly).coeff(k)),
   );
   const poly = discriminant(list);
-  // Solved factor by squarefree factor (Yun), so every branch point is a SIMPLE root of what is solved:
-  // z⁴ − 4z² + t² … has double roots in t (z and −z reach the same aⱼ), and refining the whole
-  // discriminant there converges only to √ε — 8.6e-9 against the numeric route, measured.
+  return { route: "exact", ...isolateRoots(poly), poly };
+}
+
+/**
+ * The distinct roots of an exact polynomial, each in a Smith disc of its own squarefree factor, with
+ * its multiplicity. Solved factor by squarefree factor (Yun), so every root is a SIMPLE root of what is
+ * solved: z⁴ − 4z² + t² … has double roots in t (z and −z reach the same aⱼ), and refining the whole
+ * discriminant there converges only to √ε — 8.6e-9 against the numeric route, measured. Shared by the
+ * branch points of aⱼ and, since PRA-7, those of a family's t.
+ */
+export function isolateRoots(poly: QiPoly): {
+  points: Cx[];
+  multiplicity: number[];
+  discs: DiscReport[];
+} {
   const points: Cx[] = [];
   const multiplicity: number[] = [];
   const discs: DiscReport[] = [];
   for (const { factor, multiplicity: m } of yunSquarefree(poly)) {
+    if (factor.degree() < 1) continue;
     const coeffs: Gauss[] = Array.from({ length: factor.degree() + 1 }, (_, k) =>
       factor.coeff(k),
     );
@@ -112,5 +125,5 @@ export function branchPoints(p: Polynomial, j: number): BranchPoints {
       discs.push(rep);
     }
   }
-  return { route: "exact", points, multiplicity, discs, poly };
+  return { points, multiplicity, discs };
 }

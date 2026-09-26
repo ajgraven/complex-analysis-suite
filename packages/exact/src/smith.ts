@@ -247,19 +247,110 @@ export function smithDiscsEnvelope(
       return { ok: false, reason: "the polynomials do not all have the same degree" };
     if (coeffs[n].isZero()) return { ok: false, reason: "the leading coefficient is zero" };
   }
+  const geo = geometry(approx, n);
+  if (!geo.ok) return geo;
+  const { S, Z, sPow, prodN } = geo;
+
+  const nSq = BigInt(n * n);
+  const rNum: bigint[] = new Array<bigint>(n).fill(-1n);
+  const rDen: bigint[] = new Array<bigint>(n).fill(1n);
+  for (const coeffs of coeffSets) {
+    const D = lcm(coeffs.flatMap((c) => [c.re.d, c.im.d]));
+    const C = scaled(coeffs, D);
+    const leadNorm = C[n][0] * C[n][0] + C[n][1] * C[n][1];
+    for (let i = 0; i < n; i++) {
+      const [re, im] = horner(C, Z[i], sPow);
+      const num = nSq * (re * re + im * im);
+      const den = S * S * leadNorm * prodN[i];
+      // Keep the larger of num/den and rNum/rDen (both denominators positive).
+      if (rNum[i] < 0n || num * rDen[i] > rNum[i] * den) {
+        rNum[i] = num;
+        rDen[i] = den;
+      }
+    }
+  }
+  return components(approx, geo, rNum, rDen);
+}
+
+/**
+ * Smith's discs for EVERY polynomial `Σ_r s^r·parts[r]` with `s ∈ [0, 1]`, about one set of
+ * approximations: the polynomials a family `p(t, z)` takes along a segment `t = a + s·h` when its
+ * coefficients are polynomials of degree > 1 in `t` (DESIGN §4.4, ADR-0047 PRA-7). `parts[0]` is the
+ * polynomial at `s = 0` and carries the leading coefficient, which must not move with `s`: every later
+ * part's leading coefficient must be zero.
+ *
+ * Why this and not `smithDiscsEnvelope`: that one takes the maximum of `|Wᵢ|` over its polynomials,
+ * which is the maximum over the whole segment only when `Wᵢ` is LINEAR in `s` (convexity). Here it is
+ * a polynomial in `s` and can peak inside — `s(1 − s)` is 0 at both ends — so the bound is the
+ * triangle inequality instead, `|Σ s^r vᵣ| ≤ Σ |vᵣ|`, squared through Cauchy–Schwarz,
+ * `(Σ_{r<K} |vᵣ|)² ≤ K·Σ |vᵣ|²`, which keeps every quantity a square and so exact without a root.
+ * Looser than the truth by at most `√K` in the radius; the tracker's bisection pays for that.
+ */
+export function smithDiscsSeries(
+  parts: readonly (readonly Gauss[])[],
+  approx: readonly Gauss[],
+): SmithResult {
+  if (parts.length === 0) return { ok: false, reason: "no polynomial was given" };
+  const n = parts[0].length - 1;
+  if (n < 1)
+    return { ok: false, reason: "a constant polynomial has no roots to enclose" };
+  for (const part of parts)
+    if (part.length - 1 !== n)
+      return { ok: false, reason: "the parts do not all have the same degree" };
+  if (parts[0][n].isZero()) return { ok: false, reason: "the leading coefficient is zero" };
+  for (let r = 1; r < parts.length; r++)
+    if (!parts[r][n].isZero())
+      return {
+        ok: false,
+        reason: "the leading coefficient moves along the segment, so no one bound holds",
+      };
+  const geo = geometry(approx, n);
+  if (!geo.ok) return geo;
+  const { S, Z, sPow, prodN } = geo;
+  // One common denominator for every part, so the values add as Gaussian integers.
+  const L = lcm(parts.flatMap((part) => part.flatMap((c) => [c.re.d, c.im.d])));
+  const C = parts.map((part) => scaled(part, L));
+  const leadNorm = C[0][n][0] * C[0][n][0] + C[0][n][1] * C[0][n][1];
+  const K = BigInt(parts.length);
+  const nSq = BigInt(n * n);
+  const rNum: bigint[] = [];
+  const rDen: bigint[] = [];
+  for (let i = 0; i < n; i++) {
+    let sum = 0n;
+    for (const Cr of C) {
+      const [re, im] = horner(Cr, Z[i], sPow);
+      sum += re * re + im * im;
+    }
+    rNum.push(nSq * K * sum);
+    rDen.push(S * S * leadNorm * prodN[i]);
+  }
+  return components(approx, geo, rNum, rDen);
+}
+
+interface Geometry {
+  readonly ok: true;
+  readonly S: bigint;
+  readonly Z: readonly (readonly [bigint, bigint])[];
+  readonly sPow: readonly bigint[];
+  readonly N: readonly (readonly bigint[])[];
+  readonly prodN: readonly bigint[];
+}
+
+/** The approximations scaled to Gaussian integers `Zᵢ = S·zᵢ`, and `Nᵢⱼ = |Zᵢ − Zⱼ|²` once per pair. */
+function geometry(
+  approx: readonly Gauss[],
+  n: number,
+): Geometry | { readonly ok: false; readonly reason: string } {
   if (approx.length !== n) {
     return {
       ok: false,
       reason: `${approx.length} approximations were given for a polynomial of degree ${n}`,
     };
   }
-
   const S = lcm(approx.flatMap((z) => [z.re.d, z.im.d]));
   const Z = approx.map((z) => [(z.re.n * S) / z.re.d, (z.im.n * S) / z.im.d] as const);
   const sPow: bigint[] = [1n];
   for (let m = 1; m <= n; m++) sPow.push(sPow[m - 1] * S);
-
-  // Nᵢⱼ, once per pair.
   const N: bigint[][] = Array.from({ length: n }, () => new Array<bigint>(n).fill(0n));
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
@@ -281,33 +372,36 @@ export function smithDiscsEnvelope(
     for (let j = 0; j < n; j++) if (j !== i) den *= N[i][j];
     return den;
   });
+  return { ok: true, S, Z, sPow, N, prodN };
+}
 
-  const nSq = BigInt(n * n);
-  const rNum: bigint[] = new Array<bigint>(n).fill(-1n);
-  const rDen: bigint[] = new Array<bigint>(n).fill(1n);
-  for (const coeffs of coeffSets) {
-    const D = lcm(coeffs.flatMap((c) => [c.re.d, c.im.d]));
-    const C = coeffs.map((c) => [(c.re.n * D) / c.re.d, (c.im.n * D) / c.im.d] as const);
-    const leadNorm = C[n][0] * C[n][0] + C[n][1] * C[n][1];
-    for (let i = 0; i < n; i++) {
-      const [x, y] = Z[i];
-      let re = C[n][0];
-      let im = C[n][1];
-      for (let k = n - 1; k >= 0; k--) {
-        const nr = re * x - im * y + C[k][0] * sPow[n - k];
-        im = re * y + im * x + C[k][1] * sPow[n - k];
-        re = nr;
-      }
-      const num = nSq * (re * re + im * im);
-      const den = S * S * leadNorm * prodN[i];
-      // Keep the larger of num/den and rNum/rDen (both denominators positive).
-      if (rNum[i] < 0n || num * rDen[i] > rNum[i] * den) {
-        rNum[i] = num;
-        rDen[i] = den;
-      }
-    }
+const scaled = (coeffs: readonly Gauss[], D: bigint): (readonly [bigint, bigint])[] =>
+  coeffs.map((c) => [(c.re.n * D) / c.re.d, (c.im.n * D) / c.im.d] as const);
+
+/** `Σ Cₖ Zᵏ S^{n−k}` by homogenised Horner: `D·Sⁿ·p(z)` for the scaled coefficients `C = D·a`. */
+function horner(
+  C: readonly (readonly [bigint, bigint])[],
+  [x, y]: readonly [bigint, bigint],
+  sPow: readonly bigint[],
+): [bigint, bigint] {
+  const n = C.length - 1;
+  let re = C[n][0];
+  let im = C[n][1];
+  for (let k = n - 1; k >= 0; k--) {
+    const nr = re * x - im * y + C[k][0] * sPow[n - k];
+    im = re * y + im * x + C[k][1] * sPow[n - k];
+    re = nr;
   }
+  return [re, im];
+}
 
+function components(
+  approx: readonly Gauss[],
+  { S, N }: Geometry,
+  rNum: readonly bigint[],
+  rDen: readonly bigint[],
+): SmithResult {
+  const n = approx.length;
   // Components of the union: union–find over the pairs that are NOT provably disjoint. Most pairs are
   // decided by `pairVerdict`'s rigorous log₂ brackets; only a pair within a factor ~1 + 1e-6 of touching
   // reaches the exact test, which is discsDisjoint's cleared of denominators: with sₐ = a/b,

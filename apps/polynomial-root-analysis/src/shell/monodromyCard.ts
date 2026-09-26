@@ -5,7 +5,7 @@ import { formatCycles, isIdentity, type Perm } from "@cas/monodromy";
 import type { Certificate } from "@cas/rigor";
 import { h, type Child, type Desc } from "@cas/ui";
 import type { Loop, LoopContext } from "../engine/loops/loop.js";
-import { loopName } from "../engine/loops/loop.js";
+import { loopName, paramName } from "../engine/loops/loop.js";
 import type { LoopRun } from "../engine/loops/run.js";
 import { monodromyCert } from "../engine/certify.js";
 import { CARD, MONODROMY } from "../engine/vocabulary.js";
@@ -57,16 +57,18 @@ function card(...body: Child[]): Desc {
 export function monodromyCard(m: MonodromyModel, on: MonodromyHandlers): Desc {
   const ctx = m.context;
   if (!ctx) return card(h("p", { key: "none", class: "legend" }, MONODROMY.none));
-  const j = ctx.coefficient;
+  const name = paramName(ctx);
+  // A coefficient is written with its subscript on screen (a₀); a family's parameter is t.
+  const shown = ctx.family ? name : `a${subscript(ctx.coefficient)}`;
   if (ctx.branchPoints.length === 0)
-    return card(h("p", { key: "none", class: "legend" }, MONODROMY.noPoints(j)));
+    return card(h("p", { key: "none", class: "legend" }, MONODROMY.noPoints(shown)));
 
   const chips = h(
     "ul",
     {
       key: "chips",
       class: "lasso-chips",
-      "aria-label": `Loops round the branch points of a${j}`,
+      "aria-label": `Loops round the branch points of ${name}`,
     },
     ...ctx.branchPoints.map((b, k) =>
       h(
@@ -78,7 +80,7 @@ export function monodromyCard(m: MonodromyModel, on: MonodromyHandlers): Desc {
             key: "b",
             type: "button",
             class: "chip",
-            "aria-label": `Loop round branch point ${k + 1}, at a${j} ≈ ${formatCx(b, 6)}`,
+            "aria-label": `Loop round branch point ${k + 1}, at ${name} ≈ ${formatCx(b, 6)}`,
             onclick: () => on.onLasso(k),
           },
           `γ${subscript(k + 1)}`,
@@ -134,7 +136,11 @@ export function monodromyCard(m: MonodromyModel, on: MonodromyHandlers): Desc {
   );
 
   const rows: Child[] = [
-    h("p", { key: "what", class: "legend" }, MONODROMY.what),
+    h(
+      "p",
+      { key: "what", class: "legend" },
+      ctx.family ? MONODROMY.whatFamily : MONODROMY.what,
+    ),
     chips,
     tools,
   ];
@@ -201,7 +207,11 @@ export function monodromyCard(m: MonodromyModel, on: MonodromyHandlers): Desc {
   }
 
   rows.push(
-    h("button", { key: "grp", type: "button", onclick: on.onGroup }, MONODROMY.group(j)),
+    h(
+      "button",
+      { key: "grp", type: "button", onclick: on.onGroup },
+      MONODROMY.group(shown),
+    ),
   );
   if (m.group) {
     const c = m.group.cert;

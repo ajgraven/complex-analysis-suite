@@ -9,6 +9,7 @@
 // so a straight tether is used when it is clear, and otherwise one bent through a waypoint to either
 // side, the first that is clear. The routing is geometry chosen for legibility; what the loop DOES is
 // decided afterwards, by the tracker, and never assumed from the picture.
+import type { Gauss } from "@cas/exact";
 import type { Cx } from "../types.js";
 
 export type Loop =
@@ -27,7 +28,31 @@ export interface LoopContext {
   readonly branchPoints: readonly Cx[];
   /** Per branch point, a radius its exact disc is known to lie within (0 when only numeric). */
   readonly branchRadii: readonly number[];
+  /**
+   * How a lasso reaches its circle. "bend" (the coefficient plane's default) tries a straight tether and
+   * then ones bent to either side; "straight" (a family's flower, PRA-7) takes the straight tether or
+   * refuses, so that every lasso of the flower leaves the ONE base point along its own ray — tethers that
+   * never cross, which is what makes the flower's lassos generate the whole fundamental group.
+   */
+  readonly tether?: "bend" | "straight";
+  /** The parameter's name, for refusals: `a₀` by default, `t` for a family. */
+  readonly name?: string;
+  /** A family's exact data, when the plane is a family's t-plane rather than a coefficient's. */
+  readonly family?: FamilyPlane;
 }
+
+/** The exact family a t-plane loop is tracked through (see `run.ts`). */
+export interface FamilyPlane {
+  /** `grid[k][m]`: the coefficient of zᵏ·tᵐ. */
+  readonly grid: readonly (readonly Gauss[])[];
+  /** The base point, exactly. */
+  readonly base: Gauss;
+  /** What identifies the family and base, for memoising runs. */
+  readonly key: string;
+}
+
+/** The parameter a loop moves, as a reader names it. */
+export const paramName = (ctx: LoopContext): string => ctx.name ?? `a${ctx.coefficient}`;
 
 export type PathResult =
   | { readonly ok: true; readonly path: readonly Cx[] }
@@ -60,15 +85,18 @@ export function lassoRadius(ctx: LoopContext, k: number): number {
   return 0.3 * gap;
 }
 
-/** Is the polyline clear of every branch point but `except`, by at least that point's own lasso radius? */
-function clear(poly: readonly Cx[], ctx: LoopContext, except: number): boolean {
+/**
+ * The first branch point but `except` whose lasso circle the polyline enters (by that point's own lasso
+ * radius), or −1 when it stays clear of all of them.
+ */
+function blocker(poly: readonly Cx[], ctx: LoopContext, except: number): number {
   for (let i = 0; i < ctx.branchPoints.length; i++) {
     if (i === except) continue;
     const r = lassoRadius(ctx, i);
     for (let s = 0; s + 1 < poly.length; s++)
-      if (segmentDistance(ctx.branchPoints[i], poly[s], poly[s + 1]) < r) return false;
+      if (segmentDistance(ctx.branchPoints[i], poly[s], poly[s + 1]) < r) return i;
   }
-  return true;
+  return -1;
 }
 
 function lassoPath(ctx: LoopContext, k: number, sign: 1 | -1): PathResult {
@@ -76,13 +104,16 @@ function lassoPath(ctx: LoopContext, k: number, sign: 1 | -1): PathResult {
   if (!b)
     return {
       ok: false,
-      reason: `there is no branch point #${k + 1} of a${ctx.coefficient}`,
+      reason: `there is no branch point #${k + 1} of ${paramName(ctx)}`,
     };
   const r = lassoRadius(ctx, k);
   if (!(r > 0))
     return {
       ok: false,
-      reason: `branch point #${k + 1} sits on the current value of a${ctx.coefficient}`,
+      reason:
+        ctx.family !== undefined
+          ? `branch point #${k + 1} sits on the base point — move the base point off it`
+          : `branch point #${k + 1} sits on the current value of ${paramName(ctx)}`,
     };
   const base = ctx.base;
   // Candidate tethers: straight, then through a waypoint to the left or right of the straight line,
@@ -91,15 +122,18 @@ function lassoPath(ctx: LoopContext, k: number, sign: 1 | -1): PathResult {
   const ux = (b[0] - base[0]) / d;
   const uy = (b[1] - base[1]) / d;
   const vias: (Cx | null)[] = [null];
-  for (const s of [0.35, -0.35, 0.7, -0.7, 1.2, -1.2]) {
+  for (const s of ctx.tether === "straight" ? [] : [0.35, -0.35, 0.7, -0.7, 1.2, -1.2]) {
     vias.push([base[0] + (ux * d) / 2 - uy * s * d, base[1] + (uy * d) / 2 + ux * s * d]);
   }
+  let first = -1;
   for (const via of vias) {
     const from = via ?? base;
     const th = Math.atan2(from[1] - b[1], from[0] - b[0]);
     const entry: Cx = [b[0] + r * Math.cos(th), b[1] + r * Math.sin(th)];
     const tether: Cx[] = via ? [base, via, entry] : [base, entry];
-    if (!clear(tether, ctx, k)) continue;
+    const hitBy = blocker(tether, ctx, k);
+    if (first < 0) first = hitBy;
+    if (hitBy >= 0) continue;
     const ring: Cx[] = [];
     for (let m = 1; m < LASSO_VERTICES; m++) {
       const a = th + (sign * 2 * Math.PI * m) / LASSO_VERTICES;
@@ -110,9 +144,14 @@ function lassoPath(ctx: LoopContext, k: number, sign: 1 | -1): PathResult {
       path: [...tether, ...ring, entry, ...[...tether].reverse().slice(1)],
     };
   }
+  if (ctx.tether === "straight")
+    return {
+      ok: false,
+      reason: `the tether from the base point to branch point #${k + 1} passes through the circle round branch point #${first + 1}, so this lasso would go round both — move the base point, or draw the loop by hand`,
+    };
   return {
     ok: false,
-    reason: `no tether from a${ctx.coefficient} to branch point #${k + 1} stays clear of the others — draw this loop by hand`,
+    reason: `no tether from ${paramName(ctx)} to branch point #${k + 1} stays clear of the others — draw this loop by hand`,
   };
 }
 

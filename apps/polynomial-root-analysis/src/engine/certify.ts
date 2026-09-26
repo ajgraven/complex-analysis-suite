@@ -22,6 +22,8 @@ import { groupByLabel } from "./galois/tables.js";
 import { formatCycles, groupElements, type Perm } from "@cas/monodromy";
 import type { LoopRun } from "./loops/run.js";
 import type { Recognition } from "@cas/monodromy";
+import type { FamilyReading } from "./family/family.js";
+import type { Arithmetic, Relation } from "./family/bridge.js";
 
 export function coordinateCert(): Certificate {
   return estimate("the root's coordinates", METHOD.coordinate);
@@ -414,5 +416,50 @@ export function movedCert(
   return estimate(
     `after the motion: moved, to ${f(re)}${Math.abs(im) < 1e-9 * Math.max(1, Math.abs(re)) ? "" : `${im < 0 ? " − " : " + "}${f(Math.abs(im))}i`}`,
     METHOD.movedValue,
+  );
+}
+
+/** A family's branch points: `=` when every one is alone in its Smith disc. */
+export function familyBranchCert(fam: FamilyReading): Certificate {
+  const alone = fam.discs.every((d) => d.ok && d.discs.every((x) => x.count === 1));
+  return alone
+    ? exact("each branch point in its disc", METHOD.familyBranch)
+    : estimate("the branch points", "their discs could not be separated");
+}
+
+const SUBS = (n: number): string =>
+  String(n)
+    .split("")
+    .map((d) => "₀₁₂₃₄₅₆₇₈₉"[Number(d)])
+    .join("");
+
+/** The group over ℚ(t), named only when the monodromy and the discriminant pin it. */
+export function arithmeticCert(a: Arithmetic, n: number): Certificate {
+  const claim = "the Galois group over ℚ(t)";
+  if (a.kind === "unknown") return refuse(claim, a.why);
+  if (a.kind === "contains")
+    return refuse(
+      claim,
+      "the monodromy group alone does not pin it: it contains the monodromy group as a normal subgroup",
+    );
+  return exact(
+    `${a.name}${SUBS(n)}, the ${a.name === "S" ? "symmetric" : "alternating"} group`,
+    a.why === "symmetric"
+      ? METHOD.arithmeticSymmetric
+      : a.why === "square"
+        ? METHOD.arithmeticSquare
+        : METHOD.arithmeticNotSquare,
+  );
+}
+
+/** How the specialisation's group over ℚ stands against the group over ℚ(t). */
+export function specialisationCert(r: Relation, t0: string, group: string): Certificate {
+  const claim = `at t = ${t0}`;
+  if (r.kind === "unknown") return refuse(claim, r.why);
+  return exact(
+    r.kind === "equal"
+      ? `the Galois group of p(${t0}, z) over ℚ is ${group}: all of the group over ℚ(t) — t = ${t0} is outside the thin set`
+      : `the Galois group of p(${t0}, z) over ℚ is ${group}: a proper subgroup of the group over ℚ(t) — t = ${t0} lies in the thin set Hilbert's theorem allows`,
+    METHOD.hilbert,
   );
 }

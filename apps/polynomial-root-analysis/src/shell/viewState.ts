@@ -9,12 +9,14 @@ import { MAX_DEGREE, type Cx, type Ring } from "../engine/polynomial.js";
 import {
   DEFAULT_STATE,
   buildPolynomial,
+  resolveState,
   type Cam,
   type PolySpec,
   type ShellState,
 } from "./state.js";
 import type { Loop } from "../engine/loops/loop.js";
 import { branchPoints } from "../engine/analysis/discriminant.js";
+import { readFamily } from "../engine/family/family.js";
 
 export const NAMESPACE = "pra";
 
@@ -35,6 +37,8 @@ interface Wire {
   lp?: unknown;
   /** Added at PRA-6: the Galois correspondence shown (absent = not). */
   gc?: 0 | 1;
+  /** Added at PRA-7: the family `[text, base, open]` (absent = none). */
+  fm?: [string, string, 0 | 1];
   rc: [number, number, number];
   cc: [number, number, number];
   [k: string]: unknown;
@@ -54,6 +58,15 @@ export function encodeShell(s: ShellState): string {
     pz: s.pseudozero,
     ...(s.loop ? { lp: loopOut(s.loop) } : {}),
     ...(s.lattice ? { gc: 1 as const } : {}),
+    ...(s.family
+      ? {
+          fm: [s.family.text, s.family.base, s.family.open ? 1 : 0] as [
+            string,
+            string,
+            0 | 1,
+          ],
+        }
+      : {}),
     rc: cam(s.rootCam),
     cc: cam(s.coeffCam),
   };
@@ -233,6 +246,22 @@ export function decodeShell(hash: string): Decoded | null {
     if (typeof r === "string") return { ok: false, reason: r };
     loop = r;
   }
+  let family: ShellState["family"] = null;
+  if (w.fm !== undefined) {
+    const f = w.fm;
+    if (
+      !Array.isArray(f) ||
+      f.length !== 3 ||
+      typeof f[0] !== "string" ||
+      typeof f[1] !== "string" ||
+      (f[2] !== 0 && f[2] !== 1)
+    )
+      return { ok: false, reason: "the family is not a text, a base point and a flag" };
+    const read = readFamily(f[0]);
+    if (!read.ok)
+      return { ok: false, reason: `the family cannot be read: ${read.reason}` };
+    family = { text: f[0], base: f[1], open: f[2] === 1 };
+  }
   const state: ShellState = {
     ring,
     poly,
@@ -244,9 +273,24 @@ export function decodeShell(hash: string): Decoded | null {
     pseudozero: pz as number | null,
     loop,
     lattice: w.gc === 1,
+    family,
     rootCam: rc,
     coeffCam: cc,
   };
+  if (family?.open) {
+    // The family decides the polynomial; the link must name a base point it can stand on.
+    const res = resolveState(state);
+    if (!res.poly)
+      return { ok: false, reason: res.refusal ?? "the family cannot be opened" };
+    const count = res.family?.reading?.points.length ?? 0;
+    const top = loop ? maxLasso(loop) : -1;
+    if (top >= count)
+      return {
+        ok: false,
+        reason: `the link's loop goes round branch point #${top + 1} of t, which has ${count}`,
+      };
+    return { ok: true, state };
+  }
   // A link naming a polynomial this app would refuse is refused here, with the same reason.
   const built = buildPolynomial(state);
   if (!built.ok) return { ok: false, reason: built.reason };

@@ -315,10 +315,12 @@ export function drawLoopPath(
   cam: Cam,
   vp: Viewport,
   path: readonly Cx[],
-  opts: { dashed?: boolean; closed?: boolean } = {},
+  opts: { dashed?: boolean; closed?: boolean; faint?: boolean } = {},
 ): void {
   if (path.length < 2) return;
   const pts = path.map((z) => toScreen(cam, vp, z));
+  ctx.save();
+  if (opts.faint) ctx.globalAlpha = 0.45;
   ctx.lineWidth = 2;
   ctx.strokeStyle = LOOP_INK;
   ctx.setLineDash(opts.dashed ? [5, 4] : []);
@@ -357,6 +359,7 @@ export function drawLoopPath(
   ctx.beginPath();
   ctx.arc(x0, y0, 3.5, 0, 2 * Math.PI);
   ctx.fill();
+  ctx.restore();
 }
 
 /** The branch points' numbers, beside their ✕, matching the lasso chips γ₁, γ₂, …. */
@@ -423,4 +426,24 @@ export function drawBraid(
     }
     ctx.stroke();
   }
+}
+
+/** A family's base point t₀ in the t-plane: a square like a coefficient's, labelled t₀. */
+export function drawBase(
+  ctx: CanvasRenderingContext2D,
+  cam: Cam,
+  vp: Viewport,
+  z: Cx,
+  selected: boolean,
+): void {
+  const [px, py] = toScreen(cam, vp, z);
+  ctx.fillStyle = INK.coeff;
+  ctx.fillRect(px - COEFF_HALF, py - COEFF_HALF, 2 * COEFF_HALF, 2 * COEFF_HALF);
+  ctx.lineWidth = selected ? 3 : 1.5;
+  ctx.strokeStyle = selected ? "#ffd24a" : "rgba(0,0,0,0.8)";
+  ctx.strokeRect(px - COEFF_HALF, py - COEFF_HALF, 2 * COEFF_HALF, 2 * COEFF_HALF);
+  ctx.font = "600 10px ui-sans-serif, system-ui, sans-serif";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.fillText("t₀", px + COEFF_HALF + 3, py);
 }

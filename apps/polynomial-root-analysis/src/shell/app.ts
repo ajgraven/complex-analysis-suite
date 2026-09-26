@@ -5,7 +5,7 @@
 // its frames update a LIVE polynomial straight from the engine and commit once, on release, so a
 // drag is one undo step (DESIGN §7) and a ℚ-mode drag snaps once, where the reader let go.
 import { attachCanvasA11y, createComputeClient, patch } from "@cas/ui";
-import { Frac, Gauss, QiPoly, renderQiPolyText } from "@cas/exact";
+import { Frac, Gauss, QiPoly, gaussOfDoubles, renderQiPolyText } from "@cas/exact";
 import {
   fromCoeffs,
   fromRoots,
@@ -17,10 +17,18 @@ import {
 import { parsePolynomial } from "../engine/parse.js";
 import { snapRational } from "../engine/rational.js";
 import { APP_NAME, MONODROMY, PANE } from "../engine/vocabulary.js";
+import {
+  baseText,
+  defaultBase,
+  readBase,
+  readFamily,
+  snapBase,
+} from "../engine/family/family.js";
+import { specialGalois, type SpecialGalois } from "../engine/family/bridge.js";
 import type { Loop } from "../engine/loops/loop.js";
 import { motion as makeMotion, FRAMES_PER_MOVE } from "../engine/loops/motion.js";
 import { crossings, pathsAsFrames } from "../engine/loops/braid.js";
-import { loopPath } from "../engine/loops/loop.js";
+import { lassoRadius, loopPath } from "../engine/loops/loop.js";
 import { lassoGroup } from "../engine/loops/group.js";
 import { monodromyGroupCert } from "../engine/certify.js";
 import {
@@ -60,6 +68,7 @@ import {
   drawLoopPath,
   drawBranchNumbers,
   drawBraid,
+  drawBase,
 } from "../ui/ink.js";
 import { Portrait } from "../ui/portrait.js";
 import { figureBytes } from "./figure.js";
@@ -67,8 +76,10 @@ import { formatCx } from "./format.js";
 import { leftRail, rightRail } from "./rails.js";
 import {
   DEFAULT_STATE,
+  familyState,
   frame,
   memoRun,
+  resolveFamily,
   resolvePolynomial,
   resolveState,
   specOf,
@@ -82,7 +93,8 @@ type PaneId = "roots" | "coefficients";
 /** What a pointer or the keyboard is holding. */
 type Target =
   | { readonly kind: "root"; readonly index: number }
-  | { readonly kind: "coeff"; readonly index: number };
+  | { readonly kind: "coeff"; readonly index: number }
+  | { readonly kind: "base"; readonly index: 0 };
 
 interface Pane {
   readonly id: PaneId;
@@ -124,6 +136,12 @@ export interface App {
     penAt(z: Cx): void;
     play(): void;
     group(): void;
+    /** Families (PRA-7). */
+    openFamily(text: string, base?: string | null): void;
+    setBase(text: string): void;
+    specialise(): void;
+    backToFamily(): void;
+    leaveFamily(): void;
   };
   /** The Galois card's model: refused, busy, or the evidence for the committed polynomial. */
   galois(): GaloisModel | null;
@@ -245,6 +263,9 @@ export function mountApp(host: HTMLElement): App {
   let ringRefusal: string | null = null;
   let copyStatus = "";
   let pendingText: string | null = null;
+  /** The family box's text when it did not read, and why. */
+  let familyText: string | null = null;
+  let familyRefusal: string | null = null;
   /** Root trails by LABEL, for the drag in progress (and kept after it when `state.trails`). */
   const trails = new Map<number, Cx[]>();
   // Loop authoring and playback — session state, never in the permalink (the WORD is; these are how it
@@ -426,7 +447,11 @@ export function mountApp(host: HTMLElement): App {
 
   /** What the loop session belongs to: the polynomial and the coefficient that moves. */
   function sessionKey(s: ShellState, r: Resolution): string {
-    return JSON.stringify([r.poly?.coeffs ?? null, s.coefficient]);
+    return JSON.stringify([
+      r.poly?.coeffs ?? null,
+      s.coefficient,
+      s.family?.open ? s.family.text : null,
+    ]);
   }
   function resetSession(): void {
     group = null;
@@ -498,7 +523,20 @@ export function mountApp(host: HTMLElement): App {
     };
   }
   const paneFor = (t: Target): PaneId =>
-    t.kind === "root" || state.overlay ? "roots" : "coefficients";
+    t.kind === "base"
+      ? "coefficients"
+      : t.kind === "root" || state.overlay
+        ? "roots"
+        : "coefficients";
+  const familyOpen = (): boolean => state.family?.open === true;
+  /** Where the base point is drawn: the live one mid-drag. */
+  const basePoint = (): Cx | null => live.family?.base?.toTuple() ?? null;
+  const pointOf = (t: Target, p: Polynomial): Cx | null =>
+    t.kind === "base"
+      ? basePoint()
+      : t.kind === "root"
+        ? p.roots[t.index]
+        : p.coeffs[t.index];
   const camOf = (id: PaneId): Cam => (id === "roots" ? state.rootCam : state.coeffCam);
   function setCam(id: PaneId, cam: Cam): void {
     state = id === "roots" ? { ...state, rootCam: cam } : { ...state, coeffCam: cam };
@@ -509,6 +547,8 @@ export function mountApp(host: HTMLElement): App {
   function targetsIn(id: PaneId): Target[] {
     const p = live.poly;
     if (!p) return [];
+    // In a family the polynomial is p(t₀, z): it moves only as t₀ does.
+    if (familyOpen()) return id === "coefficients" ? [{ kind: "base", index: 0 }] : [];
     const roots: Target[] = p.roots.map((_, i) => ({ kind: "root", index: i }));
     const coeffs: Target[] = p.coeffs.map((_, k) => ({ kind: "coeff", index: k }));
     if (id === "roots") return state.overlay ? [...roots, ...coeffs] : roots;
@@ -523,7 +563,8 @@ export function mountApp(host: HTMLElement): App {
     let best: Target | null = null;
     let bestD = Infinity;
     for (const t of targetsIn(id)) {
-      const w = t.kind === "root" ? p.roots[t.index] : p.coeffs[t.index];
+      const w = pointOf(t, p);
+      if (!w) continue;
       const [sx, sy] = toScreen(cam, vp, w);
       const d = Math.hypot(sx - px, sy - py);
       const reach = (t.kind === "root" ? ROOT_RADIUS : COEFF_HALF) + 6;
@@ -543,6 +584,20 @@ export function mountApp(host: HTMLElement): App {
   }
 
   function moveTo(t: Target, to: Cx): void {
+    if (t.kind === "base") {
+      const f = state.family;
+      if (!f?.open) return;
+      // A drag frame: p(t, z) at the dragged (dyadic) t, nothing slow; committed where it is let go.
+      live = resolveFamily(
+        state,
+        f,
+        live.poly ?? undefined,
+        gaussOfDoubles(to[0], to[1]),
+      );
+      dragging = t;
+      render();
+      return;
+    }
     const p = live.poly;
     if (!p) return;
     const ring = ringForDrag();
@@ -592,6 +647,26 @@ export function mountApp(host: HTMLElement): App {
   function release(): void {
     const t = dragging;
     dragging = null;
+    if (t?.kind === "base") {
+      const at = basePoint();
+      const f = state.family;
+      if (!at || !f) return;
+      const next = familyState(state, {
+        ...f,
+        base: baseText(
+          snapBase(at, 0.5 / scaleOf(state.coeffCam, viewport(panes.coefficients))),
+        ),
+      });
+      if (!next.ok) {
+        familyRefusal = next.reason;
+        live = resolution;
+        render();
+        return;
+      }
+      familyRefusal = null;
+      commit(next.state);
+      return;
+    }
     const p = live.poly;
     if (!t || !p) return;
     if (!state.trails) trails.clear();
@@ -694,19 +769,14 @@ export function mountApp(host: HTMLElement): App {
   // when nothing is selected, + − zoom, Escape deselects. Each arrow press is one committed edit.
   function nudge(dx: number, dy: number, id: PaneId): void {
     const cam = camOf(id);
-    if (selected && paneFor(selected) === id && live.poly) {
-      const p = live.poly;
-      const w =
-        selected.kind === "root" ? p.roots[selected.index] : p.coeffs[selected.index];
+    const w0 = selected && live.poly ? pointOf(selected, live.poly) : null;
+    if (selected && paneFor(selected) === id && w0) {
       const step = cam.half / 50;
-      moveTo(selected, [w[0] + dx * step, w[1] + dy * step]);
+      moveTo(selected, [w0[0] + dx * step, w0[1] + dy * step]);
       release();
       const q = live.poly;
-      if (q) {
-        const now =
-          selected.kind === "root" ? q.roots[selected.index] : q.coeffs[selected.index];
-        panes[id].announce(`${describe(selected)} at ${formatCx(now, 4)}`);
-      }
+      const now = q ? pointOf(selected, q) : null;
+      if (now) panes[id].announce(`${describe(selected)} at ${formatCx(now, 4)}`);
     } else
       setCam(id, {
         ...cam,
@@ -716,9 +786,11 @@ export function mountApp(host: HTMLElement): App {
   }
 
   function describe(t: Target): string {
-    return t.kind === "root"
-      ? `root ${live.poly?.labels[t.index] ?? t.index + 1}`
-      : `coefficient a${t.index}`;
+    return t.kind === "base"
+      ? "the base point t₀"
+      : t.kind === "root"
+        ? `root ${live.poly?.labels[t.index] ?? t.index + 1}`
+        : `coefficient a${t.index}`;
   }
 
   function onKey(pane: Pane, e: KeyboardEvent): void {
@@ -844,6 +916,105 @@ export function mountApp(host: HTMLElement): App {
     render();
   }
 
+  // ── Families (PRA-7).
+  function openFamily(text: string, base: string | null = null): void {
+    const read = readFamily(text);
+    if (!read.ok) {
+      familyText = text;
+      familyRefusal = read.reason;
+      render();
+      return;
+    }
+    const f = { text, base: base ?? baseText(defaultBase(read.family)), open: true };
+    const next = familyState(state, f);
+    if (!next.ok) {
+      familyText = text;
+      familyRefusal = next.reason;
+      render();
+      return;
+    }
+    familyText = null;
+    familyRefusal = null;
+    selected = null;
+    const res = next.res;
+    commit({
+      ...next.state,
+      rootCam: res.poly ? frame(res.poly.roots) : state.rootCam,
+      coeffCam: familyFrame(res),
+    });
+  }
+  /** A t-plane camera showing the base point and every lasso circle whole. */
+  function familyFrame(res: Resolution): Cam {
+    const ctx = res.loopContext;
+    if (!ctx) return state.coeffCam;
+    const pts: Cx[] = [ctx.base];
+    ctx.branchPoints.forEach((b, k) => {
+      const r = lassoRadius(ctx, k);
+      pts.push([b[0] - r, b[1] - r], [b[0] + r, b[1] + r]);
+    });
+    return frame(pts);
+  }
+  function setBase(text: string): void {
+    const f = state.family;
+    if (!f?.open) return;
+    const b = readBase(text);
+    if (!b.ok) {
+      familyRefusal = b.reason;
+      render();
+      return;
+    }
+    const next = familyState(state, { ...f, base: baseText(b.base) });
+    if (!next.ok) {
+      familyRefusal = next.reason;
+      render();
+      return;
+    }
+    familyRefusal = null;
+    commit(next.state);
+  }
+  function specialiseFamily(): void {
+    const f = state.family;
+    if (!f?.open || !live.poly) return;
+    familyRefusal = null;
+    commit({
+      ...state,
+      family: { ...f, open: false },
+      loop: null,
+      coefficient: 0,
+      coeffCam: frame(live.poly.coeffs),
+    });
+  }
+  function backToFamily(): void {
+    const f = state.family;
+    if (!f || f.open) return;
+    const next = familyState(state, { ...f, open: true });
+    if (!next.ok) {
+      familyRefusal = next.reason;
+      render();
+      return;
+    }
+    commit({ ...next.state, coeffCam: familyFrame(next.res) });
+  }
+  function leaveFamily(): void {
+    familyText = null;
+    familyRefusal = null;
+    if (!state.family) return;
+    const p = live.poly;
+    commit({
+      ...state,
+      family: null,
+      loop: null,
+      coefficient: 0,
+      ...(p ? { coeffCam: frame(p.coeffs) } : {}),
+    });
+  }
+  /** What the Galois card knows of the member p(t₀, z), for the bridge. */
+  function special(): SpecialGalois {
+    if (!galois || galois.kind === "busy") return specialGalois(null);
+    if (galois.kind === "done") return specialGalois(galois.evidence);
+    return { kind: "open", why: galois.reason };
+  }
+
   // ── Actions from the rails.
   function type(text: string): void {
     pendingText = text;
@@ -855,7 +1026,8 @@ export function mountApp(host: HTMLElement): App {
     }
     textRefusal = null;
     pendingText = null;
-    const next: ShellState = { ...state, poly: { kind: "text", text } };
+    // Typing a polynomial leaves any family: it is no longer p(t₀, z).
+    const next: ShellState = { ...state, family: null, poly: { kind: "text", text } };
     const res = resolveState(next);
     if (!res.poly) {
       textRefusal = res.refusal;
@@ -878,6 +1050,12 @@ export function mountApp(host: HTMLElement): App {
 
   function setRing(ring: Ring): void {
     ringRefusal = null;
+    if (familyOpen()) {
+      ringRefusal =
+        "a family's members have the coefficients p(t₀, z) gives them — leave the family to change the ring";
+      render();
+      return;
+    }
     const p = live.poly;
     let next: ShellState = { ...state, ring, loop: null };
     if (ring === "Q" && p && !p.exact) {
@@ -1006,7 +1184,10 @@ export function mountApp(host: HTMLElement): App {
         {
           onText: type,
           onRing: setRing,
-          onOverlay: (on) => commit({ ...state, overlay: on }),
+          onOverlay: (on) => {
+            // The t-plane and the root plane are different planes: no overlay in a family.
+            if (!familyOpen()) commit({ ...state, overlay: on });
+          },
           onDiscs: (on) => commit({ ...state, discs: on }),
           onCritical: (on) => commit({ ...state, critical: on }),
           onCoefficient: setCoefficient,
@@ -1019,6 +1200,22 @@ export function mountApp(host: HTMLElement): App {
           onRedo: redo,
           onCopyLink: () => void copyLink(),
           onSaveFigure: () => void saveFigure(),
+        },
+        {
+          model: {
+            state: state.family,
+            resolution: live.family,
+            text: familyText ?? state.family?.text ?? "",
+            refusal: familyRefusal,
+            special: special(),
+          },
+          on: {
+            onOpen: openFamily,
+            onBase: setBase,
+            onSpecialise: specialiseFamily,
+            onBack: backToFamily,
+            onLeave: leaveFamily,
+          },
         },
       ),
     );
@@ -1072,6 +1269,9 @@ export function mountApp(host: HTMLElement): App {
     stage.dataset.overlay = state.overlay ? "true" : "false";
     panes.coefficients.section.hidden = state.overlay;
     panes.roots.heading.textContent = state.overlay ? PANE.overlay : PANE.roots;
+    panes.coefficients.heading.textContent = familyOpen()
+      ? PANE.parameter
+      : PANE.coefficients;
     drawPane(panes.roots);
     if (!state.overlay) drawPane(panes.coefficients);
     describePanes();
@@ -1133,8 +1333,16 @@ export function mountApp(host: HTMLElement): App {
     const coeffsNow = anim?.coeffs ? anim.coeffs[anim.f] : p.coeffs;
     const run = live.loopRun;
     // Branch points, their numbers, and the loop live in the plane of the coefficient they belong to.
+    const fam = familyOpen() ? live.family : null;
     const coefficientLayer = (): void => {
-      if (state.coefficient !== null && a?.branch) {
+      if (fam?.reading) {
+        drawBranchPoints(ctx, cam, vp, fam.reading.points);
+        drawBranchNumbers(ctx, cam, vp, fam.reading.points);
+        // The flower, faint, until a loop of the reader's own is drawn over it.
+        if (!state.loop && fam.runs)
+          for (const r of fam.runs)
+            if (r.path) drawLoopPath(ctx, cam, vp, r.path, { dashed: true, faint: true });
+      } else if (state.coefficient !== null && a?.branch) {
         drawBranchPoints(ctx, cam, vp, a.branch.points);
         if (live.loopContext) drawBranchNumbers(ctx, cam, vp, a.branch.points);
       }
@@ -1184,7 +1392,9 @@ export function mountApp(host: HTMLElement): App {
       }
     } else {
       coefficientLayer();
-      drawCoeffs(ctx, cam, vp, coeffsNow, sel("coeff"));
+      const b = fam ? basePoint() : null;
+      if (b) drawBase(ctx, cam, vp, b, selected?.kind === "base");
+      else if (!fam) drawCoeffs(ctx, cam, vp, coeffsNow, sel("coeff"));
     }
   }
 
@@ -1237,9 +1447,12 @@ export function mountApp(host: HTMLElement): App {
       : "no discs certified";
     const rootsText = `${state.overlay ? "Roots and coefficients" : "Root pane"}: the ${p.degree} roots of a degree-${p.degree} polynomial over its phase portrait, ${certified}. ${keys}`;
     panes.roots.ink.setAttribute("aria-label", rootsText);
+    const famR = familyOpen() ? live.family : null;
     panes.coefficients.ink.setAttribute(
       "aria-label",
-      `Coefficient pane: the ${p.degree + 1} coefficients a0 to a${p.degree} as points in the complex plane. ${keys}`,
+      famR?.reading
+        ? `Parameter plane: the ${famR.reading.points.length} branch points of t for the family ${famR.reading.text}, and the base point t₀ = ${famR.baseText}, which can be dragged or moved with the arrow keys; + and − zoom.`
+        : `Coefficient pane: the ${p.degree + 1} coefficients a0 to a${p.degree} as points in the complex plane. ${keys}`,
     );
     const layers = [
       state.critical
@@ -1259,15 +1472,17 @@ export function mountApp(host: HTMLElement): App {
         ? `Colour: the argument of p (≈, drawn from the plotted roots).${state.pseudozero === null ? " Dark bands: each doubling of |p|." : ""} Rings: the certified discs.`
         : "The phase portrait needs WebGL2, which is unavailable here; the roots and their discs are unaffected."
     }${layers ? ` ${layers}` : ""}`;
-    panes.coefficients.legend.textContent = `${
-      state.ring === "C"
-        ? "Each square is a coefficient; drag it anywhere."
-        : "Each square is a coefficient; it moves along the real axis."
-    }${
-      state.coefficient !== null
-        ? ` ✕: where two roots collide as a${state.coefficient} moves.`
-        : ""
-    }`;
+    panes.coefficients.legend.textContent = famR
+      ? PANE.parameterLegend
+      : `${
+          state.ring === "C"
+            ? "Each square is a coefficient; drag it anywhere."
+            : "Each square is a coefficient; it moves along the real axis."
+        }${
+          state.coefficient !== null
+            ? ` ✕: where two roots collide as a${state.coefficient} moves.`
+            : ""
+        }`;
   }
 
   for (const pane of Object.values(panes)) wirePointer(pane);
@@ -1319,6 +1534,11 @@ export function mountApp(host: HTMLElement): App {
       penAt,
       play,
       group: computeGroup,
+      openFamily,
+      setBase,
+      specialise: specialiseFamily,
+      backToFamily,
+      leaveFamily,
     }),
     galois: () => galois,
     lattice: () => lattice,

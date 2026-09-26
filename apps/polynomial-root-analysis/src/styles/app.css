@@ -86,7 +86,9 @@ body {
   align-items: center;
   gap: 8px;
 }
-.poly-input {
+.poly-input,
+.family-input,
+.base-input {
   flex: 1;
   min-width: 0;
   background: var(--bg);
@@ -308,7 +310,8 @@ canvas:focus-visible {
 }
 
 /* ── Monodromy (PRA-3) ─────────────────────────────────────────────────────────────── */
-.lasso-chips {
+.lasso-chips,
+.preset-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
@@ -449,5 +452,23 @@ canvas:focus-visible {
 }
 .moved {
   display: block;
+  color: var(--muted);
+}
+
+/* ── Families (PRA-7) ──────────────────────────────────────────────────────────────── */
+.field + .field {
+  margin-top: 6px;
+}
+.flower {
+  list-style: none;
+  margin: 6px 0;
+  padding: 0;
+}
+.flower li {
+  margin: 2px 0;
+}
+.bridge h3 {
+  margin: 10px 0 4px;
+  font-size: 13px;
   color: var(--muted);
 }

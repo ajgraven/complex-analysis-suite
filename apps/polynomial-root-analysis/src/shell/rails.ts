@@ -20,6 +20,7 @@ import {
 } from "./monodromyCard.js";
 import { level } from "./level.js";
 import { galoisCard, type GaloisModel, type GaloisView } from "./galoisCard.js";
+import { familyCard, type FamilyHandlers, type FamilyModel } from "./familyCard.js";
 
 /** The gain matrix's shared log scale, so one root's row can be read against another's. */
 function gainScale(c: readonly Conditioning[] | null): [number, number] {
@@ -144,9 +145,13 @@ function coefficientRows(p: Polynomial): Desc {
   );
 }
 
-export function leftRail(m: LeftModel, on: LeftHandlers): Desc[] {
+export function leftRail(
+  m: LeftModel,
+  on: LeftHandlers,
+  family?: { readonly model: FamilyModel; readonly on: FamilyHandlers },
+): Desc[] {
   const rings: Ring[] = ["C", "R", "Q"];
-  return [
+  const cards = [
     card(
       "poly",
       CARD.polynomial,
@@ -200,6 +205,7 @@ export function leftRail(m: LeftModel, on: LeftHandlers): Desc[] {
         : null,
       m.poly ? coefficientRows(m.poly) : null,
     ),
+    ...(family ? [familyCard(family.model, family.on)] : []),
     card(
       "view",
       CARD.view,
@@ -323,6 +329,7 @@ export function leftRail(m: LeftModel, on: LeftHandlers): Desc[] {
       h("p", { key: "status", class: "status", role: "status" }, m.copyStatus),
     ),
   ];
+  return cards;
 }
 
 export interface RightModel {
