@@ -10,7 +10,7 @@
 // here rather than going with it; the second block below says why, and where each test came from.
 import { describe, expect, it, vi } from "vitest";
 
-import { createModal, type Modal } from "../src/shell/modal.js";
+import { createModal, type Modal } from "../src/modal.js";
 
 /**
  * The default panel body: THREE controls, so the cycle is about something.

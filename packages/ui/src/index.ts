@@ -32,3 +32,9 @@ export type { DirectionTicksOptions, Vec2 } from "./canvasOverlay.js";
 // became its second consumer (ADR-0047).
 export { h, patch, text } from "./dom.js";
 export type { Child, Desc } from "./dom.js";
+
+// The modal mechanics — focus trap, `inert` page, Escape, focus returned. Moved from Contour
+// Integration's M8 shell when Polynomial Root Analysis's front door became its second consumer
+// (ADR-0047 PRA-10, ADR-0007).
+export { createModal } from "./modal.js";
+export type { Modal, ModalInput } from "./modal.js";

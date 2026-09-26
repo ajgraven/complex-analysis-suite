@@ -1,6 +1,9 @@
 // The modal mechanics: a focus trap, `inert`, Escape, and focus returned where it came from.
 //
-// M8 step 1.8, extracted from `contrasts.ts` on the second-consumer rule (ADR-0007). The contrast
+// Contour Integration's M8 step 1.8, extracted from `contrasts.ts` on the second-consumer rule
+// (ADR-0007), then moved into `@cas/ui` at ADR-0047's PRA-10, when Polynomial Root Analysis's front
+// door became its second APP. The references below to `frontDoor.ts`, `contrasts.ts` and
+// `shell/app.ts` are Contour Integration's, where the mechanics were written and first measured. The contrast
 // ladder built these at step 1.7 and the front door is the second panel that needs every one of
 // them; the alternative is two copies of a forty-line trap, which is how two dialogs come to
 // disagree about what Escape does.

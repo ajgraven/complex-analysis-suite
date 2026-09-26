@@ -16,11 +16,10 @@ import { citationLine } from "../families/describe.js";
 import { identityLatex, identityText } from "../families/latex.js";
 import { TAXONOMY_SECTIONS, type Family, type TaxonomySection } from "../families/schema.js";
 import type { ShellState } from "./state.js";
-import { h, patch, type Child, type Desc } from "@cas/ui";
+import { createModal, h, patch, type Child, type Desc } from "@cas/ui";
 import { DRILL_TASKS, type DrillTask } from "./drill.js";
 import { LAST_STAGE, isComplete, readProgress, stageFor, type KeyStore } from "./drillProgress.js";
 import { math, mathSpoken, mathText } from "@cas/ui/math";
-import { createModal } from "./modal.js";
 
 /**
  * How many cards a row of the grid holds — the plan's four-column front row.
