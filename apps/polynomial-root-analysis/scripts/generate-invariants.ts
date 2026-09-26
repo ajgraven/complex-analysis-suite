@@ -41,6 +41,18 @@ for (let n = 3; n <= 7; n++)
         `${g.label}/${i} → ${m.label}: ${inv.monomial.join("")} (orbit ${inv.orbit.length})`,
       );
     });
+// PRA-6: one Sₙ-relative invariant per transitive group H (Sₙ and Aₙ aside). Stab_{Sₙ}(F) = H makes
+// Stab_G(F) = H ∩ G = H for EVERY G ⊇ H, so these serve the correspondence's transitive nodes and the
+// groups containing Gal at once, whatever G the descent ended at.
+for (let n = 3; n <= 7; n++) {
+  const sn = degrees[n].reduce((a, b) => (b.order > a.order ? b : a));
+  for (const h of degrees[n]) {
+    if (h.label === sn.label || (h.even && 2 * h.order === sn.order)) continue;
+    const inv = findInvariant(`Sn/${h.label}`, sn.generators, h.generators, n);
+    out[`Sn/${h.label}`] = [...inv.monomial];
+    console.info(`S${n} ⊃ ${h.label}: ${inv.monomial.join("")} (orbit ${inv.orbit.length})`);
+  }
+}
 writeFileSync(
   new URL("../src/engine/galois/data/invariants.json", import.meta.url),
   `${JSON.stringify(out, null, 1)}\n`,

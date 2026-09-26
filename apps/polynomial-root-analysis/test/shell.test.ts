@@ -274,6 +274,7 @@ describe("applyState restores a state the app is NOT in (M6.1's test, not the fi
     trails: false,
     pseudozero: null,
     loop: null,
+    lattice: false,
     rootCam: { cx: 0.25, cy: -0.5, half: 2 },
     coeffCam: { cx: 1, cy: 0, half: 3 },
   };
@@ -295,6 +296,7 @@ describe("applyState restores a state the app is NOT in (M6.1's test, not the fi
     trails: true,
     pseudozero: -8,
     loop: { kind: "lasso", point: 1, sign: -1 },
+    lattice: true,
     rootCam: { cx: -1, cy: 2, half: 0.75 },
     coeffCam: { cx: 0, cy: 0, half: 1.5 },
   };
@@ -864,5 +866,66 @@ describe("the degree-8–15 table arrives lazily on the main thread (PRA-5 follo
     const card = q("section[aria-labelledby='card-galois']");
     expect(card.textContent).toMatch(/8T10/);
     expect(card.textContent).not.toMatch(/has not loaded/);
+  });
+});
+
+describe("the Galois correspondence (PRA-6)", () => {
+  const card = (): HTMLElement => q("section[aria-labelledby='card-galois']");
+  async function settled(app: App): Promise<void> {
+    await vi.waitFor(() => expect(app.galois()?.kind).toBe("done"), { timeout: 10_000 });
+  }
+  const toggle = (): HTMLInputElement =>
+    card().querySelector<HTMLInputElement>(
+      ".lattice input[type=checkbox]",
+    ) as HTMLInputElement;
+
+  it("is off until asked for, and costs nothing then", async () => {
+    const { app } = mount();
+    await settled(app);
+    expect(app.lattice()).toBeNull();
+    expect(toggle().checked).toBe(false);
+    expect(card().querySelector(".lattice-nodes")).toBeNull();
+  });
+
+  it("opens on x³ − 2 with S₃'s six subgroups and their fields, and travels in the link", async () => {
+    const { app } = mount();
+    app.actions().type("z^3 - 2");
+    await settled(app);
+    toggle().checked = true;
+    toggle().dispatchEvent(new Event("change"));
+    expect(app.currentState().lattice).toBe(true);
+    await vi.waitFor(() => expect(app.lattice()?.kind).toBe("done"), { timeout: 10_000 });
+    const nodes = card().querySelectorAll(".lattice-node");
+    expect(nodes).toHaveLength(6);
+    const text = card().textContent ?? "";
+    expect(text).toMatch(/the fixed field is ℚ: the invariant is the integer 0/);
+    const labels = [...card().querySelectorAll(".lattice-node [aria-label]")].map((e) =>
+      e.getAttribute("aria-label"),
+    );
+    expect(labels).toContain("T^3 − 2");
+    expect(labels).toContain("T^2 + 108");
+    // The permalink carries it.
+    const decoded = decodeShell(encodeShell(app.currentState()));
+    expect(decoded?.ok && decoded.state.lattice).toBe(true);
+  });
+
+  it("after a Galois generator is played, each invariant says whether it stayed", async () => {
+    const { app } = mount();
+    app.actions().type("z^5 - 5z + 12");
+    await settled(app);
+    toggle().checked = true;
+    toggle().dispatchEvent(new Event("change"));
+    await vi.waitFor(() => expect(app.lattice()?.kind).toBe("done"), { timeout: 10_000 });
+    const play = card().querySelector<HTMLButtonElement>("button.play");
+    if (!play) throw new Error("no Play button");
+    play.click();
+    await vi.waitFor(() => expect(card().textContent).toMatch(/After the last motion/));
+    const moved = [...card().querySelectorAll(".moved")].map((e) => e.textContent ?? "");
+    expect(moved.some((t) => /unchanged/.test(t))).toBe(true);
+    expect(moved.some((t) => /moved/.test(t))).toBe(true);
+    // The whole group's invariant, and the F₂₀ copy containing it, can never move under a Galois element.
+    expect(card().querySelector(".lattice-node .moved")?.textContent).toMatch(
+      /unchanged/,
+    );
   });
 });

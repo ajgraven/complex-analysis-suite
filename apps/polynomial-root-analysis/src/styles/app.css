@@ -420,3 +420,34 @@ canvas:focus-visible {
 .cycle[data-length="1"] .cycle-dot {
   background: var(--muted);
 }
+
+/* ── Galois correspondence (PRA-6) ─────────────────────────────────────────────────── */
+.lattice {
+  margin: 8px 0;
+  padding-top: 6px;
+  border-top: 1px dashed var(--line);
+}
+.lattice-nodes {
+  list-style: none;
+  margin: 6px 0;
+  padding: 0;
+  font-size: 13px;
+}
+.lattice-node {
+  margin: 4px 0;
+  padding-left: 8px;
+  border-left: 2px solid var(--line);
+}
+.lattice-node[data-index="1"] {
+  border-left-color: #8ee08e;
+}
+.node-name {
+  font-weight: 600;
+}
+.node-field {
+  display: block;
+}
+.moved {
+  display: block;
+  color: var(--muted);
+}

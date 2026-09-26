@@ -48,6 +48,8 @@ export interface ShellState {
   readonly pseudozero: number | null;
   /** The loop word in the selected coefficient's plane (PRA-3), carried as the word, never samples. */
   readonly loop: Loop | null;
+  /** Show the Galois correspondence — computed on request, so it is off until asked for (PRA-6). */
+  readonly lattice: boolean;
   readonly rootCam: Cam;
   readonly coeffCam: Cam;
 }
@@ -62,6 +64,7 @@ export const DEFAULT_STATE: ShellState = {
   trails: false,
   pseudozero: null,
   loop: null,
+  lattice: false,
   rootCam: { cx: 0, cy: 0, half: 1.6 },
   coeffCam: { cx: 0, cy: 0, half: 1.6 },
 };

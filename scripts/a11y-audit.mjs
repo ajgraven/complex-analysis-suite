@@ -426,6 +426,16 @@ const PAGES = [
     hash: viewState("pra", { r: "Q", t: "z^8 - 3z^6 + 4z^4 - 2z^2 + 1", d: 1, o: 0, cr: 0, j: 0, rc: [0, 0, 2], cc: [0, 0, 8] }),
     expect: ".candidates",
   },
+  {
+    // PRA-6: the Galois correspondence opened, by permalink — x³ − 2's six subgroups with their fields,
+    // typeset polynomials among them. `expect` keys on the lattice list, which only `gc: 1` renders.
+    id: "polynomial-root-analysis-correspondence",
+    mount: "polynomial-root-analysis",
+    dist: "apps/polynomial-root-analysis/dist",
+    file: "index.html",
+    hash: viewState("pra", { r: "Q", t: "z^3 - 2", d: 1, o: 0, cr: 0, j: 0, gc: 1, rc: [0, 0, 2], cc: [0, 0, 4] }),
+    expect: ".lattice-nodes",
+  },
 ];
 
 // The WCAG 2.0/2.1 A + AA conformance set plus axe's best-practice pack (landmarks/regions, valid

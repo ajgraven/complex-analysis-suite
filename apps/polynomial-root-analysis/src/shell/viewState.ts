@@ -33,6 +33,8 @@ interface Wire {
   pz?: number | null;
   /** Added at PRA-3: the loop word as a compact tree (see `loopOut`). */
   lp?: unknown;
+  /** Added at PRA-6: the Galois correspondence shown (absent = not). */
+  gc?: 0 | 1;
   rc: [number, number, number];
   cc: [number, number, number];
   [k: string]: unknown;
@@ -51,6 +53,7 @@ export function encodeShell(s: ShellState): string {
     tr: s.trails ? 1 : 0,
     pz: s.pseudozero,
     ...(s.loop ? { lp: loopOut(s.loop) } : {}),
+    ...(s.lattice ? { gc: 1 as const } : {}),
     rc: cam(s.rootCam),
     cc: cam(s.coeffCam),
   };
@@ -240,6 +243,7 @@ export function decodeShell(hash: string): Decoded | null {
     trails: w.tr === 1,
     pseudozero: pz as number | null,
     loop,
+    lattice: w.gc === 1,
     rootCam: rc,
     coeffCam: cc,
   };

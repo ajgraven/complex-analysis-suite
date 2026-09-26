@@ -84,19 +84,22 @@ export function findInvariant(
   if (hit) return hit;
   const G = groupElements([...Ggens], n, 10_000).elements;
   const K = groupElements([...Kgens], n, 10_000).elements;
-  for (let degree = 1; degree <= 3 * n; degree++) {
-    let best: Invariant | null = null;
-    for (const e of exponentVectors(n, degree, 3)) {
-      const orb = orbit(K, e);
-      if (best && orb.length >= best.orbit.length) continue;
-      if (stabiliserOrder(G, orb) === K.length) best = { monomial: e, orbit: orb };
+  // Exponents up to 3 serve every pair the descent meets; a subgroup with few symmetries (the trivial
+  // group needs n DISTINCT exponents) is searched again with exponents up to n − 1.
+  for (const maxE of n > 4 ? [3, n - 1] : [3])
+    for (let degree = 1; degree <= (maxE === 3 ? 3 * n : (n * (n - 1)) / 2); degree++) {
+      let best: Invariant | null = null;
+      for (const e of exponentVectors(n, degree, maxE)) {
+        const orb = orbit(K, e);
+        if (best && orb.length >= best.orbit.length) continue;
+        if (stabiliserOrder(G, orb) === K.length) best = { monomial: e, orbit: orb };
+      }
+      if (best) {
+        CACHE.set(cacheKey, best);
+        return best;
+      }
     }
-    if (best) {
-      CACHE.set(cacheKey, best);
-      return best;
-    }
-  }
-  throw new Error(`no invariant of degree ≤ ${3 * n} found for ${cacheKey}`);
+  throw new Error(`no invariant found for ${cacheKey}`);
 }
 
 /** The invariant carried into a conjugate frame: τ·F. */

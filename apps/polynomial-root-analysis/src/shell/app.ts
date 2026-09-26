@@ -29,7 +29,12 @@ import {
   type GaloisEvidence,
   type GaloisRequest,
 } from "../engine/galois/tier0.js";
-import type { GaloisModel } from "./galoisCard.js";
+import type { GaloisModel, LatticeModel } from "./galoisCard.js";
+import {
+  latticeFor,
+  type Correspondence,
+  type LatticeRequest,
+} from "../engine/galois/correspondence.js";
 import { loadLargeTable } from "../engine/galois/tables.js";
 import { commuteLastTwo, inverted, withLasso } from "./loopEdit.js";
 import {
@@ -122,6 +127,8 @@ export interface App {
   };
   /** The Galois card's model: refused, busy, or the evidence for the committed polynomial. */
   galois(): GaloisModel | null;
+  /** The correspondence's model, when the reader has opened it. */
+  lattice(): LatticeModel | null;
   /** What the braid strip is showing: strand count and crossings. */
   braid(): { strands: number; crossings: number } | null;
   refusal(): string | null;
@@ -284,11 +291,68 @@ export function mountApp(host: HTMLElement): App {
       render();
     },
   });
-  // The sync fallback needs the degree-8–15 table too; when it arrives, ask again.
+  // The sync fallback needs the degree-8–15 table too; when it arrives, ask again — but only if the
+  // answer on screen was waiting for it, or every app a page (or a test file) mounts recomputes.
   void loadLargeTable().then(() => {
-    galoisKey = "";
-    render();
+    if (
+      galois?.kind === "done" &&
+      JSON.stringify(galois.evidence).includes("has not loaded yet")
+    ) {
+      galoisKey = "";
+      render();
+    }
   });
+  // The Galois correspondence (PRA-6): asked for only when the reader opens it, in its own worker.
+  let lattice: LatticeModel | null = null;
+  let latticeKey = "";
+  /** The last permutation played on the roots (a Galois generator or a loop's σ), for the invariants. */
+  let lastPlayed: readonly number[] | null = null;
+  const latticeClient = createComputeClient<LatticeRequest, Correspondence>({
+    compute: latticeFor,
+    worker: () =>
+      new Worker(new URL("../engine/galois/lattice.worker.ts", import.meta.url), {
+        type: "module",
+      }),
+    toMessage: (request, reqId) => ({ reqId, request }),
+    fromMessage: (data) => {
+      const d = data as { reqId: number; lattice?: Correspondence; error?: string };
+      return {
+        reqId: d.reqId,
+        ...(d.lattice === undefined ? {} : { result: d.lattice }),
+        ...(d.error === undefined ? {} : { error: d.error }),
+      };
+    },
+    onError: (message) => {
+      lattice = { kind: "done", result: { ok: false, reason: message } };
+      render();
+    },
+  });
+  function syncLattice(): void {
+    const p = resolution.poly;
+    const ev = galois?.kind === "done" && galois.evidence.ok ? galois.evidence : null;
+    const f = ev?.irreducible ? ev.factors[0] : null;
+    const id = f?.galois?.identification;
+    if (!state.lattice || !p || !f || !id || id.tier !== 1 || f.degree > 7) {
+      if (latticeKey !== "") latticeClient.cancel();
+      latticeKey = "";
+      lattice = null;
+      return;
+    }
+    const request: LatticeRequest = {
+      coefficients: f.coefficients,
+      roots: p.roots.map(([x, y]) => [x, y] as const),
+      generators: id.generators,
+    };
+    const key = JSON.stringify(request);
+    if (key === latticeKey) return;
+    latticeKey = key;
+    lattice = { kind: "busy" };
+    latticeClient.request(request, (result) => {
+      if (latticeKey !== key) return;
+      lattice = { kind: "done", result };
+      render();
+    });
+  }
   function syncGalois(): void {
     const p = resolution.poly;
     if (!p) {
@@ -310,6 +374,7 @@ export function mountApp(host: HTMLElement): App {
     if (key === galoisKey) return;
     galoisKey = key;
     galois = { kind: "busy" };
+    lastPlayed = null;
     galoisClient.request(req.request, (evidence) => {
       if (galoisKey !== key) return;
       galois = { kind: "done", evidence };
@@ -745,6 +810,7 @@ export function mountApp(host: HTMLElement): App {
     const p = resolution.poly;
     if (!p || perm.length !== p.degree) return;
     const run = { perm: [...perm] };
+    lastPlayed = run.perm;
     const m = makeMotion(p.roots, run.perm, p.lead);
     motionInfo = {
       fallback: m.fallback,
@@ -910,6 +976,7 @@ export function mountApp(host: HTMLElement): App {
   // ── Rendering.
   function render(): void {
     syncGalois();
+    syncLattice();
     const p = live.poly;
     patch(
       left,
@@ -994,6 +1061,10 @@ export function mountApp(host: HTMLElement): App {
         {
           labels: resolution.poly?.labels ?? null,
           onPlay: playPerm,
+          lattice: state.lattice ? lattice : null,
+          onLattice: (on: boolean) => commit({ ...state, lattice: on }),
+          roots: resolution.poly?.roots ?? null,
+          lastPlayed,
         },
       ),
     );
@@ -1250,6 +1321,7 @@ export function mountApp(host: HTMLElement): App {
       group: computeGroup,
     }),
     galois: () => galois,
+    lattice: () => lattice,
     braid: () =>
       braid
         ? { strands: braid.labels.length, crossings: crossings(braid.frames).length }

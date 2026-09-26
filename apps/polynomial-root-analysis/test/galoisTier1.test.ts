@@ -20,7 +20,11 @@ import { DiscArith, polyFromRoots } from "../src/engine/galois/discArith.js";
 import { labelsHold, preciseRoots } from "../src/engine/galois/refine.js";
 import { galoisCard } from "../src/shell/galoisCard.js";
 import { actOn, orbit, stabiliserOrder } from "../src/engine/galois/invariant.js";
-import { groupByLabel, groupsOfDegree } from "../src/engine/galois/tables.js";
+import {
+  groupByLabel,
+  groupsOfDegree,
+  symmetricGroup as symmetricGroupOf,
+} from "../src/engine/galois/tables.js";
 import { registerTable } from "../src/engine/galois/tables.js";
 import large from "../src/engine/galois/data/transitive-8-15.json";
 
@@ -254,6 +258,24 @@ describe("the machinery", () => {
     let count = 0;
     for (const [k, mono] of Object.entries(stored)) {
       const [label, idx] = k.split("/");
+      if (label === "Sn") {
+        // PRA-6: Sₙ-relative, one per transitive group — Stab_{Sₙ} must be the group itself.
+        const H = groupByLabel(idx);
+        const n = H.degree;
+        const Hel = groupElements(
+          H.generators.map((x) => [...x]),
+          n,
+          10_000,
+        ).elements;
+        const Sel = groupElements(
+          symmetricGroupOf(n).generators.map((x) => [...x]),
+          n,
+          10_000,
+        ).elements;
+        expect(stabiliserOrder(Sel, orbit(Hel, mono)), k).toBe(H.order);
+        count++;
+        continue;
+      }
       const G = groupByLabel(label);
       const m = G.maximalTransitive?.[Number(idx)];
       if (!m) throw new Error(k);
@@ -271,7 +293,7 @@ describe("the machinery", () => {
       expect(stabiliserOrder(Gel, orbit(Kel, mono)), k).toBe(groupByLabel(m.label).order);
       count++;
     }
-    expect(count).toBeGreaterThan(30);
+    expect(count).toBe(61);
   });
 
   it("refined roots are certified: each disc holds one root, and the discs shrink with the bits", () => {

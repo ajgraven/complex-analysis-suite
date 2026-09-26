@@ -4,10 +4,22 @@
 // identified", never a name.
 import { h, type Child, type Desc } from "@cas/ui";
 import { math } from "@cas/ui/math";
-import { factorisationCert, galoisCerts, identityCerts } from "../engine/certify.js";
+import {
+  factorisationCert,
+  galoisCerts,
+  identityCerts,
+  latticeNodeCert,
+  movedCert,
+  overgroupCert,
+  permText,
+} from "../engine/certify.js";
+import type {
+  Correspondence,
+  CorrespondenceNode,
+} from "../engine/galois/correspondence.js";
 import type { Certificate } from "@cas/rigor";
 import type { FactorEvidence, GaloisEvidence } from "../engine/galois/tier0.js";
-import { CARD, GALOIS } from "../engine/vocabulary.js";
+import { CARD, GALOIS, LATTICE } from "../engine/vocabulary.js";
 import { level } from "./level.js";
 
 export type GaloisModel =
@@ -16,8 +28,14 @@ export type GaloisModel =
   | { readonly kind: "failed"; readonly reason: string }
   | { readonly kind: "done"; readonly evidence: GaloisEvidence };
 
-/** An integer polynomial (ascending decimal strings) as LaTeX and as plain text, in z. */
-export function zPolyText(coeffs: readonly string[]): { latex: string; plain: string } {
+export type LatticeModel =
+  { readonly kind: "busy" } | { readonly kind: "done"; readonly result: Correspondence };
+
+/** An integer polynomial (ascending decimal strings) as LaTeX and as plain text, in `v`. */
+export function zPolyText(
+  coeffs: readonly string[],
+  v = "z",
+): { latex: string; plain: string } {
   const latex: string[] = [];
   const plain: string[] = [];
   for (let k = coeffs.length - 1; k >= 0; k--) {
@@ -27,8 +45,8 @@ export function zPolyText(coeffs: readonly string[]): { latex: string; plain: st
     const mag = neg ? -c : c;
     const first = latex.length === 0;
     const coef = mag === 1n && k > 0 ? "" : mag.toString();
-    const monoL = k === 0 ? "" : k === 1 ? "z" : `z^{${k}}`;
-    const monoP = k === 0 ? "" : k === 1 ? "z" : `z^${k}`;
+    const monoL = k === 0 ? "" : k === 1 ? v : `${v}^{${k}}`;
+    const monoP = k === 0 ? "" : k === 1 ? v : `${v}^${k}`;
     latex.push(`${neg ? "-" : first ? "" : "+"}${coef}${monoL}`);
     plain.push(`${neg ? (first ? "−" : " − ") : first ? "" : " + "}${coef}${monoP}`);
   }
@@ -69,6 +87,13 @@ export interface GaloisView {
   /** The reader's label for root i (irreducible polynomials only). */
   readonly labels: readonly number[] | null;
   readonly onPlay?: (perm: readonly number[]) => void;
+  /** The correspondence, when the reader has asked for it (null: not asked, or not applicable). */
+  readonly lattice?: LatticeModel | null;
+  readonly onLattice?: (on: boolean) => void;
+  /** The plotted roots, in the order the generators number them — for the after-a-motion readout. */
+  readonly roots?: readonly (readonly [number, number])[] | null;
+  /** The last permutation played on the roots, if any. */
+  readonly lastPlayed?: readonly number[] | null;
 }
 
 function certList(key: string, label: string, certs: readonly Certificate[]): Desc {
@@ -203,6 +228,9 @@ function factorSection(
             : null,
         )
       : null,
+    irreducible && id.tier === 1 && n <= 7 && view.onLattice
+      ? latticeSection(f, view, labels)
+      : null,
     h(
       "ul",
       {
@@ -273,5 +301,197 @@ export function galoisCard(
     { key: "galois", class: "card", "aria-labelledby": "card-galois" },
     h("h2", { key: "t", id: "card-galois" }, CARD.galois),
     ...body,
+  );
+}
+
+/** The field polynomial, typeset when short enough to read, else described. */
+function polyChild(coeffs: readonly string[], key: string): Child {
+  const digits = Math.max(...coeffs.map((c) => c.replace("-", "").length));
+  const t = zPolyText(coeffs, "T");
+  if (coeffs.length - 1 <= 6 && digits <= 12)
+    return math(t.latex, { key, label: t.plain, display: false });
+  return h("span", { key }, LATTICE.longPoly(coeffs.length - 1, digits));
+}
+
+function latticeSection(
+  f: FactorEvidence,
+  view: GaloisView,
+  labels: readonly number[] | null,
+): Desc {
+  const open = view.lattice !== null && view.lattice !== undefined;
+  const body: Child[] = [
+    h(
+      "label",
+      { key: "toggle", class: "check" },
+      h("input", {
+        key: "i",
+        type: "checkbox",
+        checked: open,
+        onchange: (e: Event) => view.onLattice?.((e.target as HTMLInputElement).checked),
+      }),
+      ` ${LATTICE.toggle}`,
+    ),
+  ];
+  const m = view.lattice;
+  if (m?.kind === "busy")
+    body.push(
+      h("p", { key: "busy", class: "legend", "aria-live": "polite" }, LATTICE.busy),
+    );
+  else if (m?.kind === "done" && !m.result.ok)
+    body.push(
+      h(
+        "p",
+        { key: "refused", class: "refusal" },
+        `${LATTICE.refused}: ${m.result.reason}.`,
+      ),
+    );
+  else if (m?.kind === "done" && m.result.ok)
+    body.push(...latticeBody(m.result, f, view, labels));
+  return h("div", { key: "lattice", class: "lattice" }, ...body);
+}
+
+/** F(π·z) for the plotted roots scaled by the leading coefficient, in floating point — for display. */
+function floatValue(
+  orbit: readonly (readonly number[])[],
+  roots: readonly (readonly [number, number])[],
+  lc: number,
+  pi: readonly number[] | null,
+  change: readonly number[] = [0, 1],
+): [number, number] {
+  // y = h(lc·x): the monic transform's roots, through the node's own change of variable.
+  const ys = roots.map(([x0, y0]): [number, number] => {
+    let ar = change[change.length - 1];
+    let ai = 0;
+    for (let k = change.length - 2; k >= 0; k--) {
+      const nr = ar * lc * x0 - ai * lc * y0 + change[k];
+      ai = ar * lc * y0 + ai * lc * x0;
+      ar = nr;
+    }
+    return [ar, ai];
+  });
+  let re = 0;
+  let im = 0;
+  for (const e of orbit) {
+    let tr = 1;
+    let ti = 0;
+    e.forEach((k, i) => {
+      const [x, y] = ys[pi ? pi[i] : i];
+      for (let t = 0; t < k; t++) {
+        const nr = tr * x - ti * y;
+        ti = tr * y + ti * x;
+        tr = nr;
+      }
+    });
+    re += tr;
+    im += ti;
+  }
+  return [re, im];
+}
+
+function latticeBody(
+  c: Extract<Correspondence, { ok: true }>,
+  f: FactorEvidence,
+  view: GaloisView,
+  labels: readonly number[] | null,
+): Child[] {
+  const lc = Number(f.coefficients[f.coefficients.length - 1]);
+  const pi =
+    view.lastPlayed && view.roots && view.lastPlayed.length === view.roots.length
+      ? view.lastPlayed
+      : null;
+  const moved = (
+    orbit: readonly (readonly number[])[] | null,
+    gens: readonly (readonly number[])[],
+    change: readonly number[] = [0, 1],
+  ): Child => {
+    if (!pi || !view.roots) return null;
+    const cert = movedCert(
+      pi,
+      gens,
+      orbit ? floatValue(orbit, view.roots, lc, pi, change) : null,
+    );
+    return h(
+      "span",
+      { key: "moved", class: "moved" },
+      " ",
+      level(cert, "lv"),
+      cert.claim,
+    );
+  };
+  const out: Child[] = [];
+  if (pi)
+    out.push(
+      h("p", { key: "played", class: "legend" }, LATTICE.played(permText(pi, labels))),
+    );
+  if (c.overgroups.length)
+    out.push(
+      h("p", { key: "overT", class: "legend" }, LATTICE.overgroups),
+      h(
+        "ul",
+        { key: "over", class: "galois-rows", "aria-label": LATTICE.overgroupsLabel },
+        ...c.overgroups.map((o, k) => {
+          const cert = overgroupCert(o);
+          return h(
+            "li",
+            { key: `o${o.label}-${k}` },
+            level(cert, "lv"),
+            h("span", { key: "c" }, cert.claim),
+            h("span", { key: "w", class: "witness" }, ` — ${cert.method}`),
+            moved(o.orbit, o.generators),
+          );
+        }),
+      ),
+    );
+  out.push(
+    h("p", { key: "latT", class: "legend" }, LATTICE.heading(c.total, c.everySubgroup)),
+    h(
+      "ol",
+      { key: "nodes", class: "lattice-nodes", "aria-label": LATTICE.nodesLabel },
+      ...c.nodes.map((node) => nodeItem(node, c, moved)),
+    ),
+  );
+  return out;
+}
+
+function nodeItem(
+  node: CorrespondenceNode,
+  c: Extract<Correspondence, { ok: true }>,
+  moved: (
+    orbit: readonly (readonly number[])[] | null,
+    gens: readonly (readonly number[])[],
+    h?: readonly number[],
+  ) => Child,
+): Desc {
+  const cert = latticeNodeCert(node);
+  const name = node.label ? `${node.name} (${node.label})` : node.name;
+  const facts: string[] = [`order ${node.order}`];
+  if (node.conjugates > 1)
+    facts.push(LATTICE.conjugates(node.conjugates, c.everySubgroup));
+  else facts.push("normal");
+  if (node.derived !== null && node.derived > 0)
+    facts.push(LATTICE.derived(node.derived));
+  const below = node.below
+    .map((j) => c.nodes[j])
+    .map((b) => (b.label ? `${b.name} (${b.label})` : b.name));
+  return h(
+    "li",
+    { key: `n${node.id}`, class: "lattice-node", "data-index": String(node.index) },
+    h("span", { key: "name", class: "node-name" }, name),
+    h("span", { key: "facts", class: "witness" }, ` — ${facts.join(", ")}`),
+    h(
+      "span",
+      { key: "field", class: "node-field" },
+      level(cert, "lv"),
+      cert.claim,
+      node.resolvent ? polyChild(node.resolvent.coefficients, "poly") : null,
+    ),
+    below.length
+      ? h("span", { key: "below", class: "witness" }, ` ${LATTICE.below(below)}`)
+      : null,
+    moved(
+      node.invariant.kind === "orbit" ? node.invariant.orbit : null,
+      node.generators,
+      node.resolvent?.transform,
+    ),
   );
 }

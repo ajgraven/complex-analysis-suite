@@ -73,6 +73,29 @@ export const GALOIS = {
     `and ${k} more group${k === 1 ? "" : "s"} still consistent, each a worse fit`,
 } as const;
 
+export const LATTICE = {
+  toggle: "Show the Galois correspondence: each subgroup and its fixed field",
+  busy: "working out the subgroups and their fields…",
+  refused: "No correspondence",
+  overgroups:
+    "Groups containing the Galois group: the invariant of each is fixed by every element, so it is an integer.",
+  overgroupsLabel: "Groups containing the Galois group, with their integer invariants",
+  heading: (total: number, every: boolean): string =>
+    every
+      ? `Its ${total} subgroup${total === 1 ? "" : "s"}, largest first, each with its fixed field:`
+      : `Its subgroups, one per conjugacy class (${total} in all), largest first, each with its fixed field:`,
+  nodesLabel: "Subgroups of the Galois group and their fixed fields",
+  conjugates: (k: number, every: boolean): string =>
+    every ? `one of ${k} conjugates` : `and ${k - 1} conjugate${k === 2 ? "" : "s"}`,
+  derived: (k: number): string =>
+    k === 1 ? "the commutator subgroup" : `step ${k} of the derived series`,
+  below: (names: readonly string[]): string => `(contains ${names.join(", ")})`,
+  played: (perm: string): string =>
+    `After the last motion, ${perm}: an invariant stays exactly when the motion lies in its subgroup.`,
+  longPoly: (degree: number, digits: number): string =>
+    `a polynomial of degree ${degree} with integer coefficients of up to ${digits} digits`,
+} as const;
+
 /** "a swap", "a 5-cycle", "an 8-cycle", "an 11-cycle" — the article follows the spoken number. */
 export function aCycle(l: number): string {
   const an = l === 8 || l === 11 || l === 18 || (l >= 80 && l < 90);
@@ -168,6 +191,12 @@ export const METHOD = {
   generatorsFix: (root: string): string =>
     `each fixes the last resolvent's integer root ${root}`,
   generatorsDescent: "the group the descent ended at",
+  fixedByAll:
+    "the Galois group lies inside it, so the invariant is fixed by every element: a rational algebraic integer, named by its certified disc",
+  fieldPolynomial: (plain: boolean): string =>
+    `its coefficients certified from the roots and rounded to integers; its roots proved distinct, so it is irreducible${plain ? "" : ", after a change of variable that separates them"}`,
+  membership: "decided exactly: the motion is (or is not) an element of this subgroup",
+  movedValue: "the invariant at the moved roots, in floating point",
 } as const;
 
 /** Words the screen must never carry — the house names of the methods behind it. */
